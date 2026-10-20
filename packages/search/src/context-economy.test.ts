@@ -58,7 +58,7 @@ describe('context economy policy', () => {
   });
 
   it('excludes growing log and SQLite sidecar files from automatic discovery only', () => {
-    for (const file of ['logs/runtime.log', 'logs/runtime.log.1', 'state/lnwjud.sqlite-wal', 'state/lnwjud.sqlite-shm', 'state/other.db-wal']) {
+    for (const file of ['logs/runtime.log', 'logs/runtime.log.1', 'logs/runtime.log.old', 'state/lnwjud.sqlite-wal', 'state/lnwjud.sqlite-shm', 'state/other.db-wal']) {
       expect(classifyContextPath(file, 'automatic'), file).toMatchObject({ kind: 'ignored', discoverable: false });
       expect(classifyContextPath(file, 'explicit'), file).toMatchObject({ discoverable: true, tier: 3 });
     }
