@@ -196,7 +196,9 @@ export class WorkspaceIndexService {
       if (current === null) return this.rebuildSnapshot(workspace, store, options);
       const discovery = options.discovery ?? 'automatic';
       if (!classifyContextPath(normalized, discovery).discoverable || (discovery === 'automatic' && this.store.isInternalPath?.(absolutePath))) return ok(current);
-      const remaining = current.entries.filter((entry) => entry.relativePath !== normalized && !entry.relativePath.startsWith(`${normalized}/`));
+      const affected = (entry: WorkspaceIndexEntry): boolean => entry.relativePath === normalized || entry.relativePath.startsWith(`${normalized}/`);
+      const previous = current.entries.filter(affected);
+      const remaining = current.entries.filter((entry) => !affected(entry));
       const additions: WorkspaceIndexEntry[] = [];
       try {
         const metadata = await stat(absolutePath);
@@ -206,6 +208,8 @@ export class WorkspaceIndexService {
         if (!isNodeError(error, 'ENOENT')) throw error;
         additions.length = 0;
       }
+      additions.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+      if (isDeepStrictEqual(previous.map(indexEntryContent), additions.map(indexEntryContent))) return ok(current);
       const snapshot = this.snapshotValue(workspace, [...remaining, ...additions]);
       await store.save(snapshot);
       return ok(snapshot);
@@ -218,6 +222,7 @@ export class WorkspaceIndexService {
       const current = await store.load();
       if (current === null) return err(appError('CONFLICT', 'Workspace index is missing; rebuild before removing entries', true));
       const entries = current.entries.filter((entry) => entry.relativePath !== normalized && !entry.relativePath.startsWith(`${normalized}/`));
+      if (entries.length === current.entries.length) return ok(current);
       const snapshot = this.snapshotValue(workspace, entries);
       await store.save(snapshot);
       return ok(snapshot);
