@@ -1,4 +1,4 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, openSync, readSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
 import { stripVTControlCharacters } from 'node:util';
@@ -297,6 +297,10 @@ export class LogHub {
     try {
       const stat = statSync(filePath);
       const size = stat.size;
+      if (state.fd !== null) {
+        const opened = fstatSync(state.fd);
+        if (opened.dev !== stat.dev || opened.ino !== stat.ino || opened.birthtimeMs !== stat.birthtimeMs) this.closeFd(state);
+      }
       if (state.fd === null) {
         state.fd = openSync(filePath, 'r');
         state.offset = state.initialOffset ?? Math.max(0, size - MAX_TAIL_READ_BYTES_PER_SYNC);
