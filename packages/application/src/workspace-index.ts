@@ -138,7 +138,7 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
   }
 }
 
-function indexFileIdentity(stats: Awaited<ReturnType<typeof stat>>): string {
+function indexFileIdentity(stats: { readonly dev: bigint; readonly ino: bigint; readonly size: bigint; readonly mtimeNs: bigint; readonly ctimeNs: bigint; readonly birthtimeNs: bigint }): string {
   return [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs, stats.birthtimeNs].join(':');
 }
 
