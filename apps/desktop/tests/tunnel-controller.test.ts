@@ -1,5 +1,5 @@
 import { isolateTunnelProfile } from './tunnel-profile-fixture.js';
-import { mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,6 +28,28 @@ afterEach(async () => {
 });
 
 describe('TunnelController lifecycle', () => {
+  it('only uses the last 64 KiB of the log for unexpected-exit hints', async () => {
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tunnel-bounded-exit-'));
+    temporaryRoots.push(dataPath);
+    isolateTunnelProfile(dataPath);
+    const controller = new TunnelController({
+      getClientPath: (): string | null => null,
+      setClientPath: (): void => undefined,
+      getDataPath: (): string => dataPath,
+      getRuntimeDesiredState: (): 'stopped' => 'stopped',
+    });
+    await mkdir(path.dirname(controller.logPath()), { recursive: true });
+    const internals = controllerInternals(controller);
+
+    await writeFile(controller.logPath(), `TTL reached\n${'x'.repeat(128 * 1024)}`);
+    await internals.applyUnexpectedExit(-1, 'unused');
+    expect(internals.message).toBe('tunnel-client exited abnormally');
+
+    await writeFile(controller.logPath(), `${'x'.repeat(128 * 1024)}\nTTL reached`);
+    await internals.applyUnexpectedExit(-1, 'unused');
+    expect(internals.message).toContain('TTL reached');
+  });
+
   it('replaces a redirected secret path without touching the link target', async () => {
     const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tunnel-secret-atomic-'));
     temporaryRoots.push(dataPath);
