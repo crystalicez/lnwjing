@@ -50,6 +50,7 @@ export interface WorkspaceIndexEntry {
 
 const WORKSPACE_INDEX_DISCOVERY_POLICY_REVISION = 1;
 const MAX_INDEX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_CACHED_INDEX_BYTES = 32 * 1024 * 1024;
 
 export interface WorkspaceIndexSnapshot {
   readonly version: 1;
@@ -73,6 +74,8 @@ export interface WorkspaceIndexStore {
 }
 
 export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
+  private cached: { readonly workspaceId: string; readonly identity: string; readonly snapshot: WorkspaceIndexSnapshot } | null = null;
+
   public constructor(private readonly directory: string = path.join(os.tmpdir(), 'lnwjud', 'index')) {}
 
   public isInternalPath(absolutePath: string): boolean {
@@ -80,14 +83,24 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
   }
 
   public async load(workspaceId: string): Promise<WorkspaceIndexSnapshot | null> {
+    const filePath = this.filePath(workspaceId);
     try {
-      const content = await readFile(this.filePath(workspaceId), 'utf8');
+      const before = await stat(filePath, { bigint: true });
+      const identity = indexFileIdentity(before);
+      if (this.cached?.workspaceId === workspaceId && this.cached.identity === identity) return this.cached.snapshot;
+      const content = await readFile(filePath, 'utf8');
       const value: unknown = JSON.parse(content);
       if (isRecord(value) && value.version === 1 && (value.discoveryPolicyRevision === undefined || value.discoveryPolicyRevision === 0)) return null;
       if (!isSnapshot(value) || value.workspaceId !== workspaceId) throw new Error('Workspace index data is invalid; rebuild the index to recover');
+      // Cache only one reasonably sized snapshot. Identity changes on atomic replacement by another runtime.
+      this.cached = before.size <= BigInt(MAX_CACHED_INDEX_BYTES) && indexFileIdentity(await stat(filePath, { bigint: true })) === identity
+        ? { workspaceId, identity, snapshot: value } : null;
       return value;
     } catch (error: unknown) {
-      if (isNodeError(error, 'ENOENT')) return null;
+      if (isNodeError(error, 'ENOENT')) {
+        this.cached = null;
+        return null;
+      }
       throw error;
     }
   }
@@ -99,7 +112,10 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
         if (snapshot.workspaceId !== workspaceId) throw new Error('Workspace index mutation belongs to another workspace');
         await this.save(snapshot, signal);
       },
-      delete: () => rm(this.filePath(workspaceId), { force: true }),
+      delete: async () => {
+        await rm(this.filePath(workspaceId), { force: true });
+        if (this.cached?.workspaceId === workspaceId) this.cached = null;
+      },
     }), { ...(signal === undefined ? {} : { signal }) });
   }
 
@@ -111,6 +127,7 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
       await writeFile(temporaryPath, `${JSON.stringify(snapshot)}\n`, { encoding: 'utf8', flag: 'wx', ...(signal === undefined ? {} : { signal }) });
       signal?.throwIfAborted();
       await rename(temporaryPath, this.filePath(snapshot.workspaceId));
+      this.cached = null;
     } finally {
       await rm(temporaryPath, { force: true }).catch(() => undefined);
     }
@@ -119,6 +136,10 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
   private filePath(workspaceId: string): string {
     return path.join(this.directory, `${encodeURIComponent(workspaceId)}.json`);
   }
+}
+
+function indexFileIdentity(stats: Awaited<ReturnType<typeof stat>>): string {
+  return [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs, stats.birthtimeNs].join(':');
 }
 
 export type WorkspaceIndexWatchOptions = WorkspaceIndexQueueOptions & { readonly signal?: AbortSignal };
