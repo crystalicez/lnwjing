@@ -1067,8 +1067,7 @@ export class TunnelController {
 
   private async readExitHint(): Promise<string> {
     try {
-      const raw = await readFile(this.logPath(), 'utf8');
-      const tail = raw.split(/\r?\n/).slice(-120).join('\n');
+      const tail = (await readBoundedTail(this.logPath(), MAX_HEALTH_METADATA_BYTES)).split(/\r?\n/).slice(-120).join('\n');
       return tunnelExitHintFromLog(tail);
     } catch {
       return '';
