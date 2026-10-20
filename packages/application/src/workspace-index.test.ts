@@ -33,6 +33,48 @@ function memoryStore(beforeCommit?: () => Promise<void>): WorkspaceIndexStore {
 }
 
 describe('WorkspaceIndexService', () => {
+  it('does not publish an unchanged file event or an already removed path', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-noop-'));
+    const workspace: Workspace = {
+      id: 'no-op', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString(),
+    };
+    let writes = 0;
+    const store = memoryStore(async () => { writes += 1; });
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), store);
+    try {
+      const sourcePath = path.join(root, 'src.ts');
+      await writeFile(sourcePath, 'export const value = 1;');
+      const built = await service.indexWorkspace(workspace.id);
+      expect(built.ok).toBe(true);
+      expect(writes).toBe(1);
+
+      const unchanged = await service.indexPath(workspace.id, 'src.ts');
+      expect(unchanged).toEqual(built);
+      expect(writes).toBe(1);
+
+      await writeFile(sourcePath, 'export const updated = 2;');
+      const changed = await service.indexPath(workspace.id, 'src.ts');
+      expect(changed.ok).toBe(true);
+      expect(writes).toBe(2);
+      if (changed.ok) expect(changed.value.entries[0]?.symbols).toContain('updated');
+
+      expect(await service.indexPath(workspace.id, 'src.ts')).toEqual(changed);
+      expect(writes).toBe(2);
+      expect((await service.removePath(workspace.id, 'missing.ts')).ok).toBe(true);
+      expect(writes).toBe(2);
+
+      await rm(sourcePath);
+      const removed = await service.indexPath(workspace.id, 'src.ts');
+      expect(removed.ok).toBe(true);
+      expect(writes).toBe(3);
+      if (removed.ok) expect(removed.value.entries).toHaveLength(0);
+      expect(await service.indexPath(workspace.id, 'src.ts')).toEqual(removed);
+      expect(writes).toBe(3);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('preserves both distinct path updates when snapshot commits overlap', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-concurrent-'));
     const workspace: Workspace = {
