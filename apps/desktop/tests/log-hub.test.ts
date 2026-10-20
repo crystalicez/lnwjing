@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -162,6 +162,27 @@ describe('LogHub', () => {
     expect(texts).toContain('plain text line');
     expect(texts).toContain('boom');
     expect(hub.snapshot().lines.find((line) => line.text === 'boom')?.level).toBe('error');
+  });
+
+  it('reopens a rotated log instead of holding the old file descriptor', async () => {
+    vi.useFakeTimers();
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-rotation-'));
+    temporaryRoots.push(root);
+    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    await writeFile(logPath, 'old entry\n', 'utf8');
+    const hub = new LogHub({ tunnelLogPath: logPath });
+    try {
+      hub.start();
+      expect(hub.snapshot().lines.map((line) => line.text)).toContain('old entry');
+      await rename(logPath, `${logPath}.1`);
+      await writeFile(logPath, 'new entry\n', 'utf8');
+      await vi.advanceTimersByTimeAsync(600);
+      const messages = hub.snapshot().lines.map((line) => line.text);
+      expect(messages).toContain('new entry');
+      expect(messages.filter((text) => text === 'old entry')).toHaveLength(1);
+    } finally {
+      hub.stop();
+    }
   });
 
   it('keeps tunnel-client event times when replaying prior sessions', async () => {
