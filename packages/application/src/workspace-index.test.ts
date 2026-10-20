@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, truncate, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -33,6 +33,34 @@ function memoryStore(beforeCommit?: () => Promise<void>): WorkspaceIndexStore {
 }
 
 describe('WorkspaceIndexService', () => {
+  it('retains metadata without reading oversized files and indexes them once they shrink', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-large-file-'));
+    const workspace: Workspace = { id: 'large', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
+    try {
+      const source = path.join(root, 'large.ts');
+      await writeFile(source, 'export const initial = 1;');
+      await truncate(source, 8 * 1024 * 1024 + 1);
+      const indexed = await service.indexWorkspace(workspace.id);
+      expect(indexed.ok).toBe(true);
+      if (!indexed.ok) return;
+      expect(indexed.value.entries[0]).toMatchObject({
+        relativePath: 'large.ts', kind: 'file', size: 8 * 1024 * 1024 + 1,
+        contentHash: null, symbols: [],
+      });
+
+      await writeFile(source, 'export const recovered = 2;');
+      const refreshed = await service.indexPath(workspace.id, 'large.ts');
+      expect(refreshed.ok).toBe(true);
+      if (refreshed.ok) {
+        expect(refreshed.value.entries[0]?.contentHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(refreshed.value.entries[0]?.symbols).toContain('recovered');
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('does not publish an unchanged file event or an already removed path', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-noop-'));
     const workspace: Workspace = {
