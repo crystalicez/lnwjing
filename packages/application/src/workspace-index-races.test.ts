@@ -26,6 +26,34 @@ async function fixture(): Promise<{ directory: string; root: string; workspace: 
 }
 
 describe('workspace index races', () => {
+  it('reuses unchanged JSON snapshots but observes atomic replacements from another runtime', async () => {
+    const setup = await fixture();
+    const service = new WorkspaceIndexService(setup.repository, setup.store);
+    try {
+      await writeFile(path.join(setup.root, 'a.ts'), 'export const value = 1;');
+      expect((await service.indexWorkspace(setup.workspace.id)).ok).toBe(true);
+      const initial = await setup.store.load(setup.workspace.id);
+      expect(initial).not.toBeNull();
+      vi.mocked(readFile).mockClear();
+      expect(await setup.store.load(setup.workspace.id)).toEqual(initial);
+      const indexPath = path.join(setup.directory, 'index', 'shared.json');
+      expect(vi.mocked(readFile).mock.calls.filter(([file]) => file === indexPath)).toHaveLength(0);
+
+      const otherStore = new JsonWorkspaceIndexStore(path.join(setup.directory, 'index'));
+      await otherStore.withMutation(setup.workspace.id, async (scope) => {
+        const current = await scope.load();
+        if (current === null) throw new Error('Missing fixture snapshot');
+        await scope.save({ ...current, indexedAt: '2030-01-01T00:00:00.000Z' });
+      });
+      const updated = await setup.store.load(setup.workspace.id);
+      expect(updated?.indexedAt).toBe('2030-01-01T00:00:00.000Z');
+      expect(vi.mocked(readFile).mock.calls.some(([file]) => file === indexPath)).toBe(true);
+    } finally {
+      await service.close();
+      await rm(setup.directory, { recursive: true, force: true });
+    }
+  });
+
   it('quiesces filename-free notifications caused by its own snapshot publication', async () => {
     const setup = await fixture();
     let notify: ((event: 'change' | 'rename', filename: string | null) => void) | undefined;
