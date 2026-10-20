@@ -132,7 +132,7 @@ export function classifyContextPath(filePath: string, mode: ContextDiscoveryMode
   const basename = segments.at(-1) ?? lowerPath;
   const extension = basename.includes('.') ? `.${basename.split('.').at(-1)}` : '';
   const ignoredDirectory = segments.find((segment) => DEFAULT_IGNORED_DIRECTORIES.has(segment));
-  const ignoredFile = DEFAULT_IGNORED_FILES.has(basename) || /\.log(?:\.\d+)?$|\.(?:sqlite|db)-(?:wal|shm)$/.test(basename);
+  const ignoredFile = DEFAULT_IGNORED_FILES.has(basename) || /\.log(?:\..*)?$|\.(?:sqlite|db)-(?:wal|shm)$/.test(basename);
   const isBinary = BINARY_EXTENSIONS.has(extension);
   const isGenerated = GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(basename)) || lowerPath.includes('/generated/');
   const isMetadata = METADATA_FILES.has(basename);
