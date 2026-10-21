@@ -1,4 +1,6 @@
-import { mkdir, appendFile } from 'node:fs/promises';
+import { appendFileSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
 import { decodeActivityTargetReference, Redactor } from '@lnwjud/audit';
 import type { ActivitySink, ActivitySinkEvent } from './activity-tracker.js';
@@ -26,13 +28,64 @@ export function formatActivityLogLine(event: ActivitySinkEvent): string {
   })}\n`;
 }
 
-export function createFileActivitySink(filePath: string): ActivitySink {
+const MAX_ACTIVITY_LOG_BYTES = 16 * 1024 * 1024;
+const ROTATED_ACTIVITY_LOGS = 3;
+const ACTIVITY_LOCK_TIMEOUT_MS = 10_000;
+
+/** SQLite's OS locks release on process exit; every writer must hold one across rotation and append. */
+export function createFileActivitySink(filePath: string, options: { readonly maxBytes?: number } = {}): ActivitySink {
+  const maxBytes = options.maxBytes === undefined ? MAX_ACTIVITY_LOG_BYTES : Math.max(256, Math.floor(options.maxBytes));
   return {
     async record(event: ActivitySinkEvent): Promise<void> {
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await appendFile(filePath, formatActivityLogLine(event), 'utf8');
+      const line = formatActivityLogLine(event);
+      mkdirSync(path.dirname(filePath), { recursive: true });
+      const mutex = new DatabaseSync(`${filePath}.lock.sqlite`, { timeout: 0 });
+      let locked = false;
+      try {
+        const deadline = Date.now() + ACTIVITY_LOCK_TIMEOUT_MS;
+        while (!locked) {
+          try {
+            mutex.exec('BEGIN IMMEDIATE');
+            locked = true;
+          } catch (error: unknown) {
+            if (!isSqliteBusy(error) || Date.now() >= deadline) throw error;
+            await delay(20);
+          }
+        }
+        // No await while holding the lock: all writers serialize against the same log path.
+        let size = 0;
+        try {
+          size = statSync(filePath).size;
+        } catch (error: unknown) {
+          if (!isMissingFile(error)) throw error;
+        }
+        if (size > 0 && size + Buffer.byteLength(line) > maxBytes) {
+          rmSync(`${filePath}.${ROTATED_ACTIVITY_LOGS}`, { force: true });
+          for (let index = ROTATED_ACTIVITY_LOGS - 1; index >= 1; index -= 1) {
+            try {
+              renameSync(`${filePath}.${index}`, `${filePath}.${index + 1}`);
+            } catch (error: unknown) {
+              if (!isMissingFile(error)) throw error;
+            }
+          }
+          renameSync(filePath, `${filePath}.1`);
+        }
+        appendFileSync(filePath, line, 'utf8');
+      } finally {
+        if (locked) mutex.exec('ROLLBACK');
+        mutex.close();
+      }
     },
   };
+}
+
+function isMissingFile(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+function isSqliteBusy(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'errcode' in error
+    && typeof error.errcode === 'number' && (error.errcode & 0xff) === 5;
 }
 
 export function composeActivitySinks(sinks: readonly ActivitySink[]): ActivitySink {
