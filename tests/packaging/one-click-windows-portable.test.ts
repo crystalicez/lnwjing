@@ -15,6 +15,8 @@ describe('one-click Windows x64 portable build', () => {
     expect(script).toContain('Get-FileHash');
     expect(script).toContain("'8.0'");
     expect(script).toContain('dotnet-install.ps1');
+    expect(script.match(/Invoke-WebRequest -Uri 'https:\/\/dot\.net\/v1\/dotnet-install\.ps1'/g)).toHaveLength(1);
+    expect(script).not.toContain('.local-artifacts\\dotnet-sdk-8');
     expect(await readFile(path.join(root, '.gitignore'), 'utf8')).toContain('apps/desktop/build/dotnet-sdk/');
     expect(script).not.toContain("'--win', 'nsis'");
   });

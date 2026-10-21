@@ -87,29 +87,6 @@ try {
     Invoke-Step 'Stage tunnel client' $desktopDirectory 'node' @('scripts/prepare-tunnel-client.mjs')
     Invoke-Step 'Stage Windows runtime tools' $desktopDirectory 'node' @('scripts/prepare-runtime-tools.mjs')
     Invoke-Step 'Stage ECC runtime' $desktopDirectory 'node' @('scripts/prepare-ecc-runtime.mjs')
-    $localSdkDirectory = Join-Path $repositoryRoot '.local-artifacts\dotnet-sdk-8'
-    $localSdkExecutable = Join-Path $localSdkDirectory 'dotnet.exe'
-    if (Test-Path -LiteralPath $localSdkExecutable -PathType Leaf) {
-        $env:PATH = "$localSdkDirectory;$env:PATH"
-        $env:DOTNET_ROOT = $localSdkDirectory
-    }
-    $sdk = @(& dotnet --list-sdks | Where-Object { $_ -match '^8\.' })
-    if ($sdk.Count -eq 0) {
-        # Do not require Administrator/UAC. Microsoft's official installer can
-        # install SDK 8 in a git-ignored folder on the source drive.
-        $toolsDirectory = Join-Path $repositoryRoot '.local-artifacts\build-tools'
-        New-Item -ItemType Directory -Path $toolsDirectory -Force | Out-Null
-        $installer = Join-Path $toolsDirectory 'dotnet-install.ps1'
-        if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
-            Write-Host '==> Download official .NET SDK installer from Microsoft' -ForegroundColor Cyan
-            Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installer -UseBasicParsing
-        }
-        Invoke-Step 'Install .NET SDK 8 (per-user local cache)' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $installer, '-Channel', '8.0', '-Architecture', 'x64', '-InstallDir', $localSdkDirectory, '-NoPath')
-        $env:PATH = "$localSdkDirectory;$env:PATH"
-        $env:DOTNET_ROOT = $localSdkDirectory
-        $sdk = @(& dotnet --list-sdks | Where-Object { $_ -match '^8\.' })
-        if ($sdk.Count -eq 0) { throw 'The local .NET SDK 8 installation did not register correctly.' }
-    }
     Invoke-Step 'Prepare native Windows OCR' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/prepare-windows-ocr.ps1')
     Invoke-Step 'Build native secret migrator' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/build-windows-secret-migrator.ps1')
     Invoke-Step 'Compile desktop and workspace packages' $repositoryRoot 'corepack' @('pnpm@10.15.0', '--filter', '@lnwjing/desktop...', 'build')
