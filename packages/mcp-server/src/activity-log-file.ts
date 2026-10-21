@@ -5,6 +5,8 @@ import path from 'node:path';
 import { decodeActivityTargetReference, Redactor } from '@lnwjud/audit';
 import type { ActivitySink, ActivitySinkEvent } from './activity-tracker.js';
 
+const MAX_ACTIVITY_LOG_FIELD_CHARS = 4_096;
+
 export function mcpActivityLogPath(dataPath: string): string {
   return path.join(dataPath, 'mcp-activity.log');
 }
@@ -20,9 +22,9 @@ export function formatActivityLogLine(event: ActivitySinkEvent): string {
     timestamp: event.timestamp,
     ...(event.workspaceId === undefined ? {} : { workspaceId: event.workspaceId }),
     ...(event.sessionId === undefined ? {} : { sessionId: event.sessionId }),
-    ...(event.targetSummary === undefined ? {} : { targetSummary: redactor.redactText(event.targetSummary) }),
+    ...(event.targetSummary === undefined ? {} : { targetSummary: redactor.redactText(event.targetSummary).slice(0, MAX_ACTIVITY_LOG_FIELD_CHARS) }),
     targetDetail: decodeActivityTargetReference(event.targetDetail, event.targetSummary),
-    ...(event.resultMessage === undefined ? {} : { resultMessage: redactor.redactText(event.resultMessage) }),
+    ...(event.resultMessage === undefined ? {} : { resultMessage: redactor.redactText(event.resultMessage).slice(0, MAX_ACTIVITY_LOG_FIELD_CHARS) }),
     ...(event.traceId === undefined ? {} : { traceId: event.traceId }),
     ...(event.traceParent === undefined ? {} : { traceParent: event.traceParent }),
   })}\n`;
