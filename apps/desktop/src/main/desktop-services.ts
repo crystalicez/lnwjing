@@ -1168,15 +1168,22 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     lastAuditRetentionSweepAt = now;
     const cutoffIso = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
     auditRetentionSweep = (async () => {
+      let totalDeleted = 0;
       for (let batch = 0; batch < 20; batch += 1) {
         const deleted = await auditRepository.purgeExpiredRoutineReads(cutoffIso);
+        totalDeleted += deleted;
         if (deleted < 500) break;
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
+      if (totalDeleted > 0) console.log(`[Audit] purged ${totalDeleted} expired routine read events`);
     })().catch((error: unknown) => {
       console.error(`Audit retention sweep failed: ${error instanceof Error ? error.message : 'unknown error'}`);
     }).finally(() => { auditRetentionSweep = null; });
   }
+
+  const auditRetentionTimer = setInterval(sweepAuditRetention, recoveryRetentionSweepIntervalMs);
+  auditRetentionTimer.unref?.();
+  void startupBackup.then(sweepAuditRetention);
 
   async function sweepRecoveryRetention(force = false): Promise<void> {
     const retentionDays = readSettings().recoveryRetentionDays;
@@ -1675,7 +1682,6 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       return { deleted: true, workspaceId: workspace.id, rootPath: workspace.realRootPath, backupId: backup.id };
     },
     getDashboard: async (): Promise<DashboardSnapshot> => {
-      sweepAuditRetention();
       await sweepRecoveryRetention().catch((error: unknown) => {
         console.error(`Recovery retention sweep failed: ${error instanceof Error ? error.message : 'unknown error'}`);
       });
@@ -2281,6 +2287,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       await watcherHandle.close();
       watcherHandle = null;
     }
+    clearInterval(auditRetentionTimer);
     logHub.stop();
     await mcpLifecycle.close();
     debugSessions.close();
