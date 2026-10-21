@@ -13,6 +13,50 @@ afterEach(async () => {
 });
 
 describe('SqliteAuditRepository', () => {
+  it('retains both phases of goal-linked, failed and recently completed calls during routine pruning', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-audit-retention-pairs-'));
+    temporaryRoots.push(root);
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    const repository = new SqliteAuditRepository(database);
+    const old = '2026-01-01T00:00:00.000Z';
+    const recent = '2026-10-20T00:00:00.000Z';
+    const add = (id: string, callId: string, phase: 'started' | 'completed', options: {
+      sessionId?: string; timestamp?: string; resultCode?: string; goalId?: string;
+    } = {}): Promise<void> => repository.insert({
+      id, timestamp: options.timestamp ?? old, actorId: 'client', actorName: 'test',
+      workspaceId: 'ws', sessionId: options.sessionId ?? 'session-a',
+      action: 'mcp_tool:read_file', resultCode: options.resultCode ?? (phase === 'started' ? 'STARTED' : 'SUCCESS'),
+      durationMs: 1,
+      metadata: { callId, toolName: 'read_file', phase, ...(options.goalId === undefined ? {} : { goalId: options.goalId }) },
+    });
+    try {
+      await add('goal-start', 'goal-call', 'started');
+      await add('goal-done', 'goal-call', 'completed', { goalId: 'goal' });
+      await add('denied-start', 'denied-call', 'started');
+      await add('denied-done', 'denied-call', 'completed', { resultCode: 'PERMISSION_DENIED' });
+      await add('recent-start', 'recent-call', 'started');
+      await add('recent-done', 'recent-call', 'completed', { timestamp: recent });
+      await add('routine-start', 'routine-call', 'started');
+      await add('routine-done', 'routine-call', 'completed');
+      await add('other-scope-start', 'reused', 'started');
+      await add('other-scope-goal', 'reused', 'completed', { sessionId: 'session-b', goalId: 'different-goal' });
+
+      expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z')).toBe(3);
+      const ids = (await repository.list(50)).map((event) => event.id);
+      expect(ids).toEqual(expect.arrayContaining([
+        'goal-start', 'goal-done', 'denied-start', 'denied-done',
+        'recent-start', 'recent-done', 'other-scope-goal',
+      ]));
+      expect(ids).not.toEqual(expect.arrayContaining(['routine-start', 'routine-done', 'other-scope-start']));
+      const page = await repository.listCallHistory({ workspaceId: 'ws', goalId: 'goal', limit: 10 });
+      expect(page.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ callId: 'goal-call', startedAt: old }),
+      ]));
+    } finally {
+      database.close();
+    }
+  });
+
   it('prunes expired routine reads in batches but preserves goal, mutation and recent evidence', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-audit-retention-'));
     temporaryRoots.push(root);
