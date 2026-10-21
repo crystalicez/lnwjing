@@ -123,7 +123,7 @@ export class SqliteAuditRepository implements AuditEventRepository {
                 OR json_type(related.metadata_json, '$.mutationReceipt') IS NOT NULL
               )
           )
-        ORDER BY candidate.timestamp ASC, candidate.id ASC LIMIT ?
+        ORDER BY candidate.timestamp ASC LIMIT ?
       )
     `).run(cutoffIso, cutoffIso, boundedLimit);
     return Number(result.changes);
