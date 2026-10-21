@@ -5,7 +5,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { CodexDiscovery } from '@lnwjud/codex';
 import { ToolRegistry } from '@lnwjud/mcp-server';
 import { USER_SETTING_KEYS } from '@lnwjud/shared';
-import { SqliteAuditRepository, SqliteDatabase, SqliteSettingsRepository } from '@lnwjud/storage';
+import { SqliteAuditRepository, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository } from '@lnwjud/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-services.js';
 
@@ -185,6 +185,28 @@ describe('DesktopRuntime persistence', () => {
       .map(async (name): Promise<{ reason: string }> => JSON.parse(await readFile(path.join(directory, name), 'utf8')) as { reason: string }));
     expect(manifests).toEqual(expect.arrayContaining([expect.objectContaining({ reason: 'daily' })]));
   });
+
+  it('does not delete audit records after repeated startup backup failures', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-retention-backup-fail-'));
+    temporaryRoots.push(root);
+    const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockRejectedValue(new Error('backup unavailable'));
+    const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let runtime: DesktopRuntime | null = null;
+    try {
+      runtime = createDesktopRuntime(await realpath(root));
+      for (let attempt = 0; attempt < 30 && backup.mock.calls.length < 2; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+      expect(backup).toHaveBeenCalledTimes(2);
+      expect(purge).not.toHaveBeenCalled();
+    } finally {
+      if (runtime !== null) await runtime.close();
+      errors.mockRestore();
+      purge.mockRestore();
+      backup.mockRestore();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('tolerates concurrent and repeated close() calls without re-closing SQLite', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-double-close-'));
