@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ActivityTracker, type ActivitySinkEvent } from './activity-tracker.js';
 import { composeActivitySinks, createFileActivitySink, formatActivityLogLine, mcpActivityLogPath } from './activity-log-file.js';
@@ -71,6 +72,39 @@ describe('mcp activity log file', () => {
     }
     expect(retained.has('call-23')).toBe(true);
     expect(retained.size).toBeLessThan(24);
+  });
+
+  it('waits asynchronously for another runtime holding the SQLite log lock', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-lock-'));
+    temporaryRoots.push(root);
+    const filePath = mcpActivityLogPath(root);
+    const mutex = new DatabaseSync(`${filePath}.lock.sqlite`, { timeout: 0 });
+    mutex.exec('BEGIN IMMEDIATE');
+    const pending = createFileActivitySink(filePath).record({
+      callId: 'after-lock', toolName: 'read_file', phase: 'completed',
+      resultCode: 'SUCCESS', durationMs: 0, timestamp: '2026-10-21T00:00:00.000Z',
+    });
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      mutex.exec('ROLLBACK');
+      mutex.close();
+      await expect(pending).resolves.toBeUndefined();
+      expect(await readFile(filePath, 'utf8')).toContain('after-lock');
+    } finally {
+      if (mutex.isOpen) mutex.close();
+    }
+  });
+
+  it('limits verbose activity fields without dropping compact correlation', () => {
+    const json = formatActivityLogLine({
+      callId: 'bounded-call', toolName: 'read_file', phase: 'completed',
+      resultCode: 'SUCCESS', durationMs: 0, timestamp: '2026-10-21T00:00:00.000Z',
+      targetSummary: 'a'.repeat(20_000), resultMessage: 'b'.repeat(20_000),
+    });
+    const row = JSON.parse(json) as { callId: string; targetSummary: string; resultMessage: string };
+    expect(row.callId).toBe('bounded-call');
+    expect(row.targetSummary).toHaveLength(4_096);
+    expect(row.resultMessage).toHaveLength(4_096);
   });
 
   it('still records to later sinks when an earlier activity sink fails', async () => {
