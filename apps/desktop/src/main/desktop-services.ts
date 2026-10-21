@@ -1168,6 +1168,15 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     lastAuditRetentionSweepAt = now;
     const cutoffIso = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
     auditRetentionSweep = (async () => {
+      // Fail closed: pruning must not run without a recent, available daily backup.
+      const created = await backupService.ensureRecent();
+      if (created === null) {
+        const backups = await backupService.list();
+        const hasRecentDaily = backups.some((item) => item.reason === 'daily'
+          && Date.parse(item.createdAt) <= now
+          && now - Date.parse(item.createdAt) < 24 * 60 * 60 * 1000);
+        if (!hasRecentDaily) return;
+      }
       let totalDeleted = 0;
       for (let batch = 0; batch < 20; batch += 1) {
         const deleted = await auditRepository.purgeExpiredRoutineReads(cutoffIso);
