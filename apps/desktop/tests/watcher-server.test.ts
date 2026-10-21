@@ -1,3 +1,4 @@
+import { get } from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import {
@@ -25,7 +26,46 @@ function snapshot(activity: readonly WatcherActivityEvent[]): WatcherSnapshot {
   };
 }
 
+function pairingResponse(url: URL, headers: Record<string, string>): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = get(url, { headers }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer) => chunks.push(chunk));
+      response.once('end', () => resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    request.once('error', reject);
+  });
+}
+
 describe('Watcher server', () => {
+  it('rejects rebinding Host and foreign Origin before disclosing the pairing token', async () => {
+    const token = 'watcher-test-token-0123456789abcdef';
+    const server = await startWatcherServer({
+      port: 0, pairingPort: 0, accessToken: token,
+      buildSnapshot: async (events) => snapshot(events),
+      subscribeActivity: (): (() => void) => (): void => undefined,
+    });
+    try {
+      for (const headers of [
+        { Host: 'attacker.example' },
+        { Host: `127.0.0.1:${server.pairingEndpoint.port}`, Origin: 'https://attacker.example' },
+        { Host: `127.0.0.1:${server.pairingEndpoint.port}`, Origin: 'null' },
+      ]) {
+        const denied = await pairingResponse(server.pairingEndpoint, headers);
+        expect(denied.status).toBe(403);
+        expect(denied.body).not.toContain(token);
+      }
+      const accepted = await pairingResponse(server.pairingEndpoint, {
+        Host: `localhost:${server.pairingEndpoint.port}`,
+        Origin: `http://localhost:${server.pairingEndpoint.port}`,
+      });
+      expect(accepted.status).toBe(200);
+      expect(accepted.body).toContain(token);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('keeps pairing local, requires bearer auth for snapshots, and streams only after websocket auth', async () => {
     const token = 'watcher-test-token-0123456789abcdef';
     let publish: ((event: WatcherActivityEvent) => void) | null = null;

@@ -110,6 +110,15 @@ export interface WatcherServerHandle {
 const MAX_ACTIVITY = 100;
 const WS_AUTH_TIMEOUT_MS = 5_000;
 
+/** Keep pairing secrets on literal loopback hosts; reject rebinding Host and remote browser origins. */
+function trustedPairingRequest(request: IncomingMessage, port: number): boolean {
+  const host = request.headers.host;
+  if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return false;
+  const origin = request.headers.origin;
+  if (origin === undefined) return true; // Native clients and navigation omit Origin.
+  return origin === `http://127.0.0.1:${port}` || origin === `http://localhost:${port}`;
+}
+
 function tokenMatches(expected: string, provided: string): boolean {
   const expectedBytes = Buffer.from(expected, 'utf8');
   const providedBytes = Buffer.from(provided, 'utf8');
@@ -288,7 +297,12 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
 
   const apiPort = await listen(apiServer, options.port);
 
+  let pairingPort = 0;
   const pairingServer = createServer((request, response) => {
+    if (!trustedPairingRequest(request, pairingPort)) {
+      json(response, 403, { error: 'forbidden' });
+      return;
+    }
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
     if (request.method !== 'GET' || url.pathname !== '/api/v1/pair') {
       json(response, 404, { error: 'not_found' });
@@ -306,7 +320,6 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
     json(response, 200, pair);
   });
 
-  let pairingPort: number;
   try {
     pairingPort = await listen(pairingServer, options.pairingPort);
   } catch (error) {
