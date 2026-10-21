@@ -208,6 +208,28 @@ describe('DesktopRuntime persistence', () => {
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
 
+  it('does not delete audit records when a concurrent backup has no recent snapshot', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-retention-no-backup-'));
+    temporaryRoots.push(root);
+    const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockResolvedValue(null);
+    const list = vi.spyOn(SqliteBackupService.prototype, 'list').mockResolvedValue([]);
+    const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');
+    let runtime: DesktopRuntime | null = null;
+    try {
+      runtime = createDesktopRuntime(await realpath(root));
+      for (let attempt = 0; attempt < 30 && list.mock.calls.length === 0; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+      expect(list).toHaveBeenCalled();
+      expect(purge).not.toHaveBeenCalled();
+    } finally {
+      if (runtime !== null) await runtime.close();
+      purge.mockRestore();
+      list.mockRestore();
+      backup.mockRestore();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
   it('tolerates concurrent and repeated close() calls without re-closing SQLite', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-double-close-'));
     temporaryRoots.push(root);
