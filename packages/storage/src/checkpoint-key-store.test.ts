@@ -2,12 +2,12 @@ import { readFile, readdir, rm, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createExplicitKeySecretProtector, type SecretProtector } from '@lnwjud/shared';
+import { createExplicitKeySecretProtector, type SecretProtector } from '@lnwjing/shared';
 import { CheckpointKeyStore, publishCheckpointKeyExclusive } from './checkpoint-key-store.js';
 
 describe('CheckpointKeyStore', () => {
   it('creates a protected 32-byte key and reuses it after restart', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-'));
     try {
       const protector = createExplicitKeySecretProtector(Buffer.alloc(32, 3));
       const filePath = path.join(root, 'checkpoint-master.key');
@@ -23,7 +23,7 @@ describe('CheckpointKeyStore', () => {
   });
 
   it('fails closed when the protected key cannot be decrypted instead of generating a replacement', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-fail-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-fail-'));
     try {
       const filePath = path.join(root, 'checkpoint-master.key');
       const firstProtector = createExplicitKeySecretProtector(Buffer.alloc(32, 4));
@@ -37,7 +37,7 @@ describe('CheckpointKeyStore', () => {
   });
 
   it('returns the winner when two initializers race to create the file', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-race-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-race-'));
     try {
       const filePath = path.join(root, 'checkpoint-master.key');
       const protector = createExplicitKeySecretProtector(Buffer.alloc(32, 6));
@@ -50,7 +50,7 @@ describe('CheckpointKeyStore', () => {
   });
 
   it('does not expose the key pathname while its ciphertext is still being written', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-publish-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-publish-'));
     try {
       const filePath = path.join(root, 'checkpoint-master.key');
       let signalPartial!: () => void;
@@ -76,7 +76,7 @@ describe('CheckpointKeyStore', () => {
   });
 
   it('re-encrypts a rotated envelope without changing the key', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-rotate-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-rotate-'));
     try {
       const filePath = path.join(root, 'checkpoint-master.key');
       let reencrypt = false;
@@ -101,7 +101,7 @@ describe('CheckpointKeyStore', () => {
   });
 
   it('does not quarantine a current envelope that fails decryption even when quarantineUnsupported is true', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-current-fail-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-current-fail-'));
     try {
       const filePath = path.join(root, 'checkpoint-master.key');
       const firstProtector = createExplicitKeySecretProtector(Buffer.alloc(32, 10));
@@ -120,7 +120,7 @@ describe('CheckpointKeyStore', () => {
   });
 
   it('does not quarantine malformed safe:v1 content because the version itself is supported', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-malformed-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-malformed-'));
     try {
       const filePath = path.join(root, 'checkpoint-master.key');
       await writeFile(filePath, 'safe:v1:not-base64', 'utf8');
@@ -137,7 +137,7 @@ describe('CheckpointKeyStore', () => {
   });
 
   it('quarantines unsupported envelope versions and generates a fresh key when quarantineUnsupported is true', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checkpoint-key-quarantine-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-key-quarantine-'));
     try {
       const filePath = path.join(root, 'checkpoint-master.key');
       // Simulate foreign host envelope (e.g. from Windows or older build)

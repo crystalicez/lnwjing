@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import { createProcessTreeTerminator } from '@lnwjud/process';
+import { createProcessTreeTerminator } from '@lnwjing/process';
 import { NativeHostProcessBridge } from './native-host-protocol.js';
 
 export function resolveNativeHostBridge(options: {
@@ -12,7 +12,7 @@ export function resolveNativeHostBridge(options: {
   const executable = options.executablePaths.find((candidate) => existsSync(candidate));
   if (executable === undefined || !path.isAbsolute(executable)) return undefined;
   const manifestPath = path.join(path.dirname(executable), 'NATIVE_HOST.json');
-  const expectedName = options.platform === 'darwin' ? 'lnwjud-macos-host' : 'lnwjud-linux-host';
+  const expectedName = options.platform === 'darwin' ? 'lnwjing-macos-host' : 'lnwjing-linux-host';
   try {
     const executableStat = lstatSync(executable);
     const manifestStat = lstatSync(manifestPath);

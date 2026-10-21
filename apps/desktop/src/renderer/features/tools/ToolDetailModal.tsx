@@ -1,7 +1,7 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import type { ResolvedRemediation, ToolCatalogItem, UiLocale } from '@lnwjud/ipc-contracts';
+import type { ResolvedRemediation, ToolCatalogItem, UiLocale } from '@lnwjing/ipc-contracts';
 import { formatDateTime } from '../../date-time.js';
 import { createTranslator, type Translator } from '../../i18n/index.js';
 import { toolReadinessLabel } from './tool-readiness-copy.js';
@@ -67,7 +67,7 @@ export function ToolDetailModal({ locale, item, remediations, onClose, onRemedia
       <section ref={dialogRef} className="tool-modal" role="dialog" aria-modal="true" aria-labelledby="tool-detail-title">
         <header className="tool-modal-header">
           <div className="tool-modal-title-copy">
-            <p className="eyebrow">{item.origin === 'external_mcp' ? `MCP · ${item.serverName ?? ''}` : 'lnwjud'}</p>
+            <p className="eyebrow">{item.origin === 'external_mcp' ? `MCP · ${item.serverName ?? ''}` : 'lnwjing'}</p>
             <div className="tool-modal-title-line">
               <h2 ref={titleRef} tabIndex={-1} id="tool-detail-title">{item.title}</h2>
               <span className={`tool-readiness-badge tool-readiness-${item.readiness}`}>{toolReadinessLabel(locale, item)}</span>
@@ -82,8 +82,8 @@ export function ToolDetailModal({ locale, item, remediations, onClose, onRemedia
             <div><dt>{t('tools.detail.status')}</dt><dd><span className={`tool-readiness-badge tool-readiness-${item.readiness}`}>{toolReadinessLabel(locale, item)}</span></dd></div>
             {item.deliveryState === undefined ? null : <div><dt>{t('tools.detail.deliveryState')}</dt><dd>{deliveryStateLabel(t, item)}</dd></div>}
             {item.available === undefined ? null : <div><dt>{t('tools.detail.runtimeAvailable')}</dt><dd>{booleanLabel(t, item.available)}</dd></div>}
-            {item.origin === 'lnwjud' ? <div><dt>{t('tools.detail.userAvailability')}</dt><dd>{toolAvailabilityLabel(locale, item)}</dd></div> : null}
-            {item.origin === 'lnwjud' ? <div><dt>{t('tools.detail.mcpExposure')}</dt><dd>{effectiveExposureLabel(locale, item)}</dd></div> : null}
+            {item.origin === 'lnwjing' ? <div><dt>{t('tools.detail.userAvailability')}</dt><dd>{toolAvailabilityLabel(locale, item)}</dd></div> : null}
+            {item.origin === 'lnwjing' ? <div><dt>{t('tools.detail.mcpExposure')}</dt><dd>{effectiveExposureLabel(locale, item)}</dd></div> : null}
             <div><dt>{t('tools.detail.declaredPermission')}</dt><dd>{declaredPermissionLabel(t, item)}</dd></div>
             <div><dt>{t('tools.detail.profileDecision')}</dt><dd>{profileDecisionLabel(t, item)}</dd></div>
             <div><dt>{t('tools.detail.riskMode')}</dt><dd>{riskModeLabel(t, item)}</dd></div>
@@ -92,7 +92,7 @@ export function ToolDetailModal({ locale, item, remediations, onClose, onRemedia
             <div><dt>{t('tools.detail.cancelable')}</dt><dd>{nullableBooleanLabel(t, item.supportsCancel, item.origin === 'external_mcp')}</dd></div>
             <div><dt>{t('tools.detail.dryRun')}</dt><dd>{nullableBooleanLabel(t, item.supportsDryRun, item.origin === 'external_mcp')}</dd></div>
           </dl>
-          {item.origin === 'lnwjud' ? <section className="tool-availability-panel"><div><strong>{toolAvailabilityLabel(locale, item)}</strong><small>{effectiveExposureLabel(locale, item)}</small></div><ToolAvailabilitySwitch locale={locale} checked={toolControlEnabled(item)} busy={availabilityBusy} disabled={onSetAvailability === undefined || (!toolControlEnabled(item) && !toolControlCanEnable(item))} blockedLabel={!toolControlEnabled(item) && !toolControlCanEnable(item) ? t('tools.setupFirst') : undefined} label={item.title} onChange={(enabled) => { void onSetAvailability?.(enabled); }} />{item.userPreference === 'default' ? null : <ActionButton type="button" disabled={availabilityBusy || onResetAvailability === undefined} onClick={() => { void onResetAvailability?.(); }}>{t('tools.useDefault')}</ActionButton>}</section> : null}
+          {item.origin === 'lnwjing' ? <section className="tool-availability-panel"><div><strong>{toolAvailabilityLabel(locale, item)}</strong><small>{effectiveExposureLabel(locale, item)}</small></div><ToolAvailabilitySwitch locale={locale} checked={toolControlEnabled(item)} busy={availabilityBusy} disabled={onSetAvailability === undefined || (!toolControlEnabled(item) && !toolControlCanEnable(item))} blockedLabel={!toolControlEnabled(item) && !toolControlCanEnable(item) ? t('tools.setupFirst') : undefined} label={item.title} onChange={(enabled) => { void onSetAvailability?.(enabled); }} />{item.userPreference === 'default' ? null : <ActionButton type="button" disabled={availabilityBusy || onResetAvailability === undefined} onClick={() => { void onResetAvailability?.(); }}>{t('tools.useDefault')}</ActionButton>}</section> : null}
           {item.riskMode === 'input_dependent' ? <p role="note" className="tool-risk-caveat">{t('tools.detail.inputDependentRisk')}</p> : null}
           {item.origin === 'external_mcp' && item.readiness === 'ready' ? <p role="note" className="tool-risk-caveat">{t('tools.detail.externalDiscoveryCaveat')}</p> : null}
           {item.stale ? <p role="status" className="tool-stale-caveat">{t('tools.detail.staleCaveat')}</p> : null}

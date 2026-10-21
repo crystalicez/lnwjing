@@ -1,6 +1,6 @@
 # Native provider development
 
-lnwjud keeps the MCP/domain/storage/UI core shared. Native code is a narrow,
+lnwjing keeps the MCP/domain/storage/UI core shared. Native code is a narrow,
 integrity-bound adapter selected at the Desktop/STDIO composition root. A
 provider must report its dependency and permission state; a transport health
 response alone is never capability readiness.
@@ -49,7 +49,7 @@ arm64 parity without matching runtime artifacts.
 
 The bundled OpenAI `tunnel-client` is accepted only after the pinned archive
 hash, executable version, and Sigstore provenance all verify. Packaging hosts
-must provide `cosign` version 3.1.3 or newer (or set `LNWJUD_COSIGN_PATH` to an
+must provide `cosign` version 3.1.3 or newer (or set `LNWJING_COSIGN_PATH` to an
 equivalent trusted installation); a missing or old verifier fails closed.
 
 ## Provider readiness rules

@@ -8,7 +8,7 @@ import { digest, loadOfficeTable, preflightXlsxZip } from './office-file-provide
 
 const roots:string[]=[];
 async function workspace():Promise<{root:string;service:OfficeDataWorkflowService}> {
-  const root=await mkdtemp(path.join(os.tmpdir(),'lnwjud-office-v580-'));
+  const root=await mkdtemp(path.join(os.tmpdir(),'lnwjing-office-v580-'));
   roots.push(root);
   const service=new OfficeDataWorkflowService(async (id)=>id==='ws'?root:null);
   return {root,service};

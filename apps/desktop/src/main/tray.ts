@@ -2,7 +2,7 @@ import type { MenuItemConstructorOptions } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CloseBehavior, UiLocale, UpdateStatus } from '@lnwjud/ipc-contracts';
+import type { CloseBehavior, UiLocale, UpdateStatus } from '@lnwjing/ipc-contracts';
 import { nativeMessages } from './native-i18n.js';
 
 const mainDirectory = path.dirname(fileURLToPath(import.meta.url));

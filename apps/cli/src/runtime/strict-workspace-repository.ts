@@ -1,5 +1,5 @@
 import { realpath, stat } from 'node:fs/promises';
-import { isHostPathWithin, isPosixMountRoot, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { isHostPathWithin, isPosixMountRoot, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 
 export class StrictWorkspaceRepository implements WorkspaceRepository {
   private readonly allowed = new Set<string>();
@@ -43,7 +43,7 @@ export class StrictWorkspaceRepository implements WorkspaceRepository {
 }
 
 export async function canonicalizeAllowedRoots(roots: readonly string[], platform: NodeJS.Platform = process.platform): Promise<readonly string[]> {
-  if (roots.length === 0) throw new Error('Strict root mode requires at least one explicit --allowed-root or LNWJUD_ALLOWED_ROOTS entry');
+  if (roots.length === 0) throw new Error('Strict root mode requires at least one explicit --allowed-root or LNWJING_ALLOWED_ROOTS entry');
   const canonical: string[] = [];
   const seen = new Set<string>();
   for (const input of roots) {

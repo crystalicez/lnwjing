@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import type { CapabilityService, CapabilityToolName } from '@lnwjud/capabilities';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import type { CapabilityService, CapabilityToolName } from '@lnwjing/capabilities';
 import { ComputerUseService } from './computer-use-service.js';
 import { SetOfMarksService } from './set-of-marks-service.js';
 

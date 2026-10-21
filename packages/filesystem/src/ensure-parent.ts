@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { err, ok, type Result } from '@lnwjud/domain';
+import { err, ok, type Result } from '@lnwjing/domain';
 import { mapNodeFsError } from './fs-error.js';
 
 export async function ensureParentDirectory(filePath: string): Promise<Result<void>> {

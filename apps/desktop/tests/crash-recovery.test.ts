@@ -34,7 +34,7 @@ describe('crash recovery diagnostics', () => {
   });
 
   it('writes local NDJSON crash records', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-crash-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-crash-'));
     temporaryRoots.push(root);
     const recorder = new CrashDiagnosticsRecorder(root, '4.6.1');
     recorder.record({ type: 'renderer-gone', processType: 'renderer', reason: 'crashed', exitCode: 1 });
@@ -45,7 +45,7 @@ describe('crash recovery diagnostics', () => {
   });
 
   it('reads persisted schema-1/schema-2 history after restart and ignores malformed lines', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-crash-history-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-crash-history-'));
     temporaryRoots.push(root);
     const recorder = new CrashDiagnosticsRecorder(root, '5.1.1');
     expect(readCrashEventHistory(root)).toEqual([]);
@@ -64,7 +64,7 @@ describe('crash recovery diagnostics', () => {
   });
 
   it('persists bounded startup stages in the same local diagnostic stream', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-startup-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-startup-'));
     temporaryRoots.push(root);
     const recorder = new CrashDiagnosticsRecorder(root, '4.62.2');
     recorder.record({ type: 'desktop-startup', processType: 'main', reason: 'safe-storage:status:begin' });

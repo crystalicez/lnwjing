@@ -1,4 +1,4 @@
-import type { Result } from '@lnwjud/domain';
+import type { Result } from '@lnwjing/domain';
 
 export interface ReplacementRecoveryBackup {
   readonly recoveryId: string;
@@ -6,7 +6,7 @@ export interface ReplacementRecoveryBackup {
 }
 
 /**
- * A provider can fail after lnwjud has already captured the target pre-image.
+ * A provider can fail after lnwjing has already captured the target pre-image.
  * Preserve the original error semantics while making that recovery artifact
  * discoverable to the caller. The backup is intentionally not deleted here.
  */

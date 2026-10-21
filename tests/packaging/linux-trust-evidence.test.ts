@@ -17,7 +17,7 @@ describe('Linux package evidence contract', () => {
     const script = await readFile(path.join(repositoryRoot, 'scripts', 'verify-linux-release.sh'), 'utf8');
     expect(script).toContain('--appimage-extract');
     expect(script).toContain('dpkg-deb --info');
-    expect(script).toContain('lnwjud-linux-host');
+    expect(script).toContain('lnwjing-linux-host');
     expect(script).toContain('NATIVE_HOST.json');
     expect(script).toContain('must run on Linux');
     expect(script).toContain('-L');

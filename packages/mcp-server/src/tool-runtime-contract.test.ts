@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { err, type Result } from '@lnwjud/domain';
+import { err, type Result } from '@lnwjing/domain';
 import { UPGRADE_TOOL_CATALOG } from './upgrade-catalog.js';
 import { ToolRegistry } from './tool-registry.js';
 import { withNativeDiagnosticFixture } from './native-diagnostic-test-fixture.js';
@@ -97,7 +97,7 @@ async function preparedInput(
     }
     case 'ecc_memory_save': {
       const result = await executeDefinition(registry, 'ecc_memory_save', {
-        workspaceId: 'ecc-workspace', title: 'Runtime contract memory', body: 'runtime contract memory body', kind: 'note', sourceHarness: 'lnwjud-test',
+        workspaceId: 'ecc-workspace', title: 'Runtime contract memory', body: 'runtime contract memory body', kind: 'note', sourceHarness: 'lnwjing-test',
       });
       if (!result.ok) throw new Error(result.error.message);
       const memory = record(record(result.value).memory);

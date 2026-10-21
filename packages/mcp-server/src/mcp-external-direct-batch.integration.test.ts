@@ -3,15 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { LocalExtensionsService } from '@lnwjud/extensions';
-import { permissionProfiles } from '@lnwjud/permissions';
+import { LocalExtensionsService } from '@lnwjing/extensions';
+import { permissionProfiles } from '@lnwjing/permissions';
 import { ToolRegistry } from './tool-registry.js';
 
 const child = fileURLToPath(new URL('../../extensions/tests/fixtures/external-mcp-server.mjs', import.meta.url));
 
 describe('real local external MCP direct-vs-batch contract', () => {
   it('preserves direct success, exact child error, and batched child status without changing approval policy', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-mcp-direct-batch-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-direct-batch-'));
     const extensions = new LocalExtensionsService({
       homeDir: root,
       appDataDir: root,
@@ -23,7 +23,7 @@ describe('real local external MCP direct-vs-batch contract', () => {
           'safe-local-fixture': {
             command: process.execPath,
             args: [child],
-            env: { LNWJUD_EXTERNAL_MCP_FIXTURE_ERA: 'schema-error' },
+            env: { LNWJING_EXTERNAL_MCP_FIXTURE_ERA: 'schema-error' },
           },
         },
       },

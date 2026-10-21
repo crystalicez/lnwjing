@@ -17,9 +17,9 @@ afterEach(async () => {
 
 describe('019_native_automation migration', () => {
   it('upgrades an 018 database atomically while preserving goal and scheduled-continuation rows', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-automation-upgrade-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-automation-upgrade-'));
     roots.push(root);
-    const filename = path.join(root, 'lnwjud.sqlite');
+    const filename = path.join(root, 'lnwjing.sqlite');
     const initial = new SqliteDatabase(filename);
     initial.connection.prepare(`INSERT INTO workspaces (id, display_name, root_path, real_root_path, created_at)
       VALUES (?, ?, ?, ?, ?)`).run('workspace-a', 'Workspace A', root, root, now);

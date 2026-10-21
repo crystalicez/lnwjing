@@ -22,7 +22,7 @@ export function canInstallMacosUpdates(
   },
 ): boolean {
   const appPath = path.resolve(executablePath, '../../..');
-  if (path.basename(appPath) !== 'lnwjud.app') return false;
+  if (path.basename(appPath) !== 'lnwjing.app') return false;
   try {
     const details = run(['--display', '--verbose=4', appPath]);
     if (!isTrustedMacosUpdateSignature(details)) return false;

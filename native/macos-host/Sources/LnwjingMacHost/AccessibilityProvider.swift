@@ -179,7 +179,7 @@ enum MacAccessibilityProvider {
 
     /// Apply only the bounded window mutations used by the public window
     /// capability. Accessibility permission is checked again at the point of
-    /// mutation because TCC grants may be revoked while lnwjud is running.
+    /// mutation because TCC grants may be revoked while lnwjing is running.
     static func mutateWindow(
         pid: pid_t,
         windowTarget: MacWindowTarget? = nil,

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AuditEvent } from '@lnwjud/audit';
+import type { AuditEvent } from '@lnwjing/audit';
 import { SqliteAuditRepository } from './audit-repository.js';
 import { SqliteDatabase } from './database.js';
 
@@ -15,10 +15,10 @@ afterEach(async () => {
 });
 
 describe('SqliteDatabase WAL', () => {
-  it('opens in WAL mode so desktop and stdio MCP can share lnwjud.sqlite', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-wal-'));
+  it('opens in WAL mode so desktop and stdio MCP can share lnwjing.sqlite', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-wal-'));
     temporaryRoots.push(root);
-    const filename = path.join(root, 'lnwjud.sqlite');
+    const filename = path.join(root, 'lnwjing.sqlite');
     const writer = new SqliteDatabase(filename);
     const mode = writer.connection.prepare('PRAGMA journal_mode;').get() as { journal_mode?: string } | undefined;
     expect(mode?.journal_mode?.toLowerCase()).toBe('wal');
@@ -28,7 +28,7 @@ describe('SqliteDatabase WAL', () => {
       id: 'event-mcp-1',
       timestamp: new Date().toISOString(),
       actorId: 'cli-mcp-stdio',
-      actorName: 'lnwjud cli MCP',
+      actorName: 'lnwjing cli MCP',
       action: 'mcp_tool:read_file',
       resultCode: 'SUCCESS',
       durationMs: 3,
@@ -44,18 +44,18 @@ describe('SqliteDatabase WAL', () => {
   });
 
   it('automatically creates parent directory when database path does not exist yet', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-dir-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-dir-'));
     temporaryRoots.push(root);
-    const filename = path.join(root, 'nested', 'deep', 'lnwjud.sqlite');
+    const filename = path.join(root, 'nested', 'deep', 'lnwjing.sqlite');
     const database = new SqliteDatabase(filename);
     expect(database.connection.prepare('SELECT 1 as val').get()).toEqual({ val: 1 });
     database.close();
   });
 
   it('refuses to create an empty canonical database while another process owns a restore claim', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-restore-race-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-restore-race-'));
     temporaryRoots.push(root);
-    const filename = path.join(root, 'lnwjud.sqlite');
+    const filename = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     await mkdir(backupDirectory, { recursive: true });
     await writeFile(path.join(backupDirectory, 'restore-pending.json.claim-123-fixture'), '{}', 'utf8');
@@ -65,9 +65,9 @@ describe('SqliteDatabase WAL', () => {
   });
 
   it('waits through the canonical restore swap instead of opening the temporary gap', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-restore-lock-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-restore-lock-'));
     temporaryRoots.push(root);
-    const filename = path.join(root, 'lnwjud.sqlite');
+    const filename = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     await mkdir(backupDirectory, { recursive: true });
 
@@ -118,9 +118,9 @@ describe('SqliteDatabase WAL', () => {
   }, 20_000);
 
   it('waits for the lifecycle lock before reopening a live canonical connection', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-live-restore-lock-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-restore-lock-'));
     temporaryRoots.push(root);
-    const filename = path.join(root, 'lnwjud.sqlite');
+    const filename = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     await mkdir(backupDirectory, { recursive: true });
     let identity: string | null = 'first';
@@ -165,9 +165,9 @@ describe('SqliteDatabase WAL', () => {
   }, 20_000);
 
   it('reopens the canonical database when the file identity changes under a live runtime', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-replaced-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-replaced-'));
     temporaryRoots.push(root);
-    const filename = path.join(root, 'lnwjud.sqlite');
+    const filename = path.join(root, 'lnwjing.sqlite');
     let identity: string | null = 'first';
     let replacements = 0;
     const database = new SqliteDatabase(filename, {
@@ -187,9 +187,9 @@ describe('SqliteDatabase WAL', () => {
   });
 
   it('does not resurrect a database after its owner closes it', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-closed-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-closed-'));
     temporaryRoots.push(root);
-    const database = new SqliteDatabase(path.join(root, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
     expect(database.connection.prepare('SELECT 1 as val').get()).toEqual({ val: 1 });
     database.close();
     database.close();

@@ -66,7 +66,7 @@ export class EccMemoryVaultService {
     if (Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES) throw new Error('ECC memory body exceeds 128 KiB');
     rejectSecrets(`${title}\n${body}`);
     const kind = input.kind ?? 'note';
-    const sourceHarness = normalizeSlug(input.sourceHarness ?? 'lnwjud', 'source harness');
+    const sourceHarness = normalizeSlug(input.sourceHarness ?? 'lnwjing', 'source harness');
     const targetHarnesses = normalizeSlugArray(input.targetHarnesses ?? ['all'], 'target harness');
     const tags = normalizeSlugArray(input.tags ?? [], 'tag');
     const links = normalizeMemoryLinks(input.links ?? []);

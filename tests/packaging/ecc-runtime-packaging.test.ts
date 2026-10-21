@@ -17,8 +17,8 @@ describe('ECC packaged runtime contract', () => {
     expect(desktopPackage.dependencies?.['ecc-agentshield']).toBe('1.4.0');
     expect(prepareSource).toContain("const EXPECTED_VERSION = '2.2.1'");
     expect(prepareSource).toContain("const EXPECTED_SCANNER_VERSION = '1.4.0'");
-    expect(prepareSource).toContain("scannerRuntimeBundlePath = path.join(targetRoot, '.lnwjud-agentshield-runtime.cjs')");
-    expect(prepareSource).toContain("require('./.lnwjud-agentshield-runtime.cjs')");
+    expect(prepareSource).toContain("scannerRuntimeBundlePath = path.join(targetRoot, '.lnwjing-agentshield-runtime.cjs')");
+    expect(prepareSource).toContain("require('./.lnwjing-agentshield-runtime.cjs')");
     expect(prepareSource).toContain("[scannerBundlePath, '--version']");
     expect(prepareSource).toContain('Prepared AgentShield wrapper failed passthrough validation');
     expect(prepareSource).toContain('scannerCliVersion');
@@ -28,7 +28,7 @@ describe('ECC packaged runtime contract', () => {
     expect(prepareSource).toContain('scannerBundleSha256');
     expect(builderSource).toContain('from: build/ecc-runtime');
     expect(builderSource).toContain('to: ecc-runtime');
-    expect(mainSource).toContain("path.join(process.resourcesPath, 'ecc-runtime', '.lnwjud-agentshield.cjs')");
+    expect(mainSource).toContain("path.join(process.resourcesPath, 'ecc-runtime', '.lnwjing-agentshield.cjs')");
   });
 
   it('keeps generated ECC resources out of Git while retaining required attribution', () => {
@@ -36,6 +36,6 @@ describe('ECC packaged runtime contract', () => {
     expect(notices).toContain('ecc-universal` 2.2.1');
     expect(notices).toContain('ecc-agentshield` 1.4.0');
     expect(notices).toContain('normalizes the packaged AgentShield CLI version');
-    expect(notices).toContain('Imported rules, hooks, workflows, MCP templates, memories, and instincts do not override lnwjud permissions');
+    expect(notices).toContain('Imported rules, hooks, workflows, MCP templates, memories, and instincts do not override lnwjing permissions');
   });
 });

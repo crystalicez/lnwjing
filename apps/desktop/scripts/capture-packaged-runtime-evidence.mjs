@@ -18,13 +18,13 @@ const BUNDLED_TUNNEL_CLIENT_VERSION = runtimeDependencies.tunnelClient.version;
 const TARGETS = Object.freeze({
   win32: Object.freeze({
     required: Object.freeze([
-      ['lnwjud.exe', 'lnwjud.exe'],
-      ['lnwjud-mcp-stdio.cmd', 'lnwjud-mcp-stdio.cmd'],
+      ['lnwjing.exe', 'lnwjing.exe'],
+      ['lnwjing-mcp-stdio.cmd', 'lnwjing-mcp-stdio.cmd'],
       ['windows-capability-bridge.ps1', 'resources/windows-capability-bridge.ps1'],
       ['windows-capability-bridge.sha256', 'resources/windows-capability-bridge.sha256'],
       ['windows-capability-bridge.integrity.json', 'resources/windows-capability-bridge.integrity.json'],
-      ['windows-secret-migrator.exe', 'resources/windows-secret-migrator/lnwjud-windows-secret-migrator.exe'],
-      ['windows-secret-migrator.sha256', 'resources/windows-secret-migrator/lnwjud-windows-secret-migrator.sha256'],
+      ['windows-secret-migrator.exe', 'resources/windows-secret-migrator/lnwjing-windows-secret-migrator.exe'],
+      ['windows-secret-migrator.sha256', 'resources/windows-secret-migrator/lnwjing-windows-secret-migrator.sha256'],
       ['rg.exe', 'resources/runtime-tools/ripgrep/rg.exe'],
       ['rg-manifest', 'resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json'],
       ['tunnel-client.exe', 'resources/tunnel-client/tunnel-client.exe'],
@@ -32,25 +32,25 @@ const TARGETS = Object.freeze({
   }),
   darwin: Object.freeze({
     required: Object.freeze([
-      ['lnwjud', 'Contents/MacOS/lnwjud'],
-      ['lnwjud-mcp-stdio', 'Contents/Resources/lnwjud-mcp-stdio'],
+      ['lnwjing', 'Contents/MacOS/lnwjing'],
+      ['lnwjing-mcp-stdio', 'Contents/Resources/lnwjing-mcp-stdio'],
       ['rg', 'Contents/Resources/runtime-tools/ripgrep/rg'],
       ['rg-manifest', 'Contents/Resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json'],
       ['tunnel-client', 'Contents/Resources/tunnel-client/tunnel-client'],
       ['tunnel-client-manifest', 'Contents/Resources/tunnel-client/BUNDLED_TUNNEL_CLIENT.json'],
-      ['native-host', 'Contents/Resources/native-host/macos/{arch}/lnwjud-macos-host'],
+      ['native-host', 'Contents/Resources/native-host/macos/{arch}/lnwjing-macos-host'],
       ['native-host-manifest', 'Contents/Resources/native-host/macos/{arch}/NATIVE_HOST.json'],
     ]),
   }),
   linux: Object.freeze({
     required: Object.freeze([
-      ['lnwjud', 'lnwjud'],
-      ['lnwjud-mcp-stdio', 'lnwjud-mcp-stdio'],
+      ['lnwjing', 'lnwjing'],
+      ['lnwjing-mcp-stdio', 'lnwjing-mcp-stdio'],
       ['rg', 'resources/runtime-tools/ripgrep/rg'],
       ['rg-manifest', 'resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json'],
       ['tunnel-client', 'resources/tunnel-client/tunnel-client'],
       ['tunnel-client-manifest', 'resources/tunnel-client/BUNDLED_TUNNEL_CLIENT.json'],
-      ['native-host', 'resources/native-host/linux/{arch}/lnwjud-linux-host'],
+      ['native-host', 'resources/native-host/linux/{arch}/lnwjing-linux-host'],
       ['native-host-manifest', 'resources/native-host/linux/{arch}/NATIVE_HOST.json'],
     ]),
   }),
@@ -118,7 +118,7 @@ export async function collectPackagedRuntimeEvidence(context, { allowIncompleteM
     let policy;
     if (mode !== 'unsigned' && !allowIncompleteMacSigningPolicy) {
       policy = await readMacosSigningPolicyEvidence();
-      const rootExecutable = files.find((entry) => entry.relativePath === 'Contents/MacOS/lnwjud');
+      const rootExecutable = files.find((entry) => entry.relativePath === 'Contents/MacOS/lnwjing');
       validateMacosSigningPolicyEvidence(policy, {
         mode,
         arch,
@@ -154,14 +154,14 @@ async function assertRegularCanonicalFile(filePath, label) {
 
 function resolvePackagedPath(appOutDir, platform, relativePath) {
   // electron-builder 26 passes the output directory to both afterPack and
-  // afterSign. productName is lnwjud; mac extraFiles live in its Contents.
+  // afterSign. productName is lnwjing; mac extraFiles live in its Contents.
   return platform === 'darwin'
-    ? path.join(appOutDir, 'lnwjud.app', relativePath)
+    ? path.join(appOutDir, 'lnwjing.app', relativePath)
     : path.join(appOutDir, relativePath);
 }
 
 function isExecutablePath(relativePath) {
-  return ['lnwjud', 'lnwjud-mcp-stdio', 'rg', 'tunnel-client', 'lnwjud-macos-host', 'lnwjud-linux-host']
+  return ['lnwjing', 'lnwjing-mcp-stdio', 'rg', 'tunnel-client', 'lnwjing-macos-host', 'lnwjing-linux-host']
     .includes(path.posix.basename(relativePath));
 }
 
@@ -180,7 +180,7 @@ async function verifyRuntimeManifest(filePath, platform, arch, relativePath) {
   } catch {
     throw new Error(`Packaged runtime manifest is not valid JSON: ${relativePath}`);
   }
-  if (manifest?.schemaVersion !== 1 || manifest.product !== 'lnwjud' || manifest.platform !== platform || manifest.arch !== arch) {
+  if (manifest?.schemaVersion !== 1 || manifest.product !== 'lnwjing' || manifest.platform !== platform || manifest.arch !== arch) {
     throw new Error(`Packaged runtime manifest identity mismatch: ${relativePath}`);
   }
   if (typeof manifest.version !== 'string' || !/^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/.test(manifest.version)
@@ -239,7 +239,7 @@ async function verifyNativeHostManifest(filePath, platform, arch, relativePath) 
   } catch {
     throw new Error(`Packaged native-host manifest is not valid JSON: ${relativePath}`);
   }
-  const expectedName = platform === 'darwin' ? 'lnwjud-macos-host' : 'lnwjud-linux-host';
+  const expectedName = platform === 'darwin' ? 'lnwjing-macos-host' : 'lnwjing-linux-host';
   if (manifest?.schemaVersion !== 1 || manifest?.name !== expectedName || manifest.platform !== platform || manifest.arch !== arch || manifest.verified !== true
     || typeof manifest.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(manifest.sha256)
     || !Number.isSafeInteger(manifest.sizeBytes) || manifest.sizeBytes < 1) {

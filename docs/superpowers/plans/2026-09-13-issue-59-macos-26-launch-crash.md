@@ -6,7 +6,7 @@
 
 **Execution update (CI run `34744910612`):** The first fix-head run produced and launched all macOS 15 artifacts, but exposed two test-harness defects before release. The current hosted `macos-26` arm64 runner launched the exact public v4.62.1 DMG instead of reproducing the reporter's `25G83` dyld abort, so old-runtime failure is not a portable CI invariant. The gate now proves the old defect deterministically by staging the exact hash-pinned v4.62.1 DMG and ZIP without mutation and requiring the effective signing-policy inspector to reject both because their hardened Electron processes lack `disable-library-validation`; the old runtime launch result is retained as a non-gating observation. The same run also showed that target-native provenance sampled build byproducts instead of initial source cleanliness, so the orchestrator now snapshots Git status before any build/test step and forwards that value into release evidence. A new exact-head run must pass both fixes before integration continues.
 
-**Execution update (CI run `34746365706`):** The deterministic v4.62.1 DMG/ZIP policy RED passed, the corrected arm64/x64 artifacts passed clean provenance and effective signing-policy verification, and both DMG and ZIP launched through LaunchServices on the current macOS 26 arm64 and Intel runners. The remaining packaged-smoke step failed before Electron started because the fresh compatibility checkout had installed dependencies but had not built the workspace packages imported by `desktop-dashboard.e2e.ts` (`@lnwjud/audit` and `@lnwjud/storage`). The compatibility job now builds only the five-package `@lnwjud/storage...` dependency graph before Playwright; this leaves the downloaded application artifacts untouched while making the test harness runnable. A new exact-head run must still pass the complete matrix before the change is eligible for PR or release.
+**Execution update (CI run `34746365706`):** The deterministic v4.62.1 DMG/ZIP policy RED passed, the corrected arm64/x64 artifacts passed clean provenance and effective signing-policy verification, and both DMG and ZIP launched through LaunchServices on the current macOS 26 arm64 and Intel runners. The remaining packaged-smoke step failed before Electron started because the fresh compatibility checkout had installed dependencies but had not built the workspace packages imported by `desktop-dashboard.e2e.ts` (`@lnwjing/audit` and `@lnwjing/storage`). The compatibility job now builds only the five-package `@lnwjing/storage...` dependency graph before Playwright; this leaves the downloaded application artifacts untouched while making the test harness runnable. A new exact-head run must still pass the complete matrix before the change is eligible for PR or release.
 
 **Execution update (CI run `34747745653`):** All native contracts, Windows verification, target-native macOS/Linux packages, v4.62.1 policy RED, corrected artifact provenance/policy, and macOS 26 x64 compatibility passed. On the exact reporter OS build (`26.6.2`, `25G83`) the arm64 DMG and ZIP also passed policy inspection and LaunchServices process survival, but the subsequent packaged E2E connected to a responsive Electron main process and observed no renderer page; later tests timed out waiting for a first window. The compatibility workflow had launched and forcibly terminated fresh DMG and ZIP instances after only three seconds immediately before E2E. That ordering can interrupt the pre-window Keychain-backed `safeStorage` initialization that Electron documents as asynchronous and has historically found timing-sensitive on macOS 26 arm64. The gate now stages both immutable artifacts without launching, runs the UI-level packaged E2E to completion first, and only then exercises DMG/ZIP LaunchServices startup. This preserves both acceptance boundaries without killing the first secure-storage startup before it creates a window. A new exact-head run must pass before PR creation.
 
@@ -14,7 +14,7 @@
 
 **Execution update (CI run `34750280455`):** The two-second delay did not change the failure: every Windows/macOS/Linux contract, all four target-native package producers, and macOS 26 x64 compatibility passed, while the exact macOS `26.6.2` (`25G83`) arm64 job again exposed a responsive Electron main process with zero renderer pages and timed out before `createDesktopWindow()`. This falsifies the fixed-delay workaround. Electron's upstream implementation shows that `isAsyncEncryptionAvailable()` lazily starts a distinct OS crypt/Keychain provider and waits for its initialization; the same upstream report explicitly states that synchronous `safeStorage` still works, and the async provider requests sync-compatible ciphertext. The replacement strategy therefore avoids starting the hanging async provider only for packaged Darwin 25+ arm64 and uses Electron's synchronous `isEncryptionAvailable` / `encryptString` / `decryptString` path there. Windows, Linux, macOS x64, older macOS, and unpackaged development retain the async path. Unit tests prove API routing and fail-closed behavior, while the startup contract proves the scoped strategy is selected before the first storage probe. A new exact-head macOS 26 arm64 run must still pass before PR creation.
 
-**Execution update (CI run `34751605213`, attempt 2):** Rerunning the exact SHA `3631a02f637d7fb37f8bcbf018408d762623b293` cleared an unrelated Windows timing flake and passed every required job except the macOS 26 arm64 UI smoke. The arm64 DMG/ZIP again passed byte provenance, deep signature verification, hardened-runtime inspection, and `disable-library-validation` inspection for every Electron process. The same artifacts left both the `lnwjud` main process and one Helper alive, but the manual CDP launch never received `/json/version` and both Playwright `_electron.launch` calls never returned. macOS 26 x64 passed the identical sequence. This falsifies the synchronous-safeStorage routing as a complete fix and narrows the remaining arm64-only behavior to a blocked main event loop or an equivalent pre-window launch handshake. Because the dashboard harness used an unbounded `fetch` within a nominal 60-second polling loop and the security harness attached stderr only after `_electron.launch` returned, the failed artifacts did not contain the last completed startup stage. The next exact-head run therefore records synchronous bounded startup stages from entrypoint through instance locking, restore, safeStorage, checkpoint-key creation, runtime construction, and first-window creation; the E2E harness bounds each CDP request and attaches that NDJSON journal on failure. No further runtime workaround is permitted until that evidence identifies the blocking call.
+**Execution update (CI run `34751605213`, attempt 2):** Rerunning the exact SHA `3631a02f637d7fb37f8bcbf018408d762623b293` cleared an unrelated Windows timing flake and passed every required job except the macOS 26 arm64 UI smoke. The arm64 DMG/ZIP again passed byte provenance, deep signature verification, hardened-runtime inspection, and `disable-library-validation` inspection for every Electron process. The same artifacts left both the `lnwjing` main process and one Helper alive, but the manual CDP launch never received `/json/version` and both Playwright `_electron.launch` calls never returned. macOS 26 x64 passed the identical sequence. This falsifies the synchronous-safeStorage routing as a complete fix and narrows the remaining arm64-only behavior to a blocked main event loop or an equivalent pre-window launch handshake. Because the dashboard harness used an unbounded `fetch` within a nominal 60-second polling loop and the security harness attached stderr only after `_electron.launch` returned, the failed artifacts did not contain the last completed startup stage. The next exact-head run therefore records synchronous bounded startup stages from entrypoint through instance locking, restore, safeStorage, checkpoint-key creation, runtime construction, and first-window creation; the E2E harness bounds each CDP request and attaches that NDJSON journal on failure. No further runtime workaround is permitted until that evidence identifies the blocking call.
 
 **Execution update (CI run `34753790283`):** Exact SHA `03022b2793ca4622419d170b923a9d96df676af6` passed the Windows gate, all three platform contracts, all four target-native package jobs, and the complete macOS 26 x64 compatibility job. Only macOS 26 arm64 packaged E2E failed. Its three independent launches all recorded the same final startup checkpoint: `safe-storage:sync:selected` followed by `safe-storage:status:begin`, with no matching status completion. Playwright reached both Node inspector and Chromium DevTools sockets, then force-killed the still-live main process after the 40/60-second bounds; this proves a main-thread stall inside synchronous `safeStorage.isEncryptionAvailable()`, not dyld, signing, renderer, or artifact-provenance failure. The runner evidence also shows its only/default Keychain was `login.keychain-db`; CI had not provisioned an interaction-free unlocked Keychain. The correction removes the disproven synchronous production branch, keeps Electron's non-blocking async safeStorage APIs on every platform, and makes the macOS 26 acceptance job create, unlock, select, and finally delete an ephemeral Keychain while restoring the runner's original Keychain configuration. The gate still exercises real encrypted storage and does not add a plaintext/test bypass. A new exact-head run must pass both macOS 26 architectures before PR creation.
 
@@ -24,7 +24,7 @@
 
 **Execution update (CI run `34759240096`, exact SHA `b6987ce972d1a5e279cffdc752762089917e6b77`):** The fixed-delay async experiment produced two independent macOS 26 findings. x64 created a renderer window and kept the app alive, but the first-run Doctor performed one MCP identity request while the loopback server was still settling; its 750 ms timeout was cached as a required `mcp-port` failure, so the UI never wrote the first-run completion marker. arm64 never created a renderer window in any of three launches; the main process reached DevTools but remained before `createDesktopWindow()` with no DYLD/signing error, consistent with the hosted Keychain/safeStorage startup path blocking. The next patch retries only timeout/transport identity failures within the Doctor probe budget and makes the macOS 26 arm64 packaged E2E opt into an explicitly named in-memory secret fixture. The fixture is guarded by packaged + Darwin 25+ + arm64 + both E2E flags; production launches continue to require Electron safeStorage and do not persist fixture ciphertext.
 
-**Goal:** Make the exact lnwjud macOS arm64 DMG/ZIP launch successfully on macOS 26 without weakening Developer ID builds, add an exact-artifact macOS 26 regression gate, and publish the correction only as a new patch release after the full release contract passes.
+**Goal:** Make the exact lnwjing macOS arm64 DMG/ZIP launch successfully on macOS 26 without weakening Developer ID builds, add an exact-artifact macOS 26 regression gate, and publish the correction only as a new patch release after the full release contract passes.
 
 **Architecture:** Keep hardened runtime enabled. Select one of two explicit signing policies at package time: community ad-hoc builds receive a dedicated `disable-library-validation` entitlement on the Electron process entry points, while Developer ID builds retain library validation and require one non-empty Team ID across all bundled code. Inspect the effective signature and entitlements after signing, preserve the result in release evidence, then test the same artifact built on the minimum-build runner again on macOS 26 rather than rebuilding it there.
 
@@ -32,7 +32,7 @@
 
 ## Global Constraints
 
-- Preserve the user's current dirty `E:\lnwjud` working tree. At analysis time it is on `dev` at `4b26cd2`, seven commits behind `origin/dev`; implementation must start in an isolated clean worktree from the then-current approved baseline and must not reset, overwrite, or absorb unrelated changes.
+- Preserve the user's current dirty `E:\lnwjing` working tree. At analysis time it is on `dev` at `4b26cd2`, seven commits behind `origin/dev`; implementation must start in an isolated clean worktree from the then-current approved baseline and must not reset, overwrite, or absorb unrelated changes.
 - The affected public release is `v4.62.1`, source commit `e05e6f1f6b6425dd70771cf1fb9950d7d1a7bd26`. Reconfirm the tag, release assets, and hashes before implementation because release state can change.
 - Do not change Electron, electron-builder, osx-sign, Node, pnpm, or the minimum supported macOS version in this hotfix. A dependency upgrade would make the signing diagnosis ambiguous and belongs in a separate plan.
 - Keep `hardenedRuntime: true`. Do not use `hardenedRuntime: false`, `--deep --force` as a repair shortcut, disabled SIP, or post-install re-signing as the product fix.
@@ -49,7 +49,7 @@
 
 ### User-visible failure
 
-[GitHub Issue #59](https://github.com/engasnm111/lnwjud/issues/59) reports that `lnwjud 4.62.1` installed from the arm64 DMG exits immediately on a MacBook Air M1 running macOS Tahoe `26.6.2 (25G83)`.
+[GitHub Issue #59](https://github.com/engasnm111/lnwjud/issues/59) reports that `lnwjing 4.62.1` installed from the arm64 DMG exits immediately on a MacBook Air M1 running macOS Tahoe `26.6.2 (25G83)`.
 
 The crash is not an application JavaScript exception:
 
@@ -74,8 +74,8 @@ The message says “Library missing,” but the report shows that the framework 
 | Evidence | Confirmed result | Consequence |
 | --- | --- | --- |
 | Issue report | M1, arm64 DMG, macOS `26.6.2 (25G83)`, dyld Team-ID rejection | Diagnose packaging/signing before application code |
-| Public asset | `lnwjud-4.62.1-arm64.dmg`, SHA-256 `d9cf74be1711a123fde49fc070c6fe055bf2c65bf6345395d4c8fa3816bed12c` | Use this exact immutable artifact for the policy RED and runtime observation |
-| Public ZIP | `lnwjud-4.62.1-arm64.zip`, SHA-256 `cf982b59a42c0ee6f91186212a03a683634e6c14675a718ddbdbf6fe1ba00db8` | Validate both distribution formats |
+| Public asset | `lnwjing-4.62.1-arm64.dmg`, SHA-256 `d9cf74be1711a123fde49fc070c6fe055bf2c65bf6345395d4c8fa3816bed12c` | Use this exact immutable artifact for the policy RED and runtime observation |
+| Public ZIP | `lnwjing-4.62.1-arm64.zip`, SHA-256 `cf982b59a42c0ee6f91186212a03a683634e6c14675a718ddbdbf6fe1ba00db8` | Validate both distribution formats |
 | Release provenance | CI run `34732348722`, source commit `e05e6f1...`, `signingCredentialConfigured: false`, signing mode `ad-hoc` | The public macOS release is not Developer ID signed |
 | Builder config | `apps/desktop/electron-builder.yml` enables hardened runtime and uses `scripts/sign-macos-runtime.mjs` | Preserve hardened runtime and fix the signing policy |
 | Entitlements | The current root and inherited plists do not contain `com.apple.security.cs.disable-library-validation` | An ad-hoc process has no explicit exception from library validation |
@@ -133,7 +133,7 @@ CI run `34744910612` reached this decision point. The exact hash-pinned v4.62.1 
 | For community ad-hoc builds only, keep hardened runtime and add `disable-library-validation` to Electron process entry points | Narrow, explicit reduction for an already ad-hoc artifact | Can unblock affected users without credentials | **Recommended patch-release hotfix** |
 | Disable hardened runtime for ad-hoc builds | Broadly weakens runtime protection and diverges farther from production | Easy | **Rejected** |
 | Repeat or deepen ad-hoc re-signing without an OS-level launch test | v4.62.1 already attempted this and still failed | Appears small but does not close the failure | **Rejected** |
-| Tell users to remove quarantine, disable SIP, or manually re-sign `/Applications/lnwjud.app` | Mutates user installations, does not fix the release artifact, and can reduce security | Superficial workaround | **Rejected** |
+| Tell users to remove quarantine, disable SIP, or manually re-sign `/Applications/lnwjing.app` | Mutates user installations, does not fix the release artifact, and can reduce security | Superficial workaround | **Rejected** |
 
 ### Chosen design
 
@@ -195,7 +195,7 @@ The distinction is made from the **resolved signer identity**, not from an envir
 - [ ] Preserve the current dirty workspace and create an isolated implementation worktree from the current approved `origin/dev` only after user authorization. Confirm that it contains commit `e05e6f1f6b6425dd70771cf1fb9950d7d1a7bd26` and Issue #59's v4.62.1 signing changes.
 - [ ] Record `git status --short --branch`, `git rev-parse HEAD`, `git merge-base --is-ancestor e05e6f1f6b6425dd70771cf1fb9950d7d1a7bd26 HEAD`, Node, pnpm, Electron, electron-builder, and osx-sign versions in the implementation notes.
 - [ ] Add the macOS 26 compatibility job skeleton described in Task 5 without the entitlement fix, push the diagnostic branch only if authorized, resolve its exact numeric workflow run ID, and pass that ID to one authoritative `gh run watch` process using a 20-second interval and `--exit-status`.
-- [ ] On `macos-26`, download `lnwjud-4.62.1-arm64.dmg` from the existing release, verify the SHA-256 above, stage it with `scripts/stage-macos-smoke-app.sh`, and launch through `open -n`.
+- [ ] On `macos-26`, download `lnwjing-4.62.1-arm64.dmg` from the existing release, verify the SHA-256 above, stage it with `scripts/stage-macos-smoke-app.sh`, and launch through `open -n`.
 - [ ] Capture `sw_vers`, `uname -m`, `codesign --display --verbose=4`, `codesign --display --requirements -`, and `codesign --display --entitlements :-` for the root main executable, Electron Framework binary, and each Electron helper executable.
 - [ ] Capture dyld/unified-log output and the process exit/survival result. Do not remove quarantine, re-sign, or modify the staged bundle.
 - [ ] Repeat the lightweight baseline on the v4.62.1 arm64 ZIP so the archive format is not confused with the signing defect.
@@ -248,7 +248,7 @@ corepack pnpm@10.15.0 exec vitest run tests/packaging/capture-packaged-runtime-e
 - [ ] Create the two ad-hoc plist files with the exact capability matrix in Task 1. Do not add unrelated entitlements.
 - [ ] Resolve both files from the signer's own module directory, not from the caller's current working directory.
 - [ ] Wrap `configuration.optionsForFile` only when `identity === '-'`:
-  - root `lnwjud.app` receives `entitlements.mac.adhoc.plist`;
+  - root `lnwjing.app` receives `entitlements.mac.adhoc.plist`;
   - nested helper apps/processes receive `entitlements.mac.adhoc.inherit.plist`;
   - existing hardened-runtime and all unrelated per-file options are preserved;
   - timestamp remains `none` for ad-hoc signing.
@@ -277,7 +277,7 @@ corepack pnpm@10.15.0 exec vitest run tests/packaging/capture-packaged-runtime-e
   1. parse `codesign` details and entitlement plist output;
   2. validate a normalized snapshot against `ad-hoc` or `certificate` policy;
   3. execute `/usr/bin/codesign` only in the production adapter on Darwin.
-- [ ] Inspect the actual executable carrying entitlements, not only the `.app` directory. Required Electron process entry points are the root `Contents/MacOS/lnwjud` binary plus every helper app executable under `Contents/Frameworks`.
+- [ ] Inspect the actual executable carrying entitlements, not only the `.app` directory. Required Electron process entry points are the root `Contents/MacOS/lnwjing` binary plus every helper app executable under `Contents/Frameworks`.
 - [ ] Enumerate every signable nested app, framework, dylib, and executable already covered by the release verifier. Reject symlink substitutions and non-canonical paths.
 - [ ] Enforce these ad-hoc invariants:
   - root and every nested signable verify successfully and report ad-hoc mode;
@@ -319,8 +319,8 @@ corepack pnpm@10.15.0 exec vitest run tests/packaging/capture-packaged-runtime-e
 - [ ] Make distributable macOS verification reject a wholly unsigned app. The default community state is ad-hoc signed, not unsigned.
 - [ ] Define flags unambiguously:
   - default: accept either a compliant ad-hoc policy or a compliant certificate policy;
-  - `LNWJUD_REQUIRE_CODESIGN=1`: require a real certificate/Team ID, not merely ad-hoc integrity;
-  - `LNWJUD_REQUIRE_NOTARIZATION=1`: imply certificate mode and require Gatekeeper assessment plus a valid staple.
+  - `LNWJING_REQUIRE_CODESIGN=1`: require a real certificate/Team ID, not merely ad-hoc integrity;
+  - `LNWJING_REQUIRE_NOTARIZATION=1`: imply certificate mode and require Gatekeeper assessment plus a valid staple.
 - [ ] Verify the effective policy independently for both DMG and ZIP contents.
 - [ ] Update `stage-macos-smoke-app.sh` so a launch failure records OS build, architecture, artifact hash, relevant process/signature snapshots, and bounded unified-log output before returning non-zero.
 - [ ] Keep the launch helper read-only with respect to the staged app. Do not clear quarantine, patch plists, invoke `codesign --force`, or disable protections.
@@ -343,7 +343,7 @@ corepack pnpm@10.15.0 exec vitest run tests/packaging/capture-packaged-runtime-e
 - [ ] Keep the existing package builders on `macos-15` and `macos-15-intel`. Building on the older supported environment and testing the resulting bytes on the newer environment catches compatibility errors without silently raising the minimum OS.
 - [ ] Add a downstream `macOS 26 Package Compatibility` matrix job with `needs: native-package-verification` and the same push/workflow-dispatch scope as native packaging.
 - [ ] Download `native-darwin-${arch}-${github.sha}` from the current workflow run. Do not rebuild Electron, native hosts, DMG, or ZIP on macOS 26.
-- [ ] Run artifact-only provenance verification with `LNWJUD_EXPECTED_COMMIT_SHA=${github.sha}` before executing downloaded bytes.
+- [ ] Run artifact-only provenance verification with `LNWJING_EXPECTED_COMMIT_SHA=${github.sha}` before executing downloaded bytes.
 - [ ] Run `verify:macos-release` against both the downloaded DMG and ZIP.
 - [ ] Stage and launch the DMG and ZIP independently through LaunchServices. Require each process to survive the current bounded startup window and emit diagnostics on failure.
 - [ ] Run the packaged Playwright smoke suite once against the DMG-staged app; the ZIP needs layout/signature/LaunchServices survival coverage but need not duplicate the full UI suite.
@@ -420,7 +420,7 @@ powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/veri
 
 #### C. Target-native macOS build gate
 
-- [ ] On macOS 15 arm64 and Intel, run the normal target-native packaging path with pinned Node/pnpm and `LNWJUD_VERIFY_PLATFORM=darwin`, `LNWJUD_VERIFY_ARCH` matching the runner, and package verification enabled.
+- [ ] On macOS 15 arm64 and Intel, run the normal target-native packaging path with pinned Node/pnpm and `LNWJING_VERIFY_PLATFORM=darwin`, `LNWJING_VERIFY_ARCH` matching the runner, and package verification enabled.
 - [ ] Verify both DMG and ZIP, the observed policy evidence, runtime hashes, native Swift host tests, real LaunchServices startup, and packaged Playwright smoke.
 
 #### D. macOS 26 exact-artifact gate
@@ -479,7 +479,7 @@ powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/veri
 ## 9. External References
 
 - [Issue #59 — Mac M1 exits at launch](https://github.com/engasnm111/lnwjud/issues/59)
-- [lnwjud v4.62.1 release](https://github.com/engasnm111/lnwjud/releases/tag/v4.62.1)
+- [lnwjing v4.62.1 release](https://github.com/engasnm111/lnwjud/releases/tag/v4.62.1)
 - [CI run 34732348722 for v4.62.1 source](https://github.com/engasnm111/lnwjud/actions/runs/34732348722)
 - [Apple Developer Forums — resolving library-validation Team-ID mismatch](https://developer.apple.com/forums/thread/126895)
 - [electron-builder macOS code-signing guidance](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/)

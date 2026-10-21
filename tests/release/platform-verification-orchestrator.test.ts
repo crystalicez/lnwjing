@@ -8,7 +8,7 @@ describe('platform verification orchestrator', () => {
   it('keeps verification target-native and never publishes', async (): Promise<void> => {
     const source = await readFile(path.join(repositoryRoot, 'scripts', 'verify-platform-release.mjs'), 'utf8');
     expect(source).toContain('Platform verification must run on');
-    expect(source).toContain('LNWJUD_VERIFY_ARCH');
+    expect(source).toContain('LNWJING_VERIFY_ARCH');
     expect(source).toContain('shell: false');
     expect(source).toContain('resolveInvocation');
     expect(source).toContain('Invoke the bundled Corepack JavaScript through this exact');
@@ -21,7 +21,7 @@ describe('platform verification orchestrator', () => {
   it('snapshots source cleanliness before build and forwards it to release evidence', async (): Promise<void> => {
     const source = await readFile(path.join(repositoryRoot, 'scripts', 'verify-platform-release.mjs'), 'utf8');
     expect(source).toContain('const sourceDirtyAtStart = await sourceTreeDirty();');
-    expect(source).toContain("LNWJUD_SOURCE_DIRTY_AT_START: sourceDirtyAtStart ? '1' : '0'");
+    expect(source).toContain("LNWJING_SOURCE_DIRTY_AT_START: sourceDirtyAtStart ? '1' : '0'");
     expect(source).toContain('async function sourceTreeDirty()');
     expect(source).toContain("['status', '--porcelain=v1', '--untracked-files=normal']");
   });
@@ -44,7 +44,7 @@ describe('platform verification orchestrator', () => {
     expect(workflow).toContain('inspect-macos-signing-policy.mjs');
     expect(workflow).toContain('lacks disable-library-validation');
     expect(workflow).toContain('Build packaged-smoke workspace dependencies');
-    expect(workflow).toContain('pnpm --filter @lnwjud/storage... --if-present build');
+    expect(workflow).toContain('pnpm --filter @lnwjing/storage... --if-present build');
     expect(workflow.indexOf('Build packaged-smoke workspace dependencies'))
       .toBeLessThan(workflow.indexOf('Run packaged Electron smoke on macOS 26'));
     expect(workflow).toContain('Stage exact DMG and ZIP apps without launching');

@@ -3,9 +3,9 @@ import { createServer, type Socket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { actorForRequestScope, createStdioRequestScope, ToolRegistry, type ToolRegistryOptions } from '@lnwjud/mcp-server';
-import { permissionProfiles } from '@lnwjud/permissions';
-import { SqliteDatabase, SqliteWorkspaceRepository } from '@lnwjud/storage';
+import { actorForRequestScope, createStdioRequestScope, ToolRegistry, type ToolRegistryOptions } from '@lnwjing/mcp-server';
+import { permissionProfiles } from '@lnwjing/permissions';
+import { SqliteDatabase, SqliteWorkspaceRepository } from '@lnwjing/storage';
 import { createStdioMcpRuntime } from './stdio-mcp-runtime.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -14,10 +14,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 describe('STDIO host-owned debugger lifetime', () => {
   it('shares sessions across request registries and closes every debugger socket on real runtime shutdown', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-debug-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-debug-'));
     const root = await realpath(directory);
     const workspace = { id: 'stdio-debug-workspace', displayName: 'STDIO debug fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
-    const database = new SqliteDatabase(path.join(directory, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(directory, 'lnwjing.sqlite'));
     await new SqliteWorkspaceRepository(database).insert(workspace);
     database.close();
     const sockets = new Set<Socket>();
@@ -73,7 +73,7 @@ describe('STDIO host-owned debugger lifetime', () => {
       await runtime.close();
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve, reject) => server.close((error) => error === undefined ? resolve() : reject(error)));
-      expect(path.dirname(directory) === os.tmpdir() && path.basename(directory).startsWith('lnwjud-stdio-debug-')).toBe(true);
+      expect(path.dirname(directory) === os.tmpdir() && path.basename(directory).startsWith('lnwjing-stdio-debug-')).toBe(true);
       await rm(directory, { recursive: true, force: true });
     }
   }, 30_000);

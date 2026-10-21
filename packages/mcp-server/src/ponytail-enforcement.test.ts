@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
-import { permissionProfiles } from '@lnwjud/permissions';
+import { appError, err, ok } from '@lnwjing/domain';
+import { permissionProfiles } from '@lnwjing/permissions';
 import { ToolRegistry, type McpApplicationServices } from './tool-registry.js';
 import { BUNDLED_PONYTAIL_REVIEW_SKILL_ID, BUNDLED_PONYTAIL_SKILL_ID, PonytailActivationLedger } from './ponytail-runtime.js';
 
@@ -12,7 +12,7 @@ function createServices(workspaceProfile?: unknown, skillMatchFailure = false): 
   const services = {
     file: {
       async readFile(_actor: unknown, _workspaceId: string, request: { readonly path: string }) {
-        if (request.path === '.lnwjud/project-profile.json') {
+        if (request.path === '.lnwjing/project-profile.json') {
           if (workspaceProfile === undefined) return err(appError('FILE_NOT_FOUND', 'missing profile'));
           return ok({ path: request.path, content: JSON.stringify(workspaceProfile), startLine: 1, endLine: 1 });
         }

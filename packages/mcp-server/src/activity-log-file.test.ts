@@ -14,11 +14,11 @@ afterEach(async () => {
 
 describe('mcp activity log file', () => {
   it('resolves the activity log under the shared data path', () => {
-    expect(mcpActivityLogPath('C:\\Users\\me\\AppData\\Roaming\\lnwjud')).toMatch(/mcp-activity\.log$/);
+    expect(mcpActivityLogPath('C:\\Users\\me\\AppData\\Roaming\\lnwjing')).toMatch(/mcp-activity\.log$/);
   });
 
   it('writes started and completed NDJSON lines that Live Logs can tail', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-activity-'));
     temporaryRoots.push(root);
     const filePath = mcpActivityLogPath(root);
     const tracker = new ActivityTracker(createFileActivitySink(filePath));
@@ -44,7 +44,7 @@ describe('mcp activity log file', () => {
   });
 
   it('flushes a large burst in order with no lost events across batch boundaries', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-burst-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-activity-burst-'));
     temporaryRoots.push(root);
     const filePath = mcpActivityLogPath(root);
     const sink = createFileActivitySink(filePath);
@@ -58,7 +58,7 @@ describe('mcp activity log file', () => {
   });
 
   it('trims a pre-existing oversized log to complete NDJSON rows on its first rotation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-legacy-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-activity-legacy-'));
     temporaryRoots.push(root);
     const filePath = mcpActivityLogPath(root);
     const event = (callId: string): ActivitySinkEvent => ({
@@ -77,7 +77,7 @@ describe('mcp activity log file', () => {
   });
 
   it('retains a bounded set of complete NDJSON segments with concurrent activity writers', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-rotation-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-activity-rotation-'));
     temporaryRoots.push(root);
     const filePath = mcpActivityLogPath(root);
     const first = createFileActivitySink(filePath, { maxBytes: 512 });
@@ -108,7 +108,7 @@ describe('mcp activity log file', () => {
   });
 
   it('waits asynchronously for another runtime holding the SQLite log lock', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-lock-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-activity-lock-'));
     temporaryRoots.push(root);
     const filePath = mcpActivityLogPath(root);
     const mutex = new DatabaseSync(`${filePath}.lock.sqlite`, { timeout: 0 });

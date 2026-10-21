@@ -1,6 +1,6 @@
 import { ActionButton, FormInput } from '../ui/UiPrimitives.js';
 import { useMemo, useState, type ReactElement } from 'react';
-import type { UiLocale, WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import type { UiLocale, WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { settleWorkspaceAdd, type AddWorkspaceAction } from '../workspaces/workspace-add.js';
 

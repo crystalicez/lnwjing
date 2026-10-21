@@ -6,11 +6,11 @@ The v4.53 implementation changes the durable continuation mainline from a chain 
 
 Automated evidence currently proves the local/runtime contract: recurring `dueAt` is not a mutation handoff cutoff; a live-worker tick returns `worker_busy_noop` without lease theft or host-task mutation; duplicate delivery is idempotent; an available worker can return `recurring_acquired` with the same native task ID; recurring stale-valid leases recover in the same hourly tick after the bounded 60-second stale-heartbeat grace, while the two-probe orphan fence remains only for historical one-time compatibility; interval tasks reject `consumed` receipts; completion remains `pending_native_cleanup` until exact Native ChatGPT delete/disable evidence makes the recurring task non-runnable; and historical v4.52.x `occurrence=once` rows retain compatibility without allowing a live one-time and recurring watchdog to overlap for one goal. Final pre-release automated verification on `dev` passed application **165/165**, storage **66/66**, MCP server **894/894**, Desktop acceptance **30/30**, integration **4/4**, and Electron E2E **12/12**, plus root typecheck, lint, generated tool-catalog synchronization/check, and public-repository hygiene **17/17**.
 
-The **real-host release acceptance is not yet proven** by this document. Before v4.53.0 may be released, a Native ChatGPT recurring task must be created through the host surface, the **same native task ID must fire at least twice** for the same durable goal, a firing during live work must demonstrate collision/no-op behavior, and terminal cleanup must prove that exact recurring task became non-runnable. The current chat host has not exposed a callable Native Scheduled Task create surface during this implementation session, so no cloud/multi-fire claim is fabricated and no lnwjud scheduler, Windows Task Scheduler, cron, shell timer, DOM automation, or external scheduler fallback is used.
+The **real-host release acceptance is not yet proven** by this document. Before v4.53.0 may be released, a Native ChatGPT recurring task must be created through the host surface, the **same native task ID must fire at least twice** for the same durable goal, a firing during live work must demonstrate collision/no-op behavior, and terminal cleanup must prove that exact recurring task became non-runnable. The current chat host has not exposed a callable Native Scheduled Task create surface during this implementation session, so no cloud/multi-fire claim is fabricated and no lnwjing scheduler, Windows Task Scheduler, cron, shell timer, DOM automation, or external scheduler fallback is used.
 
 ## v4.52.4 Native host-surface recovery hardening — 2026-09-04
 
-The v4.52.3 live E2E proved that the first Native ChatGPT one-time watchdog can fire, be claimed, and be retired correctly while creation of the fresh successor independently fails with host `Resource not found`. A follow-up probe reproduced the same `Resource not found` from a normal chat turn immediately after the Native Scheduled Task surface was rediscovered. That evidence localizes the failure to current ChatGPT host-surface availability rather than the durable lnwjud claim state machine.
+The v4.52.3 live E2E proved that the first Native ChatGPT one-time watchdog can fire, be claimed, and be retired correctly while creation of the fresh successor independently fails with host `Resource not found`. A follow-up probe reproduced the same `Resource not found` from a normal chat turn immediately after the Native Scheduled Task surface was rediscovered. That evidence localizes the failure to current ChatGPT host-surface availability rather than the durable lnwjing claim state machine.
 
 v4.52.4 adds a bounded recovery rule without introducing any scheduler fallback: when the Native Scheduled Task host explicitly reports a lookup/dispatch failure such as `Resource not found` that proves the operation was not dispatched, resolve the currently exposed Native Scheduled Task operation again exactly once and retry the exact same native operation exactly once. The provider, schedule/request identity, and continuation intent remain unchanged. Ambiguous possible-success is never retried and remains `create_uncertain` until exact host reconciliation. If the bounded retry still fails, record `create_failed` truthfully and keep unfinished durable work active.
 
@@ -18,7 +18,7 @@ This hardening cannot make an unavailable ChatGPT host resource exist; it preven
 
 ## v4.52.3 Scheduler-degraded durable-goal hardening — 2026-09-04
 
-A live end-to-end probe exposed a post-fire host-surface failure that durable state must not confuse with work completion: the first Native ChatGPT one-time watchdog fired and was correctly retired/superseded, a fresh generation-2 successor reservation was created, and the Native Scheduled Task host then returned `Resource not found` while creating the fresh successor. The successor was recorded truthfully as `create_failed`; no Windows Task Scheduler, lnwjud scheduler, cron, DOM automation, recurrence, or external scheduler fallback was used.
+A live end-to-end probe exposed a post-fire host-surface failure that durable state must not confuse with work completion: the first Native ChatGPT one-time watchdog fired and was correctly retired/superseded, a fresh generation-2 successor reservation was created, and the Native Scheduled Task host then returned `Resource not found` while creating the fresh successor. The successor was recorded truthfully as `create_failed`; no Windows Task Scheduler, lnwjing scheduler, cron, DOM automation, recurrence, or external scheduler fallback was used.
 
 v4.52.3 hardens the boundary between **work state** and **scheduler transport state**:
 
@@ -55,7 +55,7 @@ Focused evidence on 2026-09-03: application package **160/160** passed, storage 
 
 The v4.45 incident exposed a liveness gap between durable state and the native host: a scheduled wake successfully claimed an active goal, but the worker did not make the separate `prepare_scheduled_continuation` call requested only by prompt text. The firing continuation became historical, the goal stayed active, and no next reservation existed until the user prompted the agent again.
 
-The v4.45 repository contract now makes that omission impossible inside lnwjud. A successful `claim_scheduled_continuation` transaction acquires the new lease, marks the firing continuation `claimed`, inserts exactly one deterministic generation N+1 row as `prepared`, caps the acquired lease at the +2-minute handoff, and returns that successor with its host `scheduleRequest`. A repeated claim after an interrupted response returns `successor_required` with the same row. A replay with `native_task_receipt_missing`, `native_task_creation_uncertain`, or `native_task_id_already_recorded` requires exact host reconciliation before any create; only a truthfully failed create without a native ID can refresh to a new +2 retry request. Confirmed worker collisions retain the existing same-native-task +2-minute reschedule path; they do not create a replacement task.
+The v4.45 repository contract now makes that omission impossible inside lnwjing. A successful `claim_scheduled_continuation` transaction acquires the new lease, marks the firing continuation `claimed`, inserts exactly one deterministic generation N+1 row as `prepared`, caps the acquired lease at the +2-minute handoff, and returns that successor with its host `scheduleRequest`. A repeated claim after an interrupted response returns `successor_required` with the same row. A replay with `native_task_receipt_missing`, `native_task_creation_uncertain`, or `native_task_id_already_recorded` requires exact host reconciliation before any create; only a truthfully failed create without a native ID can refresh to a new +2 retry request. Confirmed worker collisions retain the existing same-native-task +2-minute reschedule path; they do not create a replacement task.
 
 Focused implementation evidence on 2026-09-01:
 
@@ -63,14 +63,14 @@ Focused implementation evidence on 2026-09-01:
 - MCP tool and bundled-skill contract suites: 5/5 passed;
 - acquired, interrupted-repeat, receipt, collision, orphan-recovery, lease-cap, finish, and exact-successor cancellation behaviors are exercised by repository/application tests.
 
-This proves the durable lnwjud state transition and published client contract. It does **not** prove that the external ChatGPT host created a native cloud task: `prepared`, `create_failed`, and `create_uncertain` remain unconfirmed. Host creation is accepted only after a real native task ID, host-reported due time, and `runsOn: cloud` receipt are recorded. A real two-wake host run remains the release-level E2E proof.
+This proves the durable lnwjing state transition and published client contract. It does **not** prove that the external ChatGPT host created a native cloud task: `prepared`, `create_failed`, and `create_uncertain` remain unconfirmed. Host creation is accepted only after a real native task ID, host-reported due time, and `runsOn: cloud` receipt are recorded. A real two-wake host run remains the release-level E2E proof.
 
 ## Native one-time capability probe — 2026-08-27
 
 - Host surface: ChatGPT scheduled automation capability exposed to this chat.
 - Destination requested: current chat continuation.
 - Occurrence requested: one-time, exactly one DTSTART and no RRULE.
-- Probe prompt: bounded harmless current-time report; no file mutation, lnwjud mutation, or successor creation.
+- Probe prompt: bounded harmless current-time report; no file mutation, lnwjing mutation, or successor creation.
 - Create result: accepted by the native host as a one-time task.
 - Native task identifier: returned by host and intentionally not copied into repository evidence because user-facing automation policy treats it as internal metadata.
 - Requested delay: 2 minutes.
@@ -96,4 +96,4 @@ Final verification from the implementation worktree:
 
 ## Native-host gate interpretation
 
-The host proves a native one-time create/disable surface without Windows Task Scheduler or an undocumented OpenAI API. Native current-chat serialization/queuing itself remains unverified, but overlap safety no longer relies on that behavior: the lnwjud session-level mutation fence fails closed if ownership cannot be transferred safely. Any execution-mode claim remains `unverified` until the native host explicitly confirms `cloud` or `local`.
+The host proves a native one-time create/disable surface without Windows Task Scheduler or an undocumented OpenAI API. Native current-chat serialization/queuing itself remains unverified, but overlap safety no longer relies on that behavior: the lnwjing session-level mutation fence fails closed if ownership cannot be transferred safely. Any execution-mode claim remains `unverified` until the native host explicitly confirms `cloud` or `local`.

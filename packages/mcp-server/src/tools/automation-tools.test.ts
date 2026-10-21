@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { ContextEconomyRuntime } from '../context-economy.js';
 import { AUTOMATION_TOOL_NAMES, automationTools } from './automation-tools.js';
 import type { McpApplicationServices, McpToolContext, McpToolDefinition } from './tool-types.js';

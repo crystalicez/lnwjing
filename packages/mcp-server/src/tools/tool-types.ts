@@ -1,7 +1,7 @@
-import { err, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { err, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import type { CheckedInvocationEnvelope, McpRegistryRuntimePort } from '../registry-runtime-port.js';
-import type { CapabilityService, EventLogBackendOptions, WorkspaceWriterLeasePort } from '@lnwjud/capabilities';
-import type { ExtensionsService } from '@lnwjud/extensions';
+import type { CapabilityService, EventLogBackendOptions, WorkspaceWriterLeasePort } from '@lnwjing/capabilities';
+import type { ExtensionsService } from '@lnwjing/extensions';
 import type {
   AgentSwarmService,
   AutomationDispatchContext,
@@ -37,7 +37,7 @@ import type {
   CallHistoryService,
   TaskResultService,
   ResourceSnapshotService,
-} from '@lnwjud/application';
+} from '@lnwjing/application';
 import { z } from 'zod';
 import type { ContextEconomyRuntime } from '../context-economy.js';
 import type { OfficeDataWorkflowService } from '../office-data-workflow.js';

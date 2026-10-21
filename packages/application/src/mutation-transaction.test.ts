@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { runMutationTransaction } from './mutation-transaction.js';
 
 describe('runMutationTransaction', () => {

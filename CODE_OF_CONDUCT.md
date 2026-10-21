@@ -2,7 +2,7 @@
 
 ## Our pledge
 
-We are committed to making participation in lnwjud a respectful, harassment-free experience for everyone, regardless of background, identity, experience level, or role in the project.
+We are committed to making participation in lnwjing a respectful, harassment-free experience for everyone, regardless of background, identity, experience level, or role in the project.
 
 ## Expected behavior
 
@@ -24,7 +24,7 @@ Examples of unacceptable behavior include:
 
 ## Scope
 
-This Code of Conduct applies to project spaces and to public interactions where someone is representing the lnwjud project or community.
+This Code of Conduct applies to project spaces and to public interactions where someone is representing the lnwjing project or community.
 
 ## Enforcement
 

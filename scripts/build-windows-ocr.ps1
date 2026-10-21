@@ -15,12 +15,12 @@ if (-not $dotnet) {
   Write-Error 'dotnet CLI not found. Install the .NET SDK 8+ first.'
 }
 
-& dotnet publish (Join-Path $ocrDir 'lnwjud-windows-ocr.csproj') `
+& dotnet publish (Join-Path $ocrDir 'lnwjing-windows-ocr.csproj') `
   -c $Configuration -r win-x64 --self-contained true `
   -p:PublishSingleFile=true -p:PublishReadyToRun=true `
   -o (Join-Path $ocrDir 'bin')
 if ($LASTEXITCODE -ne 0) { Write-Error 'dotnet publish failed.' }
 
-$helper = Join-Path $ocrDir 'bin\lnwjud-windows-ocr.exe'
+$helper = Join-Path $ocrDir 'bin\lnwjing-windows-ocr.exe'
 if (-not (Test-Path $helper)) { Write-Error "Expected helper was not produced: $helper" }
 Write-Host "Built $helper"

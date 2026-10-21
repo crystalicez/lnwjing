@@ -1,8 +1,8 @@
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
-import type { EngineeringGateEvidenceVerifier } from '@lnwjud/application';
-import type { EngineeringGateEvidence, Result } from '@lnwjud/domain';
-import { engineeringCommandFingerprint, formatEngineeringCommand } from '@lnwjud/shared';
+import type { EngineeringGateEvidenceVerifier } from '@lnwjing/application';
+import type { EngineeringGateEvidence, Result } from '@lnwjing/domain';
+import { engineeringCommandFingerprint, formatEngineeringCommand } from '@lnwjing/shared';
 
 interface EngineeringEvidenceStatusProvider {
   statusForGoalLiveness(workspaceId: string, taskId: string): Result<unknown> | Promise<Result<unknown>>;
@@ -227,7 +227,7 @@ async function packageObservation(
 
   if (isCanonicalClaimedCommand(evidence.command, /^node(?:\.exe)?$/i, [], ['apps/desktop/scripts/verify-release-evidence.mjs'])) {
     if (typeof result.value.stdout !== 'string') return false;
-    const match = /Release evidence verified for lnwjud (\S+) (win32|darwin|linux)\/(x64|arm64) commit ([0-9a-f]{40})/i.exec(result.value.stdout);
+    const match = /Release evidence verified for lnwjing (\S+) (win32|darwin|linux)\/(x64|arm64) commit ([0-9a-f]{40})/i.exec(result.value.stdout);
     if (match?.[4]?.toLowerCase() !== evidence.commit.toLowerCase()) return false;
     const artifactName = evidence.artifact.replace(/\\/g, '/').split('/').at(-1);
     const expectedNames = packageArtifactNames(match[2]?.toLowerCase(), match[1], match[3]?.toLowerCase());
@@ -255,9 +255,9 @@ function isPackageArtifactPath(value: string): boolean {
 
 function packageArtifactNames(platform: string | undefined, version: string | undefined, arch: string | undefined): readonly string[] {
   if (version === undefined || (arch !== 'x64' && arch !== 'arm64')) return [];
-  if (platform === 'win32') return [`lnwjud-Setup-${version}.exe`, `lnwjud-Portable-${version}.exe`];
-  if (platform === 'darwin') return [`lnwjud-${version}-${arch}.dmg`, `lnwjud-${version}-${arch}.zip`];
-  if (platform === 'linux') return [`lnwjud-${version}-${arch}.AppImage`, `lnwjud-${version}-${arch}.deb`];
+  if (platform === 'win32') return [`lnwjing-Setup-${version}.exe`, `lnwjing-Portable-${version}.exe`];
+  if (platform === 'darwin') return [`lnwjing-${version}-${arch}.dmg`, `lnwjing-${version}-${arch}.zip`];
+  if (platform === 'linux') return [`lnwjing-${version}-${arch}.AppImage`, `lnwjing-${version}-${arch}.deb`];
   return [];
 }
 

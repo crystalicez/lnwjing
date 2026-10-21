@@ -1,5 +1,5 @@
-import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 import { parseRepositoryImportRequest, type RepositoryImportRequest } from './repository-import-contract.js';
 

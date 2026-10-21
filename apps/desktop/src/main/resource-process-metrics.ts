@@ -21,14 +21,14 @@ export type MetricsExecutor = (pid: number) => Promise<WindowsProcessSample>;
 
 const WINDOWS_METRIC_SCRIPT = [
   "$ErrorActionPreference='Stop'",
-  '$p=Get-Process -Id ([int]$env:LNWJUD_METRIC_PID) -ErrorAction Stop',
+  '$p=Get-Process -Id ([int]$env:LNWJING_METRIC_PID) -ErrorAction Stop',
   "[pscustomobject]@{pid=[int]$p.Id;started_at=$p.StartTime.ToUniversalTime().ToString('o');working_set_bytes=[long]$p.WorkingSet64;cpu_seconds=[double]$p.TotalProcessorTime.TotalSeconds}|ConvertTo-Json -Compress",
 ].join('; ');
 
 async function readWindowsProcess(pid: number): Promise<WindowsProcessSample> {
   const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_METRIC_SCRIPT], {
     encoding: 'utf8', windowsHide: true, timeout: 5_000, maxBuffer: 16 * 1024,
-    env: { ...process.env, LNWJUD_METRIC_PID: String(pid) },
+    env: { ...process.env, LNWJING_METRIC_PID: String(pid) },
   });
   return JSON.parse(stdout) as WindowsProcessSample;
 }

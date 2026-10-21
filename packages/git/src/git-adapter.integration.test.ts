@@ -8,7 +8,7 @@ import { GitAdapter } from './git-adapter.js';
 const roots:string[]=[];
 afterEach(async()=>{await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})))});
 it('shows exact contents of a newly created nested directory, not the directory name',async()=>{
-  const root=await mkdtemp(path.join(os.tmpdir(),'lnwjud-git-list-'));
+  const root=await mkdtemp(path.join(os.tmpdir(),'lnwjing-git-list-'));
   roots.push(root);
   const init=spawnSync('git',['init','-q'],{cwd:root,encoding:'utf8'});
   if(init.status!==0)throw new Error(`git unavailable: ${init.stderr}`);

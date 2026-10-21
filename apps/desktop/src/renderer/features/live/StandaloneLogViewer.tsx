@@ -1,6 +1,6 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { workspaceScopeMatches, type DashboardSnapshot, type LiveLogExportReference, type LogLine, type LogSource, type TunnelAuthStatus, type UiLocale, type WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import { workspaceScopeMatches, type DashboardSnapshot, type LiveLogExportReference, type LogLine, type LogSource, type TunnelAuthStatus, type UiLocale, type WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { tunnelAuthPresentation } from '../../tunnel-auth-presentation.js';
 import { appendLogBatch, applyLogSnapshot, rememberLogId } from './log-buffer.js';
@@ -39,15 +39,15 @@ export function StandaloneLogViewer(): ReactElement {
       logFlushTimer.current = window.setTimeout(flushPendingLogLines, 40);
     }
   }, [flushPendingLogLines]);
-  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjud.resolveActivityTargetDetail({ detailRef })).detail, []);
+  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjing.resolveActivityTargetDetail({ detailRef })).detail, []);
   const searchTargetDetails = useCallback(async (
     query: string,
     candidates: readonly { readonly id: string; readonly detailRef: string | null }[],
-  ) => (await window.lnwjud.searchActivityTargetDetails({ query, candidates })).matchingIds, []);
+  ) => (await window.lnwjing.searchActivityTargetDetails({ query, candidates })).matchingIds, []);
 
   useEffect(() => {
     let disposed = false;
-    void window.lnwjud.getLogSnapshot().then((snapshot) => {
+    void window.lnwjing.getLogSnapshot().then((snapshot) => {
       if (disposed) return;
       setLines((previous) => {
         const merged = applyLogSnapshot(previous, logIds.current, snapshot.lines, MAX_CLIENT_LOG_LINES);
@@ -58,15 +58,15 @@ export function StandaloneLogViewer(): ReactElement {
       setTunnelLogExists(snapshot.tunnelLogExists);
       setTunnelAuth(snapshot.tunnelAuth);
     }).catch(() => undefined);
-    void window.lnwjud.listWorkspaces().then((nextWorkspaces) => {
+    void window.lnwjing.listWorkspaces().then((nextWorkspaces) => {
       if (!disposed) setWorkspaces(nextWorkspaces);
     }).catch(() => undefined);
-    void window.lnwjud.getDashboard().then((dashboard) => {
+    void window.lnwjing.getDashboard().then((dashboard) => {
       if (disposed) return;
       setLocale(dashboard.locale);
       setHostPlatform(dashboard.hostPlatform);
     }).catch(() => undefined);
-    const unsubscribe = window.lnwjud.onLogEvent((line) => {
+    const unsubscribe = window.lnwjing.onLogEvent((line) => {
       appendLine(line);
       if (line.source === 'tunnel') setTunnelLogExists(true);
     });
@@ -87,13 +87,13 @@ export function StandaloneLogViewer(): ReactElement {
       ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
       ...(scope.sessionId === null ? {} : { sessionId: scope.sessionId }),
     };
-    await window.lnwjud.clearLogBuffer(request).catch(() => undefined);
+    await window.lnwjing.clearLogBuffer(request).catch(() => undefined);
     pendingLogLines.current = pendingLogLines.current.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces));
     setLines((previous) => previous.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces)));
   }
 
   async function clearAll(): Promise<void> {
-    await Promise.all(sources.map((source) => window.lnwjud.clearLogBuffer({ source }).catch(() => undefined)));
+    await Promise.all(sources.map((source) => window.lnwjing.clearLogBuffer({ source }).catch(() => undefined)));
     if (logFlushTimer.current !== null) {
       window.clearTimeout(logFlushTimer.current);
       logFlushTimer.current = null;
@@ -104,7 +104,7 @@ export function StandaloneLogViewer(): ReactElement {
   }
 
   async function exportLogs(source: LogSource, scope: LogScopeSelection, query: string, lines: readonly LiveLogExportReference[]): Promise<void> {
-    await window.lnwjud.exportLogs({
+    await window.lnwjing.exportLogs({
       source,
       filePath: '',
       locale,
@@ -120,7 +120,7 @@ export function StandaloneLogViewer(): ReactElement {
       <header className="custom-titlebar">
         <div className="titlebar-drag-region">
           <div className="titlebar-brand">
-            <img src="./favicon.ico" alt="lnwjud logo" className="titlebar-logo" />
+            <img src="./favicon.ico" alt="lnwjing logo" className="titlebar-logo" />
             <span className="titlebar-title">{t('brand')}</span>
             <span className="titlebar-version">{t('live.title')}</span>
           </div>

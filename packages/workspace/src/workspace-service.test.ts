@@ -24,7 +24,7 @@ function repositorySpy(): WorkspaceRepository & { inserted: Workspace[] } {
 
 describe('WorkspaceService', () => {
   it('stores the canonical realRootPath when adding a directory', async () => {
-    const parent = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-service-'));
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-service-'));
     temporaryRoots.push(parent);
     const rootPath = path.join(parent, 'project');
     await mkdir(rootPath);
@@ -40,7 +40,7 @@ describe('WorkspaceService', () => {
   });
 
   it('rejects a nonexistent or file root without writing to the repository', async () => {
-    const parent = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-service-'));
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-service-'));
     temporaryRoots.push(parent);
     const filePath = path.join(parent, 'not-a-directory.txt');
     await writeFile(filePath, 'fixture', 'utf8');

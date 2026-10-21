@@ -166,19 +166,19 @@ export class TunnelRuntimeAdapter {
       });
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(`lnwjud could not safely check the local Tunnel processes. Restart Windows, reopen lnwjud, then check the Tunnel status. Details: ${detail}`);
+      throw new Error(`lnwjing could not safely check the local Tunnel processes. Restart Windows, reopen lnwjing, then check the Tunnel status. Details: ${detail}`);
     }
   }
 
   /**
-   * Remove only a confirmed stopped lnwjud local alias. The official v0.0.16
+   * Remove only a confirmed stopped lnwjing local alias. The official v0.0.16
    * "runtimes rm" also removes the profile/log/health files, so snapshot and
    * restore the exact owned files before reporting success. It never deletes
    * the remote tunnel, never calls "stop", and never targets another alias.
    */
   public async retireStoppedAlias(expectedTunnelId: string): Promise<void> {
     if (this.alias !== TUNNEL_RUNTIME_ALIAS || !/^tunnel_[A-Za-z0-9_-]{8,128}$/.test(expectedTunnelId)) {
-      throw new Error('Cannot verify the dedicated lnwjud native runtime alias');
+      throw new Error('Cannot verify the dedicated lnwjing native runtime alias');
     }
     const journal = this.options.recoveryDirectory === undefined
       ? null : new TunnelAliasRetirementJournal(this.options.recoveryDirectory, this.options.profileDirectory);
@@ -198,10 +198,10 @@ export class TunnelRuntimeAdapter {
       throw new Error('Tunnel profile directory is not a trusted directory; refusing alias removal');
     }
     const paths = [
-      path.join(directory, 'lnwjud.yaml'),
-      path.join(directory, 'lnwjud-tunnel.log'),
-      path.join(directory, 'lnwjud.runtime.secret'),
-      path.join(directory, 'lnwjud.oauth.session.secret'),
+      path.join(directory, 'lnwjing.yaml'),
+      path.join(directory, 'lnwjing-tunnel.log'),
+      path.join(directory, 'lnwjing.runtime.secret'),
+      path.join(directory, 'lnwjing.oauth.session.secret'),
     ];
     const profileMeta = await lstat(paths[0]!).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null;
@@ -226,7 +226,7 @@ export class TunnelRuntimeAdapter {
         const target = path.resolve(directory, healthFile);
         const rel = path.relative(directory, target);
         if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
-          throw new Error('Tunnel health URL file escapes the lnwjud profile directory');
+          throw new Error('Tunnel health URL file escapes the lnwjing profile directory');
         }
         paths.push(target);
       }

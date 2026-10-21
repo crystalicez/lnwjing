@@ -13,13 +13,13 @@ const execFileAsync = promisify(execFile);
 async function commitStage(stage: string): Promise<string> {
   await execFileAsync('git', ['init', '-q', stage]);
   await execFileAsync('git', ['-C', stage, 'add', '--', 'proof.txt']);
-  await execFileAsync('git', ['-C', stage, '-c', 'user.name=lnwjud-test', '-c', 'user.email=lnwjud-test@example.invalid', 'commit', '-qm', 'stage fixture']);
+  await execFileAsync('git', ['-C', stage, '-c', 'user.name=lnwjing-test', '-c', 'user.email=lnwjing-test@example.invalid', 'commit', '-qm', 'stage fixture']);
   return (await execFileAsync('git', ['-C', stage, 'rev-parse', 'HEAD'])).stdout.trim().toLowerCase();
 }
 
 describe.skipIf(process.platform !== 'win32')('Windows repository import native anchor', () => {
   it('publishes without replacement and refuses junction ancestry on the real filesystem', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud import anchor '));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing import anchor '));
     const workspace = path.join(root, 'workspace');
     const stage = path.join(root, 'stage');
     await mkdir(workspace);
@@ -71,7 +71,7 @@ describe.skipIf(process.platform !== 'win32')('Windows repository import native 
       '$cancelled=[RepositoryImportAnchor]::new($workspace,"cancelled")',
       '$cancelled.Dispose()',
       'if([IO.Directory]::Exists((Join-Path $workspace "cancelled"))){throw "Dispose published a cancelled destination"}',
-      'if(@([IO.Directory]::EnumerateDirectories($workspace,".lnwjud-import-guard-*")).Length -ne 0){throw "Guard cleanup failed"}',
+      'if(@([IO.Directory]::EnumerateDirectories($workspace,".lnwjing-import-guard-*")).Length -ne 0){throw "Guard cleanup failed"}',
       'Write-Output "NATIVE_ANCHOR_VERIFIED"',
     ].join('\n'));
     try {
@@ -84,7 +84,7 @@ describe.skipIf(process.platform !== 'win32')('Windows repository import native 
   }, 40_000);
 
   it('publishes a native stage with the exact identity pinned before checkout', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stage-match-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stage-match-'));
     const workspace = path.join(root, 'workspace');
     const stage = path.join(root, 'stage');
     const anchorSource = path.join(root, 'anchor.cs');
@@ -126,7 +126,7 @@ describe.skipIf(process.platform !== 'win32')('Windows repository import native 
   }, 45000);
 
   it('refuses modified tracked content and extra untracked content before native publication', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stage-content-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stage-content-'));
     const workspace = path.join(root, 'workspace');
     const stage = path.join(root, 'stage');
     const anchorSource = path.join(root, 'anchor.cs');
@@ -182,7 +182,7 @@ describe.skipIf(process.platform !== 'win32')('Windows repository import native 
   }, 60000);
 
   it('refuses a stage swapped after the pre-clone NTFS identity was captured', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stage-identity-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stage-identity-'));
     const workspace = path.join(root, 'workspace');
     const stage = path.join(root, 'stage');
     const anchorSource = path.join(root, 'anchor.cs');
@@ -224,7 +224,7 @@ describe.skipIf(process.platform !== 'win32')('Windows repository import native 
   }, 45000);
 
   it('removes its pinned guard after hard helper termination', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud import crash '));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing import crash '));
     const workspace = path.join(root, 'workspace');
     await mkdir(workspace);
     await writeFile(path.join(root, 'anchor.cs'), windowsRepositoryImportAnchorSource);
@@ -250,7 +250,7 @@ describe.skipIf(process.platform !== 'win32')('Windows repository import native 
         child.once('error', () => resolve(false));
       });
       expect(ready).toBe(true);
-      const guards = (await readdir(workspace)).filter((name) => name.startsWith('.lnwjud-import-guard-'));
+      const guards = (await readdir(workspace)).filter((name) => name.startsWith('.lnwjing-import-guard-'));
       expect(guards).toHaveLength(1);
       await expect(rm(path.join(workspace, guards[0]!), { recursive: true })).rejects.toThrow();
       expect(child.kill('SIGKILL')).toBe(true);

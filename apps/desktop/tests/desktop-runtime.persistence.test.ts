@@ -2,17 +2,17 @@ import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/pro
 import os from 'node:os';
 import path from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { CodexDiscovery } from '@lnwjud/codex';
-import { ToolRegistry } from '@lnwjud/mcp-server';
-import { USER_SETTING_KEYS } from '@lnwjud/shared';
-import { SqliteAuditRepository, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository } from '@lnwjud/storage';
+import { CodexDiscovery } from '@lnwjing/codex';
+import { ToolRegistry } from '@lnwjing/mcp-server';
+import { USER_SETTING_KEYS } from '@lnwjing/shared';
+import { SqliteAuditRepository, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository } from '@lnwjing/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-services.js';
 
 const temporaryRoots: string[] = [];
 
 function enableAutomaticBackups(root: string): void {
-  const database = new SqliteDatabase(path.join(root, 'lnwjud.sqlite'));
+  const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
   try {
     new SqliteSettingsRepository(database).set(USER_SETTING_KEYS.autoBackupEnabled, 'true');
   } finally {
@@ -25,7 +25,7 @@ const RUNTIME_TEST_TIMEOUT_MS = isWindowsGitHubActions ? 90_000 : 30_000;
 const LONG_RUNTIME_TEST_TIMEOUT_MS = isWindowsGitHubActions ? 120_000 : 60_000;
 
 beforeEach(() => {
-  vi.stubEnv('LNWJUD_UNRESTRICTED', '1');
+  vi.stubEnv('LNWJING_UNRESTRICTED', '1');
 });
 
 afterEach(async () => {
@@ -41,7 +41,7 @@ afterEach(async () => {
 
 describe('DesktopRuntime persistence', () => {
   it('defaults Local MCP HTTP to an automatically assigned free port', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-auto-mcp-port-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-auto-mcp-port-'));
     temporaryRoots.push(rawDataRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {
@@ -55,8 +55,8 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('reports real Desktop main-process memory even with no attributable Goal tasks', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-resources-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-resources-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-resources-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-resources-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {
@@ -73,10 +73,10 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('migrates the legacy 18765 default to Auto once and preserves a later explicit 18765 pin', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-mcp-port-migration-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-mcp-port-migration-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
-    const database = new SqliteDatabase(path.join(dataRoot, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(dataRoot, 'lnwjing.sqlite'));
     const settings = new SqliteSettingsRepository(database);
     settings.set(USER_SETTING_KEYS.mcpHttpPort, '18765');
     database.close();
@@ -99,7 +99,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('defaults unset recovery retention to 30 days while preserving an explicit Never choice', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-recovery-retention-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-recovery-retention-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
     const runtime = createDesktopRuntime(dataRoot);
@@ -121,7 +121,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('persists Engineering Harness, signals reconnect for connection-time instructions, and preserves legacy-client writes', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-engineering-harness-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-engineering-harness-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
     const runtime = createDesktopRuntime(dataRoot);
@@ -171,7 +171,7 @@ describe('DesktopRuntime persistence', () => {
 
   it('does not execute Codex discovery for the default-disabled Codex tools on dashboard refresh', async () => {
     const discover = vi.spyOn(CodexDiscovery.prototype, 'discover');
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-codex-disabled-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-codex-disabled-'));
     temporaryRoots.push(rawDataRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {
@@ -184,7 +184,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('defaults automatic database backups to off without affecting manual backups', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-backup-disabled-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-backup-disabled-'));
     temporaryRoots.push(root);
     const backupSpy = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent');
     const runtime = createDesktopRuntime(await realpath(root));
@@ -203,7 +203,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('persists the auto-backup switch and starts daily snapshots after opting in', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-backup-opt-in-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-backup-opt-in-'));
     temporaryRoots.push(root);
     const dataRoot = await realpath(root);
     const runtime = createDesktopRuntime(dataRoot);
@@ -231,7 +231,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('finishes the startup database backup before an immediate shutdown closes SQLite', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-backup-close-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-backup-close-'));
     temporaryRoots.push(root);
     enableAutomaticBackups(root);
     const runtime = createDesktopRuntime(await realpath(root));
@@ -244,7 +244,7 @@ describe('DesktopRuntime persistence', () => {
   });
 
   it('does not delete audit records after repeated startup backup failures', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-retention-backup-fail-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-retention-backup-fail-'));
     temporaryRoots.push(root);
     enableAutomaticBackups(root);
     const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockRejectedValue(new Error('backup unavailable'));
@@ -267,7 +267,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('does not delete audit records when a concurrent backup has no recent snapshot', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-retention-no-backup-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-retention-no-backup-'));
     temporaryRoots.push(root);
     enableAutomaticBackups(root);
     const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockResolvedValue(null);
@@ -290,7 +290,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('tolerates concurrent and repeated close() calls without re-closing SQLite', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-double-close-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-double-close-'));
     temporaryRoots.push(root);
     const runtime = createDesktopRuntime(await realpath(root));
 
@@ -299,7 +299,7 @@ describe('DesktopRuntime persistence', () => {
   });
 
   it('builds the production dashboard audit summary without parsing large started metadata', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-audit-summary-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-audit-summary-'));
     temporaryRoots.push(rawDataRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     const maximumLengthPath = `E:\\${'x'.repeat(4_093)}`;
@@ -325,7 +325,7 @@ describe('DesktopRuntime persistence', () => {
   }, FAST_RUNTIME_TEST_TIMEOUT_MS);
 
   it('starts with no automatically registered drive roots even when unrestricted mode is enabled', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-no-auto-drives-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-no-auto-drives-'));
     temporaryRoots.push(rawDataRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {
@@ -336,7 +336,7 @@ describe('DesktopRuntime persistence', () => {
   });
 
   it('wires durable goals and scheduled continuation orchestration into desktop MCP services', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-continuation-data-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-continuation-data-'));
     temporaryRoots.push(rawDataRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {
@@ -349,8 +349,8 @@ describe('DesktopRuntime persistence', () => {
   });
 
   it('restores owner-scoped automation state through the Desktop MCP composition after restart', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-automation-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-automation-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-automation-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-automation-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRoot = await realpath(rawWorkspaceRoot);
@@ -418,8 +418,8 @@ describe('DesktopRuntime persistence', () => {
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
   it('updates one connected Desktop MCP client immediately when in-process tool availability changes', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-tool-availability-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-tool-availability-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-tool-availability-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-tool-availability-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRoot = await realpath(rawWorkspaceRoot);
@@ -450,8 +450,8 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('publishes Agent Swarm to an already connected MCP client when Codex opt-in changes', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-live-codex-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-live-codex-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-live-codex-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-live-codex-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {
@@ -494,8 +494,8 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('publishes Agent Swarm when Codex is enabled before the MCP client connects', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-start-codex-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-start-codex-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-start-codex-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-start-codex-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {
@@ -520,12 +520,12 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('updates a long-lived MCP process when another process changes Codex opt-in', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-external-codex-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-external-codex-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-external-codex-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-external-codex-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const dataRoot = await realpath(rawDataRoot);
     const runtime = createDesktopRuntime(dataRoot, { watchToolAvailability: true });
-    const externalDatabase = new SqliteDatabase(path.join(dataRoot, 'lnwjud.sqlite'));
+    const externalDatabase = new SqliteDatabase(path.join(dataRoot, 'lnwjing.sqlite'));
     try {
       const workspace = await runtime.services.addWorkspace({ rootPath: await realpath(rawWorkspaceRoot) });
       const status = await runtime.services.startMcp({ workspaceId: workspace.id });
@@ -556,7 +556,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('persists user tool availability across a Desktop runtime restart', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-tool-availability-restart-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-tool-availability-restart-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
 
@@ -578,8 +578,8 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('keeps completed MCP work-log sessions visible across a Desktop runtime restart', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-worklog-restart-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-worklog-restart-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-worklog-restart-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-worklog-restart-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRoot = await realpath(rawWorkspaceRoot);
@@ -634,10 +634,10 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('discovers and loads a session older than the 500-row dashboard window', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-old-session-data-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-old-session-data-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
-    const database = new SqliteDatabase(path.join(dataRoot, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(dataRoot, 'lnwjing.sqlite'));
     const repository = new SqliteAuditRepository(database);
     const insertActivity = async (id: string, timestamp: string, workspaceId: string, sessionId: string): Promise<void> => {
       await repository.insert({
@@ -672,8 +672,8 @@ describe('DesktopRuntime persistence', () => {
   }, LONG_RUNTIME_TEST_TIMEOUT_MS);
 
   it('applies and restores permission settings without restoring an MCP listener', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRoot = await realpath(rawWorkspaceRoot);
@@ -720,9 +720,9 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('keeps one desktop MCP listener alive while selecting and serving different workspaces', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-multi-data-'));
-    const rawWorkspaceA = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-multi-a-'));
-    const rawWorkspaceB = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-multi-b-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-multi-data-'));
+    const rawWorkspaceA = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-multi-a-'));
+    const rawWorkspaceB = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-multi-b-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceA, rawWorkspaceB);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRootA = await realpath(rawWorkspaceA);
@@ -768,8 +768,8 @@ describe('DesktopRuntime persistence', () => {
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
   it('persists AI delete and STDIO security policy settings and applies scoped delete dynamically', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-policy-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-policy-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-policy-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-policy-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRoot = await realpath(rawWorkspaceRoot);
@@ -831,9 +831,9 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('archives, restores, and deletes project registrations without deleting the project folder', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-project-lifecycle-data-'));
-    const rawWorkspaceA = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-project-lifecycle-a-'));
-    const rawWorkspaceB = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-project-lifecycle-b-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-project-lifecycle-data-'));
+    const rawWorkspaceA = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-project-lifecycle-a-'));
+    const rawWorkspaceB = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-project-lifecycle-b-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceA, rawWorkspaceB);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRootA = await realpath(rawWorkspaceA);
@@ -897,7 +897,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('restores the persisted UI locale for native tray startup', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-locale-data-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-locale-data-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
 
@@ -920,7 +920,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('persists user-configurable runtime settings and custom MCP server definitions', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-user-settings-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-user-settings-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
 
@@ -1020,7 +1020,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('installs and configures the PDF provider through the desktop service without requiring restart', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-pdf-provider-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-pdf-provider-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
     const providerPath = path.join(dataRoot, 'runtime-tools', 'pdf-provider', 'fixture', 'Library', 'bin', 'pdftotext.exe');
@@ -1052,7 +1052,7 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('applies MCP poll and foreground wait settings live without requiring a runtime restart', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-live-waits-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-live-waits-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
     const runtime = createDesktopRuntime(dataRoot);
@@ -1071,8 +1071,8 @@ describe('DesktopRuntime persistence', () => {
   }, RUNTIME_TEST_TIMEOUT_MS);
 
   it('serves the local capability health tool through the desktop MCP listener', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRoot = await realpath(rawWorkspaceRoot);

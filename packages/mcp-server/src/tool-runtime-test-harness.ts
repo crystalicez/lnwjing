@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import type { McpApplicationServices } from './tools/tool-types.js';
 
 type ServiceResolver = (method: string, args: readonly unknown[]) => unknown;
@@ -25,7 +25,7 @@ export function runtimeRecord(value: unknown): Record<string, unknown> {
 }
 
 export function createRuntimeSuccessServices(calls: string[]): McpApplicationServices {
-  const runtimeEccWorkspaceRoot = path.join(os.tmpdir(), `lnwjud-runtime-contract-ecc-${process.pid}`);
+  const runtimeEccWorkspaceRoot = path.join(os.tmpdir(), `lnwjing-runtime-contract-ecc-${process.pid}`);
   mkdirSync(runtimeEccWorkspaceRoot, { recursive: true });
   const processSnapshot = {
     processId: 'process-1', executable: 'pnpm.cmd', args: ['typecheck'], cwd: 'E:\\project', state: 'exited',
@@ -36,12 +36,12 @@ export function createRuntimeSuccessServices(calls: string[]): McpApplicationSer
   return {
     sandboxRuntimeOptions: {
       platform: process.platform,
-      sandboxExecutable: '__lnwjud_runtime_contract_missing_windows_sandbox__.exe',
+      sandboxExecutable: '__lnwjing_runtime_contract_missing_windows_sandbox__.exe',
     },
     eventLogRuntimeOptions: {
       runner: async () => ok(JSON.stringify([{
         time: '2026-09-11T00:00:00.000Z',
-        provider: 'lnwjud-test',
+        provider: 'lnwjing-test',
         id: 1,
         level: 'Information',
         message: 'fixture event',
@@ -93,7 +93,7 @@ export function createRuntimeSuccessServices(calls: string[]): McpApplicationSer
         const filePath = typeof request.path === 'string' ? request.path : 'README.md';
         const startLine = typeof request.startLine === 'number' ? request.startLine : 1;
         const paged = filePath === 'paged.txt';
-        const content = filePath === '.lnwjud/project-profile.json'
+        const content = filePath === '.lnwjing/project-profile.json'
           ? '{"language":"typescript"}\n'
           : filePath === 'package.json'
             ? '{"packageManager":"pnpm@10.15.0","scripts":{"benchmark":"vitest bench"}}\n'
@@ -178,7 +178,7 @@ export function createRuntimeSuccessServices(calls: string[]): McpApplicationSer
       if (method === 'listMcpResources') return { server: 'server-1', enabled: true, connected: true, resources: [{ uri: 'file:///resource.txt', name: 'resource' }] };
       return { called: true };
     }),
-    localProviders: () => ({ pdfProvider: '__lnwjud_missing_pdf_provider__.exe' }),
+    localProviders: () => ({ pdfProvider: '__lnwjing_missing_pdf_provider__.exe' }),
     capabilities: {
       async execute(tool: string, input: unknown) {
         calls.push(`capabilities.${tool}`);

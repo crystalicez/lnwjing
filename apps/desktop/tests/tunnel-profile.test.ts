@@ -22,9 +22,9 @@ afterEach(async () => {
 
 describe('tunnel profile MCP target', () => {
   it('resolves the macOS shell launcher from Resources without requiring a resources override', () => {
-    const contents = path.resolve('fixture', 'lnwjud.app', 'Contents');
-    expect(packagedStdioLauncherCandidates(path.join(contents, 'MacOS', 'lnwjud'), undefined, 'darwin'))
-      .toContain(path.join(contents, 'Resources', 'lnwjud-mcp-stdio'));
+    const contents = path.resolve('fixture', 'lnwjing.app', 'Contents');
+    expect(packagedStdioLauncherCandidates(path.join(contents, 'MacOS', 'lnwjing'), undefined, 'darwin'))
+      .toContain(path.join(contents, 'Resources', 'lnwjing-mcp-stdio'));
   });
   it('rewrites a legacy stdio MCP block to the Desktop loopback HTTP MCP', () => {
     const yaml = [
@@ -34,7 +34,7 @@ describe('tunnel profile MCP target', () => {
       'mcp:',
       '  commands:',
       '    - channel: main',
-      '      command: "D:/lnwjud/lnwjud-mcp-stdio.cmd"',
+      '      command: "D:/lnwjing/lnwjing-mcp-stdio.cmd"',
       '',
     ].join('\n');
     const next = rewriteTunnelYamlMcpServerUrl(yaml, 'http://127.0.0.1:3001/mcp');
@@ -42,7 +42,7 @@ describe('tunnel profile MCP target', () => {
     expect(next).toContain('connection_max_ttl: 168h0m0s');
     expect(next).toContain('url: "http://127.0.0.1:3001/mcp"');
     expect(next).not.toContain('commands:');
-    expect(next).not.toContain('lnwjud-mcp-stdio.cmd');
+    expect(next).not.toContain('lnwjing-mcp-stdio.cmd');
   });
 
   it('repairs an existing HTTP profile when the Desktop MCP port changes', () => {
@@ -157,53 +157,53 @@ describe('tunnel profile MCP target', () => {
       'mcp:',
       '  commands:',
       '    - channel: main',
-      '      command: "C:/Users/me/AppData/Local/Programs/lnwjud/lnwjud-mcp-stdio.cmd"',
+      '      command: "C:/Users/me/AppData/Local/Programs/lnwjing/lnwjing-mcp-stdio.cmd"',
     ].join('\n');
     const next = rewriteTunnelYamlMcpCommand(
       yaml,
-      'C:\\Users\\me\\AppData\\Local\\Programs\\lnwjud\\lnwjud-mcp-stdio.cmd',
+      'C:\\Users\\me\\AppData\\Local\\Programs\\lnwjing\\lnwjing-mcp-stdio.cmd',
     );
-    expect(next).toContain('command: "C:/Users/me/AppData/Local/Programs/lnwjud/lnwjud-mcp-stdio.cmd"');
+    expect(next).toContain('command: "C:/Users/me/AppData/Local/Programs/lnwjing/lnwjing-mcp-stdio.cmd"');
   });
 
-  it('keeps lnwjud.exe --mcp-stdio as a local stdio MCP command', () => {
-    const yaml = '      command: "C:/old/lnwjud-mcp-stdio.cmd --workspace E:/lnwjud"';
-    expect(rewriteTunnelYamlMcpCommand(yaml, 'D:/lnwjud/lnwjud.exe --mcp-stdio')).toContain(
-      'command: "D:/lnwjud/lnwjud.exe --mcp-stdio"',
+  it('keeps lnwjing.exe --mcp-stdio as a local stdio MCP command', () => {
+    const yaml = '      command: "C:/old/lnwjing-mcp-stdio.cmd --workspace E:/lnwjing"';
+    expect(rewriteTunnelYamlMcpCommand(yaml, 'D:/lnwjing/lnwjing.exe --mcp-stdio')).toContain(
+      'command: "D:/lnwjing/lnwjing.exe --mcp-stdio"',
     );
   });
 
   it('replaces a stale node command for direct local stdio use', () => {
     const yaml = '      command: "node"';
-    expect(rewriteTunnelYamlMcpCommand(yaml, 'D:/lnwjud/lnwjud-mcp-stdio.cmd')).toContain(
-      'command: "D:/lnwjud/lnwjud-mcp-stdio.cmd"',
+    expect(rewriteTunnelYamlMcpCommand(yaml, 'D:/lnwjing/lnwjing-mcp-stdio.cmd')).toContain(
+      'command: "D:/lnwjing/lnwjing-mcp-stdio.cmd"',
     );
   });
 
-  it('falls back to the cmd launcher when the local host is not lnwjud.exe', () => {
-    expect(preferredTunnelMcpCommand('C:\\Program Files\\nodejs\\node.exe', 'D:\\lnwjud\\lnwjud-mcp-stdio.cmd')).toBe(
-      'D:\\lnwjud\\lnwjud-mcp-stdio.cmd',
+  it('falls back to the cmd launcher when the local host is not lnwjing.exe', () => {
+    expect(preferredTunnelMcpCommand('C:\\Program Files\\nodejs\\node.exe', 'D:\\lnwjing\\lnwjing-mcp-stdio.cmd')).toBe(
+      'D:\\lnwjing\\lnwjing-mcp-stdio.cmd',
     );
   });
 
-  it('prefers the packaged cmd launcher for direct local stdio when the host is a GUI lnwjud.exe', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-exe-'));
+  it('prefers the packaged cmd launcher for direct local stdio when the host is a GUI lnwjing.exe', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-exe-'));
     temporaryRoots.push(root);
-    const exePath = path.join(root, 'lnwjud.exe');
+    const exePath = path.join(root, 'lnwjing.exe');
     await writeFile(exePath, 'stub', 'utf8');
-    const cmdPath = path.join(root, 'lnwjud-mcp-stdio.cmd');
+    const cmdPath = path.join(root, 'lnwjing-mcp-stdio.cmd');
     await writeFile(cmdPath, '@echo off\n', 'utf8');
     expect(preferredTunnelMcpCommand(exePath, cmdPath)).toBe(await realpath(cmdPath));
   });
 
   it('resolves the first existing packaged cmd candidate', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-'));
     temporaryRoots.push(root);
     const resources = path.join(root, 'resources');
     await mkdir(resources);
-    const cmdPath = path.join(root, 'lnwjud-mcp-stdio.cmd');
+    const cmdPath = path.join(root, 'lnwjing-mcp-stdio.cmd');
     await writeFile(cmdPath, '@echo off\n', 'utf8');
-    expect(resolveStdioLauncherPath(packagedStdioLauncherCandidates(path.join(root, 'lnwjud.exe'), resources, 'win32'))).toBe(
+    expect(resolveStdioLauncherPath(packagedStdioLauncherCandidates(path.join(root, 'lnwjing.exe'), resources, 'win32'))).toBe(
       path.resolve(cmdPath),
     );
   });

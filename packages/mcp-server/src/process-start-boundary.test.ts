@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { ToolRegistry, type McpApplicationServices, type WorkspaceScope } from './tool-registry.js';
 
 const actor = { clientId: 'process-boundary', clientName: 'process-boundary-test' };

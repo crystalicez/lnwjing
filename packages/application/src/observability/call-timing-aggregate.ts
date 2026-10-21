@@ -1,4 +1,4 @@
-import type { CallTimingAggregate, CallTimingObservation } from '@lnwjud/domain';
+import type { CallTimingAggregate, CallTimingObservation } from '@lnwjing/domain';
 
 /** Percentiles use nearest-rank on independently observed terminal samples, never estimated transport time. */
 export function aggregateCallTimings(observations: readonly CallTimingObservation[]): CallTimingAggregate {

@@ -77,7 +77,7 @@ describe('desktop packaged startup regression contract', () => {
   it('turns startup rejection into a reported quit instead of a ghost process', () => {
     const desktop = section('function bootstrapDesktop', 'function bootstrapLogViewerOnly');
     expect(desktop).toContain(".catch((error: unknown) => handleDesktopStartupFailure('desktop', error))");
-    expect(source).toContain("dialog.showErrorBox('lnwjud failed to start'");
+    expect(source).toContain("dialog.showErrorBox('lnwjing failed to start'");
     expect(source).toContain('app.quit();');
   });
 
@@ -110,7 +110,7 @@ describe('desktop packaged startup regression contract', () => {
   it('fails stdio startup explicitly if checkpoint/runtime bootstrap rejects', () => {
     const stdio = section('function bootstrapMcpStdio', 'function applyDesktopUserSettings');
     expect(stdio).toContain('resolveDesktopRuntimeSecrets(dataPath)');
-    expect(stdio).toContain('lnwjud MCP stdio startup failed:');
+    expect(stdio).toContain('lnwjing MCP stdio startup failed:');
     expect(stdio).toContain('app.quit();');
   });
 

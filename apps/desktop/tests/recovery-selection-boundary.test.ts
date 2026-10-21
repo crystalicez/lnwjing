@@ -12,9 +12,9 @@ afterEach(async () => {
 
 describe('Recovery Center selected-workspace authority', () => {
   it('shows only recovery entries belonging to the host-selected workspace', async () => {
-    const rawData = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-recovery-selection-data-'));
-    const rawA = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-recovery-selection-a-'));
-    const rawB = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-recovery-selection-b-'));
+    const rawData = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-recovery-selection-data-'));
+    const rawA = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-recovery-selection-a-'));
+    const rawB = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-recovery-selection-b-'));
     temporaryRoots.push(rawData, rawA, rawB);
     const dataRoot = await realpath(rawData);
     const rootA = await realpath(rawA);

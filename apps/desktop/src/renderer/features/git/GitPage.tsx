@@ -1,6 +1,6 @@
 import { ActionButton, FormInput, FilterBar } from '../ui/UiPrimitives.js';
 import { useDeferredValue, useEffect, useMemo, useState, type ReactElement } from 'react';
-import type { DashboardSnapshot, GitImagePreview, GitStatusEntrySummary, UiLocale, WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import type { DashboardSnapshot, GitImagePreview, GitStatusEntrySummary, UiLocale, WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { v580Strings } from '../../i18n/v580-copy.js';
 import { SplitDiffViewer } from './SplitDiffViewer.js';
@@ -79,7 +79,7 @@ export function GitPage({
     oldImage?: GitImagePreview;
     newImage?: GitImagePreview;
     imagePreviewError?: 'too_large' | 'unsupported';
-    preview?: import('@lnwjud/ipc-contracts').GitFilePreviewInfo;
+    preview?: import('@lnwjing/ipc-contracts').GitFilePreviewInfo;
     additions?: number;
     deletions?: number;
     loading: boolean;
@@ -95,7 +95,7 @@ export function GitPage({
     setSelectedStaged(staged);
     setDiffData({ patch: '', loading: true });
     try {
-      const res = await window.lnwjud.getGitDiff({
+      const res = await window.lnwjing.getGitDiff({
         workspaceId: selectedWorkspace.id,
         path: entry.path,
         staged,

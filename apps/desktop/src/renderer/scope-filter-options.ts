@@ -1,5 +1,5 @@
-import { canonicalWorkspaceScopeId, workspaceScopeMatches, type UiLocale, type WorkspaceSummary } from '@lnwjud/ipc-contracts';
-import { formatDisplayDateTime } from '@lnwjud/shared/date-time-display';
+import { canonicalWorkspaceScopeId, workspaceScopeMatches, type UiLocale, type WorkspaceSummary } from '@lnwjing/ipc-contracts';
+import { formatDisplayDateTime } from '@lnwjing/shared/date-time-display';
 
 export interface ScopeFilterSample {
   readonly workspaceId: string | null;

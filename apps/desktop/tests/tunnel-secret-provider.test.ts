@@ -2,7 +2,7 @@ import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createExplicitKeySecretProtector } from '@lnwjud/shared';
+import { createExplicitKeySecretProtector } from '@lnwjing/shared';
 import { TunnelController } from '../src/main/tunnel-controller.js';
 
 const temporaryRoots: string[] = [];
@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('TunnelController protected secret provider', () => {
   it('persists a purpose-bound safe envelope and never writes the API key plaintext', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tunnel-secret-provider-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tunnel-secret-provider-'));
     temporaryRoots.push(root);
     vi.stubEnv('APPDATA', path.join(root, 'appdata'));
     const protector = createExplicitKeySecretProtector(Buffer.alloc(32, 0x42));
@@ -25,7 +25,7 @@ describe('TunnelController protected secret provider', () => {
       isExternalTunnelRunning: async (): Promise<boolean> => false,
       secretProtector: protector,
     });
-    const plaintext = 'lnwjud-provider-secret';
+    const plaintext = 'lnwjing-provider-secret';
 
     await expect(controller.saveApiKey(plaintext)).resolves.toBeUndefined();
     const ciphertext = await readFile(controller.secretPath(), 'utf8');
@@ -35,7 +35,7 @@ describe('TunnelController protected secret provider', () => {
   });
 
   it('fails closed when no provider or explicit test seam is injected', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tunnel-secret-provider-missing-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tunnel-secret-provider-missing-'));
     temporaryRoots.push(root);
     vi.stubEnv('APPDATA', path.join(root, 'appdata'));
     const controller = new TunnelController({

@@ -1,7 +1,7 @@
 # Full-project re-review remediation plan
 
 Date: 2026-09-22
-Repository: `C:\Users\User\Desktop\lnwjud`
+Repository: `C:\Users\User\Desktop\lnwjing`
 Branch: `dev`
 Reviewed HEAD: `b526680b3a394eb21b2e13d4c53dd799aeb90864`
 Status: implementation in progress for source v5.4.3. All confirmed functional remediation items have been implemented on `dev`; final full validation, dev push, and local Windows installer verification remain before this cycle is terminal.
@@ -273,7 +273,7 @@ Later, `AtomicFileWriter.write()` creates parents/temp files and performs `renam
 
 Static pre-existing symlink/junction escapes are already rejected and have a Windows junction regression test. The remaining issue is a path component changing **after validation but before mutation**.
 
-This is a local agent-scope boundary race, not an OS privilege escalation: a same-user process generally already has the user's filesystem privileges. It still matters because lnwjud promises workspace-scoped AI mutations.
+This is a local agent-scope boundary race, not an OS privilege escalation: a same-user process generally already has the user's filesystem privileges. It still matters because lnwjing promises workspace-scoped AI mutations.
 
 ### Fix plan
 

@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { StrictWorkspaceRepository, canonicalizeAllowedRoots, requestedPathInsideAllowedRoot } from './strict-workspace-repository.js';
 
 const roots: string[] = [];
@@ -10,7 +10,7 @@ afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root,
 
 describe('strict stdio workspace repository', () => {
   it('hides previously registered broad roots and exposes only explicit allowed roots', async () => {
-    const allowed = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-strict-allowed-'));
+    const allowed = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-strict-allowed-'));
     const broad = path.parse(allowed).root;
     roots.push(allowed);
     const allowedReal = await realpath(allowed);
@@ -22,8 +22,8 @@ describe('strict stdio workspace repository', () => {
   });
 
   it('canonicalizes roots and rejects requested workspaces outside them', async () => {
-    const allowed = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-strict-allowed-'));
-    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-strict-outside-'));
+    const allowed = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-strict-allowed-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-strict-outside-'));
     roots.push(allowed, outside);
     const canonical = await canonicalizeAllowedRoots([allowed]);
     await expect(requestedPathInsideAllowedRoot(allowed, canonical)).resolves.toBe(canonical[0]);

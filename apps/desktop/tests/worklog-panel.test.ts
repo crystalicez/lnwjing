@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { collectSessionFilterOptions, collectWorkspaceFilterOptions } from '../src/renderer/scope-filter-options.js';
 import { describe, expect, it } from 'vitest';
-import type { InFlightWorkItem, WorkLogEntry } from '@lnwjud/ipc-contracts';
+import type { InFlightWorkItem, WorkLogEntry } from '@lnwjing/ipc-contracts';
 import { formatWorkLogCopyText, newestFirstWorkLogRows, WorkLogPanel } from '../src/renderer/features/worklog/WorkLogPanel.js';
 import * as workLogPanelModule from '../src/renderer/features/worklog/WorkLogPanel.js';
 import { retainedHistoricalEntriesAfterClear } from '../src/renderer/features/worklog/WorkLogPage.js';
@@ -57,7 +57,7 @@ const mockErrorEntry: WorkLogEntry = {
   level: 'error',
   resultCode: 'INTERNAL_ERROR',
   errorMessage: 'Operation failed',
-  targetSummary: 'service=lnwjud',
+  targetSummary: 'service=lnwjing',
 };
 
 describe('WorkLogPanel', () => {
@@ -209,9 +209,9 @@ describe('WorkLogPanel', () => {
   it('disambiguates duplicate workspace names and suppresses duplicate registrations for the same root', () => {
     const workspaces = [
       { id: 'drive-e', displayName: 'Local Disk E:', rootPath: 'E:\\', realRootPath: 'E:\\', createdAt: '2026-08-01T00:00:00.000Z', kind: 'machine_root' as const },
-      { id: 'workspace-a', displayName: 'lnwjud', rootPath: 'E:\\lnwjud', realRootPath: 'E:\\lnwjud', createdAt: '2026-08-01T00:00:00.000Z' },
-      { id: 'workspace-alias', displayName: 'lnwjud', rootPath: 'E:/lnwjud/', realRootPath: 'E:/lnwjud/', createdAt: '2026-08-01T00:00:00.000Z' },
-      { id: 'workspace-b', displayName: 'lnwjud', rootPath: 'D:\\projects\\lnwjud', realRootPath: 'D:\\projects\\lnwjud', createdAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'workspace-a', displayName: 'lnwjing', rootPath: 'E:\\lnwjing', realRootPath: 'E:\\lnwjing', createdAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'workspace-alias', displayName: 'lnwjing', rootPath: 'E:/lnwjing/', realRootPath: 'E:/lnwjing/', createdAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'workspace-b', displayName: 'lnwjing', rootPath: 'D:\\projects\\lnwjing', realRootPath: 'D:\\projects\\lnwjing', createdAt: '2026-08-01T00:00:00.000Z' },
     ];
     const markup = renderToStaticMarkup(createElement(WorkLogPanel, {
       title: 'Work log', emptyLabel: 'Empty', filterAllLabel: 'All', filterErrorLabel: 'Errors',
@@ -219,8 +219,8 @@ describe('WorkLogPanel', () => {
       filter: 'all', onFilterChange: () => {}, onClear: async () => {}, entries: [], inFlight: [], workspaces,
     }));
     const choices = collectWorkspaceFilterOptions([], workspaces);
-    expect(choices.map((option) => option.label)).toContain('lnwjud — E:\\lnwjud');
-    expect(choices.map((option) => option.label)).toContain('lnwjud — D:\\projects\\lnwjud');
+    expect(choices.map((option) => option.label)).toContain('lnwjing — E:\\lnwjing');
+    expect(choices.map((option) => option.label)).toContain('lnwjing — D:\\projects\\lnwjing');
     expect(choices.some((option) => option.id === 'workspace-alias')).toBe(false);
     expect(choices.some((option) => option.id === 'drive-e')).toBe(false);
     expect(markup).not.toContain('Local Disk E:');
@@ -242,15 +242,15 @@ describe('WorkLogPanel', () => {
 
   it('treats slash and case variants of a legacy workspace path as the same project', () => {
     const workspaces = [
-      { id: 'lnwjud-project', displayName: 'lnwjud', rootPath: 'E:\\lnwjud', realRootPath: 'E:\\lnwjud', createdAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'lnwjing-project', displayName: 'lnwjing', rootPath: 'E:\\lnwjing', realRootPath: 'E:\\lnwjing', createdAt: '2026-08-01T00:00:00.000Z' },
     ];
     const entries: WorkLogEntry[] = [
-      { ...mockEntries[0]!, id: 'slash', workspaceId: 'e:/LNWJUD/' },
-      { ...mockEntries[1]!, id: 'backslash', workspaceId: 'E:\\lnwjud' },
+      { ...mockEntries[0]!, id: 'slash', workspaceId: 'e:/LNWJING/' },
+      { ...mockEntries[1]!, id: 'backslash', workspaceId: 'E:\\lnwjing' },
       { ...mockEntries[0]!, id: 'other', workspaceId: 'E:\\other' },
     ];
 
-    const rows = newestFirstWorkLogRows(entries, [], 'all', '', { workspaceId: 'lnwjud-project', sessionId: null }, workspaces);
+    const rows = newestFirstWorkLogRows(entries, [], 'all', '', { workspaceId: 'lnwjing-project', sessionId: null }, workspaces);
     expect(rows.map((row) => row.id)).toEqual(['slash', 'backslash']);
   });
 
@@ -297,13 +297,13 @@ describe('WorkLogPanel', () => {
       toolName: 'run_goal', targetSummary: `goalKey=activity-log-full-detail-no-truncation workspace=${workspaceId}`,
       targetDetail: { detailRef: `${callId}:completed`, itemCount: 2, preview: [], legacyIncomplete: false },
     };
-    const workspaces = [{ id: workspaceId, displayName: 'lnwjud', rootPath: 'E:\\lnwjud', realRootPath: 'E:\\lnwjud', createdAt: '2026-08-01T00:00:00.000Z' }];
+    const workspaces = [{ id: workspaceId, displayName: 'lnwjing', rootPath: 'E:\\lnwjing', realRootPath: 'E:\\lnwjing', createdAt: '2026-08-01T00:00:00.000Z' }];
     const markup = renderToStaticMarkup(createElement(WorkLogPanel, {
       title: 'Work log', emptyLabel: 'Empty', filterAllLabel: 'All', filterErrorLabel: 'Errors',
       clearSessionLabel: 'Clear session', clearWorkspaceLabel: 'Clear workspace', clearAllLabel: 'Clear all',
       filter: 'all', onFilterChange: () => {}, onClear: async () => {}, entries: [entry], inFlight: [], workspaces,
     }));
-    expect(collectWorkspaceFilterOptions([{ workspaceId }], workspaces)).toEqual([{ id:workspaceId, label:'lnwjud — E:\\lnwjud' }]);
+    expect(collectWorkspaceFilterOptions([{ workspaceId }], workspaces)).toEqual([{ id:workspaceId, label:'lnwjing — E:\\lnwjing' }]);
     expect(markup).toContain(`title="${workspaceId}"`);
     expect(markup).toContain(`title="${sessionId}"`);
     expect(markup).toContain('scope-badge workspace copyable');

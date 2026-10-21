@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { LspRuntimeService } from './lsp-runtime.js';
 import type { McpApplicationServices } from './tools/tool-types.js';
 
@@ -28,12 +28,12 @@ describe('LspRuntimeService', () => {
   });
 
   it('rejects lexical workspace escapes before spawning a language server', async () => {
-    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjud-lsp-test-')));
+    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjing-lsp-test-')));
     const outside = path.join(root, '..', 'outside.ts');
     await writeFile(outside, 'export const outside = true;\n', 'utf8');
     let spawns = 0;
     const runtime = new LspRuntimeService(servicesWithRoot(root), actor, {
-      environment: { LNWJUD_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, 'unused-server.mjs']) },
+      environment: { LNWJING_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, 'unused-server.mjs']) },
       spawner: (): ReturnType<typeof ok> => { spawns += 1; return ok({ kill: () => undefined } as never); },
     });
     await expect(runtime.diagnostics({ workspaceId: 'ws-1', files: [path.join('..', 'outside.ts')] })).resolves.toMatchObject({
@@ -43,10 +43,10 @@ describe('LspRuntimeService', () => {
   });
 
   it('fails fast when a configured language-server process exits before initialization', async () => {
-    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjud-lsp-exit-test-')));
+    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjing-lsp-exit-test-')));
     await writeFile(path.join(root, 'a.ts'), 'export const value = 1;\n', 'utf8');
     const runtime = new LspRuntimeService(servicesWithRoot(root), actor, {
-      environment: { ...process.env, LNWJUD_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, '--version']) },
+      environment: { ...process.env, LNWJING_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, '--version']) },
       timeoutMs: 10_000,
     });
 
@@ -58,13 +58,13 @@ describe('LspRuntimeService', () => {
   });
 
   it('collects published diagnostics from a configured language server', async () => {
-    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjud-lsp-test-')));
+    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjing-lsp-test-')));
     await writeFile(path.join(root, 'a.ts'), 'export const broken = 1;\n', 'utf8');
 
     const fakeServer = await createFakeServer();
     try {
       const runtime = new LspRuntimeService(servicesWithRoot(root), actor, {
-        environment: { LNWJUD_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, fakeServer]) },
+        environment: { LNWJING_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, fakeServer]) },
         timeoutMs: 10_000,
       });
       const result = await runtime.diagnostics({ workspaceId: 'ws-1', files: ['a.ts'] });
@@ -78,11 +78,11 @@ describe('LspRuntimeService', () => {
   });
 
   it('returns an approval-gated rename plan without applying it', async () => {
-    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjud-lsp-test-')));
+    const root = path.normalize(await mkdtemp(path.join(tmpdir(), 'lnwjing-lsp-test-')));
     await writeFile(path.join(root, 'a.ts'), 'export const broken = 1;\n', 'utf8');
     const fakeServer = await createFakeServer();
     const runtime = new LspRuntimeService(servicesWithRoot(root), actor, {
-      environment: { LNWJUD_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, fakeServer]) },
+      environment: { LNWJING_LSP_TYPESCRIPT_COMMAND: JSON.stringify([process.execPath, fakeServer]) },
       timeoutMs: 10_000,
     });
     const result = await runtime.renamePlan({ workspaceId: 'ws-1', file: 'a.ts', line: 0, character: 13, newName: 'fixed' });
@@ -96,7 +96,7 @@ describe('LspRuntimeService', () => {
 
 async function createFakeServer(): Promise<string> {
   const { writeFile: write } = await import('node:fs/promises');
-  const directory = await mkdtemp(path.join(tmpdir(), 'lnwjud-lsp-fake-'));
+  const directory = await mkdtemp(path.join(tmpdir(), 'lnwjing-lsp-fake-'));
   const file = path.join(directory, 'fake-server.mjs');
   await write(file, FAKE_SERVER_SOURCE, 'utf8');
   return file;

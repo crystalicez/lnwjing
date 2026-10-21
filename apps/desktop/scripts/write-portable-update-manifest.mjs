@@ -11,7 +11,7 @@ const version = String(packageJson.version ?? '').trim();
 if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) throw new Error(`Invalid desktop package version: ${version}`);
 
 const installerDirectory = path.join(desktopDirectory, 'dist', 'installers');
-const fileName = `lnwjud-Portable-${version}.exe`;
+const fileName = `lnwjing-Portable-${version}.exe`;
 const artifactPath = path.join(installerDirectory, fileName);
 const metadata = await assertRegularCanonicalFile(artifactPath);
 const content = await readFile(artifactPath);

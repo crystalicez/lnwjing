@@ -8,7 +8,7 @@ import {
   type JSONRPCMessage,
   type McpServer,
 } from '@modelcontextprotocol/server';
-import type { FileActor } from '@lnwjud/application';
+import type { FileActor } from '@lnwjing/application';
 import { z } from 'zod';
 import {
   MODERN_TASKS_EXTENSION_ID,

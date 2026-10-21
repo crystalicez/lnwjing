@@ -1,6 +1,6 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { Fragment, useRef, useState, type ReactElement } from 'react';
-import type { GitFilePreviewInfo, GitImagePreview, UiLocale } from '@lnwjud/ipc-contracts';
+import type { GitFilePreviewInfo, GitImagePreview, UiLocale } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { v580Strings } from '../../i18n/v580-copy.js';
 

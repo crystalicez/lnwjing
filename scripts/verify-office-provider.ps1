@@ -132,11 +132,11 @@ try {
   }
 
   # Word: create, table/image/header/comment/tracked change, export, reopen/inspect.
-  Invoke-Office 'word' 'create' @{ file_path = $wordPath; text = 'lnwjud Office acceptance document' } | Out-Null
+  Invoke-Office 'word' 'create' @{ file_path = $wordPath; text = 'lnwjing Office acceptance document' } | Out-Null
   Invoke-Office 'word' 'insert_table' @{ file_path = $wordPath; table = @{ rows = 2; columns = 2 } } | Out-Null
   Invoke-Office 'word' 'update_table_cells' @{ file_path = $wordPath; table = @{ index = 1; row = 1; column = 1 }; text = 'verified' } | Out-Null
   Invoke-Office 'word' 'insert_image' @{ file_path = $wordPath; image_path = $imagePath } | Out-Null
-  Invoke-Office 'word' 'update_header_footer' @{ file_path = $wordPath; text = 'lnwjud acceptance'; parameters = @{ section = 1; kind = 1; target = 'header' } } | Out-Null
+  Invoke-Office 'word' 'update_header_footer' @{ file_path = $wordPath; text = 'lnwjing acceptance'; parameters = @{ section = 1; kind = 1; target = 'header' } } | Out-Null
   Invoke-Office 'word' 'add_comment' @{ file_path = $wordPath; range = @{ start = 0; end = 6 }; text = 'acceptance comment' } | Out-Null
   Invoke-Office 'word' 'set_track_changes' @{ file_path = $wordPath; parameters = @{ enabled = $true } } | Out-Null
   Invoke-Office 'word' 'append_text' @{ file_path = $wordPath; text = [Environment]::NewLine + 'tracked acceptance text' } | Out-Null
@@ -205,7 +205,7 @@ try {
   Add-Evidence $evidence 'excel' 'create-formula-table-chart-pivot-filter-freeze-validation-export-reopen'
 
   # PowerPoint: create, add slide/text/media/table/chart/notes, export, reopen.
-  Invoke-Office 'powerpoint' 'create' @{ file_path = $pptPath; text = 'lnwjud acceptance' } | Out-Null
+  Invoke-Office 'powerpoint' 'create' @{ file_path = $pptPath; text = 'lnwjing acceptance' } | Out-Null
   $slide = Invoke-Office 'powerpoint' 'add_slide' @{ file_path = $pptPath; parameters = @{ layout = 12 } }
   $slideIndex = [int]$slide.slide
   Invoke-Office 'powerpoint' 'add_textbox' @{ file_path = $pptPath; slide = $slideIndex; text = 'Acceptance slide'; parameters = @{ left = 40; top = 40; width = 500; height = 80 } } | Out-Null
@@ -265,13 +265,13 @@ try {
     $messages = Invoke-Office 'outlook' 'list_messages' @{ max_messages = 1 }
     Write-Host '[office-acceptance] outlook:create_draft'
     $draft = Invoke-Office 'outlook' 'create_draft' @{
-      subject = ('lnwjud acceptance ' + [Guid]::NewGuid().ToString('N'))
-      body = 'Local draft created by lnwjud provider acceptance. This draft is deleted without sending.'
+      subject = ('lnwjing acceptance ' + [Guid]::NewGuid().ToString('N'))
+      body = 'Local draft created by lnwjing provider acceptance. This draft is deleted without sending.'
     }
     $draftId = [string]$draft.draft_id
     Assert-True ($draftId.Length -gt 0) 'Outlook draft did not return an id'
     Write-Host '[office-acceptance] outlook:update_draft'
-    Invoke-Office 'outlook' 'update_draft' @{ draft_id = $draftId; subject = 'lnwjud acceptance updated'; body = 'updated local acceptance draft' } | Out-Null
+    Invoke-Office 'outlook' 'update_draft' @{ draft_id = $draftId; subject = 'lnwjing acceptance updated'; body = 'updated local acceptance draft' } | Out-Null
     Write-Host '[office-acceptance] outlook:delete_draft'
     Invoke-Office 'outlook' 'delete' @{ draft_id = $draftId } | Out-Null
     $draftId = $null

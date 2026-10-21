@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ExtensionsService } from '@lnwjud/extensions';
+import type { ExtensionsService } from '@lnwjing/extensions';
 import { projectExternalMcpTools } from '../src/main/tool-catalog/external-tool-catalog-adapter.js';
 
 function fakeExtensions(overrides: Partial<ExtensionsService>): ExtensionsService {

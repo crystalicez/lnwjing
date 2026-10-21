@@ -3,7 +3,7 @@ import type {
   InstallOperationKind,
   InstallOperationPhase,
   InstallOperationStatus,
-} from '@lnwjud/ipc-contracts';
+} from '@lnwjing/ipc-contracts';
 
 export interface InstallOperationUpdate {
   readonly kind: InstallOperationKind;

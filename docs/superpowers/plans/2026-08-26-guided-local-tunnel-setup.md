@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- ทำงานเฉพาะใน `E:\lnwjud`; ห้ามสร้าง worktree, สำเนา repository หรือ artifact นอกโฟลเดอร์นี้
+- ทำงานเฉพาะใน `E:\lnwjing`; ห้ามสร้าง worktree, สำเนา repository หรือ artifact นอกโฟลเดอร์นี้
 - ก่อนแก้ทุกไฟล์ให้เปิดอ่านเวอร์ชันปัจจุบันใหม่ เพราะ working tree มีงานอื่นค้างอยู่ ห้าม reset, checkout ทับ, format ทั้ง repository หรือ stage ไฟล์ที่ไม่เกี่ยวข้อง
 - ห้ามเพิ่มชื่อ ผลิตภัณฑ์ อ้างอิง หรือหลักฐานของโปรแกรมคู่แข่งลงใน source, docs, tests, fixtures, snapshots, commit message หรือ installer metadata
 - ค่าเริ่มต้นต้องฟรีและ local-first: ห้ามเพิ่ม domain, VPS, cloud gateway, OAuth server, public relay หรือ OpenAI model API usage
@@ -22,7 +22,7 @@
 - ถ้าผู้ใช้ตั้งค่าค้างกลางทางและ onboarding state เป็น `in_progress` ให้กลับมาทำต่อที่ขั้นที่หาได้จากสถานะจริง
 - การปิด Tips ด้วย “ไว้ทีหลัง” ต้องไม่ปิดความสามารถ ผู้ใช้เปิดคู่มือใหม่ได้ตลอดจาก Settings > Secure Tunnel และจากการ์ดสถานะหน้า Home
 - ห้ามเปลี่ยน timeout, tunnel lifetime, reconnect contract, MCP tool schema, permission profile หรือ release pipeline ในงานนี้
-- ห้าม build/publish installer, tag, push หรือ release จากแผนนี้ เว้นแต่ผู้ใช้สั่งเพิ่มภายหลัง หากมีคำสั่ง build installer ต้องออกเฉพาะ `E:\lnwjud\apps\desktop\dist\installers`
+- ห้าม build/publish installer, tag, push หรือ release จากแผนนี้ เว้นแต่ผู้ใช้สั่งเพิ่มภายหลัง หากมีคำสั่ง build installer ต้องออกเฉพาะ `E:\lnwjing\apps\desktop\dist\installers`
 - Commit ในแต่ละ task ทำได้เมื่อผู้ใช้อนุญาตให้ commit เท่านั้น และต้อง stage เฉพาะไฟล์ของ task นั้น; ถ้ายังไม่ได้รับอนุญาต ให้หยุดที่ verified working tree checkpoint
 
 ---
@@ -48,14 +48,14 @@
 ## User Flow Contract
 
 ```text
-เปิด lnwjud ครั้งแรก
+เปิด lnwjing ครั้งแรก
   |
   |-- มี key/profile เดิมอย่างน้อยหนึ่งอย่าง --> ไม่เปิด Tips อัตโนมัติ
   |
   `-- ไม่มี key + ไม่มี profile + ไม่มี onboarding dismissal
         |
         v
-    Tips: “ตั้งค่า ChatGPT ให้ใช้ lnwjud”
+    Tips: “ตั้งค่า ChatGPT ให้ใช้ lnwjing”
         |
         |-- ไว้ทีหลัง --> ปิด Tips, แสดงปุ่มเปิดคู่มือใน Home/Settings
         |
@@ -68,7 +68,7 @@
         1. เปิดหน้า OpenAI Tunnel Settings
         2. สร้าง tunnel และวาง Tunnel ID
         3. เปิดหน้า API Keys และวาง Runtime API key
-        4. lnwjud บันทึก key ด้วย DPAPI + configure profile + doctor
+        4. lnwjing บันทึก key ด้วย DPAPI + configure profile + doctor
         5. ผู้ใช้กด Start Tunnel
         6. แสดง Running และปุ่มเปิด ChatGPT Plugins
         7. อธิบาย Developer mode + Connection = Tunnel
@@ -96,7 +96,7 @@ fresh = !tunnel.hasApiKey
 - “Local setup configured” = `hasApiKey && profileExists`
 - “Tunnel started” = top-level `tunnel.state === 'running'`
 - ตั้ง onboarding state เป็น `completed` หลัง `startTunnel()` คืนสถานะ `running` เท่านั้น
-- การเปิด ChatGPT Plugins เป็นขั้นสุดท้ายที่ผู้ใช้ทำเอง lnwjud แสดงคำแนะนำได้ แต่ห้ามอ้างว่า ChatGPT connection สำเร็จเพราะ local app ตรวจไม่ได้
+- การเปิด ChatGPT Plugins เป็นขั้นสุดท้ายที่ผู้ใช้ทำเอง lnwjing แสดงคำแนะนำได้ แต่ห้ามอ้างว่า ChatGPT connection สำเร็จเพราะ local app ตรวจไม่ได้
 
 ---
 
@@ -131,7 +131,7 @@ fresh = !tunnel.hasApiKey
 
 ### Modify
 
-- `packages/ipc-contracts/src/index.ts` — target enum, single public URL map, IPC request/response map and `LnwjudApi`
+- `packages/ipc-contracts/src/index.ts` — target enum, single public URL map, IPC request/response map and `LnwjingApi`
 - `apps/desktop/src/preload/index.ts` — validated bridge method for opening allowlisted setup pages
 - `apps/desktop/src/main/main.ts` — trusted IPC handler, payload parser and Electron `shell.openExternal`
 - `apps/desktop/src/renderer/App.tsx` — first-load decision, Tips state, automatic settings navigation, guided callbacks
@@ -153,7 +153,7 @@ Do not create a new dependency. Use `react-dom/server` for component markup test
 - Test: `apps/desktop/tests/guided-tunnel-setup-state.test.ts`
 
 **Interfaces:**
-- Consumes: `TunnelStatus` from `@lnwjud/ipc-contracts`
+- Consumes: `TunnelStatus` from `@lnwjing/ipc-contracts`
 - Produces:
 
 ```ts
@@ -161,7 +161,7 @@ export type GuidedTunnelSetupState = 'not_started' | 'in_progress' | 'dismissed'
 export type GuidedTunnelLaunchDecision = 'none' | 'show_tip' | 'resume_settings';
 export type GuidedTunnelStep = 'create_tunnel' | 'save_key' | 'configure' | 'start' | 'connect_chatgpt';
 
-export const GUIDED_TUNNEL_SETUP_STORAGE_KEY = 'lnwjud.guided-tunnel-setup.v1';
+export const GUIDED_TUNNEL_SETUP_STORAGE_KEY = 'lnwjing.guided-tunnel-setup.v1';
 
 export function isFreshTunnelSetup(tunnel: TunnelStatus): boolean;
 export function isTunnelConfigured(tunnel: TunnelStatus): boolean;
@@ -214,7 +214,7 @@ it('stores only the finite onboarding state', () => {
 Run:
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts
 ```
 
 Expected: FAIL because the module does not exist.
@@ -239,8 +239,8 @@ export function guidedTunnelLaunchDecision(
 - [ ] **Step 4: Run focused test and typecheck**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts
-corepack pnpm@10.15.0 --filter @lnwjud/desktop typecheck
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop typecheck
 ```
 
 Expected: PASS.
@@ -270,13 +270,13 @@ export interface OpenExternalSetupPageRequest {
   readonly target: ExternalSetupTarget;
 }
 
-// LnwjudApi
+// LnwjingApi
 openExternalSetupPage(
   request: OpenExternalSetupPageRequest,
 ): Promise<{ readonly opened: true }>;
 ```
 
-Define one public, immutable URL map in `@lnwjud/ipc-contracts` so the main process opens it and the renderer can show/copy the same fallback address without duplicating strings:
+Define one public, immutable URL map in `@lnwjing/ipc-contracts` so the main process opens it and the renderer can show/copy the same fallback address without duplicating strings:
 
 ```ts
 export const EXTERNAL_SETUP_URLS: Readonly<Record<ExternalSetupTarget, string>> = {
@@ -301,7 +301,7 @@ expect(Object.values(EXTERNAL_SETUP_URLS).every((value) => new URL(value).protoc
 
 - [ ] **Step 2: Add IPC contract and preload validation**
 
-Add `ipcChannels.openExternalSetupPage`, request/response map entries, `LnwjudApi.openExternalSetupPage`, and a preload method that validates `{ opened: true }`.
+Add `ipcChannels.openExternalSetupPage`, request/response map entries, `LnwjingApi.openExternalSetupPage`, and a preload method that validates `{ opened: true }`.
 
 The renderer sends only `{ target }`; never accept `{ url }`.
 
@@ -336,8 +336,8 @@ await expect(handler(untrusted, { target: 'openai_tunnels' })).rejects.toThrow('
 - [ ] **Step 5: Run focused verification**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/external-setup-links.test.ts tests/production-ipc-acceptance.test.ts
-corepack pnpm@10.15.0 --filter @lnwjud/desktop typecheck
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/external-setup-links.test.ts tests/production-ipc-acceptance.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop typecheck
 ```
 
 Expected: PASS and no URL supplied by renderer reaches `shell.openExternal` directly.
@@ -362,9 +362,9 @@ Use this exact copy as the source of truth:
 
 | Key | ไทย | English |
 |---|---|---|
-| `guidedTunnel.tipTitle` | ตั้งค่า ChatGPT ให้ใช้ lnwjud | Connect ChatGPT to lnwjud |
-| `guidedTunnel.tipBody` | ทำขั้นตอนนี้เพียงครั้งเดียว lnwjud จะพาไปสร้าง Tunnel ID และ Runtime API key แล้วตั้งค่าให้โดยอัตโนมัติ | Complete this once. lnwjud will guide you through creating a Tunnel ID and Runtime API key, then configure the connection automatically. |
-| `guidedTunnel.privacy` | คีย์จะถูกเข้ารหัสด้วย Windows DPAPI และเก็บในเครื่องนี้เท่านั้น lnwjud ไม่มีเซิร์ฟเวอร์กลางรับคีย์ของคุณ | Your key is encrypted with Windows DPAPI and stored only on this PC. lnwjud has no central server that receives your key. |
+| `guidedTunnel.tipTitle` | ตั้งค่า ChatGPT ให้ใช้ lnwjing | Connect ChatGPT to lnwjing |
+| `guidedTunnel.tipBody` | ทำขั้นตอนนี้เพียงครั้งเดียว lnwjing จะพาไปสร้าง Tunnel ID และ Runtime API key แล้วตั้งค่าให้โดยอัตโนมัติ | Complete this once. lnwjing will guide you through creating a Tunnel ID and Runtime API key, then configure the connection automatically. |
+| `guidedTunnel.privacy` | คีย์จะถูกเข้ารหัสด้วย Windows DPAPI และเก็บในเครื่องนี้เท่านั้น lnwjing ไม่มีเซิร์ฟเวอร์กลางรับคีย์ของคุณ | Your key is encrypted with Windows DPAPI and stored only on this PC. lnwjing has no central server that receives your key. |
 | `guidedTunnel.startSetup` | เริ่มตั้งค่า | Start setup |
 | `guidedTunnel.later` | ไว้ทีหลัง | Set up later |
 | `guidedTunnel.openGuide` | เปิดคู่มือตั้งค่า | Open setup guide |
@@ -385,8 +385,8 @@ Use this exact copy as the source of truth:
 | `guidedTunnel.apiKeyRequired` | กรุณาวาง Runtime API key | Paste a Runtime API key. |
 | `guidedTunnel.saveKey` | บันทึกคีย์อย่างปลอดภัย | Save key securely |
 | `guidedTunnel.keyStored` | บันทึกคีย์ใน Windows DPAPI แล้ว | Key saved with Windows DPAPI. |
-| `guidedTunnel.stepConfigureTitle` | 3. ให้ lnwjud ตั้งค่าอัตโนมัติ | 3. Let lnwjud configure the connection |
-| `guidedTunnel.stepConfigureBody` | lnwjud จะใช้ tunnel-client ที่มากับโปรแกรม สร้างโปรไฟล์ local และตรวจสอบการเชื่อมต่อให้ | lnwjud will use the bundled tunnel-client, create the local profile, and check the connection. |
+| `guidedTunnel.stepConfigureTitle` | 3. ให้ lnwjing ตั้งค่าอัตโนมัติ | 3. Let lnwjing configure the connection |
+| `guidedTunnel.stepConfigureBody` | lnwjing จะใช้ tunnel-client ที่มากับโปรแกรม สร้างโปรไฟล์ local และตรวจสอบการเชื่อมต่อให้ | lnwjing will use the bundled tunnel-client, create the local profile, and check the connection. |
 | `guidedTunnel.configure` | ตั้งค่าและตรวจสอบ | Configure and check |
 | `guidedTunnel.configuring` | กำลังสร้างโปรไฟล์และตรวจสอบ… | Creating the profile and checking it… |
 | `guidedTunnel.configured` | โปรไฟล์ Tunnel พร้อมใช้งาน | Tunnel profile is ready. |
@@ -417,7 +417,7 @@ Add all keys to `requiredKeys` or a dedicated `guidedKeys` list. Assert both lan
 - [ ] **Step 3: Run i18n tests**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/i18n.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/i18n.test.ts
 ```
 
 Expected: PASS with identical key sets.
@@ -550,8 +550,8 @@ Keep ordinary manual Settings navigation behavior unchanged. The request ID is U
 - [ ] **Step 5: Run focused tests and renderer build**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts
-corepack pnpm@10.15.0 --filter @lnwjud/desktop build:renderer
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop build:renderer
 ```
 
 Expected: PASS; no horizontal overflow in the built renderer smoke.
@@ -638,7 +638,7 @@ Create a status-returning helper in `App.tsx` without breaking existing Home cal
 async function startTunnelWithStatus(): Promise<TunnelStatus> {
   setTunnelBusy(true);
   try {
-    const status = await window.lnwjud.startTunnel();
+    const status = await window.lnwjing.startTunnel();
     await refresh();
     return status;
   } finally {
@@ -691,8 +691,8 @@ Existing users must still be able to:
 - [ ] **Step 9: Run focused tests**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts tests/i18n.test.ts
-corepack pnpm@10.15.0 --filter @lnwjud/desktop typecheck
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts tests/i18n.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop typecheck
 ```
 
 Expected: PASS.
@@ -751,7 +751,7 @@ Assert configured users do not receive auto Tips, dismissed users can reopen man
 - [ ] **Step 5: Run focused tests**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts
 ```
 
 Expected: PASS.
@@ -764,17 +764,17 @@ Expected: PASS.
 - Create: `apps/desktop/e2e/guided-tunnel-setup.e2e.ts`
 
 **Interfaces:**
-- Consumes: built Electron main/preload/renderer, isolated `LNWJUD_DATA_PATH`, CDP launch pattern from existing desktop E2E
+- Consumes: built Electron main/preload/renderer, isolated `LNWJING_DATA_PATH`, CDP launch pattern from existing desktop E2E
 - Produces: evidence that a fresh local profile shows Tips and routes into Secure Tunnel correctly
 
 - [ ] **Step 1: Launch an isolated fresh user-data directory**
 
-Create the disposable test root only under `E:\lnwjud\.local-artifacts\e2e-guided-setup\<unique>` and always remove that exact verified child path in `finally`. Set `LNWJUD_DATA_PATH` and `--user-data-dir` to that same isolated root. Do not use `os.tmpdir()`, do not create a repository/worktree copy, and do not reference real `%APPDATA%\tunnel-client` credentials in this test.
+Create the disposable test root only under `E:\lnwjing\.local-artifacts\e2e-guided-setup\<unique>` and always remove that exact verified child path in `finally`. Set `LNWJING_DATA_PATH` and `--user-data-dir` to that same isolated root. Do not use `os.tmpdir()`, do not create a repository/worktree copy, and do not reference real `%APPDATA%\tunnel-client` credentials in this test.
 
 - [ ] **Step 2: Verify the fresh-user path in Thai**
 
 ```ts
-await expect(page.getByRole('dialog', { name: 'ตั้งค่า ChatGPT ให้ใช้ lnwjud' })).toBeVisible();
+await expect(page.getByRole('dialog', { name: 'ตั้งค่า ChatGPT ให้ใช้ lnwjing' })).toBeVisible();
 await page.getByRole('button', { name: 'เริ่มตั้งค่า' }).click();
 await expect(page.getByRole('heading', { name: /Secure Tunnel/i })).toBeVisible();
 await expect(page.getByText('1. สร้าง OpenAI Tunnel')).toBeVisible();
@@ -794,13 +794,13 @@ Click Set up later, assert dialog closes, Home shows Open setup guide, click it 
 - [ ] **Step 5: Run the E2E file**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop test:e2e -- guided-tunnel-setup.e2e.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop test:e2e -- guided-tunnel-setup.e2e.ts
 ```
 
 If the package script does not forward a filename to Playwright, run after the build command:
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec playwright test --config playwright.config.ts e2e/guided-tunnel-setup.e2e.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec playwright test --config playwright.config.ts e2e/guided-tunnel-setup.e2e.ts
 ```
 
 Expected: PASS; no real browser page, key, tunnel or external process is created.
@@ -831,7 +831,7 @@ Do not duplicate unstable page screenshots. Text and URLs are easier to maintain
 - [ ] **Step 2: Run targeted Desktop tests**
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts tests/external-setup-links.test.ts tests/i18n.test.ts tests/production-ipc-acceptance.test.ts tests/tunnel-controller.test.ts tests/tunnel-continuity-acceptance.test.ts
+corepack pnpm@10.15.0 --filter @lnwjing/desktop exec vitest run --config vitest.config.ts tests/guided-tunnel-setup-state.test.ts tests/guided-tunnel-setup-ui.test.ts tests/external-setup-links.test.ts tests/i18n.test.ts tests/production-ipc-acceptance.test.ts tests/tunnel-controller.test.ts tests/tunnel-continuity-acceptance.test.ts
 ```
 
 Expected: PASS.
@@ -841,7 +841,7 @@ Expected: PASS.
 ```powershell
 corepack pnpm@10.15.0 lint
 corepack pnpm@10.15.0 typecheck
-corepack pnpm@10.15.0 --filter @lnwjud/desktop build
+corepack pnpm@10.15.0 --filter @lnwjing/desktop build
 git diff --check
 ```
 

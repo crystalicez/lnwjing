@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { appError, err, ok, type Result, type WorkflowStartRequest, type WorkflowStartResult, type WorkflowGoalMetadata } from '@lnwjud/domain';
+import { appError, err, ok, type Result, type WorkflowStartRequest, type WorkflowStartResult, type WorkflowGoalMetadata } from '@lnwjing/domain';
 import type { FileActor } from '../file-service.js';
 import { GoalContinuationService } from '../goal-continuation-service.js';
 import { WorkflowTemplateService } from './workflow-template-service.js';

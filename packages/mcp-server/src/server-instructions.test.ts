@@ -12,11 +12,11 @@ describe('MCP Ponytail instructions', () => {
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('Never invoke generic handoff skills');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('use those tools directly in the current conversation');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('Do not ask or suggest switching to ChatGPT Work, Codex');
-    expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('the required capability is not available through the exposed lnwjud tools');
+    expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('the required capability is not available through the exposed lnwjing tools');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).not.toContain('engineering_prepare_task');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).not.toContain('engineering_start_task');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('unless the user explicitly disabled scheduling');
-    expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).not.toContain('lnwjud_o');
+    expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).not.toContain('lnwjing_o');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('USER_INSTRUCTIONS');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('Goal freshness is user-visible state');
     expect(MCP_OUTCOME_DRIVEN_INSTRUCTIONS).toContain('at least every 10 minutes');

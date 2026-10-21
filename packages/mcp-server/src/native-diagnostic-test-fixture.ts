@@ -32,7 +32,7 @@ export async function withNativeDiagnosticFixture<T>(name: string, run: () => Pr
       : ['journalctl', '--no-pager --output=json -n 1 -p err..emerg', event]); break;
     default: return run();
   }
-  const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-diagnostic-fixture-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-diagnostic-fixture-'));
   const originalPath = process.env.PATH;
   const originalMixedPath = process.env.Path;
   try {

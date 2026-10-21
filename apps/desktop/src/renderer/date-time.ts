@@ -1,5 +1,5 @@
-import type { UiLocale } from '@lnwjud/ipc-contracts';
-import { formatDisplayDateTime } from '@lnwjud/shared/date-time-display';
+import type { UiLocale } from '@lnwjing/ipc-contracts';
+import { formatDisplayDateTime } from '@lnwjing/shared/date-time-display';
 
 /** Renderer compatibility wrapper around the shared cross-platform display contract. */
 export function formatDateTime(

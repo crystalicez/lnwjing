@@ -1,4 +1,4 @@
-import type { GoalRecord } from '@lnwjud/domain';
+import type { GoalRecord } from '@lnwjing/domain';
 
 /** A Goal's status, objective and freshly created empty plan are not result data. */
 export function hasInspectableGoalResults(goal: Pick<GoalRecord,

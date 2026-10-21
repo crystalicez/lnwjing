@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Redactor } from '@lnwjud/audit';
+import { Redactor } from '@lnwjing/audit';
 import {
   appError,
   err,
@@ -13,8 +13,8 @@ import {
   type CreateAgentSwarmRecord,
   type InvocationAuthorization,
   type Result,
-} from '@lnwjud/domain';
-import type { ManagedProcess, ProcessLogResult } from '@lnwjud/process';
+} from '@lnwjing/domain';
+import type { ManagedProcess, ProcessLogResult } from '@lnwjing/process';
 import type { FileActor } from './file-service.js';
 import type {
   AgentSwarmListPage,

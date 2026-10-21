@@ -4,17 +4,17 @@ import { createServer, type Server } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createProcessTreeTerminator } from '@lnwjud/process';
+import { createProcessTreeTerminator } from '@lnwjing/process';
 import { BrowserCdpBackend, type BrowserCdpEventChannel } from './browser-cdp-backend.js';
 import { NodeBrowserCdpProtocol } from './browser-cdp-protocol.js';
 import { CAPABILITY_TASK_OWNER_METADATA_KEY } from './task-ownership.js';
 
-const executable = process.env.LNWJUD_REAL_BROWSER_TEST_EXECUTABLE;
+const executable = process.env.LNWJING_REAL_BROWSER_TEST_EXECUTABLE;
 
 describe('installed browser retained observations', () => {
   it.skipIf(executable === undefined)('observes two real tabs and preserves browser ownership through cancellation and shutdown', async () => {
     if (executable === undefined) throw new Error('An installed browser executable is required');
-    const profile = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-browser-proof-'));
+    const profile = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-browser-proof-'));
     const http = createServer((request, response) => {
       if (request.url?.startsWith('/api')) { response.setHeader('content-type', 'application/json'); response.end('{"ok":true}'); return; }
       const name = request.url === '/b' ? 'tab-b' : 'tab-a';
@@ -90,7 +90,7 @@ describe('installed browser retained observations', () => {
       await channel.close();
       await protocol.request(second.id, 'Runtime.evaluate', { expression: "console.log('second stream after cancellation')", returnByValue: true });
       await until(async () => JSON.stringify(await backend.execute(read(secondId))).includes('second stream after cancellation'));
-      const evidenceDir = process.env.LNWJUD_BROWSER_PROOF_OUTPUT;
+      const evidenceDir = process.env.LNWJING_BROWSER_PROOF_OUTPUT;
       if (evidenceDir !== undefined) {
         await mkdir(evidenceDir, { recursive: true });
         const screenshot = await protocol.request(first.id, 'Page.captureScreenshot', { format: 'png' });

@@ -5,7 +5,7 @@ import type {
   PonytailPolicyContext,
   PonytailPolicySource,
   UiLocale,
-} from '@lnwjud/ipc-contracts';
+} from '@lnwjing/ipc-contracts';
 import { createTranslator, type Translator } from '../../i18n/index.js';
 import { EmptyState, SettingsCardHeading, StatusMessage } from '../ui/UiPrimitives.js';
 import { SettingsSelect as FormSelect } from '../ui/SettingsSelect.js';

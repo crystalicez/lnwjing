@@ -2,7 +2,7 @@ import { mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { WindowsNativeCapabilityBackend, type WindowsCapabilityBridge } from './windows-native-backend.js';
 
 describe('WindowsNativeCapabilityBackend', () => {
@@ -63,7 +63,7 @@ describe('WindowsNativeCapabilityBackend', () => {
       execute: async () => { called = true; return ok({}); },
     };
     const backend = new WindowsNativeCapabilityBackend('audio', bridge, 'win32', {
-      allowedRootsProvider: async (): Promise<readonly string[]> => ['C:\\Users\\Test\\AppData\\Local\\Temp\\lnwjud-audio'],
+      allowedRootsProvider: async (): Promise<readonly string[]> => ['C:\\Users\\Test\\AppData\\Local\\Temp\\lnwjing-audio'],
     });
 
     const result = await backend.execute({ action: 'record', output_path: 'C:\\Windows\\Temp\\out.wav' });
@@ -73,7 +73,7 @@ describe('WindowsNativeCapabilityBackend', () => {
   });
 
   it('allows file targets inside the canonical Active Project root for office', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-root-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-root-'));
     const report = path.join(root, 'report.xlsx');
     await writeFile(report, 'fixture', 'utf8');
     let called = false;
@@ -95,8 +95,8 @@ describe('WindowsNativeCapabilityBackend', () => {
     ['screen_record', { action: 'start', output_path: 'outside.mp4', userConfirmed: true }],
     ['office', { app: 'word', action: 'replace', file_path: 'outside.docx', find: 'old', replace_with: 'new', userConfirmed: true }],
   ] as const)('does not let unrestricted %s bypass the Active Project path boundary', async (capability, template) => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-root-'));
-    const outside = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-outside-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-root-'));
+    const outside = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-outside-'));
     const targetField = capability === 'office' ? 'file_path' : 'output_path';
     const input = { ...template, [targetField]: path.join(outside, String(template[targetField])) };
     if (capability === 'office') await writeFile(String(input.file_path), 'fixture', 'utf8');
@@ -115,8 +115,8 @@ describe('WindowsNativeCapabilityBackend', () => {
   });
 
   it('accepts an outside path and mutating native action only under trusted Full Bypass authorization', async () => {
-    const activeRoot = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-root-'));
-    const outsideRoot = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-outside-'));
+    const activeRoot = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-root-'));
+    const outsideRoot = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-outside-'));
     const report = path.join(outsideRoot, 'report.docx');
     await writeFile(report, 'fixture', 'utf8');
     let called = false;
@@ -138,8 +138,8 @@ describe('WindowsNativeCapabilityBackend', () => {
     ['screen_record', { action: 'start', output_path: 'capture.mp4', userConfirmed: true }],
     ['office', { app: 'word', action: 'replace', file_path: 'report.docx', find: 'old', replace_with: 'new', userConfirmed: true }],
   ] as const)('rejects a junction escape for %s before native provider dispatch', async (capability, template) => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-root-'));
-    const outside = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-outside-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-root-'));
+    const outside = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-outside-'));
     const escape = path.join(root, 'escape');
     await symlink(outside, escape, process.platform === 'win32' ? 'junction' : 'dir');
     const targetField = capability === 'office' ? 'file_path' : 'output_path';
@@ -167,7 +167,7 @@ describe('WindowsNativeCapabilityBackend', () => {
   });
 
   it('blocks Office replacement and raw input without confirmation', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-native-root-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-native-root-'));
     const report = path.join(root, 'report.docx');
     await writeFile(report, 'fixture', 'utf8');
     let called = false;

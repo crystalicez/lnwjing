@@ -101,7 +101,7 @@ export async function inspectMacosSigningPolicy(appPath, options) {
     throw new Error('Certificate-signed macOS app does not expose a TeamIdentifier');
   }
 
-  const mainExecutable = inspected.find((candidate) => candidate.relativePath === 'Contents/MacOS/lnwjud');
+  const mainExecutable = inspected.find((candidate) => candidate.relativePath === 'Contents/MacOS/lnwjing');
   if (!mainExecutable?.electronProcess) throw new Error('macOS signing inspection did not include the root executable');
   const policy = {
     schemaVersion: 1,
@@ -145,14 +145,14 @@ export async function discoverMacosSignableCode(appPath, { arch }) {
     candidates.push({ absolutePath, relativePath: normalized, kind, electronProcess });
   };
   add(root, '.', 'app');
-  add(path.join(root, 'Contents', 'MacOS', 'lnwjud'), 'Contents/MacOS/lnwjud', 'executable', true);
+  add(path.join(root, 'Contents', 'MacOS', 'lnwjing'), 'Contents/MacOS/lnwjing', 'executable', true);
 
   const frameworks = path.join(root, 'Contents', 'Frameworks');
   await walkFrameworks(frameworks, root, add);
   const runtimePaths = [
     'Contents/Resources/runtime-tools/ripgrep/rg',
     'Contents/Resources/tunnel-client/tunnel-client',
-    `Contents/Resources/native-host/macos/${arch}/lnwjud-macos-host`,
+    `Contents/Resources/native-host/macos/${arch}/lnwjing-macos-host`,
   ];
   for (const relativePath of runtimePaths) add(path.join(root, relativePath), relativePath, 'executable');
 
@@ -221,10 +221,10 @@ export function validateMacosSigningPolicyEvidence(policy, expected = {}) {
       throw new Error(`macOS certificate Electron process policy is invalid: ${entry.relativePath}`);
     }
   }
-  if (!processPaths.has('Contents/MacOS/lnwjud')) throw new Error('macOS signing-policy root executable evidence is missing');
+  if (!processPaths.has('Contents/MacOS/lnwjing')) throw new Error('macOS signing-policy root executable evidence is missing');
   const expectedProcessPaths = policy.code
     .filter((entry) => entry.kind === 'executable'
-      && (entry.relativePath === 'Contents/MacOS/lnwjud' || /[.]app\/Contents\/MacOS\/[^/]+$/.test(entry.relativePath)))
+      && (entry.relativePath === 'Contents/MacOS/lnwjing' || /[.]app\/Contents\/MacOS\/[^/]+$/.test(entry.relativePath)))
     .map((entry) => entry.relativePath);
   if (expectedProcessPaths.length !== processPaths.size || expectedProcessPaths.some((entry) => !processPaths.has(entry))) {
     throw new Error('macOS signing-policy Electron process evidence is incomplete');

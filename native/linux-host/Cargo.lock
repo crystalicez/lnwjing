@@ -100,7 +100,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
-name = "lnwjud-linux-host"
+name = "lnwjing-linux-host"
 version = "4.44.0"
 dependencies = [
  "base64",

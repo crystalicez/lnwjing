@@ -1,5 +1,5 @@
 {
-  "name": "@lnwjud/workspace",
+  "name": "@lnwjing/workspace",
   "version": "5.8.7",
   "private": true,
   "type": "module",
@@ -13,8 +13,8 @@
     }
   },
   "dependencies": {
-    "@lnwjud/domain": "workspace:*",
-    "@lnwjud/shared": "workspace:*"
+    "@lnwjing/domain": "workspace:*",
+    "@lnwjing/shared": "workspace:*"
   },
   "scripts": {
     "test": "vitest run",

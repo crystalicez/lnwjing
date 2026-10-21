@@ -219,7 +219,7 @@ export class EccProviderService {
     const expectedVersion = this.options.expectedVersion?.trim() || null;
     const versionMatchesExpectation = expectedVersion === null || expectedVersion === version;
     if (!versionMatchesExpectation) {
-      return unavailableInventory(this.options, 'Configured ECC package version does not match the pinned lnwjud expectation', rootPath, packageName, version, license);
+      return unavailableInventory(this.options, 'Configured ECC package version does not match the pinned lnwjing expectation', rootPath, packageName, version, license);
     }
 
     const counters: ScanCounters = { scannedFiles: 0, skippedSymlinks: 0, skippedOversizeFiles: 0 };

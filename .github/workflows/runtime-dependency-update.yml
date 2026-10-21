@@ -62,8 +62,8 @@ jobs:
         shell: bash
         run: |
           node apps/desktop/scripts/write-stdio-launcher.mjs
-          pnpm --filter @lnwjud/desktop typecheck
-          pnpm --filter @lnwjud/desktop build
+          pnpm --filter @lnwjing/desktop typecheck
+          pnpm --filter @lnwjing/desktop build
           pnpm test:packaging
 
       - name: Upsert the one verified managed dependency PR

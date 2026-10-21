@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EXTERNAL_SETUP_URLS } from '@lnwjud/ipc-contracts';
+import { EXTERNAL_SETUP_URLS } from '@lnwjing/ipc-contracts';
 import { parseOpenExternalSetupPageRequest, resolveExternalSetupUrl } from '../src/main/external-setup-links.js';
 
 describe('external setup links', () => {

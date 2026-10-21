@@ -98,7 +98,7 @@ jobs:
         shell: bash
         # The desktop suite runs in isolated shards below. Keep the remaining
         # workspace packages on pnpm's normal bounded recursive pool.
-        run: pnpm -r --workspace-concurrency=2 --filter '!@lnwjud/desktop' --if-present test
+        run: pnpm -r --workspace-concurrency=2 --filter '!@lnwjing/desktop' --if-present test
 
       - name: Test macOS native host protocol
         timeout-minutes: 10
@@ -171,11 +171,11 @@ jobs:
 
       - name: Build workspace packages used by desktop acceptance tests
         shell: bash
-        run: pnpm --filter '@lnwjud/cli...' build
+        run: pnpm --filter '@lnwjing/cli...' build
 
       - name: Run isolated desktop test shard
         shell: bash
-        run: pnpm --filter @lnwjud/desktop exec vitest run --config vitest.config.ts --passWithNoTests --shard=${{ matrix.shard_index }}/${{ matrix.shard_total }}
+        run: pnpm --filter @lnwjing/desktop exec vitest run --config vitest.config.ts --passWithNoTests --shard=${{ matrix.shard_index }}/${{ matrix.shard_total }}
 
   native-package-verification:
     name: Native Package Verification (${{ matrix.name }})
@@ -261,16 +261,16 @@ jobs:
         # Bundled FPM contains x86 Ruby; ARM runners need their native Ruby.
         shell: bash
         env:
-          LNWJUD_VERIFY_PLATFORM: ${{ matrix.platform }}
-          LNWJUD_VERIFY_ARCH: ${{ matrix.arch }}
-          LNWJUD_COSIGN_PATH: cosign
+          LNWJING_VERIFY_PLATFORM: ${{ matrix.platform }}
+          LNWJING_VERIFY_ARCH: ${{ matrix.arch }}
+          LNWJING_COSIGN_PATH: cosign
           MACOS_CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
           MACOS_CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           # Developer ID signing must be stable across macOS releases. Never
           # silently fall back to ad-hoc when half a certificate pair is set.
-          if [[ "$LNWJUD_VERIFY_PLATFORM" == darwin ]]; then
+          if [[ "$LNWJING_VERIFY_PLATFORM" == darwin ]]; then
             if [[ -n "$MACOS_CSC_LINK" || -n "$MACOS_CSC_KEY_PASSWORD" ]]; then
               if [[ -z "$MACOS_CSC_LINK" || -z "$MACOS_CSC_KEY_PASSWORD" ]]; then
                 echo 'macOS signing needs both MACOS_CSC_LINK and MACOS_CSC_KEY_PASSWORD' >&2
@@ -278,13 +278,13 @@ jobs:
               fi
               export CSC_LINK="$MACOS_CSC_LINK"
               export CSC_KEY_PASSWORD="$MACOS_CSC_KEY_PASSWORD"
-              export LNWJUD_REQUIRE_CODESIGN=1
-              echo 'LNWJUD_REQUIRE_CODESIGN=1' >> "$GITHUB_ENV"
+              export LNWJING_REQUIRE_CODESIGN=1
+              echo 'LNWJING_REQUIRE_CODESIGN=1' >> "$GITHUB_ENV"
             fi
           fi
           # app-builder checks presence, not truthiness: even an empty value
           # selects system FPM, so leave it completely unset on other targets.
-          if [[ "$LNWJUD_VERIFY_PLATFORM/$LNWJUD_VERIFY_ARCH" == linux/arm64 ]]; then
+          if [[ "$LNWJING_VERIFY_PLATFORM/$LNWJING_VERIFY_ARCH" == linux/arm64 ]]; then
             export USE_SYSTEM_FPM=true
           else
             unset USE_SYSTEM_FPM
@@ -296,16 +296,16 @@ jobs:
       - name: Verify packaged artifact layout
         shell: bash
         env:
-          LNWJUD_VERIFY_PLATFORM: ${{ matrix.platform }}
-          LNWJUD_VERIFY_ARCH: ${{ matrix.arch }}
+          LNWJING_VERIFY_PLATFORM: ${{ matrix.platform }}
+          LNWJING_VERIFY_ARCH: ${{ matrix.arch }}
         run: |
           version="$(node -p "require('./package.json').version")"
           if [[ "${{ matrix.platform }}" == "darwin" ]]; then
-            pnpm verify:macos-release "apps/desktop/dist/installers/lnwjud-${version}-${{ matrix.arch }}.dmg"
-            pnpm verify:macos-release "apps/desktop/dist/installers/lnwjud-${version}-${{ matrix.arch }}.zip"
+            pnpm verify:macos-release "apps/desktop/dist/installers/lnwjing-${version}-${{ matrix.arch }}.dmg"
+            pnpm verify:macos-release "apps/desktop/dist/installers/lnwjing-${version}-${{ matrix.arch }}.zip"
           else
-            pnpm verify:linux-release "apps/desktop/dist/installers/lnwjud-${version}-${{ matrix.arch }}.AppImage"
-            pnpm verify:linux-release "apps/desktop/dist/installers/lnwjud-${version}-${{ matrix.arch }}.deb"
+            pnpm verify:linux-release "apps/desktop/dist/installers/lnwjing-${version}-${{ matrix.arch }}.AppImage"
+            pnpm verify:linux-release "apps/desktop/dist/installers/lnwjing-${version}-${{ matrix.arch }}.deb"
           fi
 
       - name: Stage and launch the real macOS DMG package
@@ -314,11 +314,11 @@ jobs:
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
-          installed_app="$RUNNER_TEMP/lnwjud-installed-${{ matrix.arch }}/lnwjud.app"
+          installed_app="$RUNNER_TEMP/lnwjing-installed-${{ matrix.arch }}/lnwjing.app"
           bash scripts/stage-macos-smoke-app.sh \
-            "apps/desktop/dist/installers/lnwjud-${version}-${{ matrix.arch }}.dmg" \
+            "apps/desktop/dist/installers/lnwjing-${version}-${{ matrix.arch }}.dmg" \
             "$installed_app"
-          echo "LNWJUD_STAGED_MACOS_EXECUTABLE=$installed_app/Contents/MacOS/lnwjud" >> "$GITHUB_ENV"
+          echo "LNWJING_STAGED_MACOS_EXECUTABLE=$installed_app/Contents/MacOS/lnwjing" >> "$GITHUB_ENV"
 
       - name: Run native packaged Electron E2E smoke
         shell: bash
@@ -331,29 +331,29 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$TARGET_PLATFORM" == darwin ]]; then
-            test -n "${LNWJUD_STAGED_MACOS_EXECUTABLE:-}"
-            export LNWJUD_PACKAGED_EXECUTABLE="$LNWJUD_STAGED_MACOS_EXECUTABLE"
+            test -n "${LNWJING_STAGED_MACOS_EXECUTABLE:-}"
+            export LNWJING_PACKAGED_EXECUTABLE="$LNWJING_STAGED_MACOS_EXECUTABLE"
           else
             case "$TARGET_PLATFORM/$TARGET_ARCH" in
-              linux/x64) relative='linux-unpacked/lnwjud' ;;
-              linux/arm64) relative='linux-arm64-unpacked/lnwjud' ;;
+              linux/x64) relative='linux-unpacked/lnwjing' ;;
+              linux/arm64) relative='linux-arm64-unpacked/lnwjing' ;;
               *) echo 'Unsupported native smoke target' >&2; exit 1 ;;
             esac
-            export LNWJUD_PACKAGED_EXECUTABLE="$GITHUB_WORKSPACE/apps/desktop/dist/installers/$relative"
+            export LNWJING_PACKAGED_EXECUTABLE="$GITHUB_WORKSPACE/apps/desktop/dist/installers/$relative"
           fi
           if [[ "$TARGET_PLATFORM" == linux ]]; then
             # Install the real DEB on this disposable runner. Its post-install
             # hook configures the supported AppArmor/userns or SUID sandbox.
             # A generic unshare probe does not prove Electron can use userns.
             version="$(node -p "require('./package.json').version")"
-            sudo apt-get install -y "$GITHUB_WORKSPACE/apps/desktop/dist/installers/lnwjud-${version}-${TARGET_ARCH}.deb"
-            export LNWJUD_PACKAGED_EXECUTABLE=/opt/lnwjud/lnwjud
+            sudo apt-get install -y "$GITHUB_WORKSPACE/apps/desktop/dist/installers/lnwjing-${version}-${TARGET_ARCH}.deb"
+            export LNWJING_PACKAGED_EXECUTABLE=/opt/lnwjing/lnwjing
           fi
-          test -f "$LNWJUD_PACKAGED_EXECUTABLE" && test -x "$LNWJUD_PACKAGED_EXECUTABLE"
+          test -f "$LNWJING_PACKAGED_EXECUTABLE" && test -x "$LNWJING_PACKAGED_EXECUTABLE"
           test "$(id -u)" -ne 0
           cd "$GITHUB_WORKSPACE/apps/desktop"
           mkdir -p packaged-e2e-diagnostics
-          printf '%s\n' "$LNWJUD_PACKAGED_EXECUTABLE" > packaged-e2e-diagnostics/executable.txt
+          printf '%s\n' "$LNWJING_PACKAGED_EXECUTABLE" > packaged-e2e-diagnostics/executable.txt
           # Execute the installed Linux package or sealed macOS app just built.
           smoke=(node node_modules/@playwright/test/cli.js test --config playwright.config.ts
             desktop-dashboard.e2e.ts desktop-mcp-client.e2e.ts tools-doctor.e2e.ts electron-security.e2e.ts
@@ -362,16 +362,16 @@ jobs:
             # Record installed sandbox state without altering the artifact or
             # disabling sandboxing. The Electron security test asserts that
             # the actual renderer remains sandboxed.
-            sandbox="$(dirname "$LNWJUD_PACKAGED_EXECUTABLE")/chrome-sandbox"
+            sandbox="$(dirname "$LNWJING_PACKAGED_EXECUTABLE")/chrome-sandbox"
             test -f "$sandbox" && test ! -L "$sandbox"
             stat -c '%a %u:%g %n' "$sandbox" | tee packaged-e2e-diagnostics/sandbox.txt
-            dpkg-query -W lnwjud | tee -a packaged-e2e-diagnostics/sandbox.txt
-            if [[ -f /etc/apparmor.d/lnwjud ]]; then
-              cat /etc/apparmor.d/lnwjud >> packaged-e2e-diagnostics/sandbox.txt
+            dpkg-query -W lnwjing | tee -a packaged-e2e-diagnostics/sandbox.txt
+            if [[ -f /etc/apparmor.d/lnwjing ]]; then
+              cat /etc/apparmor.d/lnwjing >> packaged-e2e-diagnostics/sandbox.txt
             fi
             umask 077
-            session_root="$(mktemp -d "$RUNNER_TEMP/lnwjud-keyring.XXXXXXXX")"
-            trap 'case "$session_root" in "$RUNNER_TEMP"/lnwjud-keyring.?*) rm -rf -- "$session_root" ;; esac' EXIT
+            session_root="$(mktemp -d "$RUNNER_TEMP/lnwjing-keyring.XXXXXXXX")"
+            trap 'case "$session_root" in "$RUNNER_TEMP"/lnwjing-keyring.?*) rm -rf -- "$session_root" ;; esac' EXIT
             export XDG_DATA_HOME="$session_root/data" XDG_CONFIG_HOME="$session_root/config"
             export XDG_CACHE_HOME="$session_root/cache" XDG_RUNTIME_DIR="$session_root/runtime"
             export XDG_CURRENT_DESKTOP=GNOME
@@ -454,19 +454,19 @@ jobs:
 
       - name: Build packaged-smoke workspace dependencies
         shell: bash
-        run: pnpm --filter @lnwjud/storage... --if-present build
+        run: pnpm --filter @lnwjing/storage... --if-present build
 
       - name: Record exact v4.62.1 macOS signing-policy regression
         if: matrix.arch == 'arm64'
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p macos26-diagnostics "$RUNNER_TEMP/lnwjud-v4.62.1-baseline"
+          mkdir -p macos26-diagnostics "$RUNNER_TEMP/lnwjing-v4.62.1-baseline"
           sw_vers > macos26-diagnostics/os.txt
           uname -a >> macos26-diagnostics/os.txt
-          baseline_directory="$RUNNER_TEMP/lnwjud-v4.62.1-baseline"
-          baseline_dmg="$baseline_directory/lnwjud-4.62.1-arm64.dmg"
-          baseline_zip="$baseline_directory/lnwjud-4.62.1-arm64.zip"
+          baseline_directory="$RUNNER_TEMP/lnwjing-v4.62.1-baseline"
+          baseline_dmg="$baseline_directory/lnwjing-4.62.1-arm64.dmg"
+          baseline_zip="$baseline_directory/lnwjing-4.62.1-arm64.zip"
           curl --fail --location --retry 3 \
             --output "$baseline_dmg" \
             https://github.com/engasnm111/lnwjud/releases/download/v4.62.1/lnwjud-4.62.1-arm64.dmg
@@ -480,7 +480,7 @@ jobs:
           for format in dmg zip; do
             baseline_variable="baseline_${format}"
             baseline="${!baseline_variable}"
-            baseline_app="$RUNNER_TEMP/lnwjud-v4.62.1-${format}-policy-app/lnwjud.app"
+            baseline_app="$RUNNER_TEMP/lnwjing-v4.62.1-${format}-policy-app/lnwjing.app"
             bash scripts/stage-macos-smoke-app.sh "$baseline" "$baseline_app" stage-only
             set +e
             node apps/desktop/scripts/inspect-macos-signing-policy.mjs \
@@ -504,7 +504,7 @@ jobs:
             # static signing-policy regression on, whether this runner launches it.
             set +e
             bash scripts/stage-macos-smoke-app.sh \
-              "$baseline" "$RUNNER_TEMP/lnwjud-v4.62.1-${format}-launch-app/lnwjud.app" \
+              "$baseline" "$RUNNER_TEMP/lnwjing-v4.62.1-${format}-launch-app/lnwjing.app" \
               2>&1 | tee "macos26-diagnostics/v4.62.1-${format}-launch-observation.log"
             launch_status="${PIPESTATUS[0]}"
             set -e
@@ -515,13 +515,13 @@ jobs:
       - name: Verify exact artifact provenance and macOS 26 signing policy
         shell: bash
         env:
-          LNWJUD_RELEASE_PLATFORM: darwin
-          LNWJUD_EXPECTED_COMMIT_SHA: ${{ github.sha }}
-          LNWJUD_REQUIRE_CLEAN_PROVENANCE: '1'
-          LNWJUD_RELEASE_ARTIFACT_ONLY: '1'
+          LNWJING_RELEASE_PLATFORM: darwin
+          LNWJING_EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          LNWJING_REQUIRE_CLEAN_PROVENANCE: '1'
+          LNWJING_RELEASE_ARTIFACT_ONLY: '1'
         run: |
           set -euo pipefail
-          provenance_list="$RUNNER_TEMP/lnwjud-macos26-provenance.txt"
+          provenance_list="$RUNNER_TEMP/lnwjing-macos26-provenance.txt"
           find "$GITHUB_WORKSPACE/macos26-artifact" -type f -name PROVENANCE.json -print > "$provenance_list"
           provenance_count="$(wc -l < "$provenance_list" | tr -d '[:space:]')"
           if [[ "$provenance_count" -ne 1 ]]; then
@@ -530,19 +530,19 @@ jobs:
           fi
           IFS= read -r provenance_path < "$provenance_list"
           installer_directory="$(dirname "$provenance_path")"
-          export LNWJUD_RELEASE_INSTALLER_DIRECTORY="$installer_directory"
+          export LNWJING_RELEASE_INSTALLER_DIRECTORY="$installer_directory"
           node apps/desktop/scripts/verify-release-evidence.mjs
           version="$(node -p "require('./package.json').version")"
-          dmg="$installer_directory/lnwjud-${version}-${{ matrix.arch }}.dmg"
-          zip="$installer_directory/lnwjud-${version}-${{ matrix.arch }}.zip"
+          dmg="$installer_directory/lnwjing-${version}-${{ matrix.arch }}.dmg"
+          zip="$installer_directory/lnwjing-${version}-${{ matrix.arch }}.zip"
           mkdir -p macos26-diagnostics
           sw_vers > macos26-diagnostics/os.txt
           uname -a >> macos26-diagnostics/os.txt
           shasum -a 256 "$dmg" "$zip" > macos26-diagnostics/artifact-sha256.txt
           bash scripts/verify-macos-release.sh "$dmg" 2>&1 | tee macos26-diagnostics/verify-dmg.log
           bash scripts/verify-macos-release.sh "$zip" 2>&1 | tee macos26-diagnostics/verify-zip.log
-          echo "LNWJUD_MACOS26_DMG=$dmg" >> "$GITHUB_ENV"
-          echo "LNWJUD_MACOS26_ZIP=$zip" >> "$GITHUB_ENV"
+          echo "LNWJING_MACOS26_DMG=$dmg" >> "$GITHUB_ENV"
+          echo "LNWJING_MACOS26_ZIP=$zip" >> "$GITHUB_ENV"
 
       # Keep the artifacts staged-only here so the UI smoke owns the only live
       # package instance and its startup journal identifies any pre-window block.
@@ -551,11 +551,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dmg_app="$RUNNER_TEMP/lnwjud-macos26-dmg/lnwjud.app"
-          zip_app="$RUNNER_TEMP/lnwjud-macos26-zip/lnwjud.app"
-          bash scripts/stage-macos-smoke-app.sh "$LNWJUD_MACOS26_DMG" "$dmg_app" stage-only
-          bash scripts/stage-macos-smoke-app.sh "$LNWJUD_MACOS26_ZIP" "$zip_app" stage-only
-          echo "LNWJUD_PACKAGED_EXECUTABLE=$dmg_app/Contents/MacOS/lnwjud" >> "$GITHUB_ENV"
+          dmg_app="$RUNNER_TEMP/lnwjing-macos26-dmg/lnwjing.app"
+          zip_app="$RUNNER_TEMP/lnwjing-macos26-zip/lnwjing.app"
+          bash scripts/stage-macos-smoke-app.sh "$LNWJING_MACOS26_DMG" "$dmg_app" stage-only
+          bash scripts/stage-macos-smoke-app.sh "$LNWJING_MACOS26_ZIP" "$zip_app" stage-only
+          echo "LNWJING_PACKAGED_EXECUTABLE=$dmg_app/Contents/MacOS/lnwjing" >> "$GITHUB_ENV"
 
       - name: Run packaged Electron smoke on macOS 26
         shell: bash
@@ -565,12 +565,12 @@ jobs:
           ELECTRON_ENABLE_LOGGING: '1'
           # GitHub's macOS 26 arm64 runner has no usable login Keychain for a
           # packaged smoke process. The app accepts this fixture-only switch
-          # only together with LNWJUD_E2E_FIXTURE and only on that host.
-          LNWJUD_E2E_EPHEMERAL_SECRETS: '1'
+          # only together with LNWJING_E2E_FIXTURE and only on that host.
+          LNWJING_E2E_EPHEMERAL_SECRETS: '1'
         run: |
           set -euo pipefail
           mkdir -p macos26-diagnostics
-          ci_keychain="$RUNNER_TEMP/lnwjud-macos26-${{ matrix.arch }}.keychain-db"
+          ci_keychain="$RUNNER_TEMP/lnwjing-macos26-${{ matrix.arch }}.keychain-db"
           ci_keychain_password="$(uuidgen)"
           echo "::add-mask::$ci_keychain_password"
           original_default_keychain="$(security default-keychain -d user | sed -e 's/^[[:space:]]*//' -e 's/^"//' -e 's/"$//')"
@@ -609,10 +609,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dmg_app="$RUNNER_TEMP/lnwjud-macos26-dmg/lnwjud.app"
-          zip_app="$RUNNER_TEMP/lnwjud-macos26-zip/lnwjud.app"
-          bash scripts/stage-macos-smoke-app.sh "$LNWJUD_MACOS26_DMG" "$dmg_app" 2>&1 | tee macos26-diagnostics/launch-dmg.log
-          bash scripts/stage-macos-smoke-app.sh "$LNWJUD_MACOS26_ZIP" "$zip_app" 2>&1 | tee macos26-diagnostics/launch-zip.log
+          dmg_app="$RUNNER_TEMP/lnwjing-macos26-dmg/lnwjing.app"
+          zip_app="$RUNNER_TEMP/lnwjing-macos26-zip/lnwjing.app"
+          bash scripts/stage-macos-smoke-app.sh "$LNWJING_MACOS26_DMG" "$dmg_app" 2>&1 | tee macos26-diagnostics/launch-dmg.log
+          bash scripts/stage-macos-smoke-app.sh "$LNWJING_MACOS26_ZIP" "$zip_app" 2>&1 | tee macos26-diagnostics/launch-zip.log
 
       - name: Upload macOS 26 compatibility diagnostics
         if: always()
@@ -701,7 +701,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $version = 'v3.1.3'
           $expectedSha256 = '9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be'
-          $installDir = Join-Path $env:RUNNER_TEMP 'lnwjud-cosign'
+          $installDir = Join-Path $env:RUNNER_TEMP 'lnwjing-cosign'
           $target = Join-Path $installDir 'cosign.exe'
           New-Item -ItemType Directory -Force -Path $installDir | Out-Null
           $url = "https://github.com/sigstore/cosign/releases/download/$version/cosign-windows-amd64.exe"
@@ -723,12 +723,12 @@ jobs:
             throw "cosign SHA-256 mismatch: expected $expectedSha256, got $actualSha256"
           }
           $installDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          "LNWJUD_COSIGN_PATH=$target" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LNWJING_COSIGN_PATH=$target" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Verify cosign release verifier
         shell: powershell
         run: |
-          $cosign = if ($env:LNWJUD_COSIGN_PATH) { $env:LNWJUD_COSIGN_PATH } else { 'cosign' }
+          $cosign = if ($env:LNWJING_COSIGN_PATH) { $env:LNWJING_COSIGN_PATH } else { 'cosign' }
           $versionText = (& $cosign version 2>&1 | Out-String)
           if ($LASTEXITCODE -ne 0) { throw "cosign failed to run: $versionText" }
           if ($versionText -notmatch 'v?3\.1\.3') { throw "Expected cosign v3.1.3, got: $versionText" }
@@ -782,8 +782,8 @@ jobs:
       - name: Verify packaged Windows legacy-profile startup
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         env:
-          LNWJUD_PACKAGED_EXECUTABLE: ${{ github.workspace }}/apps/desktop/dist/installers/win-unpacked/lnwjud.exe
-        run: pnpm --filter @lnwjud/desktop exec playwright test --config playwright.config.ts --grep "Windows upgrade opens"
+          LNWJING_PACKAGED_EXECUTABLE: ${{ github.workspace }}/apps/desktop/dist/installers/win-unpacked/lnwjing.exe
+        run: pnpm --filter @lnwjing/desktop exec playwright test --config playwright.config.ts --grep "Windows upgrade opens"
 
       - name: Upload Windows E2E diagnostics
         if: failure()

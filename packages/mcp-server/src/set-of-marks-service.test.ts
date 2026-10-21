@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import type { CapabilityService, CapabilityToolName } from '@lnwjud/capabilities';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import type { CapabilityService, CapabilityToolName } from '@lnwjing/capabilities';
 import { SetOfMarksObservationStore, SetOfMarksService } from './set-of-marks-service.js';
 
 const image = {
@@ -62,7 +62,7 @@ describe('SetOfMarksService', () => {
       },
     };
     const service = new SetOfMarksService(capabilities);
-    const result = await service.capture({ workspaceId: 'ws-1', capture: 'window', app: { process_name: 'lnwjud' }, window_index: 0 });
+    const result = await service.capture({ workspaceId: 'ws-1', capture: 'window', app: { process_name: 'lnwjing' }, window_index: 0 });
     expect(result).toMatchObject({ ok: true, value: {
       image: { origin_x: 200, origin_y: 50, scale_x: 1.5, scale_y: 1.5 },
       marks: [

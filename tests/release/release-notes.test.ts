@@ -63,7 +63,7 @@ describe('standardized GitHub release notes', () => {
 - Fixed a process-lifecycle race.
 
 ## Windows release assets
-- \`lnwjud-Setup-4.8.3.exe\`
+- \`lnwjing-Setup-4.8.3.exe\`
 
 **Full Changelog**: https://github.com/engasnm111/lnwjud/compare/v4.7.1...v4.8.3`;
 
@@ -76,7 +76,7 @@ describe('standardized GitHub release notes', () => {
 
     expect(body).toContain('## Features\n\n- Added a new MCP capability.');
     expect(body).toContain('## Bug Fixes\n\n- Fixed a process-lifecycle race.');
-    expect(body).toContain('## Other Changes\n\n- `lnwjud-Setup-4.8.3.exe`');
+    expect(body).toContain('## Other Changes\n\n- `lnwjing-Setup-4.8.3.exe`');
   });
 
   it('omits empty categories and collapses duplicate changelog lines', async () => {

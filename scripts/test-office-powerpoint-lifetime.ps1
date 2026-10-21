@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
 if ($HoldMutex) {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-  $mutex = [Threading.Mutex]::new($false, ('Local\lnwjud-office-powerpoint-' + $identity))
+  $mutex = [Threading.Mutex]::new($false, ('Local\lnwjing-office-powerpoint-' + $identity))
   try {
     if (-not $mutex.WaitOne(10000)) { throw 'Fixture could not acquire its bounded mutex' }
     [IO.File]::WriteAllText($ReadyPath, 'held')
@@ -51,7 +51,7 @@ if (-not $refused -or $script:presentationOpens -ne 0) { throw 'Existing borrowe
 $opened = Open-OfficePowerPointPresentation $fixtureApp 'C:\fixture\New.pptx' $false $false $true
 if ($opened.FullName -ne 'C:\fixture\New.pptx' -or $script:presentationOpens -ne 1 -or $script:presentationArguments[1] -or $script:presentationArguments[2] -or -not $script:presentationArguments[3]) { throw 'Request-owned presentation lost its path, writable mode or visible chart window' }
 
-$ready = Join-Path ([IO.Path]::GetTempPath()) ('lnwjud-office-mutex-' + [Guid]::NewGuid().ToString('N') + '.ready')
+$ready = Join-Path ([IO.Path]::GetTempPath()) ('lnwjing-office-mutex-' + [Guid]::NewGuid().ToString('N') + '.ready')
 $holder = $null
 try {
   $holder = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('"' + $PSCommandPath + '"'),'-HoldMutex','-ReadyPath',('"' + $ready + '"')) -WindowStyle Hidden -PassThru

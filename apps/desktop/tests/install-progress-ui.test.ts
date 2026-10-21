@@ -20,7 +20,7 @@ describe('GlobalInstallProgressModal', () => {
     }));
 
     expect(markup).toContain('aria-modal="true"');
-    expect(markup).toContain('กำลังอัปเดต lnwjud');
+    expect(markup).toContain('กำลังอัปเดต lnwjing');
     expect(markup).toContain('aria-valuenow="42"');
     expect(markup).toContain('width:42%');
     expect(markup).not.toContain('is-indeterminate');

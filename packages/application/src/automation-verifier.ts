@@ -15,8 +15,8 @@ import {
   type Result,
   type WorkspaceId,
   type StoredAutomationRun,
-} from '@lnwjud/domain';
-import { WorkspacePathGuard, type Workspace } from '@lnwjud/workspace';
+} from '@lnwjing/domain';
+import { WorkspacePathGuard, type Workspace } from '@lnwjing/workspace';
 import type { AutomationDispatchRequest } from './automation-service.js';
 import type { FileActor } from './file-service.js';
 

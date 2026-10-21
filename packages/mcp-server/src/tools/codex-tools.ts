@@ -22,7 +22,7 @@ export function codexTools(context: McpToolContext): McpToolDefinition[] {
     }),
     defineTool({
       name: 'codex_run',
-      description: 'Delegate an instruction to the local Codex CLI in the Active Project. Starting Codex requires explicit chat confirmation and host approval in standard mode; trusted Full Bypass skips those lnwjud application checks without forging userConfirmed.',
+      description: 'Delegate an instruction to the local Codex CLI in the Active Project. Starting Codex requires explicit chat confirmation and host approval in standard mode; trusted Full Bypass skips those lnwjing application checks without forging userConfirmed.',
       permission: 'EXECUTE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: codexRunSchema,
@@ -65,7 +65,7 @@ export function codexTools(context: McpToolContext): McpToolDefinition[] {
     }),
     defineTool({
       name: 'codex_stop',
-      description: 'Stop an owned Codex task process after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjud confirmation gate; task ownership still applies.',
+      description: 'Stop an owned Codex task process after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjing confirmation gate; task ownership still applies.',
       permission: 'EXECUTE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: codexStopSchema,

@@ -1,6 +1,8 @@
-appId: com.lnwjud.desktop
-productName: lnwjud
+appId: com.lnwjing.desktop
+productName: lnwjing
 asar: true
+# Avoid expensive maximum-compression 7z work on local one-click portable builds.
+compression: normal
 toolsets:
   appimage: 1.0.3
 npmRebuild: false
@@ -16,8 +18,8 @@ files:
   - package.json
 publish:
   provider: github
-  owner: engasnm111
-  repo: lnwjud
+  owner: crystalicez
+  repo: lnwjing
   releaseType: release
 afterPack: scripts/capture-packaged-runtime-evidence.mjs
 afterSign: scripts/capture-packaged-runtime-evidence.mjs
@@ -28,8 +30,8 @@ extraResources:
     to: runtime-tools
   - from: build/ecc-runtime
     to: ecc-runtime
-  - from: ../../.agents/skills/lnwjud-scheduled-continuation
-    to: agent-skills/lnwjud-scheduled-continuation
+  - from: ../../.agents/skills/lnwjing-scheduled-continuation
+    to: agent-skills/lnwjing-scheduled-continuation
   - from: ../../.agents/skills/ponytail
     to: agent-skills/ponytail
   - from: ../../.agents/skills/ponytail-review
@@ -53,12 +55,12 @@ win:
     - target: portable
       arch:
         - x64
-  artifactName: lnwjud-Setup-${version}.${ext}
-  # Keep the branded icon embedded in lnwjud.exe for Windows shortcuts and taskbar.
+  artifactName: lnwjing-Setup-${version}.${ext}
+  # Keep the branded icon embedded in lnwjing.exe for Windows shortcuts and taskbar.
   signAndEditExecutable: true
   extraFiles:
-    - from: build/lnwjud-mcp-stdio.cmd
-      to: lnwjud-mcp-stdio.cmd
+    - from: build/lnwjing-mcp-stdio.cmd
+      to: lnwjing-mcp-stdio.cmd
   extraResources:
     - from: build/capability-bridge/windows-capability-bridge.ps1
       to: windows-capability-bridge.ps1
@@ -66,8 +68,8 @@ win:
       to: windows-capability-bridge.sha256
     - from: build/capability-bridge/windows-capability-bridge.integrity.json
       to: windows-capability-bridge.integrity.json
-    - from: ../../native/windows-ocr/bin
-      to: windows-ocr
+    - from: ../../native/windows-ocr/bin/lnwjing-windows-ocr.exe
+      to: windows-ocr/lnwjing-windows-ocr.exe
     - from: ../../native/windows-secret-migrator/bin/win-x64
       to: windows-secret-migrator
 mac:
@@ -79,10 +81,10 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   extendInfo:
-    NSAccessibilityUsageDescription: lnwjud uses Accessibility only after you approve a native UI action.
-    NSScreenCaptureUsageDescription: lnwjud uses Screen Recording only for an explicitly requested capture.
-    NSMicrophoneUsageDescription: lnwjud uses the microphone only for an explicitly requested audio task.
-    NSAppleEventsUsageDescription: lnwjud uses Apple Events only for an explicitly approved Office action.
+    NSAccessibilityUsageDescription: lnwjing uses Accessibility only after you approve a native UI action.
+    NSScreenCaptureUsageDescription: lnwjing uses Screen Recording only for an explicitly requested capture.
+    NSMicrophoneUsageDescription: lnwjing uses the microphone only for an explicitly requested audio task.
+    NSAppleEventsUsageDescription: lnwjing uses Apple Events only for an explicitly approved Office action.
   target:
     - target: dmg
       arch:
@@ -92,16 +94,16 @@ mac:
       arch:
         - x64
         - arm64
-  artifactName: lnwjud-${version}-${arch}.${ext}
+  artifactName: lnwjing-${version}-${arch}.${ext}
   extraFiles:
-    - from: build/lnwjud-mcp-stdio.sh
+    - from: build/lnwjing-mcp-stdio.sh
       # Shell scripts belong in Resources, not the signed-code area at Contents.
-      to: Resources/lnwjud-mcp-stdio
+      to: Resources/lnwjing-mcp-stdio
   extraResources:
     - from: build/native-host/macos
       to: native-host/macos
 linux:
-  executableName: lnwjud
+  executableName: lnwjing
   maintainer: Adisorn <engasnm111@users.noreply.github.com>
   icon: build/icons
   category: Development
@@ -117,17 +119,17 @@ linux:
         - x64
         - arm64
   # Keep release filenames aligned with runtime evidence (x64, not amd64/x86_64).
-  artifactName: lnwjud-${version}-${env.LNWJUD_RUNTIME_ARCH}.${ext}
+  artifactName: lnwjing-${version}-${env.LNWJING_RUNTIME_ARCH}.${ext}
   extraFiles:
-    - from: build/lnwjud-mcp-stdio.sh
-      to: lnwjud-mcp-stdio
+    - from: build/lnwjing-mcp-stdio.sh
+      to: lnwjing-mcp-stdio
   extraResources:
     - from: build/native-host/linux
       to: native-host/linux
 nsis:
   oneClick: false
   perMachine: false
-  # Preserve the historical per-user default (%LOCALAPPDATA%\Programs\lnwjud).
+  # Preserve the historical per-user default (%LOCALAPPDATA%\Programs\lnwjing).
   # All-users remains an explicit installer-page choice instead of the default.
   selectPerMachineByDefault: false
   allowToChangeInstallationDirectory: true
@@ -139,5 +141,5 @@ nsis:
   uninstallDisplayName: ${productName}
   include: build/installer.nsh
 portable:
-  artifactName: lnwjud-Portable-${version}.${ext}
+  artifactName: lnwjing-Portable-${version}.${ext}
   splashImage: build/portable-splash.bmp

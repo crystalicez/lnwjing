@@ -186,9 +186,9 @@ describe('PowerShellWindowsCapabilityBridge integrity', () => {
     expect(script).toContain('[System.Drawing.Image]::FromStream($verifyStream, $true, $true)');
     expect(script).toContain("throw 'Capture image validation failed'");
     expect(script).toContain('[System.Security.Cryptography.SHA256]::Create()');
-    expect(script).toContain('[LnwjudNative]::PrintWindow($captureHwnd, $hdc, 2)');
+    expect(script).toContain('[LnwjingNative]::PrintWindow($captureHwnd, $hdc, 2)');
     expect(script).toContain('SetProcessDpiAwarenessContext(new IntPtr(-4))');
-    expect(script).toContain('$physicalPixelCoordinates = [LnwjudNative]::EnsurePhysicalPixelCoordinates()');
+    expect(script).toContain('$physicalPixelCoordinates = [LnwjingNative]::EnsurePhysicalPixelCoordinates()');
     expect(script).toContain('if (-not $usedPrintWindow) { $graphics.CopyFromScreen($x, $y, 0, 0, $bitmap.Size) }');
     expect(script).toContain('if (-not $physicalPixelCoordinates) { $scaleX = $dpiScale; $scaleY = $dpiScale }');
     expect(script).toContain('origin_x = $x; origin_y = $y; scale_x = $scaleX; scale_y = $scaleY');
@@ -272,7 +272,7 @@ async function temporaryRoot(): Promise<string> {
   // junction. Canonicalize that parent first so the fixture itself is a regular,
   // non-reparse path while production integrity checks remain fail-closed.
   const canonicalTemp = await realpath(os.tmpdir());
-  const root = await mkdtemp(path.join(canonicalTemp, 'lnwjud-bridge-integrity-'));
+  const root = await mkdtemp(path.join(canonicalTemp, 'lnwjing-bridge-integrity-'));
   temporaryRoots.push(root);
   return root;
 }

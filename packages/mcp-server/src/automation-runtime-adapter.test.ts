@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { automationShellRequestDigest, appError, err, ok, type Result } from '@lnwjud/domain';
-import { ShellCapabilityBackend, type CapabilityService, type CapabilityToolName } from '@lnwjud/capabilities';
-import type { AutomationDispatchRequest, FileActor } from '@lnwjud/application';
-import { permissionProfiles } from '@lnwjud/permissions';
+import { automationShellRequestDigest, appError, err, ok, type Result } from '@lnwjing/domain';
+import { ShellCapabilityBackend, type CapabilityService, type CapabilityToolName } from '@lnwjing/capabilities';
+import type { AutomationDispatchRequest, FileActor } from '@lnwjing/application';
+import { permissionProfiles } from '@lnwjing/permissions';
 import { AutomationRuntimeAdapter, type AutomationToolRegistryPort } from './automation-runtime-adapter.js';
 import { ToolRegistry, type WorkspaceScope, type McpApplicationServices } from './tool-registry.js';
 
@@ -125,7 +125,7 @@ describe('AutomationRuntimeAdapter', () => {
   });
 
   it('dispatches deterministically through ToolRegistry while keeping the reserved context out of the public schema', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-automation-adapter-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-automation-adapter-'));
     roots.push(root);
     await mkdir(path.join(root, '.tasks'), { recursive: true });
     const backend = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory: path.join(root, '.tasks') });
@@ -186,7 +186,7 @@ describe('AutomationRuntimeAdapter', () => {
   }, 20_000);
 
   it('reattaches to one exact running task after runtime replacement and reads its terminal receipt without relaunching', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-automation-adapter-restart-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-automation-adapter-restart-'));
     roots.push(root);
     const taskDirectory = path.join(root, '.tasks');
     await mkdir(taskDirectory, { recursive: true });

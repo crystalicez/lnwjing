@@ -1,4 +1,4 @@
-import type { CheckpointPayloadCipher } from '@lnwjud/storage';
+import type { CheckpointPayloadCipher } from '@lnwjing/storage';
 
 const MACOS_ASYNC_SAFE_STORAGE_SETTLE_MS = 2_000;
 

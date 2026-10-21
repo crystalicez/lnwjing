@@ -3,8 +3,8 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { copyFile, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { InstallOperationPhase, RemoteMcpStatus, RemoteMcpTransport } from '@lnwjud/ipc-contracts';
-import type { SecretProtector } from '@lnwjud/shared';
+import type { InstallOperationPhase, RemoteMcpStatus, RemoteMcpTransport } from '@lnwjing/ipc-contracts';
+import type { SecretProtector } from '@lnwjing/shared';
 
 export type TokenEndpointAuthMethod = 'none' | 'client_secret_post';
 
@@ -275,7 +275,7 @@ export class RemoteMcpController {
     } else {
       this.message = configuredPublicOrigin === null
         ? 'External public URL cleared. Configure an HTTPS public origin before starting this transport.'
-        : `${this.transport === 'cloudflare' ? 'Cloudflare' : 'Custom URL'} public origin saved. Configure the external proxy to forward to the stable local gateway URL shown by lnwjud.`;
+        : `${this.transport === 'cloudflare' ? 'Cloudflare' : 'Custom URL'} public origin saved. Configure the external proxy to forward to the stable local gateway URL shown by lnwjing.`;
     }
     return this.status();
   }
@@ -292,10 +292,10 @@ export class RemoteMcpController {
     this.message = transport === 'ngrok'
       ? 'ngrok selected. Existing ngrok authtoken, static domain, OAuth trust, and tunnel behavior are preserved.'
       : transport === 'cloudflare'
-        ? 'Cloudflare selected. lnwjud will run the OAuth gateway locally without starting ngrok; your Cloudflare tunnel must forward the configured HTTPS origin to the stable local gateway URL.'
+        ? 'Cloudflare selected. lnwjing will run the OAuth gateway locally without starting ngrok; your Cloudflare tunnel must forward the configured HTTPS origin to the stable local gateway URL.'
         : transport === 'custom'
-          ? 'Custom URL selected. lnwjud will run the OAuth gateway locally without starting ngrok; your reverse proxy must forward the configured HTTPS origin to the stable local gateway URL.'
-          : 'Local MCP selected. lnwjud will start the local MCP listener directly with no ngrok or public OAuth gateway.';
+          ? 'Custom URL selected. lnwjing will run the OAuth gateway locally without starting ngrok; your reverse proxy must forward the configured HTTPS origin to the stable local gateway URL.'
+          : 'Local MCP selected. lnwjing will start the local MCP listener directly with no ngrok or public OAuth gateway.';
     return this.status();
   }
 
@@ -339,7 +339,7 @@ export class RemoteMcpController {
     this.message = this.transport === 'local' ? 'Starting Local MCP…' : 'Starting protected Remote MCP…';
     try {
       const localMcpUrl = await this.ensureLocalMcpUrl();
-      if (localMcpUrl === null) throw new Error('Local MCP is unavailable. Start the lnwjud MCP listener first.');
+      if (localMcpUrl === null) throw new Error('Local MCP is unavailable. Start the lnwjing MCP listener first.');
 
       if (this.transport === 'local') {
         this.publicOrigin = null;
@@ -376,13 +376,13 @@ export class RemoteMcpController {
         this.publicOrigin = externalOrigin;
         const verified = await verifyExternalPublicOrigin(externalOrigin, 8_000);
         if (!verified) {
-          throw new Error(`${this.transport === 'cloudflare' ? 'Cloudflare' : 'Custom URL'} public origin is not forwarding to the lnwjud OAuth gateway yet. Configure ${this.publicOrigin} to forward to ${this.gatewayUrl} and start again.`);
+          throw new Error(`${this.transport === 'cloudflare' ? 'Cloudflare' : 'Custom URL'} public origin is not forwarding to the lnwjing OAuth gateway yet. Configure ${this.publicOrigin} to forward to ${this.gatewayUrl} and start again.`);
         }
         this.runState = 'running';
         this.desiredRunning = true;
         this.reconnectAttempts = 0;
         await this.persistState();
-        this.message = `${this.transport === 'cloudflare' ? 'Cloudflare' : 'Custom URL'} Remote MCP is online through ${this.publicOrigin}. lnwjud did not start or modify ngrok.`;
+        this.message = `${this.transport === 'cloudflare' ? 'Cloudflare' : 'Custom URL'} Remote MCP is online through ${this.publicOrigin}. lnwjing did not start or modify ngrok.`;
         return this.status();
       }
 
@@ -396,8 +396,8 @@ export class RemoteMcpController {
       this.ngrokPath = executable;
       const authtoken = await this.loadAuthtoken();
       if (authtoken === null) throw new Error('ngrok authtoken is not configured');
-      const recoveredStaleNgrok = await recoverStaleLnwjudNgrokRuntime();
-      if (recoveredStaleNgrok) this.message = 'Recovered a stale lnwjud ngrok runtime from a previous Desktop session';
+      const recoveredStaleNgrok = await recoverStaleLnwjingNgrokRuntime();
+      if (recoveredStaleNgrok) this.message = 'Recovered a stale lnwjing ngrok runtime from a previous Desktop session';
       await this.startGateway();
       if (this.gatewayUrl === null) throw new Error('Remote MCP gateway did not start');
       this.publicOrigin = null;
@@ -452,7 +452,7 @@ export class RemoteMcpController {
       await this.persistState();
       this.message = this.hasTrustedClient()
         ? 'Remote MCP is online. ChatGPT authorization is trusted; unexpected Remote MCP transport exits will reconnect automatically.'
-        : 'Remote MCP is online. Connect the published lnwjud app from ChatGPT; supported ChatGPT OAuth clients complete through a local Desktop handoff without manual code entry.';
+        : 'Remote MCP is online. Connect the published lnwjing app from ChatGPT; supported ChatGPT OAuth clients complete through a local Desktop handoff without manual code entry.';
       return this.status();
     } catch (error) {
       await this.stopOwnedRuntime();
@@ -605,14 +605,14 @@ export class RemoteMcpController {
       }
       const localMcpUrl = await this.ensureLocalMcpUrl().catch(() => null);
       if (localMcpUrl === null) {
-        json(response, 503, { error: 'local_mcp_unavailable', error_description: 'The local lnwjud MCP listener could not be started for this Remote MCP request.' });
+        json(response, 503, { error: 'local_mcp_unavailable', error_description: 'The local lnwjing MCP listener could not be started for this Remote MCP request.' });
         return;
       }
       await proxyMcp(request, response, localMcpUrl);
       return;
     }
     if (request.method === 'GET' && url.pathname === '/') {
-      html(response, 200, '<h1>lnwjud Remote MCP</h1><p>OAuth-protected MCP endpoint is online.</p>');
+      html(response, 200, '<h1>lnwjing Remote MCP</h1><p>OAuth-protected MCP endpoint is online.</p>');
       return;
     }
     response.statusCode = 404;
@@ -669,7 +669,7 @@ export class RemoteMcpController {
     if (!client.trusted) {
       json(response, 403, {
         error: 'access_denied',
-        error_description: 'This OAuth client is not supported by lnwjud Desktop. Connect from ChatGPT so authorization can complete through the local Desktop handoff.',
+        error_description: 'This OAuth client is not supported by lnwjing Desktop. Connect from ChatGPT so authorization can complete through the local Desktop handoff.',
       });
       return;
     }
@@ -724,7 +724,7 @@ export class RemoteMcpController {
         if (request.method === 'GET') {
           const displayName = escapeHtml(client.clientName ?? 'ChatGPT');
           const callback = escapeHtml(input.redirectUri);
-          html(response, 200, `<!doctype html><meta charset="utf-8"><title>Approve lnwjud connection</title><style>body{font-family:system-ui,sans-serif;max-width:680px;margin:48px auto;padding:0 20px;line-height:1.5}code{overflow-wrap:anywhere}button{font:inherit;padding:10px 18px}</style><main><h1>Approve ChatGPT connection?</h1><p>lnwjud received a first-use OAuth request.</p><p><strong>Client:</strong> ${displayName}</p><p><strong>Callback:</strong> <code>${callback}</code></p><form method="post"><button type="submit">Approve connection</button></form><p>Close this window to deny the request.</p></main>`);
+          html(response, 200, `<!doctype html><meta charset="utf-8"><title>Approve lnwjing connection</title><style>body{font-family:system-ui,sans-serif;max-width:680px;margin:48px auto;padding:0 20px;line-height:1.5}code{overflow-wrap:anywhere}button{font:inherit;padding:10px 18px}</style><main><h1>Approve ChatGPT connection?</h1><p>lnwjing received a first-use OAuth request.</p><p><strong>Client:</strong> ${displayName}</p><p><strong>Callback:</strong> <code>${callback}</code></p><form method="post"><button type="submit">Approve connection</button></form><p>Close this window to deny the request.</p></main>`);
           return;
         }
         this.pruneOAuthState();
@@ -1129,14 +1129,14 @@ export function enforceStablePublicOrigin(value: unknown, configuredOrigin: stri
 function withStableOriginHint(message: string, configuredOrigin: string | null): string {
   return configuredOrigin === null
     ? message
-    : `${message} The configured Remote MCP domain ${configuredOrigin} was explicitly requested. Verify that it is reserved in your ngrok account or clear the configured domain; lnwjud will not silently change it.`;
+    : `${message} The configured Remote MCP domain ${configuredOrigin} was explicitly requested. Verify that it is reserved in your ngrok account or clear the configured domain; lnwjing will not silently change it.`;
 }
 
 function isMissingFileError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && (error as { readonly code?: unknown }).code === 'ENOENT';
 }
 
-const NGROK_OWNERSHIP_METADATA = 'lnwjud-remote-mcp';
+const NGROK_OWNERSHIP_METADATA = 'lnwjing-remote-mcp';
 
 export function buildNgrokHttpArgs(gatewayUrl: string, publicOrigin: string | null = null): string[] {
   return ['http', gatewayUrl, ...(publicOrigin === null ? [] : ['--url', publicOrigin]), `--metadata=${NGROK_OWNERSHIP_METADATA}`, '--log=stdout', '--log-format=json'];
@@ -1268,7 +1268,7 @@ export function selectRecoverableStaleNgrokProcess(processes: readonly NgrokProc
   return matches.length === 1 ? matches[0] ?? null : null;
 }
 
-async function recoverStaleLnwjudNgrokRuntime(): Promise<boolean> {
+async function recoverStaleLnwjingNgrokRuntime(): Promise<boolean> {
   const tunnels = await readNgrokTunnelSnapshots();
   if (tunnels.length === 0) return false;
   const processes = await readNgrokProcessSnapshots();

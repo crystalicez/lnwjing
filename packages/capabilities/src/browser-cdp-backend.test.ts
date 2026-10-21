@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { appError, err, type Result } from '@lnwjud/domain';
+import { appError, err, type Result } from '@lnwjing/domain';
 import { CAPABILITY_ACTIVE_WORKSPACE_ROOT_METADATA_KEY } from './task-ownership.js';
 import { BrowserCdpBackend, type BrowserCdpProtocol, type BrowserCdpTab } from './browser-cdp-backend.js';
 
@@ -610,7 +610,7 @@ describe('BrowserCdpBackend', () => {
   });
 
   it('sets browser file inputs only from files inside the Active Project', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-browser-upload-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-browser-upload-'));
     const nested = path.join(root, '0-fixture');
     const file = path.join(nested, 'fixture.txt');
     await mkdir(nested);
@@ -645,8 +645,8 @@ describe('BrowserCdpBackend', () => {
   });
 
   it('rejects browser file uploads outside the Active Project before any CDP mutation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-browser-root-'));
-    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-browser-outside-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-browser-root-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-browser-outside-'));
     const file = path.join(outside, 'fixture.txt');
     await writeFile(file, 'fixture');
     const requests: string[] = [];

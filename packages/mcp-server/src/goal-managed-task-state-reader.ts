@@ -1,5 +1,5 @@
-import type { GoalManagedTaskStateReader, ManagedGoalTaskState } from '@lnwjud/application';
-import type { GoalTaskProvider, GoalTrackedTask, Result } from '@lnwjud/domain';
+import type { GoalManagedTaskStateReader, ManagedGoalTaskState } from '@lnwjing/application';
+import type { GoalTaskProvider, GoalTrackedTask, Result } from '@lnwjing/domain';
 
 interface GoalTaskStatusProvider {
   statusForGoalLiveness(workspaceId: string, taskId: string): Result<unknown> | Promise<Result<unknown>>;

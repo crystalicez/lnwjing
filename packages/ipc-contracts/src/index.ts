@@ -1,7 +1,7 @@
 import type { WorkflowPrepareRequest, WorkflowTemplate, WorkflowDraft, CallHistoryRequest, CallHistoryPage, TaskResultSummary, ResourceSnapshotRequest, ResourceSnapshot, RestoreTaskCheckpointRequest, RestoreTaskCheckpointResult, CancelOwnedGoalTaskRequest, CancelOwnedGoalTaskResult } from './workflow-contracts.js';
 export type * from './workflow-contracts.js';
 
-export const APP_NAME = 'lnwjud';
+export const APP_NAME = 'lnwjing';
 export const APP_VERSION = '5.8.7';
 
 export interface WorkflowChoicesRequest {
@@ -14,99 +14,99 @@ export interface WorkflowChoicesResult {
   readonly file: null | { readonly fileType: 'csv' | 'xlsx'; readonly sheets: readonly { readonly name: string; readonly columns: readonly string[] }[] };
 }
 export const ipcChannels = {
-  listWorkspaces: 'lnwjud:list-workspaces',
-  addWorkspace: 'lnwjud:add-workspace',
-  selectWorkspace: 'lnwjud:select-workspace',
-  setWorkspaceActive: 'lnwjud:set-workspace-active',
-  setWorkspaceArchived: 'lnwjud:set-workspace-archived',
-  deleteWorkspace: 'lnwjud:delete-workspace',
-  getDashboard: 'lnwjud:get-dashboard',
-  setPermissionProfile: 'lnwjud:set-permission-profile',
-  setUnrestrictedMode: 'lnwjud:set-unrestricted-mode',
-  setAiDeletePolicy: 'lnwjud:set-ai-delete-policy',
-  setStdioPolicy: 'lnwjud:set-stdio-policy',
-  createBackup: 'lnwjud:create-backup',
-  purgeRecoveryData: 'lnwjud:purge-recovery-data',
-  scheduleRestoreBackup: 'lnwjud:schedule-restore-backup',
-  restoreRecoveryItem: 'lnwjud:restore-recovery-item',
-  restoreCheckpoint: 'lnwjud:restore-checkpoint',
-  listProcesses: 'lnwjud:list-processes',
-  startProcess: 'lnwjud:start-process',
-  stopProcess: 'lnwjud:stop-process',
-  startMcp: 'lnwjud:start-mcp',
-  stopMcp: 'lnwjud:stop-mcp',
-  restartMcp: 'lnwjud:restart-mcp',
-  clearWorkLog: 'lnwjud:clear-work-log',
-  saveTunnelApiKey: 'lnwjud:save-tunnel-api-key',
-  startTunnel: 'lnwjud:start-tunnel',
-  stopTunnel: 'lnwjud:stop-tunnel',
-  getTunnelStatus: 'lnwjud:get-tunnel-status',
-  beginTunnelOAuthLogin: 'lnwjud:begin-tunnel-oauth-login',
-  getTunnelOAuthLoginStatus: 'lnwjud:get-tunnel-oauth-login-status',
-  cancelTunnelOAuthLogin: 'lnwjud:cancel-tunnel-oauth-login',
-  switchTunnelAuthToLegacy: 'lnwjud:switch-tunnel-auth-to-legacy',
-  logoutTunnelOAuth: 'lnwjud:logout-tunnel-oauth',
-  getRemoteMcpStatus: 'lnwjud:get-remote-mcp-status',
-  installRemoteMcpProvider: 'lnwjud:install-remote-mcp-provider',
-  saveRemoteMcpAuthtoken: 'lnwjud:save-remote-mcp-authtoken',
-  setRemoteMcpPublicOrigin: 'lnwjud:set-remote-mcp-public-origin',
-  setRemoteMcpTransport: 'lnwjud:set-remote-mcp-transport',
-  startRemoteMcp: 'lnwjud:start-remote-mcp',
-  stopRemoteMcp: 'lnwjud:stop-remote-mcp',
-  resetRemoteMcpOAuth: 'lnwjud:reset-remote-mcp-oauth',
-  setTunnelClientPath: 'lnwjud:set-tunnel-client-path',
-  setLocale: 'lnwjud:set-locale',
-  setUserSettings: 'lnwjud:set-user-settings',
-  getPonytailPolicyContext: 'lnwjud:get-ponytail-policy-context',
-  setWorkspacePonytailMode: 'lnwjud:set-workspace-ponytail-mode',
-  setGoalPonytailMode: 'lnwjud:set-goal-ponytail-mode',
-  chooseTunnelClientPath: 'lnwjud:choose-tunnel-client-path',
-  chooseWorkflowDataFile: 'lnwjud:choose-workflow-data-file',
-  inspectWorkflowChoices: 'lnwjud:inspect-workflow-choices',
-  generateWorkflowMapping: 'lnwjud:generate-workflow-mapping',
-  configureTunnelProfile: 'lnwjud:configure-tunnel-profile',
-  openExternalSetupPage: 'lnwjud:open-external-setup-page',
-  launchManagedBrowser: 'lnwjud:launch-managed-browser',
-  installPdfProvider: 'lnwjud:install-pdf-provider',
-  runDoctor: 'lnwjud:run-doctor',
-  listWorkflowTemplates: 'lnwjud:list-workflow-templates',
-  prepareWorkflow: 'lnwjud:prepare-workflow',
-  getCallHistory: 'lnwjud:get-call-history',
-  getDoctorGoals: 'lnwjud:get-doctor-goals',
-  getTaskResult: 'lnwjud:get-task-result',
-  restoreTaskCheckpoint: 'lnwjud:restore-task-checkpoint',
-  cancelOwnedGoalTask: 'lnwjud:cancel-owned-goal-task',
-  getResourceSnapshot: 'lnwjud:get-resource-snapshot',
-  getToolCatalog: 'lnwjud:get-tool-catalog',
-  recheckToolCatalog: 'lnwjud:recheck-tool-catalog',
-  setToolAvailability: 'lnwjud:set-tool-availability',
-  resetToolAvailability: 'lnwjud:reset-tool-availability',
-  openToolSetupTarget: 'lnwjud:open-tool-setup-target',
-  copyToolCommand: 'lnwjud:copy-tool-command',
-  getLogSnapshot: 'lnwjud:get-log-snapshot',
-  listLogSessions: 'lnwjud:list-log-sessions',
-  loadLogSessionHistory: 'lnwjud:load-log-session-history',
-  clearLogBuffer: 'lnwjud:clear-log-buffer',
-  resolveActivityTargetDetail: 'lnwjud:resolve-activity-target-detail',
-  searchActivityTargetDetails: 'lnwjud:search-activity-target-details',
-  exportLogs: 'lnwjud:export-logs',
-  exportWorkLog: 'lnwjud:export-work-log',
-  captureIncident: 'lnwjud:capture-incident',
-  openLogViewer: 'lnwjud:open-log-viewer',
-  getUpdateStatus: 'lnwjud:get-update-status',
-  getInstallActivity: 'lnwjud:get-install-activity',
-  getMutationApprovalPrompt: 'lnwjud:get-mutation-approval-prompt',
-  resolveMutationApprovalPrompt: 'lnwjud:resolve-mutation-approval-prompt',
-  factoryReset: 'lnwjud:factory-reset',
-  checkForUpdates: 'lnwjud:check-for-updates',
-  installUpdate: 'lnwjud:install-update',
-  getGitDiff: 'lnwjud:get-git-diff',
+  listWorkspaces: 'lnwjing:list-workspaces',
+  addWorkspace: 'lnwjing:add-workspace',
+  selectWorkspace: 'lnwjing:select-workspace',
+  setWorkspaceActive: 'lnwjing:set-workspace-active',
+  setWorkspaceArchived: 'lnwjing:set-workspace-archived',
+  deleteWorkspace: 'lnwjing:delete-workspace',
+  getDashboard: 'lnwjing:get-dashboard',
+  setPermissionProfile: 'lnwjing:set-permission-profile',
+  setUnrestrictedMode: 'lnwjing:set-unrestricted-mode',
+  setAiDeletePolicy: 'lnwjing:set-ai-delete-policy',
+  setStdioPolicy: 'lnwjing:set-stdio-policy',
+  createBackup: 'lnwjing:create-backup',
+  purgeRecoveryData: 'lnwjing:purge-recovery-data',
+  scheduleRestoreBackup: 'lnwjing:schedule-restore-backup',
+  restoreRecoveryItem: 'lnwjing:restore-recovery-item',
+  restoreCheckpoint: 'lnwjing:restore-checkpoint',
+  listProcesses: 'lnwjing:list-processes',
+  startProcess: 'lnwjing:start-process',
+  stopProcess: 'lnwjing:stop-process',
+  startMcp: 'lnwjing:start-mcp',
+  stopMcp: 'lnwjing:stop-mcp',
+  restartMcp: 'lnwjing:restart-mcp',
+  clearWorkLog: 'lnwjing:clear-work-log',
+  saveTunnelApiKey: 'lnwjing:save-tunnel-api-key',
+  startTunnel: 'lnwjing:start-tunnel',
+  stopTunnel: 'lnwjing:stop-tunnel',
+  getTunnelStatus: 'lnwjing:get-tunnel-status',
+  beginTunnelOAuthLogin: 'lnwjing:begin-tunnel-oauth-login',
+  getTunnelOAuthLoginStatus: 'lnwjing:get-tunnel-oauth-login-status',
+  cancelTunnelOAuthLogin: 'lnwjing:cancel-tunnel-oauth-login',
+  switchTunnelAuthToLegacy: 'lnwjing:switch-tunnel-auth-to-legacy',
+  logoutTunnelOAuth: 'lnwjing:logout-tunnel-oauth',
+  getRemoteMcpStatus: 'lnwjing:get-remote-mcp-status',
+  installRemoteMcpProvider: 'lnwjing:install-remote-mcp-provider',
+  saveRemoteMcpAuthtoken: 'lnwjing:save-remote-mcp-authtoken',
+  setRemoteMcpPublicOrigin: 'lnwjing:set-remote-mcp-public-origin',
+  setRemoteMcpTransport: 'lnwjing:set-remote-mcp-transport',
+  startRemoteMcp: 'lnwjing:start-remote-mcp',
+  stopRemoteMcp: 'lnwjing:stop-remote-mcp',
+  resetRemoteMcpOAuth: 'lnwjing:reset-remote-mcp-oauth',
+  setTunnelClientPath: 'lnwjing:set-tunnel-client-path',
+  setLocale: 'lnwjing:set-locale',
+  setUserSettings: 'lnwjing:set-user-settings',
+  getPonytailPolicyContext: 'lnwjing:get-ponytail-policy-context',
+  setWorkspacePonytailMode: 'lnwjing:set-workspace-ponytail-mode',
+  setGoalPonytailMode: 'lnwjing:set-goal-ponytail-mode',
+  chooseTunnelClientPath: 'lnwjing:choose-tunnel-client-path',
+  chooseWorkflowDataFile: 'lnwjing:choose-workflow-data-file',
+  inspectWorkflowChoices: 'lnwjing:inspect-workflow-choices',
+  generateWorkflowMapping: 'lnwjing:generate-workflow-mapping',
+  configureTunnelProfile: 'lnwjing:configure-tunnel-profile',
+  openExternalSetupPage: 'lnwjing:open-external-setup-page',
+  launchManagedBrowser: 'lnwjing:launch-managed-browser',
+  installPdfProvider: 'lnwjing:install-pdf-provider',
+  runDoctor: 'lnwjing:run-doctor',
+  listWorkflowTemplates: 'lnwjing:list-workflow-templates',
+  prepareWorkflow: 'lnwjing:prepare-workflow',
+  getCallHistory: 'lnwjing:get-call-history',
+  getDoctorGoals: 'lnwjing:get-doctor-goals',
+  getTaskResult: 'lnwjing:get-task-result',
+  restoreTaskCheckpoint: 'lnwjing:restore-task-checkpoint',
+  cancelOwnedGoalTask: 'lnwjing:cancel-owned-goal-task',
+  getResourceSnapshot: 'lnwjing:get-resource-snapshot',
+  getToolCatalog: 'lnwjing:get-tool-catalog',
+  recheckToolCatalog: 'lnwjing:recheck-tool-catalog',
+  setToolAvailability: 'lnwjing:set-tool-availability',
+  resetToolAvailability: 'lnwjing:reset-tool-availability',
+  openToolSetupTarget: 'lnwjing:open-tool-setup-target',
+  copyToolCommand: 'lnwjing:copy-tool-command',
+  getLogSnapshot: 'lnwjing:get-log-snapshot',
+  listLogSessions: 'lnwjing:list-log-sessions',
+  loadLogSessionHistory: 'lnwjing:load-log-session-history',
+  clearLogBuffer: 'lnwjing:clear-log-buffer',
+  resolveActivityTargetDetail: 'lnwjing:resolve-activity-target-detail',
+  searchActivityTargetDetails: 'lnwjing:search-activity-target-details',
+  exportLogs: 'lnwjing:export-logs',
+  exportWorkLog: 'lnwjing:export-work-log',
+  captureIncident: 'lnwjing:capture-incident',
+  openLogViewer: 'lnwjing:open-log-viewer',
+  getUpdateStatus: 'lnwjing:get-update-status',
+  getInstallActivity: 'lnwjing:get-install-activity',
+  getMutationApprovalPrompt: 'lnwjing:get-mutation-approval-prompt',
+  resolveMutationApprovalPrompt: 'lnwjing:resolve-mutation-approval-prompt',
+  factoryReset: 'lnwjing:factory-reset',
+  checkForUpdates: 'lnwjing:check-for-updates',
+  installUpdate: 'lnwjing:install-update',
+  getGitDiff: 'lnwjing:get-git-diff',
 } as const;
 
 export const pushChannels = {
-  logEvent: 'lnwjud:event:log',
-  updateStatus: 'lnwjud:event:update-status',
-  installActivity: 'lnwjud:event:install-activity',
+  logEvent: 'lnwjing:event:log',
+  updateStatus: 'lnwjing:event:update-status',
+  installActivity: 'lnwjing:event:install-activity',
 } as const;
 
 export type IpcChannel = typeof ipcChannels[keyof typeof ipcChannels];
@@ -159,7 +159,7 @@ export interface PonytailPolicyContext {
   readonly activeGoals: readonly PonytailGoalPolicySummary[];
 }
 
-export type ToolOrigin = 'lnwjud' | 'external_mcp';
+export type ToolOrigin = 'lnwjing' | 'external_mcp';
 export type ToolCategory =
   | 'workspace'
   | 'files'
@@ -346,9 +346,9 @@ export interface EngineeringHarnessSettings {
 
 export interface UserSettings {
   readonly customPermission: CustomPermissionSettings;
-  /** Full profile only. Explicitly bypasses lnwjud application authorization on Desktop HTTP/Secure Tunnel. */
+  /** Full profile only. Explicitly bypasses lnwjing application authorization on Desktop HTTP/Secure Tunnel. */
   readonly desktopFullBypassAll: boolean;
-  /** Full profile only. Explicitly bypasses lnwjud application authorization for direct STDIO. */
+  /** Full profile only. Explicitly bypasses lnwjing application authorization for direct STDIO. */
   readonly stdioFullBypassAll: boolean;
   readonly mcpCallTimeoutMs: number;
   readonly mcpIdleTimeoutMs: number;
@@ -1349,7 +1349,7 @@ export interface IpcResponseMap {
   readonly [ipcChannels.getGitDiff]: GetGitDiffResponse;
 }
 
-export interface LnwjudApi {
+export interface LnwjingApi {
   listWorkspaces(): Promise<IpcResponseMap[typeof ipcChannels.listWorkspaces]>;
   addWorkspace(request: AddWorkspaceRequest): Promise<IpcResponseMap[typeof ipcChannels.addWorkspace]>;
   selectWorkspace(request: SelectWorkspaceRequest): Promise<IpcResponseMap[typeof ipcChannels.selectWorkspace]>;

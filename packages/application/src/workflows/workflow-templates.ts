@@ -1,4 +1,4 @@
-import type { WorkflowTemplate } from '@lnwjud/domain';
+import type { WorkflowTemplate } from '@lnwjing/domain';
 const field = (key: string, labelTh: string, labelEn: string, type: 'path' | 'text' | 'enum' | 'mapping_file', required = true, options?: readonly string[]): WorkflowTemplate['inputFields'][number] =>
   ({ key, labelTh, labelEn, type, required, ...(options === undefined ? {} : { options }) });
 export const WORKFLOW_TEMPLATES: readonly WorkflowTemplate[] = [

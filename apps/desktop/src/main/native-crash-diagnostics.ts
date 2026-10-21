@@ -37,8 +37,8 @@ export function configureNativeCrashDiagnostics(
   setCrashDumpsPath(directory);
   pruneNativeCrashDumps(directory, now);
   reporter.start({
-    productName: 'lnwjud',
-    companyName: 'lnwjud',
+    productName: 'lnwjing',
+    companyName: 'lnwjing',
     uploadToServer: false,
     compress: false,
     extra: { appVersion, privacy: 'local-only' },

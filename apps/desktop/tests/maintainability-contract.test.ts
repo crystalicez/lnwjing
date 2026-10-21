@@ -62,8 +62,8 @@ describe('maintainability contracts', () => {
     const main = await readFile(path.join(desktopRoot, 'src', 'main', 'main.ts'), 'utf8');
     const home = await readFile(path.join(desktopRoot, 'src', 'renderer', 'features', 'home', 'ControlCenterPage.tsx'), 'utf8');
 
-    expect(settings).toContain("import { parseDelimitedList } from '@lnwjud/shared/text-list';");
-    expect(userConfig).toContain("import { parseDelimitedList } from '@lnwjud/shared/text-list';");
+    expect(settings).toContain("import { parseDelimitedList } from '@lnwjing/shared/text-list';");
+    expect(userConfig).toContain("import { parseDelimitedList } from '@lnwjing/shared/text-list';");
     expect(settings).not.toContain('function splitList(');
     expect(userConfig).not.toContain('function splitList(');
 

@@ -9,7 +9,7 @@ struct MacMediaOwner: Equatable {
     let workspace: String?
 
     static func read(_ input: [String: Any]) -> MacMediaOwner? {
-        guard let metadata = input["metadata"] as? [String: Any], let raw = metadata["lnwjud.taskOwner.v1"] else {
+        guard let metadata = input["metadata"] as? [String: Any], let raw = metadata["lnwjing.taskOwner.v1"] else {
             return MacMediaOwner(client: "legacy", session: "legacy", workspace: nil)
         }
         guard let owner = raw as? [String: Any], let client = valid(owner["clientId"]), let session = valid(owner["sessionId"]) else { return nil }
@@ -156,7 +156,7 @@ enum MacMediaValues {
         guard !FileManager.default.fileExists(atPath: target.path) else { throw MediaFailure(code: "CONFLICT") }
         var directory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: target.deletingLastPathComponent().path, isDirectory: &directory), directory.boolValue else { throw MediaFailure(code: "FILE_NOT_FOUND") }
-        return (target, target.deletingLastPathComponent().appendingPathComponent(".lnwjud-\(UUID().uuidString).\(suffix)"))
+        return (target, target.deletingLastPathComponent().appendingPathComponent(".lnwjing-\(UUID().uuidString).\(suffix)"))
     }
 
     static func publish(target: URL, temporary: URL, format: MacMediaFormat, durationLimit: Double, byteLimit: Int64) throws -> [String: AnyEncodable] {

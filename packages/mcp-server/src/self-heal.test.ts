@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
-import { readCapabilityTaskOwner } from '@lnwjud/capabilities';
+import { appError, err, ok } from '@lnwjing/domain';
+import { readCapabilityTaskOwner } from '@lnwjing/capabilities';
 import { UpgradeRuntimeService } from './upgrade-runtime.js';
 
 const actor = { clientId: 'recovery-client', clientName: 'fixture', sessionId: 'recovery-session' };

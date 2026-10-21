@@ -12,9 +12,9 @@ import {
   type GoalTaskCancellationObservation,
   type InvocationAuthorization,
   type Result,
-} from '@lnwjud/domain';
-import { createProcessTreeTerminator, PathExecutableResolver, toSpawnInvocation, type ExecutableResolver, type ProcessTreeTerminator } from '@lnwjud/process';
-import { engineeringCommandFingerprint, formatEngineeringCommand } from '@lnwjud/shared';
+} from '@lnwjing/domain';
+import { createProcessTreeTerminator, PathExecutableResolver, toSpawnInvocation, type ExecutableResolver, type ProcessTreeTerminator } from '@lnwjing/process';
+import { engineeringCommandFingerprint, formatEngineeringCommand } from '@lnwjing/shared';
 import type { CapabilityBackend } from './local-capability-service.js';
 import { prohibitedAgentCommandReason, riskyAgentCommandReason } from './agent-command-policy.js';
 import { DurableShellTaskStore } from './durable-shell-task-store.js';
@@ -58,7 +58,7 @@ export interface AutomationShellDispatchContext {
   readonly windowsVerbatimArguments?: boolean;
 }
 
-const AUTOMATION_SHELL_DISPATCH_CONTEXT: unique symbol = Symbol('lnwjud.automationShellDispatch');
+const AUTOMATION_SHELL_DISPATCH_CONTEXT: unique symbol = Symbol('lnwjing.automationShellDispatch');
 
 export function withAutomationShellDispatchContext(input: unknown, context: AutomationShellDispatchContext): unknown {
   if (!isRecord(input)) return input;
@@ -766,7 +766,7 @@ function isShellOperation(value: unknown): value is ShellOperation {
   return typeof value === 'string' && SHELL_OPERATIONS.some((operation) => operation === value);
 }
 
-const MEMORY_CURSOR_PREFIX = 'lnwjud-shell-memory-v1:';
+const MEMORY_CURSOR_PREFIX = 'lnwjing-shell-memory-v1:';
 
 function memoryTaskPage(tasks: readonly Record<string, unknown>[], limit: number, offset: number): Record<string, unknown> {
   const page = tasks.slice(offset, offset + limit);

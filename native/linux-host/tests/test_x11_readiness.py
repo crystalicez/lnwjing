@@ -102,7 +102,7 @@ class CaptureDisplay:
             raise RuntimeError("Owned display fixture did not stop")
 
 
-@unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_TEST_BIN"), "Requires the compiled Linux native binary")
+@unittest.skipUnless(os.environ.get("LNWJING_NATIVE_TEST_BIN"), "Requires the compiled Linux native binary")
 class X11ReadinessTests(unittest.TestCase):
     def test_direct_status_probes_pixels_and_refuses_a_connected_display_without_getimage(self):
         for refuse in (True, False):
@@ -111,7 +111,7 @@ class X11ReadinessTests(unittest.TestCase):
             environment = dict(os.environ, DISPLAY=display.display, XDG_SESSION_TYPE="x11")
             environment.pop("WAYLAND_DISPLAY", None)
             environment.pop("XAUTHORITY", None)
-            process = subprocess.Popen([os.environ["LNWJUD_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
+            process = subprocess.Popen([os.environ["LNWJING_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
             try:
                 process.stdin.write(json.dumps({"id": "pixels", "operation": "vision", "input": {"action": "status"}}) + "\n")
                 process.stdin.flush()

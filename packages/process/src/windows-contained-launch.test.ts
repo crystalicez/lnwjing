@@ -8,7 +8,7 @@ import { prepareWindowsContainedLaunch, readWindowsContainmentReceipt } from './
 
 describe.skipIf(process.platform !== 'win32')('contained launch receipt', () => {
   it.each(['completed', 'cancelled'] as const)('publishes verified %s receipt and forwards child output', async (outcome) => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud job receipt '));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing job receipt '));
     try {
       const invocation = await prepareWindowsContainedLaunch({
         directory: root, executable: process.execPath, cwd: root, timeoutMs: 10000,

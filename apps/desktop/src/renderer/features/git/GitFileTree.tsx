@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactElement } from 'react';
-import type { GitStatusEntrySummary, UiLocale } from '@lnwjud/ipc-contracts';
+import type { GitStatusEntrySummary, UiLocale } from '@lnwjing/ipc-contracts';
 import { ActionButton } from '../ui/UiPrimitives.js';
 import type { GitTreeNode } from './git-file-tree.js';
 import { v580Strings } from '../../i18n/v580-copy.js';

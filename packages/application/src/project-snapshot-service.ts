@@ -1,8 +1,8 @@
-import { ok, type Result } from '@lnwjud/domain';
-import type { GitStatusResult } from '@lnwjud/git';
-import type { ManagedProcess, ProcessLogResult } from '@lnwjud/process';
-import type { ProjectProfile } from '@lnwjud/project';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { ok, type Result } from '@lnwjing/domain';
+import type { GitStatusResult } from '@lnwjing/git';
+import type { ManagedProcess, ProcessLogResult } from '@lnwjing/process';
+import type { ProjectProfile } from '@lnwjing/project';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 import { GitService } from './git-service.js';
 import { ProcessService } from './process-service.js';
@@ -35,7 +35,7 @@ export interface ProjectSnapshot {
   readonly project: ProjectProfile;
   readonly git: ProjectSnapshotGitSummary;
   readonly tree: {
-    readonly entries: import('@lnwjud/filesystem').TreeResult['entries'];
+    readonly entries: import('@lnwjing/filesystem').TreeResult['entries'];
     readonly truncated: boolean;
   };
   readonly runningProcesses: readonly ProjectSnapshotProcessSummary[];

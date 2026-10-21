@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { GitStatusEntrySummary } from '@lnwjud/ipc-contracts';
+import type { GitStatusEntrySummary } from '@lnwjing/ipc-contracts';
 import { filterGitFiles, gitFileFolder, gitFolderCounts } from './git-file-browser.js';
 it('lists every untracked file, including nested any-extension and dotfiles, never collapses folder',()=>{
   const entries=[

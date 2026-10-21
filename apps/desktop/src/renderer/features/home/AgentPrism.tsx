@@ -1,4 +1,4 @@
-import type { AgentState } from '@lnwjud/ipc-contracts';
+import type { AgentState } from '@lnwjing/ipc-contracts';
 import type { ReactElement } from 'react';
 
 /** Dashboard reports idle for a connected agent that is ready for new work. */

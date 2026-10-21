@@ -1,7 +1,7 @@
 # Scheduled Continuation Claimed-Successor Design
 
 Date: 2026-09-01
-Target release: lnwjud 4.45.0
+Target release: lnwjing 4.45.0
 Branch: `dev`
 
 ## Context
@@ -10,7 +10,7 @@ A native one-time ChatGPT Scheduled Task can wake and successfully claim an acti
 
 The current prompt and bundled skill tell the agent to call `prepare_scheduled_continuation` after an `acquired` claim. That is advisory only. The repository transaction does not reserve the next generation, and the `acquired` result does not carry a required successor action. A model omission therefore becomes a liveness failure.
 
-Native Scheduled Task creation remains host-owned. lnwjud cannot truthfully claim that a cloud task exists until the host returns a real task ID and the receipt is recorded.
+Native Scheduled Task creation remains host-owned. lnwjing cannot truthfully claim that a cloud task exists until the host returns a real task ID and the receipt is recorded.
 
 ## Requirements
 
@@ -30,7 +30,7 @@ Native Scheduled Task creation remains host-owned. lnwjud cannot truthfully clai
 
 When the repository acquires the goal lease, it also terminalizes the firing continuation as `claimed` and inserts generation N+1 as `prepared`. The application returns the prepared successor and its `scheduleRequest` in the same `acquired` result. Repeated claims recover the same deterministic successor.
 
-This preserves the one-time fresh-ticket model, removes the extra model-dependent `prepare` call, works with the existing receipt protocol, and can be covered deterministically in repository and application tests. The native host must still create the actual cloud task, but lnwjud can no longer silently lose the durable successor state.
+This preserves the one-time fresh-ticket model, removes the extra model-dependent `prepare` call, works with the existing receipt protocol, and can be covered deterministically in repository and application tests. The native host must still create the actual cloud task, but lnwjing can no longer silently lose the durable successor state.
 
 ### B. Re-arm the currently firing native task
 
@@ -87,7 +87,7 @@ The native prompt and MCP tool description will say that `acquired` already rese
 6. Contract tests: tool descriptions, bundled skill, README, and generated prompt agree on the acquired-successor behavior.
 7. Release verification: focused continuation suites, full workspace tests, acceptance, packaging, release gate, docs catalog, diff check, Windows packaging, and packaged provenance verification.
 
-Repository tests establish the lnwjud state machine and contract. A real two-wake ChatGPT host run remains the release-level proof for native scheduling behavior; source tests alone must not be reported as host E2E proof.
+Repository tests establish the lnwjing state machine and contract. A real two-wake ChatGPT host run remains the release-level proof for native scheduling behavior; source tests alone must not be reported as host E2E proof.
 
 ## Scope
 

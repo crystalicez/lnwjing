@@ -1,5 +1,5 @@
 import { TextDecoder } from 'node:util';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const DEVICE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
@@ -45,7 +45,7 @@ export function validateRepositoryImportTree(
       const name = segments[i]!;
       if (!COMPONENT.test(name) || name === '.' || name === '..' || name.endsWith('.')
         || DEVICE.test(name) || name.toLowerCase() === '.git'
-        || name.toLowerCase() === '.gitmodules' || name.toLowerCase().startsWith('.lnwjud')) return refuse();
+        || name.toLowerCase() === '.gitmodules' || name.toLowerCase().startsWith('.lnwjing')) return refuse();
       const prefix = segments.slice(0, i + 1).join('/');
       const folded = prefix.toLowerCase();
       if (i === segments.length - 1) {

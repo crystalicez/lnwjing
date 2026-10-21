@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { EMPTY_TUNNEL_STATUS, type DashboardSnapshot } from '@lnwjud/ipc-contracts';
+import { EMPTY_TUNNEL_STATUS, type DashboardSnapshot } from '@lnwjing/ipc-contracts';
 import { ControlCenterPage } from '../src/renderer/features/home/ControlCenterPage.js';
 import { LiveLogsPage } from '../src/renderer/features/live/LiveLogsPage.js';
 
@@ -24,7 +24,7 @@ const dashboard: DashboardSnapshot = {
   stdioPermissionProfile: 'full',
   stdioStrictRoots: false,
   stdioAllowedRoots: [],
-  connectionModes: { httpUrl: null, stdioCommand: 'lnwjud --mcp-stdio' },
+  connectionModes: { httpUrl: null, stdioCommand: 'lnwjing --mcp-stdio' },
   workLog: [],
   inFlight: [],
   tunnel: EMPTY_TUNNEL_STATUS,

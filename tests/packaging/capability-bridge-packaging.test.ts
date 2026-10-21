@@ -9,7 +9,7 @@ const desktopRoot = path.join(repositoryRoot, 'apps', 'desktop');
 const temporaryDirectories: string[] = [];
 
 async function makeFixture(bytes: Buffer): Promise<{ root: string; sourcePath: string; stageDirectory: string; generatedOutput: string }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-capability-bridge-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-capability-bridge-'));
   temporaryDirectories.push(root);
   const sourcePath = path.join(root, 'windows-capability-bridge.ps1');
   const stageDirectory = path.join(root, 'stage');

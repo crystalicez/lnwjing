@@ -1,4 +1,4 @@
-import { err, ok, type Result } from '@lnwjud/domain';
+import { err, ok, type Result } from '@lnwjing/domain';
 import { executeBatch, type BatchExecutionPlan, type BatchInvocation } from '../parallel-tool-executor.js';
 import { type McpToolResponse } from '../result-mapper.js';
 import { defineTool, type McpToolDefinition } from './tool-types.js';

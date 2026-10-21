@@ -3,7 +3,7 @@
  * automation branch; this pure function performs no Git/GitHub writes.
  */
 export const MANAGED_RUNTIME_REF = 'automation/runtime-dependencies';
-export const MANAGED_RUNTIME_MARKER = '<!-- lnwjud-runtime-update:v1 -->';
+export const MANAGED_RUNTIME_MARKER = '<!-- lnwjing-runtime-update:v1 -->';
 
 export const MANAGED_RUNTIME_PR_TITLE = 'chore: update verified runtime dependencies';
 

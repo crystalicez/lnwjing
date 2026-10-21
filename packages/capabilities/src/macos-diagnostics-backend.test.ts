@@ -11,7 +11,7 @@ describe('MacosDiagnosticsCapabilityBackend', () => {
       },
     });
 
-    await expect(backend.execute({ action: 'logs', provider: 'lnwjud', max_events: 4, since: '2026-08-30T00:00:00Z' })).resolves.toMatchObject({
+    await expect(backend.execute({ action: 'logs', provider: 'lnwjing', max_events: 4, since: '2026-08-30T00:00:00Z' })).resolves.toMatchObject({
       ok: true,
       value: { available: true, ready: true, backend: 'macos-unified-log', count: 1 },
     });
@@ -19,7 +19,7 @@ describe('MacosDiagnosticsCapabilityBackend', () => {
       executable: 'log',
       args: [
         'show', '--style', 'ndjson', '--no-pager',
-        '--predicate', '(process == "lnwjud" OR subsystem == "lnwjud" OR senderImagePath ENDSWITH[c] "lnwjud")',
+        '--predicate', '(process == "lnwjing" OR subsystem == "lnwjing" OR senderImagePath ENDSWITH[c] "lnwjing")',
         '--start', '2026-08-30T00:00:00.000Z',
       ],
     }]);

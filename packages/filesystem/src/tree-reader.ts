@@ -1,7 +1,7 @@
 import { lstat, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { DEFAULT_TREE_DEPTH, DEFAULT_TREE_ENTRIES, err, MAX_TREE_DEPTH, MAX_TREE_ENTRIES, ok, type Result } from '@lnwjud/domain';
-import { isWithin } from '@lnwjud/workspace';
+import { DEFAULT_TREE_DEPTH, DEFAULT_TREE_ENTRIES, err, MAX_TREE_DEPTH, MAX_TREE_ENTRIES, ok, type Result } from '@lnwjing/domain';
+import { isWithin } from '@lnwjing/workspace';
 
 export interface TreeOptions {
   readonly maxDepth?: number;

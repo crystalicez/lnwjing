@@ -1,4 +1,4 @@
-import type { UiLocale } from '@lnwjud/ipc-contracts';
+import type { UiLocale } from '@lnwjing/ipc-contracts';
 import { en, th, type MessageKey, type Messages } from './messages.js';
 
 const catalogs: Record<UiLocale, Messages> = { th, en };

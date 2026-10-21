@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { appError, err, isApplicationAuthorized, ok, type GoalTaskCancellationObservation, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import { CodexAdapter, type CodexSandboxMode, type CodexStatus } from '@lnwjud/codex';
-import type { CodexRunAuditInput } from '@lnwjud/audit';
-import { DefaultPermissionEngine, permissionProfiles, type PermissionEngine, type PermissionProfile } from '@lnwjud/permissions';
-import type { LogQuery, ManagedProcess, ProcessLogResult } from '@lnwjud/process';
-import { WorkspacePathGuard, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, isApplicationAuthorized, ok, type GoalTaskCancellationObservation, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import { CodexAdapter, type CodexSandboxMode, type CodexStatus } from '@lnwjing/codex';
+import type { CodexRunAuditInput } from '@lnwjing/audit';
+import { DefaultPermissionEngine, permissionProfiles, type PermissionEngine, type PermissionProfile } from '@lnwjing/permissions';
+import type { LogQuery, ManagedProcess, ProcessLogResult } from '@lnwjing/process';
+import { WorkspacePathGuard, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 
 export const MAX_CODEX_INSTRUCTION_BYTES = 256 * 1024;

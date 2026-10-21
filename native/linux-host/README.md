@@ -1,4 +1,4 @@
-# lnwjud Linux native host
+# lnwjing Linux native host
 
 The Linux helper is a small, integrity-bound NDJSON process. It has no shell,
 no privilege escalation, no setuid behavior, and no arbitrary file-open API.

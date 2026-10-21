@@ -13,9 +13,9 @@ afterEach(async () => {
 
 describe('recoverable backup retention', () => {
   it('rotates an expired backup out of the active list without destroying its restore path', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-retention-recovery-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-retention-recovery-'));
     temporaryRoots.push(root);
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile, { backupDirectory });
     database.connection.exec('CREATE TABLE retention_fixture (value TEXT NOT NULL);');
@@ -45,9 +45,9 @@ describe('recoverable backup retention', () => {
   });
 
   it('expires archived backups and purge-all removes only validated backup artifacts', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-retention-purge-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-retention-purge-'));
     temporaryRoots.push(root);
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile, { backupDirectory });
     let now = new Date('2026-08-01T00:00:00.000Z');

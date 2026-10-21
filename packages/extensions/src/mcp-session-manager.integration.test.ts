@@ -9,7 +9,7 @@ async function connectFixture(era: 'legacy' | 'modern' | 'schema-error'): Return
   return defaultMcpClientFactory.connect({
     command: process.execPath,
     args: [fixturePath],
-    env: { LNWJUD_EXTERNAL_MCP_FIXTURE_ERA: era },
+    env: { LNWJING_EXTERNAL_MCP_FIXTURE_ERA: era },
   });
 }
 
@@ -36,9 +36,9 @@ describe('default External MCP client protocol negotiation', () => {
     }
   }, 20_000);
 
-  it('bypasses SDK callTool output validation so isError results reach the lnwjud guard', async () => {
+  it('bypasses SDK callTool output validation so isError results reach the lnwjing guard', async () => {
     const sdkCallTool = vi.spyOn(Client.prototype, 'callTool').mockRejectedValue(
-      new Error('SDK callTool output-schema validation ran before lnwjud guard'),
+      new Error('SDK callTool output-schema validation ran before lnwjing guard'),
     );
     const session = await connectFixture('schema-error');
     try {
@@ -54,12 +54,12 @@ describe('default External MCP client protocol negotiation', () => {
     }
   }, 20_000);
 
-  it('preserves child tool errors while lnwjud validates successful structured output', async () => {
+  it('preserves child tool errors while lnwjing validates successful structured output', async () => {
     const manager = new McpSessionManager({ callTimeoutMs: 20_000 });
     const config = {
       command: process.execPath,
       args: [fixturePath],
-      env: { LNWJUD_EXTERNAL_MCP_FIXTURE_ERA: 'schema-error' },
+      env: { LNWJING_EXTERNAL_MCP_FIXTURE_ERA: 'schema-error' },
     } as const;
     try {
       await expect(manager.call('schema-fixture', config, 'schema_error_demo', { mode: 'error-no-structured' })).resolves.toMatchObject({

@@ -1,6 +1,6 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { useCallback, useState, type ReactElement } from 'react';
-import type { IncidentClassification, LiveLogExportReference, LogLine, LogSessionSummary, LogSource, TunnelAuthStatus, UiLocale, WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import type { IncidentClassification, LiveLogExportReference, LogLine, LogSessionSummary, LogSource, TunnelAuthStatus, UiLocale, WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { formatDateTime } from '../../date-time.js';
 import { createTranslator } from '../../i18n/index.js';
 import { tunnelAuthPresentation } from '../../tunnel-auth-presentation.js';
@@ -33,11 +33,11 @@ export function LiveLogsPage(props: LiveLogsPageProps): ReactElement {
   const tunnelPresentation = tunnelAuthPresentation({ auth: props.tunnelAuth });
   const [tab, setTab] = useState<LogTab>('tunnel');
   const sources: readonly LogTab[] = ['tunnel', 'mcp', 'process'];
-  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjud.resolveActivityTargetDetail({ detailRef })).detail, []);
+  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjing.resolveActivityTargetDetail({ detailRef })).detail, []);
   const searchTargetDetails = useCallback(async (
     query: string,
     candidates: readonly { readonly id: string; readonly detailRef: string | null }[],
-  ) => (await window.lnwjud.searchActivityTargetDetails({ query, candidates })).matchingIds, []);
+  ) => (await window.lnwjing.searchActivityTargetDetails({ query, candidates })).matchingIds, []);
 
   return (
     <div className="page-content live-logs-page">

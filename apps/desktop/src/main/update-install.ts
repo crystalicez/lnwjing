@@ -1,4 +1,4 @@
-import type { TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus } from '@lnwjing/ipc-contracts';
 
 export interface UpdateTunnelStopConfirmationOptions {
   readonly getTunnelStatus: () => Promise<TunnelStatus>;
@@ -63,8 +63,8 @@ const DEFAULT_POLL_INTERVAL_MS = 250;
 export function updateReadyDialogOptions(version: string): UpdateReadyDialogOptions {
   return {
     type: 'info',
-    title: 'Update Ready - lnwjud',
-    message: `Version v${version} has been downloaded. Restart lnwjud now to install?`,
+    title: 'Update Ready - lnwjing',
+    message: `Version v${version} has been downloaded. Restart lnwjing now to install?`,
     buttons: ['Restart Now', 'Later'],
     defaultId: 1,
     cancelId: 1,

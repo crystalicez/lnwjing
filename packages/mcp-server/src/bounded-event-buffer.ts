@@ -1,1 +1,1 @@
-export { BoundedEventBuffer, type BufferedEvent, type EventPage } from '@lnwjud/capabilities';
+export { BoundedEventBuffer, type BufferedEvent, type EventPage } from '@lnwjing/capabilities';

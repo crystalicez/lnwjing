@@ -73,7 +73,7 @@ foreach ($notice in $notices) {
 }
 
 $manifest = @(
-    "ripgrep bundled by lnwjud",
+    "ripgrep bundled by lnwjing",
     "version=$version",
     "asset=$assetName",
     "source=$assetUrl",

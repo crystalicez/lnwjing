@@ -4,9 +4,9 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/p
 import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import { classifyContextPath, type ContextDiscoveryMode } from '@lnwjud/search';
-import { hostPathApi, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import { classifyContextPath, type ContextDiscoveryMode } from '@lnwjing/search';
+import { hostPathApi, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import { WorkspaceIndexQueue, type WorkspaceIndexQueueOptions, type WorkspaceIndexQueueStatus } from './workspace-index-queue.js';
 import { WorkspaceIndexBusyError, withWorkspaceIndexMutex } from './workspace-index-mutex.js';
 
@@ -79,7 +79,7 @@ export interface WorkspaceIndexStore {
 export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
   private cached: { readonly workspaceId: string; readonly identity: string; readonly snapshot: WorkspaceIndexSnapshot } | null = null;
 
-  public constructor(private readonly directory: string = path.join(os.tmpdir(), 'lnwjud', 'index')) {}
+  public constructor(private readonly directory: string = path.join(os.tmpdir(), 'lnwjing', 'index')) {}
 
   public isInternalPath(absolutePath: string): boolean {
     return isHostPathWithin(path.resolve(this.directory), path.resolve(absolutePath));

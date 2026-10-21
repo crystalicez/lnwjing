@@ -1,9 +1,9 @@
 import os from 'node:os';
 import path from 'node:path';
 import { realpath, stat } from 'node:fs/promises';
-import { appError, err, isApplicationAuthorized, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import type { CapabilityBackend } from '@lnwjud/capabilities';
-import { readCapabilityActiveWorkspaceRoot } from '@lnwjud/capabilities';
+import { appError, err, isApplicationAuthorized, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import type { CapabilityBackend } from '@lnwjing/capabilities';
+import { readCapabilityActiveWorkspaceRoot } from '@lnwjing/capabilities';
 
 export type ElectronNativeCapabilityName = 'system_info' | 'notification' | 'file_dialog' | 'clipboard' | 'vision';
 
@@ -185,7 +185,7 @@ export class ElectronNativeCapabilityBackend implements CapabilityBackend {
   private async notification(input: Record<string, unknown>, signal?: AbortSignal): Promise<Result<unknown>> {
     const show = this.api.showNotification;
     if (show === undefined) return unavailable('notification', 'Electron Notification is unavailable in headless mode');
-    const title = boundedString(input.title, 'lnwjud', 256);
+    const title = boundedString(input.title, 'lnwjing', 256);
     const body = boundedString(input.body, '', 4_096);
     if (body.length === 0) return err(appError('INVALID_INPUT', 'notification body is required'));
     if (isAborted(signal)) return cancelled('notification');

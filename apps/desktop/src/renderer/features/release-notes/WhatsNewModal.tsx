@@ -1,7 +1,7 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { useEffect, useRef, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import type { UiLocale } from '@lnwjud/ipc-contracts';
+import type { UiLocale } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { releaseNotesForSeries } from './release-notes.js';
 

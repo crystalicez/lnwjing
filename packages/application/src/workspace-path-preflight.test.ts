@@ -15,7 +15,7 @@ describe('read-only exact-target workspace path preflight', () => {
   });
 
   it('returns directory/file kind, canonical existing path without mutating either', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-path-probe-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-path-probe-')));
     roots.push(root);
     const folder = path.join(root, 'project');
     await mkdir(folder);
@@ -39,7 +39,7 @@ describe('read-only exact-target workspace path preflight', () => {
   });
 
   it('reports a missing exact target without inventing a canonical target', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-path-missing-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-path-missing-')));
     roots.push(root);
     const result = await preflightWorkspacePath(path.join(root, 'not-registered'), true);
     expect(result).toMatchObject({ ok: true, value: { status: 'NOT_FOUND', exists: false, kind: 'missing' } });
@@ -48,7 +48,7 @@ describe('read-only exact-target workspace path preflight', () => {
   });
 
   it('rejects symlinked ancestry without following or listing it', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-path-link-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-path-link-')));
     roots.push(root);
     const folder = path.join(root, 'real');
     const alias = path.join(root, 'alias');

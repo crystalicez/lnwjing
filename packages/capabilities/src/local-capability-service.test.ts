@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { LocalCapabilityService } from './local-capability-service.js';
 
 describe('LocalCapabilityService', () => {

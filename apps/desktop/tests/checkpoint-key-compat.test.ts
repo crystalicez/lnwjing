@@ -11,7 +11,7 @@ afterEach(async () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-v3-key-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-v3-key-'));
   roots.push(root);
   return root;
 }
@@ -20,7 +20,7 @@ describe('generic Windows v3 safeStorage compatibility', () => {
   it('decrypts migrated tunnel secret bytes before legacy PowerShell DPAPI sees them', () => {
     const plain = Buffer.from('runtime-key-fixture', 'utf8');
     const encrypted = Buffer.from('safe-storage-ciphertext');
-    const envelope = `lnwjud-secret:v3:windows-dpapi:${encrypted.toString('base64')}`;
+    const envelope = `lnwjing-secret:v3:windows-dpapi:${encrypted.toString('base64')}`;
     const decryptString = vi.fn(() => plain.toString('base64'));
 
     expect(decryptV3WindowsSafeStorageSecretIfPresent(envelope, { decryptString })).toEqual(plain);
@@ -38,7 +38,7 @@ describe('checkpoint key v3 compatibility', () => {
     const root = await tempRoot();
     const key = Buffer.alloc(32, 7);
     const encrypted = Buffer.from('safe-storage-ciphertext');
-    const envelope = `lnwjud-secret:v3:windows-dpapi:${encrypted.toString('base64')}`;
+    const envelope = `lnwjing-secret:v3:windows-dpapi:${encrypted.toString('base64')}`;
     const filePath = path.join(root, 'checkpoint-master.key');
     await writeFile(filePath, envelope, 'utf8');
     const decryptString = vi.fn(() => key.toString('base64'));
@@ -63,7 +63,7 @@ describe('checkpoint key v3 compatibility', () => {
     const root = await tempRoot();
     await writeFile(
       path.join(root, 'checkpoint-master.key'),
-      `lnwjud-secret:v3:macos-keychain:${Buffer.from('cipher').toString('base64')}`,
+      `lnwjing-secret:v3:macos-keychain:${Buffer.from('cipher').toString('base64')}`,
       'utf8',
     );
     expect(() => loadV3CheckpointKeyIfPresent(root, { decryptString: vi.fn() }))

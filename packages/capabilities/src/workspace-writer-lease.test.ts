@@ -9,7 +9,7 @@ const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((r) => rm(r, { recursive: true, force: true }))); });
 
 async function fixture(now?: () => number): Promise<{ one: SqliteWorkspaceWriterLease; two: SqliteWorkspaceWriterLease }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-workspace-lease-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-workspace-lease-'));
   roots.push(root);
   const filename = path.join(root, 'fences.sqlite');
   return {
@@ -87,7 +87,7 @@ describe('durable multi-session workspace writer lease', () => {
   });
 
   it('does not prematurely recover a pre-migration lease with unknown activity', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-writer-upgrade-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-writer-upgrade-'));
     roots.push(root);
     const filename = path.join(root, 'existing.sqlite');
     const db = new DatabaseSync(filename);

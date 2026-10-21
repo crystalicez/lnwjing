@@ -1,7 +1,7 @@
-import type { DoctorReport } from '@lnwjud/ipc-contracts';
+import type { DoctorReport } from '@lnwjing/ipc-contracts';
 import type { Screen } from '../shell/AppShell.js';
 
-export const STARTUP_DOCTOR_STORAGE_KEY = 'lnwjud.startup-doctor.passed-version.v1';
+export const STARTUP_DOCTOR_STORAGE_KEY = 'lnwjing.startup-doctor.passed-version.v1';
 
 export const STARTUP_CORE_CHECK_IDS = ['os', 'database', 'executable_ripgrep', 'mcp-port'] as const;
 const startupCoreCheckIdSet = new Set<string>(STARTUP_CORE_CHECK_IDS);

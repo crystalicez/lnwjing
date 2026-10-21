@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { UserSettings } from '@lnwjud/ipc-contracts';
+import type { UserSettings } from '@lnwjing/ipc-contracts';
 import { UserConfigPanel } from '../src/renderer/features/settings/UserConfigPanel.js';
 
 const settings: UserSettings = {

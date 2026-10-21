@@ -47,7 +47,7 @@ id_ed25519*
 credentials.json
 
 # Local Databases & Storage
-.lnwjud/
+.lnwjing/
 *.db
 *.db-*
 *.sqlite
@@ -55,7 +55,7 @@ credentials.json
 
 # Logs & Diagnostics
 *.log
-lnwjud-*-logs.txt
+lnwjing-*-logs.txt
 logs/
 diagnostics/
 
@@ -118,10 +118,12 @@ docs/benchmarks/*
 *.swo
 .DS_Store
 Thumbs.db
-lnwjud-incident.json
+lnwjing-incident.json
 .codegraph
 apps/desktop/build/tunnel-client/
 apps/desktop/build/runtime-tools/
 apps/desktop/build/ecc-runtime/
 apps/desktop/build/vendor/
+# Local .NET SDK cache for the one-click Windows x64 portable build (never commit SDK binaries).
+apps/desktop/build/dotnet-sdk/
 .tmp

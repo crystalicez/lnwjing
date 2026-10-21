@@ -1,5 +1,5 @@
-import { engineeringGoalMetadata, type EngineeringWorkflowPlan } from '@lnwjud/application';
-import { appError, err, mayMarkEngineeringGateNotApplicable, ok, requiresHostObservedEngineeringEvidence, type EngineeringGoalMetadata, type GoalCheckpointResumeContext, type GoalEvidence } from '@lnwjud/domain';
+import { engineeringGoalMetadata, type EngineeringWorkflowPlan } from '@lnwjing/application';
+import { appError, err, mayMarkEngineeringGateNotApplicable, ok, requiresHostObservedEngineeringEvidence, type EngineeringGoalMetadata, type GoalCheckpointResumeContext, type GoalEvidence } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import { engineeringGetStatusSchema, engineeringPrepareTaskSchema, engineeringStartTaskSchema } from './schemas.js';
 

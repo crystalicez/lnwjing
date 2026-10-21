@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import XCTest
-@testable import LnwjudMacHost
+@testable import LnwjingMacHost
 
 final class NativeRegressionTests: XCTestCase {
     func testInputOwnershipTracksOrdinaryHeldKeysAndButtonsWithoutPosting() throws {

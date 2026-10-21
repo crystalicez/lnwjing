@@ -12,7 +12,7 @@ async function writeFixture(root: string, relativePath: string, content: string)
 
 describe('EccProviderService', () => {
   it('inventories pinned ECC artifacts selectively with deterministic provenance', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ecc-provider-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ecc-provider-'));
     await writeFixture(root, 'package.json', JSON.stringify({ name: 'ecc-universal', version: '2.2.1', license: 'MIT' }));
     await writeFixture(root, 'agents/reviewer.md', '---\nname: reviewer\ndescription: Reviews changes\n---\n');
     await writeFixture(root, 'skills/tdd/SKILL.md', '---\nname: tdd\ndescription: Test first\n---\n');
@@ -65,14 +65,14 @@ describe('EccProviderService', () => {
   });
 
   it('fails closed on version drift and never follows symlinks', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ecc-provider-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ecc-provider-'));
     await writeFixture(root, 'package.json', JSON.stringify({ name: 'ecc-universal', version: '2.2.0', license: 'MIT' }));
     const mismatch = await new EccProviderService({ rootPath: root, expectedVersion: '2.2.1' }).status();
     expect(mismatch.ready).toBe(false);
     expect(mismatch.error).toContain('does not match');
 
     await writeFixture(root, 'package.json', JSON.stringify({ name: 'ecc-universal', version: '2.2.1', license: 'MIT' }));
-    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ecc-provider-outside-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ecc-provider-outside-'));
     await writeFixture(outside, 'evil.md', '# outside');
     try {
       await symlink(path.join(outside, 'evil.md'), path.join(root, 'agents', 'escape.md'), 'file');

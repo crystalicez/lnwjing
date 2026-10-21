@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe('DurableShellTaskIndex', () => {
   it('does not allow a different client or workspace to attach to another import reservation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-owner-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-owner-'));
     temporaryRoots.push(root);
     const index = new DurableShellTaskIndex(root, { maxConcurrentTasks: 10, inspectTask: async (): Promise<'active'> => 'active' });
     const owned = {
@@ -33,7 +33,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it.each(['active', 'unknown', 'missing'] as const)('blocks import across workspaces while an opaque writer is %s', async (state) => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-admission-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-admission-'));
     temporaryRoots.push(root);
     const index = new DurableShellTaskIndex(root, { maxConcurrentTasks: 10, inspectTask: async (): Promise<typeof state> => state });
     expect(await index.reserve({ taskId: 'opaque', requestDigest: 'a'.repeat(64), ownerClientId: 'other-client', ownerWorkspaceId: 'other-workspace' })).toMatchObject({ ok: true });
@@ -42,7 +42,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('atomically excludes import and opaque launches across index instances', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-race-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-race-'));
     temporaryRoots.push(root);
     const options = { maxConcurrentTasks: 10, inspectTask: async (): Promise<'unknown'> => 'unknown' };
     const first = new DurableShellTaskIndex(root, options);
@@ -55,7 +55,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('retains import exclusion across restart and permits writers after verified terminal observation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-lifetime-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-lifetime-'));
     temporaryRoots.push(root);
     let terminal = false;
     const options = { maxConcurrentTasks: 10, inspectTask: async (): Promise<'terminal' | 'unknown'> => terminal ? 'terminal' : 'unknown' };
@@ -72,7 +72,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('bootstraps legacy terminal and active history once, then reinspects only active markers', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-index-bootstrap-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-bootstrap-'));
     temporaryRoots.push(root);
     await mkdir(path.join(root, 'history-terminal'));
     await mkdir(path.join(root, 'history-running'));
@@ -113,7 +113,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('retries transient lock-file deletion before another store instance acquires the index', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-index-lock-release-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-lock-release-'));
     temporaryRoots.push(root);
     let lockRemovalAttempts = 0;
     const index = new DurableShellTaskIndex(root, {
@@ -144,7 +144,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('serializes reservations across store instances so the active limit cannot be raced', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-index-limit-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-limit-'));
     temporaryRoots.push(root);
     const inspectTask = vi.fn(async () => 'active' as const);
     const first = new DurableShellTaskIndex(root, { maxConcurrentTasks: 1, inspectTask });
@@ -178,7 +178,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('counts an unreadable active marker as active instead of freeing capacity', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-index-unknown-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-unknown-'));
     temporaryRoots.push(root);
     const owner = {
       taskId: 'uncertain-task',
@@ -218,7 +218,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('reclaims a missing pre-metadata reservation only after its launcher is proven gone', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-index-abandoned-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-abandoned-'));
     temporaryRoots.push(root);
     const now = new Date('2026-09-20T10:00:00.000Z');
     const index = new DurableShellTaskIndex(root, {
@@ -250,7 +250,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('bootstraps and pages the compact launch journal without hydrating filtered histories', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-index-journal-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-journal-'));
     temporaryRoots.push(root);
     const records = new Map(Array.from({ length: 5 }, (_, offset) => {
       const ordinal = offset + 1;
@@ -299,7 +299,7 @@ describe('DurableShellTaskIndex', () => {
   });
 
   it('rebuilds a missing or corrupt launch journal under the index lock', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-index-journal-rebuild-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-journal-rebuild-'));
     temporaryRoots.push(root);
     await mkdir(path.join(root, 'task-a'));
     const record = {

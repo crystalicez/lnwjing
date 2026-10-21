@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
-import { engineeringCommandFingerprint } from '@lnwjud/shared';
+import { appError, err, ok } from '@lnwjing/domain';
+import { engineeringCommandFingerprint } from '@lnwjing/shared';
 import { RuntimeEngineeringEvidenceVerifier, createEngineeringArtifactVerifier, createEngineeringSourceStateProvider, type EngineeringSourceState } from './engineering-evidence-verifier.js';
 
 describe('RuntimeEngineeringEvidenceVerifier', () => {
@@ -20,7 +20,7 @@ describe('RuntimeEngineeringEvidenceVerifier', () => {
   });
 
   it('verifies only fresh non-empty package artifacts contained by the workspace root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'lnwjud-engineering-artifact-'));
+    const root = await mkdtemp(join(tmpdir(), 'lnwjing-engineering-artifact-'));
     const artifact = join(root, 'dist', 'installer.exe');
     try {
       await mkdir(join(root, 'dist'), { recursive: true });
@@ -116,7 +116,7 @@ describe('RuntimeEngineeringEvidenceVerifier', () => {
           })
         : ok({
           state: 'completed', exit_code: 0, command_fingerprint: engineeringCommandFingerprint(packageCommand),
-          stdout: `Release evidence verified for lnwjud 5.7.2 win32/x64 commit ${commit}\n`,
+          stdout: `Release evidence verified for lnwjing 5.7.2 win32/x64 commit ${commit}\n`,
         })) };
     const verifier = new RuntimeEngineeringEvidenceVerifier({
       shell,
@@ -130,7 +130,7 @@ describe('RuntimeEngineeringEvidenceVerifier', () => {
     await expect(verifier.verify('workspace-1', {
       source: 'host_observed', observedAt: '2026-09-29T00:00:00Z', workspaceId: 'workspace-1',
       command: packageCommand, runId: 'package-proof', exitCode: 0, commit,
-      artifact: 'apps/desktop/dist/installers/lnwjud-Setup-5.7.2.exe',
+      artifact: 'apps/desktop/dist/installers/lnwjing-Setup-5.7.2.exe',
     }, 'package')).resolves.toBe(true);
     await expect(verifier.verify('workspace-1', {
       source: 'host_observed', observedAt: '2026-09-29T00:00:00Z', workspaceId: 'workspace-1',
@@ -179,7 +179,7 @@ describe('RuntimeEngineeringEvidenceVerifier', () => {
   it('accepts a fresh generic package artifact from the exact durable shell receipt and rejects stale or missing artifacts', async () => {
     const commit = 'cbb9ac40cc6d1acfd0f66a0a2d62c25a8f3a1264';
     const command = 'corepack pnpm@10.15.0 desktop:pack:windows';
-    const artifact = 'dist/installers/lnwjud-Watcher-Setup-0.2.8.exe';
+    const artifact = 'dist/installers/lnwjing-Watcher-Setup-0.2.8.exe';
     const shell = { statusForGoalLiveness: vi.fn(async () => ok({
       state: 'completed', exit_code: 0, command_fingerprint: engineeringCommandFingerprint(command),
       started_at: '2026-09-30T00:00:00.000Z', finished_at: '2026-09-30T00:02:00.000Z',
@@ -256,7 +256,7 @@ describe('RuntimeEngineeringEvidenceVerifier', () => {
       : ok({
           state: 'completed', exit_code: 0, executable: 'node',
           arguments: ['apps/desktop/scripts/verify-release-evidence.mjs'],
-          stdout: `Release evidence verified for lnwjud 5.7.2 win32/x64 commit ${historicalCommit}\n`,
+          stdout: `Release evidence verified for lnwjing 5.7.2 win32/x64 commit ${historicalCommit}\n`,
         })) };
     const historicalEvidence = {
       source: 'host_observed' as const,
@@ -283,7 +283,7 @@ describe('RuntimeEngineeringEvidenceVerifier', () => {
       ...historicalEvidence,
       command: 'node apps/desktop/scripts/verify-release-evidence.mjs',
       runId: 'package-proof',
-      artifact: 'apps/desktop/dist/installers/lnwjud-Setup-5.7.2.exe',
+      artifact: 'apps/desktop/dist/installers/lnwjing-Setup-5.7.2.exe',
     };
 
     await expect(mismatched.verify('workspace-1', ciEvidence, 'exact_sha_ci')).resolves.toBe(false);

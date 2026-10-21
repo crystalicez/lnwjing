@@ -26,7 +26,7 @@ import {
   type TransitionAutomationMilestoneRequest,
   type TransitionAutomationRunRequest,
   type UpdateAutomationAttemptRequest,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import type { FileActor } from './file-service.js';
 import type {
   CancelGoalRequest,

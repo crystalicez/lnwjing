@@ -7,9 +7,9 @@ import { resolveNativeHostBridge } from './native-host-resolver.js';
 
 const directories: string[] = [];
 async function packaged(overrides: Record<string, unknown> = {}): Promise<{ root: string; executable: string }> {
-  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-native-manifest-')));
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-native-manifest-')));
   directories.push(root);
-  const executable = path.join(root, 'lnwjud-linux-host');
+  const executable = path.join(root, 'lnwjing-linux-host');
   const content = Buffer.from('fixture helper identity\n');
   await writeFile(executable, content);
   await writeFile(path.join(root, 'NATIVE_HOST.json'), JSON.stringify({ schemaVersion: 1, platform: 'linux', arch: 'x64', name: path.basename(executable),

@@ -50,7 +50,7 @@ import {
   type IncidentExportResult,
   type InFlightWorkItem,
   type InstallActivitySnapshot,
-  type LnwjudApi,
+  type LnwjingApi,
   type LoadLogSessionHistoryRequest,
   type LoadLogSessionHistoryResult,
   type LogLine,
@@ -99,7 +99,7 @@ import {
   type UserSettings,
   type WorkLogEntry,
   type WorkspaceSummary,
-} from '@lnwjud/ipc-contracts';
+} from '@lnwjing/ipc-contracts';
 import { parseLogCorrelation } from './log-parser.js';
 
 function invoke(channel: string, payload?: unknown): Promise<unknown> {
@@ -963,7 +963,7 @@ function toolCatalogItem(value: unknown): ToolCatalogItem {
   const userPreference = value.userPreference;
   const systemEligible = value.systemEligible;
   const effectiveExposed = value.effectiveExposed;
-  if (origin !== 'lnwjud' && origin !== 'external_mcp') throw new Error('Invalid IPC response');
+  if (origin !== 'lnwjing' && origin !== 'external_mcp') throw new Error('Invalid IPC response');
   if (!['workspace','files','search_context','git','process','browser_desktop','system','office_media','automation','agent_goals','extensions'].includes(String(category))) throw new Error('Invalid IPC response');
   if (!['READ','WRITE','EXECUTE','DANGEROUS','UNKNOWN'].includes(String(declaredPermission))) throw new Error('Invalid IPC response');
   if (!['ALLOW','ASK','DENY','UNKNOWN'].includes(String(profileDecision))) throw new Error('Invalid IPC response');
@@ -1634,7 +1634,7 @@ function boundedWorkflowReply(value: unknown, kind: 'templates' | 'draft' | 'cal
   return value;
 }
 
-const api: LnwjudApi = {
+const api: LnwjingApi = {
   listWorkspaces: () => invoke(ipcChannels.listWorkspaces).then(workspaceList),
   addWorkspace,
   selectWorkspace,
@@ -1728,7 +1728,7 @@ const api: LnwjudApi = {
       && typeof goal.goalKey === 'string' && goal.goalKey.length <= 128
       && typeof goal.objective === 'string' && goal.objective.length <= 4096
       && typeof goal.updatedAt === 'string' && goal.updatedAt.length <= 64)) throw new Error('Invalid Doctor goal list');
-    return value as import('@lnwjud/ipc-contracts').DoctorGoalOption[];
+    return value as import('@lnwjing/ipc-contracts').DoctorGoalOption[];
   }),
   getTaskResult: (request: { workspaceId: string; goalId: string }) => invoke(ipcChannels.getTaskResult, request).then((value) => boundedWorkflowReply(value, 'result') as TaskResultSummary),
   restoreTaskCheckpoint: (request: RestoreTaskCheckpointRequest): Promise<RestoreTaskCheckpointResult> =>
@@ -1816,4 +1816,4 @@ const api: LnwjudApi = {
   onInstallActivity,
 };
 
-contextBridge.exposeInMainWorld('lnwjud', api);
+contextBridge.exposeInMainWorld('lnwjing', api);

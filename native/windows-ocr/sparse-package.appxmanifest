@@ -3,10 +3,10 @@
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          IgnorableNamespaces="uap">
   <!-- Template for the signed sparse package. Replace Identity/Publisher with the release certificate identity. -->
-  <Identity Name="com.lnwjud.windowsocr" Publisher="CN=REPLACE_WITH_SIGNING_CERTIFICATE" Version="1.0.0.0" />
+  <Identity Name="com.lnwjing.windowsocr" Publisher="CN=REPLACE_WITH_SIGNING_CERTIFICATE" Version="1.0.0.0" />
   <Properties>
-    <DisplayName>lnwjud Windows OCR</DisplayName>
-    <PublisherDisplayName>lnwjud</PublisherDisplayName>
+    <DisplayName>lnwjing Windows OCR</DisplayName>
+    <PublisherDisplayName>lnwjing</PublisherDisplayName>
     <Description>Package identity for the local Windows.Media.Ocr helper.</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -17,8 +17,8 @@
     <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.19041.0" MaxVersionTested="10.0.28000.0" />
   </Dependencies>
   <Applications>
-    <Application Id="LnwjudWindowsOcr" Executable="lnwjud-windows-ocr.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements AppListEntry="none" DisplayName="lnwjud Windows OCR" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="Local OCR helper" />
+    <Application Id="LnwjingWindowsOcr" Executable="lnwjing-windows-ocr.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements AppListEntry="none" DisplayName="lnwjing Windows OCR" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="Local OCR helper" />
     </Application>
   </Applications>
 </Package>

@@ -1,11 +1,11 @@
-# lnwjud + MCP Tasks spec (2025-11-25)
+# lnwjing + MCP Tasks spec (2025-11-25)
 
 > สถานะ: experimental (ตามสเปก MCP Tasks รุ่น 2025-11-25)
 > ใช้ได้ตั้งแต่รุ่นถัดจาก v4.7.1
 
-lnwjud เปิดดู durable background tasks ผ่านเมธอดระดับโปรโตคอลของ MCP Tasks
+lnwjing เปิดดู durable background tasks ผ่านเมธอดระดับโปรโตคอลของ MCP Tasks
 เพื่อให้ client ที่รองรับสเปกเรียกดู/เก็บผล/ยกเลิกงานยาวได้โดยไม่ต้องรู้จัก
-ชื่อ tool ของ lnwjud เอง
+ชื่อ tool ของ lnwjing เอง
 
 ## ขอบเขต
 
@@ -31,7 +31,7 @@ Capability ที่ประกาศตอน initialize: `{ tasks: { list: {}
 
 ## การแม็ปสถานะ
 
-| สถานะใน lnwjud (shell-backend / durable store) | สถานะตามสเปก |
+| สถานะใน lnwjing (shell-backend / durable store) | สถานะตามสเปก |
 | --- | --- |
 | `running` | `working` |
 | `completed` | `completed` |
@@ -50,7 +50,7 @@ Capability ที่ประกาศตอน initialize: `{ tasks: { list: {}
 ## Deviation ที่รู้ไว้ (เจตนา)
 
 สเปกกำหนดให้ `tasks/result` block จนกว่า task จะถึง terminal — แต่ durable tasks
-ของ lnwjud ออกแบบให้ทำงานยาวเกินระยะเวลารอที่สมเหตุสมผลของ request หนึ่ง ๆ
+ของ lnwjing ออกแบบให้ทำงานยาวเกินระยะเวลารอที่สมเหตุสมผลของ request หนึ่ง ๆ
 ดังนั้น implementation นี้ block ได้สูงสุดตามค่า **MCP Poll / Tool Wait** ที่ผู้ใช้ตั้ง
 (5–60 วินาที, ค่าเริ่มต้น 5 วินาที) แล้วตอบ `-32603` ถ้างานยังไม่ terminal
 พร้อมข้อความชี้ให้กลับไป poll `tasks/get` ภายหลัง

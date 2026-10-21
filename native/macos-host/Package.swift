@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "LnwjudMacHost",
+    name: "LnwjingMacHost",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "lnwjud-macos-host", targets: ["LnwjudMacHost"]),
+        .executable(name: "lnwjing-macos-host", targets: ["LnwjingMacHost"]),
     ],
     targets: [
-        .executableTarget(name: "LnwjudMacHost"),
-        .testTarget(name: "LnwjudMacHostTests", dependencies: ["LnwjudMacHost"]),
+        .executableTarget(name: "LnwjingMacHost"),
+        .testTarget(name: "LnwjingMacHostTests", dependencies: ["LnwjingMacHost"]),
     ]
 )

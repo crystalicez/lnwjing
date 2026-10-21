@@ -39,7 +39,7 @@ export class McpConfigLoader {
     );
 
     for (const [name, config] of Object.entries(this.options.settings.extraMcpServers)) {
-      discovered.push(this.toServer(name, 'lnwjud-settings', config));
+      discovered.push(this.toServer(name, 'lnwjing-settings', config));
     }
 
     return dedupeServers(discovered);
@@ -125,16 +125,16 @@ export function exclusionReason(name: string, config: McpServerLaunchConfig): st
     return 'MCP server name is invalid for a stable external namespace';
   }
   const lowered = normalizedName.toLowerCase();
-  if (lowered === 'lnwjud' || lowered.startsWith('lnwjud-')) {
-    return 'Refusing to aggregate lnwjud itself';
+  if (lowered === 'lnwjing' || lowered.startsWith('lnwjing-')) {
+    return 'Refusing to aggregate lnwjing itself';
   }
   const command = path.basename(config.command).toLowerCase();
-  if (command === 'lnwjud' || command === 'lnwjud.exe' || command.includes('lnwjud')) {
-    return 'Refusing to aggregate lnwjud itself';
+  if (command === 'lnwjing' || command === 'lnwjing.exe' || command.includes('lnwjing')) {
+    return 'Refusing to aggregate lnwjing itself';
   }
   const args = (config.args ?? []).join(' ').toLowerCase();
-  if (args.includes('--mcp-stdio') && command.includes('lnwjud')) {
-    return 'Refusing to aggregate lnwjud itself';
+  if (args.includes('--mcp-stdio') && command.includes('lnwjing')) {
+    return 'Refusing to aggregate lnwjing itself';
   }
   return undefined;
 }

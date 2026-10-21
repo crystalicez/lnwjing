@@ -9,7 +9,7 @@ const repositoryRoot = path.resolve(import.meta.dirname, '..', '..');
 
 describe('MVP release verification gate', () => {
   it('prepares verifiable Windows bridge metadata on a fresh release checkout without building packages', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-release-checkout-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-release-checkout-'));
     try {
       for (const file of [
         'apps/desktop/scripts/write-capability-integrity.mjs',
@@ -61,8 +61,8 @@ describe('MVP release verification gate', () => {
     expect(script).toContain("'latest.yml'");
     expect(script).toContain("'portable.yml'");
     expect(script).toContain('git diff --check');
-    expect(script).toContain('lnwjud-Setup-$($rootPackage.version).exe');
-    expect(script).toContain('lnwjud-Portable-$($rootPackage.version).exe');
+    expect(script).toContain('lnwjing-Setup-$($rootPackage.version).exe');
+    expect(script).toContain('lnwjing-Portable-$($rootPackage.version).exe');
   });
 
   it('documents the acceptance evidence and clean-machine limitations', async () => {
@@ -107,7 +107,7 @@ describe('MVP release verification gate', () => {
     ) as { scripts?: Record<string, string> };
     expect(desktopPackage.scripts?.['electron:install']).toBe('node node_modules/electron/install.js');
     expect(desktopPackage.scripts?.['test:e2e']).toMatch(/^node node_modules\/electron\/install\.js && /);
-    expect(rootPackage.scripts?.desktop).toContain('--filter @lnwjud/desktop electron:install');
+    expect(rootPackage.scripts?.desktop).toContain('--filter @lnwjing/desktop electron:install');
   });
 
   it('provisions ripgrep on fresh Windows CI before both verification modes', async () => {
@@ -176,8 +176,8 @@ describe('MVP release verification gate', () => {
     expect(workflow).toContain('desktop-test-shards:');
     expect(workflow).toContain('max-parallel: 6');
     expect(workflow).toContain('--shard=${{ matrix.shard_index }}/${{ matrix.shard_total }}');
-    expect(workflow).toContain("--filter '!@lnwjud/desktop' --if-present test");
-    expect(workflow).toContain("--filter '@lnwjud/cli...' build");
+    expect(workflow).toContain("--filter '!@lnwjing/desktop' --if-present test");
+    expect(workflow).toContain("--filter '@lnwjing/cli...' build");
   });
 
   it('installs the pinned Sigstore verifier before authoritative Windows packaging', async () => {
@@ -249,7 +249,7 @@ describe('MVP release verification gate', () => {
     expect(release).toContain('Waiting for main CI to appear for exact commit');
     expect(release).toContain('Exact-commit CI run $candidate_id completed with conclusion');
     expect(release).toContain('sleep 20');
-    expect(release).toContain('LNWJUD_RELEASE_INSTALLER_DIRECTORY');
+    expect(release).toContain('LNWJING_RELEASE_INSTALLER_DIRECTORY');
     expect(release).toContain('node scripts/collect-release-assets.mjs');
     expect(release).toContain('release-assets/*');
     expect(releaseNotes).toContain('`RELEASE_MANIFEST.json`');
@@ -258,7 +258,7 @@ describe('MVP release verification gate', () => {
     expect(release).toContain('generate_release_notes: false');
     expect(release).toContain('body_path: release-notes.md');
     expect(release).not.toContain('generate_release_notes: true');
-    expect(release).toContain("LNWJUD_RELEASE_ARTIFACT_ONLY: '1'");
+    expect(release).toContain("LNWJING_RELEASE_ARTIFACT_ONLY: '1'");
     expect(release.indexOf('Download verified target-native CI artifacts')).toBeLessThan(release.indexOf('Verify each downloaded release evidence bundle'));
     expect(release.indexOf('Generate and validate user-facing release notes')).toBeLessThan(release.indexOf('Download verified target-native CI artifacts'));
     expect(release.indexOf('Verify each downloaded release evidence bundle')).toBeLessThan(release.indexOf('Aggregate target-native artifacts and update feeds'));
@@ -270,8 +270,8 @@ describe('MVP release verification gate', () => {
   it('keeps release asset aggregation target-aware and architecture-aware', async () => {
     const collector = await readFile(path.join(repositoryRoot, 'scripts', 'collect-release-assets.mjs'), 'utf8');
     const verifier = await readFile(path.join(repositoryRoot, 'apps', 'desktop', 'scripts', 'verify-release-evidence.mjs'), 'utf8');
-    expect(collector).toContain('LNWJUD_RELEASE_STAGING_DIRECTORY');
-    expect(collector).toContain('LNWJUD_RELEASE_ASSETS_DIRECTORY');
+    expect(collector).toContain('LNWJING_RELEASE_STAGING_DIRECTORY');
+    expect(collector).toContain('LNWJING_RELEASE_ASSETS_DIRECTORY');
     expect(collector).toContain('win32-x64');
     expect(collector).toContain('darwin-arm64');
     expect(collector).toContain('darwin-x64');
@@ -281,7 +281,7 @@ describe('MVP release verification gate', () => {
     expect(collector).toContain('latest-mac.yml');
     expect(collector).toContain('RELEASE_MANIFEST.json');
     expect(collector).toContain('sourceProvenanceSha256');
-    expect(verifier).toContain('LNWJUD_RELEASE_INSTALLER_DIRECTORY');
+    expect(verifier).toContain('LNWJING_RELEASE_INSTALLER_DIRECTORY');
     expect(verifier).toContain('latest-linux-${normalizeArtifactArch(arch)}.yml');
   });
 

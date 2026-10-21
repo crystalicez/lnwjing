@@ -1,11 +1,11 @@
-# lnwjud Baseline Benchmark
+# lnwjing Baseline Benchmark
 
 Generated: 2026-08-16T18:08:33.449Z
 Repository: `main` @ `d6f3173c34f5d0bff9bdf94617125cb0974537dc`
 
 ## Scope
 
-This is the Phase 00 synthetic baseline. It starts the built lnwjud application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract baseline, not a production-machine benchmark.
+This is the Phase 00 synthetic baseline. It starts the built lnwjing application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract baseline, not a production-machine benchmark.
 
 | Field | Value |
 | --- | --- |

@@ -3,16 +3,16 @@ import { existsSync } from 'node:fs';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import { PathExecutableResolver, toWindowsSpawnInvocation, type ExecutableResolver } from '@lnwjud/process';
-import type { FileActor } from '@lnwjud/application';
-import { hostPathApi, isAbsoluteHostPath, isHostPathWithin, resolveHostPath } from '@lnwjud/workspace';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import { PathExecutableResolver, toWindowsSpawnInvocation, type ExecutableResolver } from '@lnwjing/process';
+import type { FileActor } from '@lnwjing/application';
+import { hostPathApi, isAbsoluteHostPath, isHostPathWithin, resolveHostPath } from '@lnwjing/workspace';
 import type { McpApplicationServices } from './tools/tool-types.js';
 
 /**
  * Wave 6 minimal stdio LSP client behind `lsp_diagnostics` and `lsp_rename`.
  * Language servers are configured per language through environment variables
- * (LNWJUD_LSP_<LANGUAGE>_COMMAND, JSON argv preferred). Workspace files are
+ * (LNWJING_LSP_<LANGUAGE>_COMMAND, JSON argv preferred). Workspace files are
  * canonicalized before they are opened so LSP cannot bypass workspace roots.
  */
 
@@ -221,7 +221,7 @@ export class LspRuntimeService {
     if (language === '') return err(appError('INVALID_INPUT', 'Could not infer a language; pass language explicitly'));
     const command = this.serverCommand(language);
     if (command === undefined) {
-      return err(appError('PERMISSION_DENIED', `No language server configured for ${language}. Set LNWJUD_LSP_${language.toUpperCase()}_COMMAND (JSON argv preferred)`));
+      return err(appError('PERMISSION_DENIED', `No language server configured for ${language}. Set LNWJING_LSP_${language.toUpperCase()}_COMMAND (JSON argv preferred)`));
     }
     const root = await this.workspaceRoot(workspaceId);
     if (!root.ok) return root;
@@ -294,7 +294,7 @@ export class LspRuntimeService {
 
   private serverCommand(language: string): readonly string[] | undefined {
     const settingsCommand = this.services.localProviders?.().lspCommands?.[language.toLowerCase()];
-    const configured = readString(settingsCommand) ?? this.environment[`LNWJUD_LSP_${language.toUpperCase()}_COMMAND`];
+    const configured = readString(settingsCommand) ?? this.environment[`LNWJING_LSP_${language.toUpperCase()}_COMMAND`];
     if (typeof configured !== 'string' || configured.trim().length === 0) return undefined;
     const trimmed = configured.trim();
     let command: string[];

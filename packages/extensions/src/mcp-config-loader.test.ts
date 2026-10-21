@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe('McpConfigLoader', () => {
   it('discovers Cursor MCP servers and substitutes workspaceFolder', async () => {
-    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-mcp-cfg-'));
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-cfg-'));
     temporaryRoots.push(home);
     await mkdir(path.join(home, '.cursor'), { recursive: true });
     await writeFile(path.join(home, '.cursor', 'mcp.json'), JSON.stringify({
@@ -24,8 +24,8 @@ describe('McpConfigLoader', () => {
           command: 'npx',
           args: ['-y', '@playwright/mcp', '--cwd', '${workspaceFolder}'],
         },
-        lnwjud: {
-          command: 'lnwjud.exe',
+        lnwjing: {
+          command: 'lnwjing.exe',
           args: ['--mcp-stdio'],
         },
       },
@@ -47,7 +47,7 @@ describe('McpConfigLoader', () => {
         }),
       }),
       expect.objectContaining({
-        name: 'lnwjud',
+        name: 'lnwjing',
         enabled: false,
         excluded: true,
       }),
@@ -56,7 +56,7 @@ describe('McpConfigLoader', () => {
 
   it.runIf(process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux')('discovers Claude Desktop MCP config from the current native host default location', async () => {
     const platform = process.platform as 'win32' | 'darwin' | 'linux';
-    const home = await mkdtemp(path.join(os.tmpdir(), `lnwjud-mcp-${platform}-`));
+    const home = await mkdtemp(path.join(os.tmpdir(), `lnwjing-mcp-${platform}-`));
     temporaryRoots.push(home);
     const appData = defaultApplicationDataDirectory(platform, home, {});
     const pathApi = platform === 'win32' ? path.win32 : path.posix;
@@ -91,7 +91,7 @@ describe('McpConfigLoader', () => {
   });
 
   it.runIf(process.platform === 'linux')('uses XDG_CONFIG_HOME for Claude Desktop discovery on Linux', async () => {
-    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-mcp-linux-xdg-'));
+    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-linux-xdg-'));
     temporaryRoots.push(rawRoot);
     const root = rawRoot.replaceAll('\\', '/');
     const xdg = path.posix.join(root, 'custom-config');
@@ -110,8 +110,8 @@ describe('McpConfigLoader', () => {
     ]));
   });
 
-  it('lets explicit lnwjud settings override the same server discovered from Cursor', async () => {
-    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-mcp-override-'));
+  it('lets explicit lnwjing settings override the same server discovered from Cursor', async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-override-'));
     temporaryRoots.push(home);
     await mkdir(path.join(home, '.cursor'), { recursive: true });
     await writeFile(path.join(home, '.cursor', 'mcp.json'), JSON.stringify({
@@ -123,12 +123,12 @@ describe('McpConfigLoader', () => {
     };
     const servers = await new McpConfigLoader({ homeDir: home, appDataDir: path.join(home, 'appdata'), settings }).discover();
     expect(servers.filter((server) => server.name === 'serena')).toEqual([
-      expect.objectContaining({ source: 'lnwjud-settings', config: expect.objectContaining({ command: 'settings-serena', args: ['new'] }) }),
+      expect.objectContaining({ source: 'lnwjing-settings', config: expect.objectContaining({ command: 'settings-serena', args: ['new'] }) }),
     ]);
   });
 
   it('canonicalizes surrounding MCP server-name whitespace before dedupe and allowlist evaluation', async () => {
-    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-mcp-name-normalize-'));
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-name-normalize-'));
     temporaryRoots.push(home);
     await mkdir(path.join(home, '.cursor'), { recursive: true });
     await writeFile(path.join(home, '.cursor', 'mcp.json'), JSON.stringify({
@@ -143,7 +143,7 @@ describe('McpConfigLoader', () => {
     expect(servers.filter((server) => server.name === 'serena')).toEqual([
       expect.objectContaining({
         name: 'serena',
-        source: 'lnwjud-settings',
+        source: 'lnwjing-settings',
         enabled: false,
         excluded: false,
         config: expect.objectContaining({ command: 'settings-serena' }),

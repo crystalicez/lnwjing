@@ -9,20 +9,20 @@ import { electronExecutablePath, terminateProcessTree } from './electron-runtime
 import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
 import { promisify } from 'node:util';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { isAdvertisedDeliveryState, isCodexDelegationTool, UPGRADE_TOOL_CATALOG } from '@lnwjud/mcp-server';
+import { isAdvertisedDeliveryState, isCodexDelegationTool, UPGRADE_TOOL_CATALOG } from '@lnwjing/mcp-server';
 import { chromium, expect, test, type Page } from '@playwright/test';
 
 const execFileAsync = promisify(execFile);
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mainEntry = path.join(desktopRoot, 'dist', 'main', 'main.js');
 const electronExecutable = electronExecutablePath(desktopRoot);
-const packagedExecutable = process.env.LNWJUD_PACKAGED_EXECUTABLE;
+const packagedExecutable = process.env.LNWJING_PACKAGED_EXECUTABLE;
 
 test('desktop serves the real MCP client development workflow', async () => {
   test.setTimeout(180_000);
   const fixtureRoot = await createFixture();
   const fixtureRealRoot = await realpath(fixtureRoot);
-  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-mcp-client-data-'));
+  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-client-data-'));
   let electronProcess: ChildProcess | undefined;
   let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
   let page: Page | undefined;
@@ -42,11 +42,11 @@ test('desktop serves the real MCP client development workflow', async () => {
       env: {
         ...process.env,
         APPDATA: dataRoot,
-        LNWJUD_DATA_PATH: dataRoot,
-        LNWJUD_WORKSPACE: fixtureRoot,
-        LNWJUD_UNRESTRICTED: '1',
-        LNWJUD_E2E_FIXTURE: '1',
-        LNWJUD_E2E_NODE_PATH: process.execPath,
+        LNWJING_DATA_PATH: dataRoot,
+        LNWJING_WORKSPACE: fixtureRoot,
+        LNWJING_UNRESTRICTED: '1',
+        LNWJING_E2E_FIXTURE: '1',
+        LNWJING_E2E_NODE_PATH: process.execPath,
       },
     });
     const stderr: string[] = [];
@@ -75,7 +75,7 @@ test('desktop serves the real MCP client development workflow', async () => {
     expect(endpoint.pathname).toBe('/mcp');
 
     client = new Client(
-      { name: 'lnwjud-desktop-e2e-client', version: '0.1.0' },
+      { name: 'lnwjing-desktop-e2e-client', version: '0.1.0' },
       { versionNegotiation: { mode: { pin: '2026-07-28' } } },
     );
     await client.connect(new StreamableHTTPClientTransport(endpoint));
@@ -168,13 +168,13 @@ test('desktop serves the real MCP client development workflow', async () => {
     const agentActions = page.locator('details.agent-actions-menu');
     await agentActions.locator('summary').click();
     await agentActions.getByRole('button', { name: /^(หยุด Desktop Agent|Stop Desktop Agent)$/ }).click();
-    await expect.poll(async () => (await page!.evaluate(() => window.lnwjud.getDashboard())).mcp.running, { timeout: 30_000 }).toBe(false);
+    await expect.poll(async () => (await page!.evaluate(() => window.lnwjing.getDashboard())).mcp.running, { timeout: 30_000 }).toBe(false);
     await expect(page.getByTestId('mcp-status')).toHaveText(/Agent หยุดทำงาน|Agent stopped/, { timeout: 30_000 });
     await browser.close();
     browser = undefined;
   } finally {
     if (client !== undefined) await client.close().catch(() => undefined);
-    if (page !== undefined) await page.evaluate(() => window.lnwjud.stopMcp()).catch(() => undefined);
+    if (page !== undefined) await page.evaluate(() => window.lnwjing.stopMcp()).catch(() => undefined);
     if (browser !== undefined) await browser.close().catch(() => undefined);
     if (electronProcess !== undefined) await terminateProcessTree(electronProcess);
     await Promise.all([removeTemporaryRoot(fixtureRoot), removeTemporaryRoot(dataRoot)]);
@@ -182,18 +182,18 @@ test('desktop serves the real MCP client development workflow', async () => {
 });
 
 async function createFixture(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-mcp-client-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-client-'));
   await mkdir(path.join(root, 'src'));
   await writeFile(path.join(root, 'src', 'app.ts'), "export const value = 'before';\n", 'utf8');
   await writeFile(path.join(root, '.env'), 'SECRET_NOT_FOR_TOOLS=hidden\n', 'utf8');
   await writeFile(path.join(root, 'package.json'), JSON.stringify({
-    name: 'lnwjud-desktop-flow-fixture',
+    name: 'lnwjing-desktop-flow-fixture',
     scripts: { test: "node -e \"process.stdout.write('project-test-pass\\n')\"" },
   }), 'utf8');
   await writeFile(path.join(root, 'package-lock.json'), '{}', 'utf8');
   await execFileAsync('git', ['init', '--quiet'], { cwd: root, windowsHide: true });
-  await execFileAsync('git', ['config', 'user.email', 'lnwjud-test@example.invalid'], { cwd: root, windowsHide: true });
-  await execFileAsync('git', ['config', 'user.name', 'lnwjud desktop e2e'], { cwd: root, windowsHide: true });
+  await execFileAsync('git', ['config', 'user.email', 'lnwjing-test@example.invalid'], { cwd: root, windowsHide: true });
+  await execFileAsync('git', ['config', 'user.name', 'lnwjing desktop e2e'], { cwd: root, windowsHide: true });
   await execFileAsync('git', ['add', '--', 'package.json', 'package-lock.json', 'src'], { cwd: root, windowsHide: true });
   await execFileAsync('git', ['commit', '--quiet', '-m', 'fixture'], { cwd: root, windowsHide: true });
   return root;

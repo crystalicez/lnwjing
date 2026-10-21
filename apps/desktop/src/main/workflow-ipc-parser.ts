@@ -1,4 +1,4 @@
-import type { CallHistoryRequest, ResourceSnapshotRequest, WorkflowPrepareRequest } from '@lnwjud/ipc-contracts';
+import type { CallHistoryRequest, ResourceSnapshotRequest, WorkflowPrepareRequest } from '@lnwjing/ipc-contracts';
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): RecordValue {
@@ -82,7 +82,7 @@ export function parseWorkflowGoal(value: unknown): { readonly workspaceId: strin
   return { workspaceId: bounded(input.workspaceId), goalId: bounded(input.goalId) };
 }
 
-export function parseRestoreTaskCheckpoint(value: unknown): import('@lnwjud/ipc-contracts').RestoreTaskCheckpointRequest {
+export function parseRestoreTaskCheckpoint(value: unknown): import('@lnwjing/ipc-contracts').RestoreTaskCheckpointRequest {
   const input = record(value);
   guardKeys(input, ['workspaceId','goalId','goalRevision','checkpointId','expectedCurrentHashes','userConfirmed']);
   if (!Number.isSafeInteger(input.goalRevision) || (input.goalRevision as number) < 0 || input.userConfirmed !== true) {
@@ -105,7 +105,7 @@ export function parseRestoreTaskCheckpoint(value: unknown): import('@lnwjud/ipc-
     expectedCurrentHashes: values, userConfirmed: true,
   };
 }
-export function parseCancelOwnedGoalTask(value: unknown): import('@lnwjud/ipc-contracts').CancelOwnedGoalTaskRequest {
+export function parseCancelOwnedGoalTask(value: unknown): import('@lnwjing/ipc-contracts').CancelOwnedGoalTaskRequest {
   const input=record(value);
   guardKeys(input,['workspaceId','goalId','taskId','provider','userConfirmed']);
   const provider=bounded(input.provider,20);

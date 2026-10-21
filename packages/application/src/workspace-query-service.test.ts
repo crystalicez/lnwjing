@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WorkspaceQueryService } from './workspace-query-service.js';
-import type { WorkspaceRepository, Workspace } from '@lnwjud/workspace';
+import type { WorkspaceRepository, Workspace } from '@lnwjing/workspace';
 
 const temporaryRoots: string[] = [];
 
@@ -13,7 +13,7 @@ afterEach(async () => {
 
 describe('WorkspaceQueryService', () => {
   it('returns a bounded tree for a registered workspace', async () => {
-    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-query-'));
+    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-query-'));
     temporaryRoots.push(rawRoot);
     const root = await realpath(rawRoot);
     await mkdir(path.join(root, 'src'));

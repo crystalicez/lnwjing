@@ -1,6 +1,6 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import type { MutationApprovalPrompt } from '@lnwjud/ipc-contracts';
+import type { MutationApprovalPrompt } from '@lnwjing/ipc-contracts';
 
 export function MutationApprovalPage(): ReactElement {
   const [prompt, setPrompt] = useState<MutationApprovalPrompt | null>(null);
@@ -13,7 +13,7 @@ export function MutationApprovalPage(): ReactElement {
     busyRef.current = true;
     setBusy(true);
     try {
-      const result = await window.lnwjud.resolveMutationApprovalPrompt({ approved });
+      const result = await window.lnwjing.resolveMutationApprovalPrompt({ approved });
       if (!result.accepted) window.close();
     } catch {
       window.close();
@@ -22,7 +22,7 @@ export function MutationApprovalPage(): ReactElement {
 
   useEffect(() => {
     let disposed = false;
-    void window.lnwjud.getMutationApprovalPrompt().then((result) => {
+    void window.lnwjing.getMutationApprovalPrompt().then((result) => {
       if (disposed) return;
       if (result === null) {
         window.close();

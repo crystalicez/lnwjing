@@ -1,4 +1,4 @@
-function Test-LnwjudTunnelLockInteger {
+function Test-LnwjingTunnelLockInteger {
   param(
     [Parameter(Mandatory = $true)]$Value,
     [Parameter(Mandatory = $true)][long]$Minimum,
@@ -18,7 +18,7 @@ function Test-LnwjudTunnelLockInteger {
   } catch { return $false }
 }
 
-function Test-LnwjudTunnelLockTimestamp {
+function Test-LnwjingTunnelLockTimestamp {
   param([Parameter(Mandatory = $true)]$Value)
 
   if ($Value -isnot [string] -or $Value -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$') { return $false }
@@ -28,27 +28,27 @@ function Test-LnwjudTunnelLockTimestamp {
   return $parsed.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture) -ceq $Value
 }
 
-function Test-LnwjudTunnelLockRecord {
+function Test-LnwjingTunnelLockRecord {
   param([Parameter(Mandatory = $true)]$Record)
 
   return $null -ne $Record `
-    -and (Test-LnwjudTunnelLockInteger -Value $Record.version -Minimum 1 -Maximum 1) `
-    -and (Test-LnwjudTunnelLockInteger -Value $Record.pid -Minimum 1 -Maximum 2147483647) `
-    -and (Test-LnwjudTunnelLockTimestamp -Value $Record.processStartedAt) `
-    -and (Test-LnwjudTunnelLockTimestamp -Value $Record.acquiredAt)
+    -and (Test-LnwjingTunnelLockInteger -Value $Record.version -Minimum 1 -Maximum 1) `
+    -and (Test-LnwjingTunnelLockInteger -Value $Record.pid -Minimum 1 -Maximum 2147483647) `
+    -and (Test-LnwjingTunnelLockTimestamp -Value $Record.processStartedAt) `
+    -and (Test-LnwjingTunnelLockTimestamp -Value $Record.acquiredAt)
 }
 
-function Read-LnwjudTunnelLockRecord {
+function Read-LnwjingTunnelLockRecord {
   param([Parameter(Mandatory = $true)][string]$LockPath)
 
   try {
     $record = Get-Content -LiteralPath $LockPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-    if (Test-LnwjudTunnelLockRecord -Record $record) { return $record }
+    if (Test-LnwjingTunnelLockRecord -Record $record) { return $record }
   } catch { }
   return $null
 }
 
-function Test-LnwjudTunnelLockOwner {
+function Test-LnwjingTunnelLockOwner {
   param(
     [Parameter(Mandatory = $true)]$Left,
     [Parameter(Mandatory = $true)]$Right
@@ -60,7 +60,7 @@ function Test-LnwjudTunnelLockOwner {
     -and (([string]$Left.acquiredAt) -ceq ([string]$Right.acquiredAt))
 }
 
-function Restore-LnwjudTunnelLockQuarantine {
+function Restore-LnwjingTunnelLockQuarantine {
   param(
     [Parameter(Mandatory = $true)][string]$QuarantinePath,
     [Parameter(Mandatory = $true)][string]$LockPath
@@ -70,7 +70,7 @@ function Restore-LnwjudTunnelLockQuarantine {
   try { [IO.File]::Move($QuarantinePath, $LockPath) } catch [IO.IOException] { }
 }
 
-function Get-LnwjudTunnelLockMutexName {
+function Get-LnwjingTunnelLockMutexName {
   param([Parameter(Mandatory = $true)][string]$ProfileDir)
 
   $normalized = [IO.Path]::GetFullPath($ProfileDir).TrimEnd([char[]]@([char]'\', [char]'/')).ToLowerInvariant()
@@ -78,21 +78,21 @@ function Get-LnwjudTunnelLockMutexName {
   try {
     $hash = $sha.ComputeHash(([Text.UTF8Encoding]::new($false)).GetBytes($normalized))
     $hex = -join ($hash | ForEach-Object { $_.ToString('x2', [Globalization.CultureInfo]::InvariantCulture) })
-    return 'Local\lnwjud-tunnel-lock-' + $hex.Substring(0, 24)
+    return 'Local\lnwjing-tunnel-lock-' + $hex.Substring(0, 24)
   } finally { $sha.Dispose() }
 }
 
-function Invoke-LnwjudTunnelLockCriticalSection {
+function Invoke-LnwjingTunnelLockCriticalSection {
   param(
     [Parameter(Mandatory = $true)][string]$ProfileDir,
     [Parameter(Mandatory = $true)][scriptblock]$Action
   )
 
-  $mutex = [Threading.Mutex]::new($false, (Get-LnwjudTunnelLockMutexName -ProfileDir $ProfileDir))
+  $mutex = [Threading.Mutex]::new($false, (Get-LnwjingTunnelLockMutexName -ProfileDir $ProfileDir))
   $held = $false
   try {
     try { $held = $mutex.WaitOne(5000) } catch [Threading.AbandonedMutexException] { $held = $true }
-    if (-not $held) { throw 'Timed out waiting for the lnwjud tunnel lock critical section' }
+    if (-not $held) { throw 'Timed out waiting for the lnwjing tunnel lock critical section' }
     return & $Action
   } finally {
     if ($held) { $mutex.ReleaseMutex() }
@@ -100,7 +100,7 @@ function Invoke-LnwjudTunnelLockCriticalSection {
   }
 }
 
-function Get-LnwjudTunnelProcessProbe {
+function Get-LnwjingTunnelProcessProbe {
   param([Parameter(Mandatory = $true)][int]$OwnerPid)
 
   try {
@@ -115,7 +115,7 @@ function Get-LnwjudTunnelProcessProbe {
   }
 }
 
-function New-LnwjudTunnelLockPublishRecord {
+function New-LnwjingTunnelLockPublishRecord {
   param(
     [Parameter(Mandatory = $true)][string]$LockPath,
     [Parameter(Mandatory = $true)]$Owner
@@ -132,7 +132,7 @@ function New-LnwjudTunnelLockPublishRecord {
   return $publishPath
 }
 
-function Enter-LnwjudTunnelLock {
+function Enter-LnwjingTunnelLock {
   param(
     [Parameter(Mandatory = $true)][string]$ProfileDir,
     [Parameter(Mandatory = $true)][int]$OwnerPid,
@@ -142,23 +142,23 @@ function Enter-LnwjudTunnelLock {
   )
 
   New-Item -ItemType Directory -Path $ProfileDir -Force | Out-Null
-  $lockPath = Join-Path $ProfileDir 'lnwjud.tunnel.lock'
+  $lockPath = Join-Path $ProfileDir 'lnwjing.tunnel.lock'
   $owner = [pscustomobject][ordered]@{
     version = 1
     pid = $OwnerPid
     processStartedAt = $OwnerStartedAt
     acquiredAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)
   }
-  if (-not (Test-LnwjudTunnelLockRecord -Record $owner)) { throw 'Tunnel lock owner metadata is invalid' }
+  if (-not (Test-LnwjingTunnelLockRecord -Record $owner)) { throw 'Tunnel lock owner metadata is invalid' }
 
-  return Invoke-LnwjudTunnelLockCriticalSection -ProfileDir $ProfileDir -Action {
+  return Invoke-LnwjingTunnelLockCriticalSection -ProfileDir $ProfileDir -Action {
     if (-not (Test-Path -LiteralPath $lockPath)) {
-      $publishPath = New-LnwjudTunnelLockPublishRecord -LockPath $lockPath -Owner $owner
+      $publishPath = New-LnwjingTunnelLockPublishRecord -LockPath $lockPath -Owner $owner
       try { [IO.File]::Move($publishPath, $lockPath) } finally { Remove-Item -LiteralPath $publishPath -Force -ErrorAction SilentlyContinue }
       return [pscustomobject]@{ acquired = $true; owner = $owner }
     }
 
-    $existing = Read-LnwjudTunnelLockRecord -LockPath $lockPath
+    $existing = Read-LnwjingTunnelLockRecord -LockPath $lockPath
     if ($null -eq $existing) { throw "Tunnel lock has invalid owner metadata: $lockPath" }
     try { $probe = & $ProcessStartProvider ([int]$existing.pid) } catch { $probe = [pscustomobject]@{ state = 'unverifiable'; reason = 'process_probe_failed' } }
     if ($null -eq $probe -or $probe.state -notin @('live', 'gone', 'unverifiable')) { $probe = [pscustomobject]@{ state = 'unverifiable'; reason = 'invalid_probe_result' } }
@@ -170,19 +170,19 @@ function Enter-LnwjudTunnelLock {
       return [pscustomobject]@{ acquired = $false; owner = $existing }
     }
 
-    $publishPath = New-LnwjudTunnelLockPublishRecord -LockPath $lockPath -Owner $owner
+    $publishPath = New-LnwjingTunnelLockPublishRecord -LockPath $lockPath -Owner $owner
     $quarantinePath = "$lockPath.stale.$OwnerPid.$([Guid]::NewGuid().ToString('N'))"
     try {
       [IO.File]::Move($lockPath, $quarantinePath)
-      $moved = Read-LnwjudTunnelLockRecord -LockPath $quarantinePath
-      if (-not (Test-LnwjudTunnelLockOwner -Left $moved -Right $existing)) {
-        Restore-LnwjudTunnelLockQuarantine -QuarantinePath $quarantinePath -LockPath $lockPath
+      $moved = Read-LnwjingTunnelLockRecord -LockPath $quarantinePath
+      if (-not (Test-LnwjingTunnelLockOwner -Left $moved -Right $existing)) {
+        Restore-LnwjingTunnelLockQuarantine -QuarantinePath $quarantinePath -LockPath $lockPath
         throw "Tunnel lock changed while stale recovery was in progress: $lockPath"
       }
       if ($null -ne $AfterStaleQuarantine) { & $AfterStaleQuarantine }
       [IO.File]::Move($publishPath, $lockPath)
     } catch {
-      Restore-LnwjudTunnelLockQuarantine -QuarantinePath $quarantinePath -LockPath $lockPath
+      Restore-LnwjingTunnelLockQuarantine -QuarantinePath $quarantinePath -LockPath $lockPath
       throw
     } finally { Remove-Item -LiteralPath $publishPath -Force -ErrorAction SilentlyContinue }
     # The fixed owner is now authoritative. Quarantine cleanup is best effort;
@@ -194,29 +194,29 @@ function Enter-LnwjudTunnelLock {
   }
 }
 
-function Release-LnwjudTunnelLock {
+function Release-LnwjingTunnelLock {
   param(
     [Parameter(Mandatory = $true)][string]$ProfileDir,
     [Parameter(Mandatory = $true)]$Owner
   )
 
-  return Invoke-LnwjudTunnelLockCriticalSection -ProfileDir $ProfileDir -Action {
-    $lockPath = Join-Path $ProfileDir 'lnwjud.tunnel.lock'
-    $current = Read-LnwjudTunnelLockRecord -LockPath $lockPath
-    if (-not (Test-LnwjudTunnelLockOwner -Left $current -Right $Owner)) { return $false }
+  return Invoke-LnwjingTunnelLockCriticalSection -ProfileDir $ProfileDir -Action {
+    $lockPath = Join-Path $ProfileDir 'lnwjing.tunnel.lock'
+    $current = Read-LnwjingTunnelLockRecord -LockPath $lockPath
+    if (-not (Test-LnwjingTunnelLockOwner -Left $current -Right $Owner)) { return $false }
 
     $releasePath = "$lockPath.released.$($Owner.pid).$([Guid]::NewGuid().ToString('N'))"
     try {
       [IO.File]::Move($lockPath, $releasePath)
-      $moved = Read-LnwjudTunnelLockRecord -LockPath $releasePath
-      if (-not (Test-LnwjudTunnelLockOwner -Left $moved -Right $Owner)) {
-        Restore-LnwjudTunnelLockQuarantine -QuarantinePath $releasePath -LockPath $lockPath
+      $moved = Read-LnwjingTunnelLockRecord -LockPath $releasePath
+      if (-not (Test-LnwjingTunnelLockOwner -Left $moved -Right $Owner)) {
+        Restore-LnwjingTunnelLockQuarantine -QuarantinePath $releasePath -LockPath $lockPath
         return $false
       }
       Remove-Item -LiteralPath $releasePath -Force -ErrorAction Stop
       return $true
     } catch {
-      Restore-LnwjudTunnelLockQuarantine -QuarantinePath $releasePath -LockPath $lockPath
+      Restore-LnwjingTunnelLockQuarantine -QuarantinePath $releasePath -LockPath $lockPath
       return $false
     }
   }

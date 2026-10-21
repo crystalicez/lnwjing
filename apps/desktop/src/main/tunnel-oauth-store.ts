@@ -1,6 +1,6 @@
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import type { SecretProtector } from '@lnwjud/shared';
+import type { SecretProtector } from '@lnwjing/shared';
 import { readRegularSecret, writeSecretAtomically } from './secret-file.js';
 
 export interface TunnelOAuthStoredSession {

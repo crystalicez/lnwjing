@@ -1,6 +1,6 @@
 import { ActionButton, Surface } from '../ui/UiPrimitives.js';
 import { useEffect, useState, type ReactElement } from 'react';
-import type { UiLocale, WorkflowDraft, WorkflowTemplate, WorkflowTemplateId } from '@lnwjud/ipc-contracts';
+import type { UiLocale, WorkflowDraft, WorkflowTemplate, WorkflowTemplateId } from '@lnwjing/ipc-contracts';
 import { WorkflowInputForm } from './WorkflowInputForm.js';
 import { workflowLaunchPrompt } from './workflow-launch-prompt.js';
 import { v580Strings, workflowLocalized } from '../../i18n/v580-copy.js';
@@ -36,7 +36,7 @@ export function WorkflowsPage(props: { readonly workspaceId: string | null; read
     setTemplates([]); setSelected(null); setDraft(null); setInputs({}); setMessage(null); setMessageError(false); setInvalidFields(new Set());
     setLoadingTemplates(props.workspaceId !== null);
     if (props.workspaceId !== null) {
-      void window.lnwjud.listWorkflowTemplates({ workspaceId: props.workspaceId })
+      void window.lnwjing.listWorkflowTemplates({ workspaceId: props.workspaceId })
         .then((items) => { if (live) setTemplates(items); })
         .catch((error: unknown) => { if (live) { setMessage(error instanceof Error ? error.message : String(error)); setMessageError(true); } })
         .finally(() => { if (live) setLoadingTemplates(false); });
@@ -72,7 +72,7 @@ export function WorkflowsPage(props: { readonly workspaceId: string | null; read
     setInvalidFields(new Set());
     setBusy(true); setDraft(null); setMessage(null);
     try {
-      const result = await window.lnwjud.prepareWorkflow({ workspaceId: props.workspaceId, templateId: selected.id, inputs });
+      const result = await window.lnwjing.prepareWorkflow({ workspaceId: props.workspaceId, templateId: selected.id, inputs });
       setDraft(result);
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : String(error));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatOffsetIsoTimestamp } from '@lnwjud/shared/date-time-display';
+import { formatOffsetIsoTimestamp } from '@lnwjing/shared/date-time-display';
 import { LogHub } from '../src/main/log-hub.js';
 import {
   buildIncidentReport, selectRelevantProcesses,
@@ -20,7 +20,7 @@ const started = (callId: string, toolName = 'read_file', sequence = 1): StartedL
 const completed = (callId: string, resultCode: 'SUCCESS' | 'FAILED' = 'SUCCESS', toolName = 'read_file', sequence = 2): CompletedLine => ({ id: sequence, source: 'mcp', text: 'display text only', timestamp: timestamp(sequence), correlation: { kind: 'mcp', phase: 'completed', callId, toolName, resultCode } });
 
 function tunnelLines(...texts: readonly string[]): IncidentEvidence['logLines'] {
-  const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+  const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
   for (const text of texts) hub.feed('tunnel', 'info', text);
   return hub.snapshot().lines;
 }
@@ -261,7 +261,7 @@ describe('incident correlation and privacy', () => {
   });
 
   it('keeps reused IDs and both orphan directions chronological through LogHub and report building', async () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog([
       { id: 'event-1', timestamp: timestamp(1), callId: 'same', kind: 'task', toolName: 'read_file', resultCode: 'STARTED', targetSummary: null },
       { id: 'event-2', timestamp: timestamp(2), callId: 'other', kind: 'task', toolName: 'search', resultCode: 'STARTED', targetSummary: null },
@@ -286,7 +286,7 @@ describe('incident correlation and privacy', () => {
   it.each(['INVALID_INPUT', 'INTERNAL_ERROR', 'EXECUTABLE_NOT_FOUND'])(
     'treats known MCP terminal %s as a completed local failure through LogHub',
     async (resultCode) => {
-      const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+      const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
       hub.syncWorkLog([
         { id: `${resultCode}-start`, timestamp: timestamp(1), callId: 'failed-call', kind: 'task', toolName: 'search_text', resultCode: 'STARTED', targetSummary: null },
         { id: `${resultCode}-completion`, timestamp: timestamp(2), callId: 'failed-call', kind: 'error', toolName: 'search_text', resultCode, targetSummary: null },
@@ -308,7 +308,7 @@ describe('incident correlation and privacy', () => {
   );
 
   it('retains distinct in-flight occurrences reusing a callId through the real LogHub path', async () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog([], [{ callId: 'reused', toolName: 'read_file', targetSummary: null, startedAt: timestamp(1) }]);
     hub.syncWorkLog([{ id: 'finish-1', timestamp: timestamp(2), callId: 'reused', kind: 'result', toolName: 'read_file', resultCode: 'SUCCESS', targetSummary: null }], []);
     hub.syncWorkLog([], [{ callId: 'reused', toolName: 'write_file', targetSummary: null, startedAt: timestamp(3) }]);
@@ -322,7 +322,7 @@ describe('incident correlation and privacy', () => {
   });
 
   it('dedupes exact delivery and the same start observed through in-flight and work-log views', async () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     const inFlight = { callId: 'same-event', toolName: 'read_file', targetSummary: null, startedAt: timestamp(1) };
     hub.syncWorkLog([], [inFlight]);
     hub.syncWorkLog([], [inFlight]);
@@ -335,7 +335,7 @@ describe('incident correlation and privacy', () => {
   });
 
   it('places historical work-log completions before a newer in-flight reused-ID start', async () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog(
       [{ id: 'old-completion', timestamp: timestamp(2), callId: 'reused', kind: 'result', toolName: 'read_file', resultCode: 'SUCCESS', targetSummary: null }],
       [{ callId: 'reused', toolName: 'write_file', targetSummary: null, startedAt: timestamp(3) }],
@@ -349,7 +349,7 @@ describe('incident correlation and privacy', () => {
   });
 
   it('places an earlier in-flight start before an unrelated later completion', async () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog(
       [{ id: 'completion-b', timestamp: timestamp(2), callId: 'b', kind: 'result', toolName: 'read_file', resultCode: 'SUCCESS', targetSummary: null }],
       [{ callId: 'a', toolName: 'write_file', targetSummary: null, startedAt: timestamp(1) }],
@@ -414,7 +414,7 @@ describe('incident correlation and privacy', () => {
   it('bounds and redacts report text including representative secrets', async () => {
     const report = await buildIncidentReport(evidence({
       logLines: Array.from({ length: 260 }, (_, index) => ({ source: 'tunnel' as const, timestamp: '2026-08-20T00:00:00.000Z', text: `api_key=sk-live-secret-${index} Authorization: Bearer abc.def.ghi\nAuthorization: Basic dXNlcjpwYXNz https://x/?token=very-secret {"apiKey":"json-secret"} X-Api-Key: newline-secret ${'x'.repeat(900)}` })),
-      collectProcessTree: async () => [{ pid: 20, parentPid: 10, executable: 'tunnel-client.exe', commandLine: 'tunnel-client.exe --api-key sk-nope --profile lnwjud' }],
+      collectProcessTree: async () => [{ pid: 20, parentPid: 10, executable: 'tunnel-client.exe', commandLine: 'tunnel-client.exe --api-key sk-nope --profile lnwjing' }],
       collectListeners: async () => [{ pid: 20, address: '127.0.0.1', port: 7777, owner: 'tunnel-client.exe --token leaked' }],
     }));
     const serialized = JSON.stringify(report);

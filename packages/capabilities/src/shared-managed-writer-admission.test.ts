@@ -8,7 +8,7 @@ import { SqliteWorkspaceWriterLease } from './workspace-writer-lease.js';
 
 describe('global managed writer admission', () => {
   it('refuses to grant/release workspace lease while a separate managed writer is active', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-global-lease-admission-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-global-lease-admission-'));
     try {
       const gate = new SharedManagedWriterAdmission(path.join(root, 'background-tasks'));
       const lease = new SqliteWorkspaceWriterLease(path.join(root, 'writer-leases.sqlite'), Date.now, gate);
@@ -35,7 +35,7 @@ describe('global managed writer admission', () => {
   }, 20000);
 
   it('refuses same-client idle recovery until the global managed writer is released', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-recover-managed-writer-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-recover-managed-writer-'));
     try {
       let time = 100_000;
       const gate = new SharedManagedWriterAdmission(path.join(root, 'background-tasks'));
@@ -55,7 +55,7 @@ describe('global managed writer admission', () => {
   });
 
   it('excludes repository import against even a different workspace synchronous file writer', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-global-admission-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-global-admission-')));
     try {
       const gate = new SharedManagedWriterAdmission(root);
       const store = new DurableShellTaskStore(root);
@@ -83,7 +83,7 @@ describe('global managed writer admission', () => {
   }, process.env.CI ? 130000 : 25000);
 
   it('an uncontained writer keeps its reservation until an explicit verified-release operation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-uncontained-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-uncontained-'));
     try {
       const gate = new SharedManagedWriterAdmission(root);
       const writer = await gate.enter({ actorClientId: 'direct-process', workspaceId: 'different-workspace', kind: 'uncontained_process' });

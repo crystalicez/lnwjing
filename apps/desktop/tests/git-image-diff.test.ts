@@ -12,7 +12,7 @@ const PNG_RED = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0l
 const PNG_GREEN = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 const PNG_BLUE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8zwAAAgEBAN6p6WQAAAAASUVORK5CYII=', 'base64');
 
-beforeEach(() => { vi.stubEnv('LNWJUD_UNRESTRICTED', '1'); });
+beforeEach(() => { vi.stubEnv('LNWJING_UNRESTRICTED', '1'); });
 afterEach(async () => {
   vi.unstubAllEnvs();
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true }).catch(() => undefined)));
@@ -24,15 +24,15 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
 
 describe('Desktop Git image diff', () => {
   it('returns before/after image payloads for staged and unstaged Git scopes', async () => {
-    const rawRepo = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-image-repo-'));
-    const rawData = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-image-data-'));
+    const rawRepo = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-image-repo-'));
+    const rawData = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-image-data-'));
     temporaryRoots.push(rawRepo, rawData);
     const repo = await realpath(rawRepo);
     const dataRoot = await realpath(rawData);
 
     await git(repo, 'init');
-    await git(repo, 'config', 'user.email', 'tests@lnwjud.local');
-    await git(repo, 'config', 'user.name', 'lnwjud tests');
+    await git(repo, 'config', 'user.email', 'tests@lnwjing.local');
+    await git(repo, 'config', 'user.name', 'lnwjing tests');
     await writeFile(path.join(repo, 'image.png'), PNG_RED);
     await git(repo, 'add', 'image.png');
     await git(repo, 'commit', '-m', 'baseline image');

@@ -12,7 +12,7 @@ afterEach(async () => {
 
 describe('TreeReader', () => {
   it('sorts entries without hiding generated, hidden, dependency, or environment paths', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tree-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tree-'));
     temporaryRoots.push(root);
     await mkdir(path.join(root, 'src'));
     await mkdir(path.join(root, '.git'));
@@ -36,7 +36,7 @@ describe('TreeReader', () => {
   });
 
   it('marks the result when the entry cap is reached', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tree-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tree-'));
     temporaryRoots.push(root);
     await writeFile(path.join(root, 'a.txt'), 'a', 'utf8');
     await writeFile(path.join(root, 'b.txt'), 'b', 'utf8');

@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CAPABILITY_ACTIVE_WORKSPACE_ROOT_METADATA_KEY } from '@lnwjud/capabilities';
+import { CAPABILITY_ACTIVE_WORKSPACE_ROOT_METADATA_KEY } from '@lnwjing/capabilities';
 import { ElectronNativeCapabilityBackend, type ElectronNativeCapabilityApi } from '../src/main/electron-native-capability-backend.js';
 
 const approved = { mode: 'standard', applicationApproved: true, bypassApplicationAuthorization: false, source: 'host_approval' } as const;
@@ -29,7 +29,7 @@ describe('Electron native capability backend', () => {
   });
 
   it('does not open a native dialog after cancellation and scopes selected paths', async (): Promise<void> => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-electron-native-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-electron-native-'));
     try {
       const selected = path.join(root, 'chosen.txt');
       await writeFile(selected, 'ok', 'utf8');
@@ -78,7 +78,7 @@ describe('Electron native capability backend', () => {
     };
     const backend = new ElectronNativeCapabilityBackend('vision', { platform: 'linux', api });
     await expect(backend.execute({ action: 'status' })).resolves.toMatchObject({ ok: true, value: { available: true, ready: true } });
-    await expect(backend.execute({ action: 'capture_window', app: { name: 'lnwjud' } })).resolves.toMatchObject({
+    await expect(backend.execute({ action: 'capture_window', app: { name: 'lnwjing' } })).resolves.toMatchObject({
       ok: true,
       value: { format: 'png', mime_type: 'image/png', width: 1920, height: 1200, byte_length: 5, backend: 'electron-desktop-capturer-window' },
     });

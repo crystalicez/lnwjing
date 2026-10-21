@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok, type GoalTaskCancellationObservation, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type GoalTaskCancellationObservation, type Result } from '@lnwjing/domain';
 import { GoalTaskCancellationService, type GoalTaskCancellationProvider } from './goal-task-cancellation-service.js';
 
 function provider(

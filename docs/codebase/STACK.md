@@ -1,7 +1,7 @@
-# lnwjud tech stack
+# lnwjing tech stack
 
 Audit date: 2026-09-19  
-Scope: Git-tracked source and release configuration in `E:\lnwjud`. Generated/local artifacts are excluded from source metrics.
+Scope: Git-tracked source and release configuration in `E:\lnwjing`. Generated/local artifacts are excluded from source metrics.
 
 ## Runtime and language baseline
 

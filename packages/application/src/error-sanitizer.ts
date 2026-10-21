@@ -1,4 +1,4 @@
-import { appError, type AppError } from '@lnwjud/domain';
+import { appError, type AppError } from '@lnwjing/domain';
 
 const MAX_DIAGNOSTIC_TEXT = 8 * 1024;
 const AUTHORIZATION_HEADER = /(Authorization\s*:\s*Bearer\s+)[^\s,;]+/gi;

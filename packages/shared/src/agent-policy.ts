@@ -84,7 +84,7 @@ export function isProtectedCriticalPath(inputPath: string): boolean {
   if (normalized.length === 0) return true;
   const parts = normalized.split('/').filter(Boolean);
   const basename = parts.at(-1) ?? normalized;
-  if (parts.includes('.git') || parts.includes('.lnwjud-recovery') || parts.includes('.lnwjud-trash')) return true;
+  if (parts.includes('.git') || parts.includes('.lnwjing-recovery') || parts.includes('.lnwjing-trash')) return true;
   if (basename === '.env' || (basename.startsWith('.env.') && !['.env.example', '.env.sample', '.env.template'].includes(basename))) return true;
   if (['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'pyproject.toml', 'poetry.lock', 'requirements.txt', 'cargo.toml', 'cargo.lock', 'go.mod', 'go.sum', 'composer.json', 'composer.lock'].includes(basename)) return true;
   if (['id_rsa', 'id_ed25519', 'credentials', 'credentials.json', 'secrets.json', 'service-account.json'].includes(basename)) return true;

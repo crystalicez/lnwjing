@@ -1,7 +1,7 @@
 /* global process */
 import readline from 'node:readline';
 
-const fixtureMode = process.env.LNWJUD_EXTERNAL_MCP_FIXTURE_ERA ?? 'legacy';
+const fixtureMode = process.env.LNWJING_EXTERNAL_MCP_FIXTURE_ERA ?? 'legacy';
 const era = fixtureMode === 'modern' ? 'modern' : 'legacy';
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 
@@ -49,7 +49,7 @@ rl.on('line', (line) => {
     result(message.id, {
       protocolVersion: requested.startsWith('2025-') ? requested : '2025-11-25',
       capabilities: { tools: {} },
-      serverInfo: { name: 'lnwjud-external-legacy-fixture', version: '1.0.0' },
+      serverInfo: { name: 'lnwjing-external-legacy-fixture', version: '1.0.0' },
     });
     return;
   }

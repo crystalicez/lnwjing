@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import type { McpApplicationServices } from './tools/tool-types.js';
 import { FilePageEngine, type FilePageContinuation, type FilePageRequest } from './file-page-engine.js';
 import { ContinuationStore } from './continuation-store.js';

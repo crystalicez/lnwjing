@@ -20,7 +20,7 @@ import {
 describe('Windows distribution-aware auto updater', () => {
   it('selects only updater formats with a platform-owned installation path', () => {
     expect(detectUpdaterDistribution(true, 'darwin', {})).toBe('macos');
-    expect(detectUpdaterDistribution(true, 'linux', { APPIMAGE: '/tmp/lnwjud.AppImage' })).toBe('linux-appimage');
+    expect(detectUpdaterDistribution(true, 'linux', { APPIMAGE: '/tmp/lnwjing.AppImage' })).toBe('linux-appimage');
     expect(detectUpdaterDistribution(true, 'linux', {})).toBe('unsupported');
     expect(detectUpdaterDistribution(true, 'freebsd', {})).toBe('unsupported');
     expect(detectUpdaterDistribution(false, 'darwin', {})).toBe('unsupported');
@@ -39,10 +39,10 @@ describe('Windows distribution-aware auto updater', () => {
   });
 
   it('distinguishes electron-builder portable launches from installed builds', () => {
-    expect(detectWindowsDistribution(true, { PORTABLE_EXECUTABLE_FILE: 'C:\\Tools\\lnwjud-Portable-4.11.0.exe' }, 'win32')).toBe('portable');
+    expect(detectWindowsDistribution(true, { PORTABLE_EXECUTABLE_FILE: 'C:\\Tools\\lnwjing-Portable-4.11.0.exe' }, 'win32')).toBe('portable');
     expect(detectWindowsDistribution(true, {}, 'win32')).toBe('installer');
-    expect(detectWindowsDistribution(false, { PORTABLE_EXECUTABLE_FILE: 'C:\\Tools\\lnwjud.exe' }, 'win32')).toBe('installer');
-    expect(detectWindowsDistribution(true, { PORTABLE_EXECUTABLE_FILE: '/tmp/lnwjud' }, 'linux')).toBe('installer');
+    expect(detectWindowsDistribution(false, { PORTABLE_EXECUTABLE_FILE: 'C:\\Tools\\lnwjing.exe' }, 'win32')).toBe('installer');
+    expect(detectWindowsDistribution(true, { PORTABLE_EXECUTABLE_FILE: '/tmp/lnwjing' }, 'linux')).toBe('installer');
   });
 
   it('keeps the installer on the packaged GitHub feed and gives portable builds their own manifest channel', () => {
@@ -72,10 +72,10 @@ describe('Windows distribution-aware auto updater', () => {
   });
 
   it('retains a working rollback after a Linux AppImage native move deletes the original', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-appimage-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-appimage-'));
     try {
-      const current = path.join(root, 'lnwjud-5.8.1-x64.AppImage');
-      const downloaded = path.join(root, 'lnwjud-5.8.2-x64.AppImage');
+      const current = path.join(root, 'lnwjing-5.8.1-x64.AppImage');
+      const downloaded = path.join(root, 'lnwjing-5.8.2-x64.AppImage');
       await writeFile(current, 'old-working-app');
       await writeFile(downloaded, 'new-app');
       const { backupPath } = await createLinuxAppImageRollback(current, downloaded);
@@ -88,9 +88,9 @@ describe('Windows distribution-aware auto updater', () => {
   });
 
   it('rejects missing or symlinked Linux AppImage inputs before native installation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-appimage-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-appimage-'));
     try {
-      const current = path.join(root, 'lnwjud.AppImage');
+      const current = path.join(root, 'lnwjing.AppImage');
       const downloaded = path.join(root, 'update.AppImage');
       await writeFile(current, 'old');
       await expect(createLinuxAppImageRollback(current, downloaded)).rejects.toThrow();
@@ -102,14 +102,14 @@ describe('Windows distribution-aware auto updater', () => {
   });
 
   it('replaces the outer portable executable path rather than Electron temporary extraction path', () => {
-    expect(currentPortableExecutablePath({ PORTABLE_EXECUTABLE_FILE: 'D:\\Apps\\lnwjud-portable.exe' }, 'C:\\Temp\\lnwjud.exe')).toBe('D:\\Apps\\lnwjud-portable.exe');
-    expect(currentPortableExecutablePath({}, 'C:\\Program Files\\lnwjud\\lnwjud.exe')).toBe('C:\\Program Files\\lnwjud\\lnwjud.exe');
+    expect(currentPortableExecutablePath({ PORTABLE_EXECUTABLE_FILE: 'D:\\Apps\\lnwjing-portable.exe' }, 'C:\\Temp\\lnwjing.exe')).toBe('D:\\Apps\\lnwjing-portable.exe');
+    expect(currentPortableExecutablePath({}, 'C:\\Program Files\\lnwjing\\lnwjing.exe')).toBe('C:\\Program Files\\lnwjing\\lnwjing.exe');
   });
 
   it('uses a wait, rollback backup, in-place replacement, restart, and script self-cleanup for portable installs', () => {
     const script = portableReplacementScript();
     expect(script).toContain('Get-Process -Id $CurrentPid');
-    expect(script).toContain('$Target.lnwjud-update-backup');
+    expect(script).toContain('$Target.lnwjing-update-backup');
     expect(script).toContain('Move-Item -LiteralPath $Target -Destination $backup -Force');
     expect(script).toContain('Move-Item -LiteralPath $Source -Destination $Target -Force');
     expect(script).toContain('Move-Item -LiteralPath $backup -Destination $Target -Force');

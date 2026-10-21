@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { err, ok } from '@lnwjud/domain';
+import { err, ok } from '@lnwjing/domain';
 import type { McpApplicationServices } from './tools/tool-types.js';
 import { ContextEngine, type WorkspaceContextRequest } from './context-engine.js';
 import { workspaceFullScanSchema } from './tools/schemas.js';

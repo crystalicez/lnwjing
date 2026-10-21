@@ -11,22 +11,22 @@ import unittest
 import wave
 
 
-@unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_MEDIA_IPC_TEST") == "1", "Requires isolated PulseAudio, Xvfb, GStreamer and the compiled Linux native binary")
+@unittest.skipUnless(os.environ.get("LNWJING_NATIVE_MEDIA_IPC_TEST") == "1", "Requires isolated PulseAudio, Xvfb, GStreamer and the compiled Linux native binary")
 class NativeMediaIpcTests(unittest.TestCase):
     def test_actual_native_pulse_artifact_owner_isolation_and_cleanup(self):
         self.run_owned_media(False)
 
-    @unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_MEDIA_TEST_SCREEN") == "1", "Requires an isolated usable Xvfb socket directory")
+    @unittest.skipUnless(os.environ.get("LNWJING_NATIVE_MEDIA_TEST_SCREEN") == "1", "Requires an isolated usable Xvfb socket directory")
     def test_actual_native_x11_screen_artifact_owner_isolation_and_cleanup(self):
         self.run_owned_media(True)
 
     def run_owned_media(self, include_screen):
-        runtime = Path(os.environ["LNWJUD_GSTREAMER_RUNTIME_ROOT"])
-        binary = os.environ["LNWJUD_NATIVE_TEST_BIN"]
-        artifact_root = os.environ.get("LNWJUD_GSTREAMER_ARTIFACT_DIR")
+        runtime = Path(os.environ["LNWJING_GSTREAMER_RUNTIME_ROOT"])
+        binary = os.environ["LNWJING_NATIVE_TEST_BIN"]
+        artifact_root = os.environ.get("LNWJING_GSTREAMER_ARTIFACT_DIR")
         children = []
         held_files = []
-        with tempfile.TemporaryDirectory(prefix="lnwjud-native-media-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="lnwjing-native-media-") as temporary:
             root = Path(temporary)
             modules = next((runtime / "usr/lib").glob("pulse-*/modules"))
             libraries = str(runtime / "usr/lib/x86_64-linux-gnu") + ":" + str(runtime / "usr/lib/x86_64-linux-gnu/pulseaudio") + ":" + str(modules)
@@ -50,7 +50,7 @@ class NativeMediaIpcTests(unittest.TestCase):
                         if write_fd is not None:
                             os.close(write_fd)
                 socket = root / "pulse.sock"
-                pulse = subprocess.Popen([str(runtime / "usr/bin/pulseaudio"), "--daemonize=no", "--use-pid-file=no", "--exit-idle-time=-1", "--disable-shm", "-n", "--dl-search-path=" + str(modules), "--load=module-null-sink sink_name=lnwjud_fixture rate=44100 channels=1", "--load=module-native-protocol-unix socket=" + str(socket) + " auth-anonymous=1"], stdout=log, stderr=log, env=environment)
+                pulse = subprocess.Popen([str(runtime / "usr/bin/pulseaudio"), "--daemonize=no", "--use-pid-file=no", "--exit-idle-time=-1", "--disable-shm", "-n", "--dl-search-path=" + str(modules), "--load=module-null-sink sink_name=lnwjing_fixture rate=44100 channels=1", "--load=module-native-protocol-unix socket=" + str(socket) + " auth-anonymous=1"], stdout=log, stderr=log, env=environment)
                 children.append(pulse)
                 deadline = time.monotonic() + 5
                 while not socket.exists() and pulse.poll() is None and time.monotonic() < deadline:
@@ -87,7 +87,7 @@ class NativeMediaIpcTests(unittest.TestCase):
                     owner = {"clientId": client, "sessionId": session}
                     if workspace is not None:
                         owner["workspaceId"] = workspace
-                    native_process.stdin.write(json.dumps({"id": str(request_id), "operation": operation, "input": {"action": action, "parameters": parameters, "metadata": {"lnwjud.taskOwner.v1": owner}}}) + "\n")
+                    native_process.stdin.write(json.dumps({"id": str(request_id), "operation": operation, "input": {"action": action, "parameters": parameters, "metadata": {"lnwjing.taskOwner.v1": owner}}}) + "\n")
                     native_process.stdin.flush()
                     self.assertTrue(select.select([native_process.stdout], [], [], 10)[0], "Native media did not answer")
                     return json.loads(native_process.stdout.readline())
@@ -101,8 +101,8 @@ class NativeMediaIpcTests(unittest.TestCase):
                     self.assertTrue(started["ok"], started)
                     self.assertEqual(started["value"]["state"], "running")
                     handle = started["value"]["handle"]
-                    observations = [("started", time.monotonic() - started_at, [(path.name, path.stat().st_size) for path in root.glob(".lnwjud-*")])]
-                    held_file = next(root.glob(".lnwjud-*")).open("rb")
+                    observations = [("started", time.monotonic() - started_at, [(path.name, path.stat().st_size) for path in root.glob(".lnwjing-*")])]
+                    held_file = next(root.glob(".lnwjing-*")).open("rb")
                     held_files.append(held_file)
                     for client, session, workspace in (("foreign", "session", "workspace"), ("client", "foreign", "workspace"), ("client", "session", "foreign")):
                         for forbidden_action in ("status", "stop"):
@@ -111,10 +111,10 @@ class NativeMediaIpcTests(unittest.TestCase):
                             self.assertEqual(denied["error"]["code"], "FILE_NOT_FOUND")
                     deadline = time.monotonic() + 6
                     status = call(operation, "status", {"handle": handle}, workspace=None)
-                    observations.append(("first_status", time.monotonic() - started_at, [(path.name, path.stat().st_size) for path in root.glob(".lnwjud-*")]))
+                    observations.append(("first_status", time.monotonic() - started_at, [(path.name, path.stat().st_size) for path in root.glob(".lnwjing-*")]))
                     while status["value"]["state"] == "running" and time.monotonic() < deadline:
                         time.sleep(0.03)
-                        observations.append(("poll", time.monotonic() - started_at, [(path.name, path.stat().st_size) for path in root.glob(".lnwjud-*")]))
+                        observations.append(("poll", time.monotonic() - started_at, [(path.name, path.stat().st_size) for path in root.glob(".lnwjing-*")]))
                         status = call(operation, "status", {"handle": handle}, workspace=None)
                     metadata = {"actual_bytes": os.fstat(held_file.fileno()).st_size}
                     if extension == "wav":

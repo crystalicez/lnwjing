@@ -10,7 +10,7 @@ describe('macOS trust evidence contract', () => {
     expect(script).toContain('codesign --verify --deep --strict');
     expect(script).toContain('hdiutil verify');
     expect(script).toContain('xcrun stapler validate');
-    expect(script).toContain('LNWJUD_REQUIRE_NOTARIZATION');
+    expect(script).toContain('LNWJING_REQUIRE_NOTARIZATION');
     expect(script).toContain('must run on macOS');
     expect(script).toContain('inspect-macos-signing-policy.mjs');
     expect(script).toContain('--provenance');

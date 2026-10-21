@@ -2,7 +2,7 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { SandboxRuntimeService } from './sandbox-runtime.js';
 import type { McpApplicationServices } from './tools/tool-types.js';
 
@@ -54,7 +54,7 @@ function service(options: {
 }
 
 async function withTempRoot(run: (root: string) => Promise<void>): Promise<void> {
-  const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-sandbox-test-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-sandbox-test-'));
   fixtureFs.root = root;
   await writeFile(path.join(root, 'WindowsSandbox.exe'), 'stub');
   try {
@@ -177,7 +177,7 @@ describe('SandboxRuntimeService', () => {
         tool: 'sandbox_exec', executed: true, jobId: 'job-test-1', exitCode: 0, stdout: 'detonated ok',
       } });
 
-      const staging = path.join(root, '.lnwjud', 'sandbox', 'job-test-1');
+      const staging = path.join(root, '.lnwjing', 'sandbox', 'job-test-1');
       const wsb = await readFile(path.join(staging, 'job.wsb'), 'utf8');
       expect(wsb).toContain('<Networking>Disable</Networking>');
       expect(wsb).toContain('sandbox-runner.ps1');

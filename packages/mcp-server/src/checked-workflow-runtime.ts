@@ -1,4 +1,4 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { mapError, type McpToolResponse } from './result-mapper.js';
 import type { CheckedInvocationEnvelope, McpRegistryRuntimePort, RegistryPermissionPreview } from './registry-runtime-port.js';
 

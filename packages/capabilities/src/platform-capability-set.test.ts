@@ -12,7 +12,7 @@ describe('platform capability composition', () => {
     });
     const runtime = createPlatformCapabilitySet({
       platform: 'linux',
-      dataPath: '/tmp/lnwjud-data',
+      dataPath: '/tmp/lnwjing-data',
       workspaceRootsProvider: async () => ['/tmp/project'],
     });
 
@@ -42,7 +42,7 @@ describe('platform capability composition', () => {
   it('composes macOS without leaking Windows providers and reports missing native-host dependencies truthfully', async () => {
     const runtime = createPlatformCapabilitySet({
       platform: 'darwin',
-      dataPath: '/Users/test/Library/Application Support/lnwjud',
+      dataPath: '/Users/test/Library/Application Support/lnwjing',
       workspaceRootsProvider: async () => ['/Users/test/project'],
     });
 
@@ -72,7 +72,7 @@ describe('platform capability composition', () => {
     };
     const runtime = createPlatformCapabilitySet({
       platform: 'linux',
-      dataPath: '/tmp/lnwjud-data',
+      dataPath: '/tmp/lnwjing-data',
       workspaceRootsProvider: async () => ['/tmp/project'],
       shared: { vision: fallback },
     });
@@ -91,7 +91,7 @@ describe('platform capability composition', () => {
   it('keeps Windows bridge composition explicit and injectable', () => {
     expect(() => createPlatformCapabilitySet({
       platform: 'win32',
-      dataPath: 'C:\\lnwjud-data',
+      dataPath: 'C:\\lnwjing-data',
       workspaceRootsProvider: async () => ['C:\\project'],
     })).toThrow('integrity-bound bridge configuration');
   });
@@ -100,7 +100,7 @@ describe('platform capability composition', () => {
     { action: 'capture_display', session_id: 'foreign-portal' }])('never substitutes Electron for an owned portal operation %j', async (input) => {
     const fallback = { execute: vi.fn(async () => ({ ok: true as const, value: { available: true, ready: true } })) };
     const execute = vi.fn(async () => ({ ok: false as const, error: { code: 'PERMISSION_DENIED' as const, message: 'Foreign portal', recoverable: false } }));
-    const runtime = createPlatformCapabilitySet({ platform: 'linux', dataPath: '/tmp/lnwjud-fixture', workspaceRootsProvider: async () => [],
+    const runtime = createPlatformCapabilitySet({ platform: 'linux', dataPath: '/tmp/lnwjing-fixture', workspaceRootsProvider: async () => [],
       nativeHost: { execute } as unknown as NativeHostProcessBridge, shared: { vision: fallback } });
     await expect(runtime.service.execute('vision', input)).resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_DENIED' } });
     expect(fallback.execute).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ describe('platform capability composition', () => {
   it('fails closed for an unsupported host instead of constructing Linux adapters', async () => {
     const runtime = createPlatformCapabilitySet({
       platform: 'freebsd',
-      dataPath: '/tmp/lnwjud-data',
+      dataPath: '/tmp/lnwjing-data',
       workspaceRootsProvider: async () => ['/tmp/project'],
     });
 

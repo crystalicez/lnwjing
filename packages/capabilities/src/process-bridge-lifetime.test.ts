@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
-import type { ProcessTreeTerminator } from '@lnwjud/process';
+import type { ProcessTreeTerminator } from '@lnwjing/process';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -23,7 +23,7 @@ describe('process bridge termination lifetime', () => {
     spawnMock.mockReturnValue(child);
     const { terminator, release, attempts } = delayedRetryTerminator();
     const bridge = new PowerShellWindowsCapabilityBridge({
-      scriptPath: 'C:\\lnwjud\\windows-capability-bridge.ps1',
+      scriptPath: 'C:\\lnwjing\\windows-capability-bridge.ps1',
       platform: 'win32',
       terminator,
       terminationRetryMs: 1,
@@ -51,7 +51,7 @@ describe('process bridge termination lifetime', () => {
     spawnMock.mockReturnValue(child);
     const { terminator, release, attempts } = delayedRetryTerminator();
     const bridge = new WindowsOcrProcessBridge({
-      helperPath: 'C:\\lnwjud\\windows-ocr-helper.exe',
+      helperPath: 'C:\\lnwjing\\windows-ocr-helper.exe',
       platform: 'win32',
       terminator,
       terminationRetryMs: 1,

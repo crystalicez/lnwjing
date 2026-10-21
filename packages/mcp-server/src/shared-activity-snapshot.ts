@@ -6,8 +6,8 @@ import { promisify } from 'node:util';
 import type { ActivitySink, ActivitySinkEvent } from './activity-tracker.js';
 
 const execFileAsync = promisify(execFile);
-const LEGACY_SNAPSHOT_FILE = 'lnwjud.mcp.activity.json';
-const LEASE_DIRECTORY = 'lnwjud.mcp.activity.v2';
+const LEGACY_SNAPSHOT_FILE = 'lnwjing.mcp.activity.json';
+const LEASE_DIRECTORY = 'lnwjing.mcp.activity.v2';
 const LEGACY_SNAPSHOT_VERSION = 1;
 const LEASE_SNAPSHOT_VERSION = 2;
 const DEFAULT_STALE_AFTER_MS = 5_000;

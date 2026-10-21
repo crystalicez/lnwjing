@@ -2,7 +2,7 @@ import { ActionButton, FilterBar } from '../ui/UiPrimitives.js';
 import { DiagnosticCopyButton } from '../ui/DiagnosticCopyButton.js';
 import { SearchableSelect } from '../../components/ui/SearchableSelect.js';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import type { DoctorGoalOption, TaskResultSummary, UiLocale } from '@lnwjud/ipc-contracts';
+import type { DoctorGoalOption, TaskResultSummary, UiLocale } from '@lnwjing/ipc-contracts';
 import { v580Strings } from '../../i18n/v580-copy.js';
 import { formatDateTime } from '../../date-time.js';
 
@@ -32,7 +32,7 @@ export function GoalResultsPanel(props: {
     setGoalId(''); setGoals([]); setResult(null); setError(null);
     setGoalsLoading(Boolean(props.workspaceId));
     if (!props.workspaceId) return (): void => { active = false; };
-    void window.lnwjud.getDoctorGoals({ workspaceId: props.workspaceId, view: 'results' })
+    void window.lnwjing.getDoctorGoals({ workspaceId: props.workspaceId, view: 'results' })
       .then((items): void => { if (active) setGoals(items); })
       .catch((cause: unknown): void => {
         if (active) setError(cause instanceof Error ? cause.message : String(cause));
@@ -51,7 +51,7 @@ export function GoalResultsPanel(props: {
     const request = ++requestId.current;
     setBusy(true); setError(null);
     try {
-      const received = await window.lnwjud.getTaskResult({ workspaceId: props.workspaceId, goalId });
+      const received = await window.lnwjing.getTaskResult({ workspaceId: props.workspaceId, goalId });
       if (request === requestId.current) setResult(received);
     } catch (cause: unknown) {
       if (request === requestId.current) setError(cause instanceof Error ? cause.message : String(cause));

@@ -1,4 +1,4 @@
-import type { Workspace } from '@lnwjud/workspace';
+import type { Workspace } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 
 interface WorkspaceRow {

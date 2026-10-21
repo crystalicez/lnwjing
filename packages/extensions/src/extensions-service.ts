@@ -1,7 +1,7 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { McpConfigLoader } from './mcp-config-loader.js';
 import { fingerprintExternalMcpValue, McpSessionManager, type McpClientFactory } from './mcp-session-manager.js';
-import type { ProcessTreeTerminator } from '@lnwjud/process';
+import type { ProcessTreeTerminator } from '@lnwjing/process';
 import { SkillCatalog } from './skill-catalog.js';
 import type {
   ExtensionsService,

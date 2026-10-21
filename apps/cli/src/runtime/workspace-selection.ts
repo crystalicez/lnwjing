@@ -1,4 +1,4 @@
-import { resolveHostPath } from '@lnwjud/workspace';
+import { resolveHostPath } from '@lnwjing/workspace';
 
 export interface RequestedWorkspacePathOptions {
   readonly requestedPath?: string;

@@ -1,6 +1,6 @@
-# Contributing to lnwjud
+# Contributing to lnwjing
 
-Thanks for helping improve lnwjud. The project is a cross-platform local AI-agent runtime and MCP gateway for Windows, macOS, and Linux, so changes should preserve local-first behavior, explicit trust boundaries, platform-specific capability gates, and deterministic release verification.
+Thanks for helping improve lnwjing. The project is a cross-platform local AI-agent runtime and MCP gateway for Windows, macOS, and Linux, so changes should preserve local-first behavior, explicit trust boundaries, platform-specific capability gates, and deterministic release verification.
 
 ## Before you start
 

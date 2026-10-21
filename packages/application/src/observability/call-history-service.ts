@@ -1,6 +1,6 @@
-import { appError, err, ok, type CallHistoryPage, type CallHistoryQuery, type CallTimingObservation, type Result } from '@lnwjud/domain';
-import type { AuditEventRepository } from '@lnwjud/audit';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type CallHistoryPage, type CallHistoryQuery, type CallTimingObservation, type Result } from '@lnwjing/domain';
+import type { AuditEventRepository } from '@lnwjing/audit';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from '../file-service.js';
 import { aggregateCallTimings } from './call-timing-aggregate.js';
 

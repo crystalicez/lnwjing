@@ -5,8 +5,8 @@ import path from 'node:path';
 // Tunnel itself targets the live Desktop loopback HTTP MCP so the host-selected
 // Active Project and native exact-action approval remain authoritative.
 const COMMAND_LINE = /(command:\s*)"[^"]*"/i;
-const PACKAGED_EXECUTABLE = 'lnwjud.exe';
-const PACKAGED_STDIO_LAUNCHER = 'lnwjud-mcp-stdio.cmd';
+const PACKAGED_EXECUTABLE = 'lnwjing.exe';
+const PACKAGED_STDIO_LAUNCHER = 'lnwjing-mcp-stdio.cmd';
 const RUNTIME_API_KEY_REF = 'env:CONTROL_PLANE_API_KEY';
 
 export function posixPath(filePath: string): string {
@@ -159,15 +159,15 @@ export function resolveStdioLauncherPath(candidates: readonly string[]): string 
  * The packaged Electron executable uses the GUI subsystem. When a direct local
  * stdio host starts it as a child, its stdio handles can close immediately even
  * though Electron reports that the app is ready. The packaged launcher uses the
- * private Node 24 runtime shipped with lnwjud and keeps the MCP pipe owned by a
+ * private Node 24 runtime shipped with lnwjing and keeps the MCP pipe owned by a
  * normal console process without system Node.js.
  *
  * This helper is for direct local stdio integrations only. Secure Tunnel uses the
  * Desktop loopback HTTP MCP and never spawns this launcher.
  *
- * An installed lnwjud.exe must never fall back to a launcher from a developer
+ * An installed lnwjing.exe must never fall back to a launcher from a developer
  * repository. Installed builds accept only a canonical launcher beside
- * lnwjud.exe or inside that installation's canonical resources directory.
+ * lnwjing.exe or inside that installation's canonical resources directory.
  * Junction or symlink escapes fail closed.
  */
 export function preferredTunnelMcpCommand(execPath: string, cmdFallback: string | null): string | null {
@@ -195,7 +195,7 @@ export function preferredTunnelMcpCommand(execPath: string, cmdFallback: string 
 
 export function packagedStdioLauncherCandidates(execPath: string, resourcesPath?: string, platform: NodeJS.Platform = process.platform): string[] {
   const execDir = path.dirname(execPath);
-  const launcher = platform === 'win32' ? 'lnwjud-mcp-stdio.cmd' : 'lnwjud-mcp-stdio';
+  const launcher = platform === 'win32' ? 'lnwjing-mcp-stdio.cmd' : 'lnwjing-mcp-stdio';
   const candidates = [
     path.join(execDir, launcher),
     path.join(execDir, 'resources', launcher),

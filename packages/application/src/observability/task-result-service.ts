@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { appError, err, ok, type GoalRepository, type Result, type TaskResultSummary } from '@lnwjud/domain';
-import type { AuditEventRepository, AuditMutationReceiptRow } from '@lnwjud/audit';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type GoalRepository, type Result, type TaskResultSummary } from '@lnwjing/domain';
+import type { AuditEventRepository, AuditMutationReceiptRow } from '@lnwjing/audit';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from '../file-service.js';
 import type { GoalContinuationService } from '../goal-continuation-service.js';
 

@@ -31,8 +31,8 @@ import {
   WorkspaceQueryService,
   ToolAvailabilityService,
   type FileActor,
-} from '@lnwjud/application';
-import { AuditService, decodeActivityTargetReference } from '@lnwjud/audit';
+} from '@lnwjing/application';
+import { AuditService, decodeActivityTargetReference } from '@lnwjing/audit';
 import {
   createPlatformCapabilitySet,
   SharedManagedWriterAdmission,
@@ -43,15 +43,15 @@ import {
   type ShellCapabilityBackend,
   WINDOWS_CAPABILITY_BRIDGE_SHA256,
   WINDOWS_CAPABILITY_BRIDGE_SIZE_BYTES,
-} from '@lnwjud/capabilities';
-import { ALLOW_AI_DELETE_SETTING_KEY, DESTRUCTIVE_AUTO_APPROVAL_SETTING_KEY, DEFAULT_CODEX_TOOLS_ENABLED, DEFAULT_MCP_CALL_TIMEOUT_MS, DEFAULT_MCP_IDLE_TIMEOUT_MS, DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_PONYTAIL_MODE, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, STDIO_ALLOWED_ROOTS_SETTING_KEY, STDIO_PERMISSION_PROFILE_SETTING_KEY, STDIO_STRICT_ROOTS_SETTING_KEY, UNRESTRICTED_SETTING_KEY, USER_SETTING_KEYS, isUnrestricted, parseAllowedRoots, parseBooleanSetting, parseCustomPermissionSettings, parseDestructiveAutoApprovalPolicy, parseIntegerSetting, parsePathList, parsePonytailMode, parseEngineeringHarnessSettings, parseEngineeringHarnessWorkspaceOverrides, parseStdioPermissionProfile, parseStringRecordSetting, type DestructiveAutoApprovalPolicy, type EngineeringHarnessSettings, type EngineeringHarnessWorkspaceOverride, type ParsedEngineeringHarnessSettings, type PonytailMode } from '@lnwjud/shared';
+} from '@lnwjing/capabilities';
+import { ALLOW_AI_DELETE_SETTING_KEY, DESTRUCTIVE_AUTO_APPROVAL_SETTING_KEY, DEFAULT_CODEX_TOOLS_ENABLED, DEFAULT_MCP_CALL_TIMEOUT_MS, DEFAULT_MCP_IDLE_TIMEOUT_MS, DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_PONYTAIL_MODE, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, STDIO_ALLOWED_ROOTS_SETTING_KEY, STDIO_PERMISSION_PROFILE_SETTING_KEY, STDIO_STRICT_ROOTS_SETTING_KEY, UNRESTRICTED_SETTING_KEY, USER_SETTING_KEYS, isUnrestricted, parseAllowedRoots, parseBooleanSetting, parseCustomPermissionSettings, parseDestructiveAutoApprovalPolicy, parseIntegerSetting, parsePathList, parsePonytailMode, parseEngineeringHarnessSettings, parseEngineeringHarnessWorkspaceOverrides, parseStdioPermissionProfile, parseStringRecordSetting, type DestructiveAutoApprovalPolicy, type EngineeringHarnessSettings, type EngineeringHarnessWorkspaceOverride, type ParsedEngineeringHarnessSettings, type PonytailMode } from '@lnwjing/shared';
 import {
   EXTENSIONS_SETTINGS_KEY,
   createLocalExtensionsService,
   type ExtensionsService,
-} from '@lnwjud/extensions';
-import { DapSessionService, OfficeDataWorkflowService, ActivityTracker, RuntimeEngineeringEvidenceVerifier, createEngineeringArtifactVerifier, createEngineeringSourceStateProvider, RuntimeGoalManagedTaskStateReader, SharedActivitySnapshotLease, composeActivitySinks, createFileActivitySink, currentSharedActivityOwner, mcpActivityLogPath, type ActivitySink, type ActivitySinkEvent, type McpApplicationServices, type WorkspaceScope } from '@lnwjud/mcp-server';
-import { permissionProfiles, type PermissionProfile, type PermissionProfileName } from '@lnwjud/permissions';
+} from '@lnwjing/extensions';
+import { DapSessionService, OfficeDataWorkflowService, ActivityTracker, RuntimeEngineeringEvidenceVerifier, createEngineeringArtifactVerifier, createEngineeringSourceStateProvider, RuntimeGoalManagedTaskStateReader, SharedActivitySnapshotLease, composeActivitySinks, createFileActivitySink, currentSharedActivityOwner, mcpActivityLogPath, type ActivitySink, type ActivitySinkEvent, type McpApplicationServices, type WorkspaceScope } from '@lnwjing/mcp-server';
+import { permissionProfiles, type PermissionProfile, type PermissionProfileName } from '@lnwjing/permissions';
 import {
   AesGcmCheckpointCipher,
   SqliteAgentSwarmRepository,
@@ -62,8 +62,8 @@ import {
   SqliteGoalRepository,
   SqliteSettingsRepository,
   SqliteWorkspaceRepository,
-} from '@lnwjud/storage';
-import { isMachineRootPath, SecretPolicy, WorkspacePathGuard, WorkspaceService, type Workspace } from '@lnwjud/workspace';
+} from '@lnwjing/storage';
+import { isMachineRootPath, SecretPolicy, WorkspacePathGuard, WorkspaceService, type Workspace } from '@lnwjing/workspace';
 import { StrictWorkspaceRepository } from './strict-workspace-repository.js';
 
 export interface PersistedStdioSecurityPolicy {
@@ -109,7 +109,7 @@ export function createStdioMcpRuntime(
   options: StdioMcpRuntimeOptions = {},
 ): StdioMcpRuntime {
   const checkpointKey = resolveStdioCheckpointKey(options.checkpointEncryptionKey);
-  const databaseFilename = path.join(dataPath, 'lnwjud.sqlite');
+  const databaseFilename = path.join(dataPath, 'lnwjing.sqlite');
   const database = new SqliteDatabase(databaseFilename, { backupDirectory: path.join(dataPath, 'backups') });
   const rawWorkspaceRepository = new SqliteWorkspaceRepository(database);
   const workspaceRepository = options.strictAllowedRoots === undefined
@@ -217,7 +217,7 @@ export function createStdioMcpRuntime(
       shell: capabilityRuntime.shell,
     }),
   });
-  const actor: FileActor = { clientId: 'cli-mcp-stdio', clientName: 'lnwjud cli MCP' };
+  const actor: FileActor = { clientId: 'cli-mcp-stdio', clientName: 'lnwjing cli MCP' };
   const engineeringSourceState = createEngineeringSourceStateProvider(async (workspaceId, args) => gitService.run(actor, { workspaceId, args }));
   const engineeringArtifactVerifier = createEngineeringArtifactVerifier(async (workspaceId) => (await workspaceRepository.get(workspaceId))?.realRootPath);
   const goalService = new GoalContinuationService(workspaceRepository, goalRepository, {
@@ -364,12 +364,12 @@ export function resolveStdioCheckpointKey(configured: Uint8Array | undefined = u
     if (configured.byteLength !== 32) throw new Error('Stdio checkpoint encryption key must be 32 bytes');
     return Buffer.from(configured);
   }
-  const encoded = process.env.LNWJUD_CHECKPOINT_KEY_BASE64?.trim();
+  const encoded = process.env.LNWJING_CHECKPOINT_KEY_BASE64?.trim();
   if (encoded === undefined || encoded.length === 0) {
-    throw new Error('Pure Node STDIO requires an explicit 32-byte LNWJUD_CHECKPOINT_KEY_BASE64; packaged STDIO must use Electron --mcp-stdio');
+    throw new Error('Pure Node STDIO requires an explicit 32-byte LNWJING_CHECKPOINT_KEY_BASE64; packaged STDIO must use Electron --mcp-stdio');
   }
   const key = Buffer.from(encoded, 'base64');
-  if (key.byteLength !== 32 || key.toString('base64') !== encoded) throw new Error('LNWJUD_CHECKPOINT_KEY_BASE64 must decode to 32 bytes');
+  if (key.byteLength !== 32 || key.toString('base64') !== encoded) throw new Error('LNWJING_CHECKPOINT_KEY_BASE64 must decode to 32 bytes');
   return key;
 }
 
@@ -416,7 +416,7 @@ function createStdioCapabilityService(
     dataPath,
     workspaceRootsProvider,
     unrestricted,
-    configuredRootsProvider: () => strictAllowedRoots ?? [...readCapabilityRoots(process.env.LNWJUD_CAPABILITY_ROOTS), ...configuredRootsProvider(), restrictedRoot],
+    configuredRootsProvider: () => strictAllowedRoots ?? [...readCapabilityRoots(process.env.LNWJING_CAPABILITY_ROOTS), ...configuredRootsProvider(), restrictedRoot],
     synchronousWaitSecondsProvider,
     ...(windows === undefined ? {} : { windows }),
   });
@@ -429,7 +429,7 @@ function readCapabilityRoots(value: string | undefined): readonly string[] {
 }
 
 function capabilityBridgeScriptPath(): string {
-  const configured = process.env.LNWJUD_CAPABILITY_BRIDGE_SCRIPT;
+  const configured = process.env.LNWJING_CAPABILITY_BRIDGE_SCRIPT;
   if (configured !== undefined && configured.trim().length > 0) return path.resolve(configured);
 
   const scriptDir = resolveScriptDirectory();
@@ -467,28 +467,28 @@ function resolveScriptDirectory(): string | undefined {
 }
 
 function capabilityBridgeExpectedSha256(): string {
-  const configuredScript = process.env.LNWJUD_CAPABILITY_BRIDGE_SCRIPT;
+  const configuredScript = process.env.LNWJING_CAPABILITY_BRIDGE_SCRIPT;
   if (configuredScript === undefined || configuredScript.trim().length === 0) return WINDOWS_CAPABILITY_BRIDGE_SHA256;
-  const configuredHash = process.env.LNWJUD_CAPABILITY_BRIDGE_SHA256?.trim().toLowerCase();
+  const configuredHash = process.env.LNWJING_CAPABILITY_BRIDGE_SHA256?.trim().toLowerCase();
   return configuredHash !== undefined && /^[0-9a-f]{64}$/.test(configuredHash) ? configuredHash : 'missing';
 }
 
 function capabilityBridgeExpectedSizeBytes(): number | undefined {
-  const configuredScript = process.env.LNWJUD_CAPABILITY_BRIDGE_SCRIPT;
+  const configuredScript = process.env.LNWJING_CAPABILITY_BRIDGE_SCRIPT;
   if (configuredScript === undefined || configuredScript.trim().length === 0) return WINDOWS_CAPABILITY_BRIDGE_SIZE_BYTES;
-  const configuredSize = Number.parseInt(process.env.LNWJUD_CAPABILITY_BRIDGE_SIZE_BYTES ?? '', 10);
+  const configuredSize = Number.parseInt(process.env.LNWJING_CAPABILITY_BRIDGE_SIZE_BYTES ?? '', 10);
   return Number.isSafeInteger(configuredSize) && configuredSize > 0 ? configuredSize : undefined;
 }
 
 function windowsOcrHelperPath(): string | undefined {
-  const configured = process.env.LNWJUD_WINDOWS_OCR_HELPER;
+  const configured = process.env.LNWJING_WINDOWS_OCR_HELPER;
   if (configured !== undefined && configured.trim().length > 0) return path.resolve(configured);
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   const scriptDir = resolveScriptDirectory();
   const candidates = [
-    scriptDir === undefined ? undefined : path.join(scriptDir, 'native', 'windows-ocr', 'lnwjud-windows-ocr.exe'),
-    resourcesPath === undefined ? undefined : path.join(resourcesPath, 'windows-ocr', 'lnwjud-windows-ocr.exe'),
-    path.join(path.dirname(process.execPath), 'windows-ocr', 'lnwjud-windows-ocr.exe'),
+    scriptDir === undefined ? undefined : path.join(scriptDir, 'native', 'windows-ocr', 'lnwjing-windows-ocr.exe'),
+    resourcesPath === undefined ? undefined : path.join(resourcesPath, 'windows-ocr', 'lnwjing-windows-ocr.exe'),
+    path.join(path.dirname(process.execPath), 'windows-ocr', 'lnwjing-windows-ocr.exe'),
   ].filter((candidate): candidate is string => candidate !== undefined);
   return candidates.find((candidate) => existsSync(candidate));
 }

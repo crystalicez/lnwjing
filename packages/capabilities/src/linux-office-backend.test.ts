@@ -52,8 +52,8 @@ describe('LinuxOfficeCapabilityBackend', () => {
   });
 
   it('keeps Office file paths inside the Active Project before dependency dispatch', async (): Promise<void> => {
-    const root = await mkdtemp(path.join(process.cwd(), '.lnwjud-linux-office-'));
-    const outside = await mkdtemp(path.join(process.cwd(), '.lnwjud-linux-office-outside-'));
+    const root = await mkdtemp(path.join(process.cwd(), '.lnwjing-linux-office-'));
+    const outside = await mkdtemp(path.join(process.cwd(), '.lnwjing-linux-office-outside-'));
     const insideFile = path.join(root, 'input.ods');
     const outsideFile = path.join(outside, 'outside.ods');
     try {

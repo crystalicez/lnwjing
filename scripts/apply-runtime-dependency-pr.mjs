@@ -92,8 +92,8 @@ export async function applyManagedRuntimePr() {
   const verify=[
     ['corepack',['pnpm@10.15.0','install','--frozen-lockfile']],
     ['corepack',['pnpm@10.15.0','test:version']],
-    ['corepack',['pnpm@10.15.0','--filter','@lnwjud/desktop','typecheck']],
-    ['corepack',['pnpm@10.15.0','--filter','@lnwjud/desktop','build']],
+    ['corepack',['pnpm@10.15.0','--filter','@lnwjing/desktop','typecheck']],
+    ['corepack',['pnpm@10.15.0','--filter','@lnwjing/desktop','build']],
     ['corepack',['pnpm@10.15.0','test:packaging']],
   ];
   for(const [name,args] of verify) runCommand(name,args);

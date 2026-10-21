@@ -1,7 +1,7 @@
 import { ActionButton, FilterBar } from '../ui/UiPrimitives.js';
 import { DiagnosticCopyButton } from '../ui/DiagnosticCopyButton.js';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import type { CallHistoryPage, CallHistoryRequest, DoctorGoalOption, ToolCatalogItem, UiLocale } from '@lnwjud/ipc-contracts';
+import type { CallHistoryPage, CallHistoryRequest, DoctorGoalOption, ToolCatalogItem, UiLocale } from '@lnwjing/ipc-contracts';
 import { v580Strings } from '../../i18n/v580-copy.js';
 import { formatDateTime } from '../../date-time.js';
 import { SearchableSelect } from '../../components/ui/SearchableSelect.js';
@@ -32,10 +32,10 @@ export function CallHistoryPanel(props: { readonly workspaceId: string | null; r
     let live = true;
     setGoalId(''); setToolName(''); setGoals([]); setTools([]);
     if (props.workspaceId) {
-      void window.lnwjud.getDoctorGoals({ workspaceId: props.workspaceId, view: 'calls' })
+      void window.lnwjing.getDoctorGoals({ workspaceId: props.workspaceId, view: 'calls' })
         .then((items) => { if (live) setGoals(items); })
         .catch((cause: unknown) => { if (live) setError(cause instanceof Error ? cause.message : String(cause)); });
-      void window.lnwjud.getToolCatalog({ locale: props.locale })
+      void window.lnwjing.getToolCatalog({ locale: props.locale })
         .then((catalog) => { if (live) setTools(catalog.items.slice().sort((a, b) => a.title.localeCompare(b.title))); })
         .catch((cause: unknown) => { if (live) setError(cause instanceof Error ? cause.message : String(cause)); });
     }
@@ -55,7 +55,7 @@ export function CallHistoryPanel(props: { readonly workspaceId: string | null; r
       };
       // Paint the loading state before a potentially expensive audit query reaches the main process.
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const result = await window.lnwjud.getCallHistory(query);
+      const result = await window.lnwjing.getCallHistory(query);
       setPage(result);
       setCursor(result.nextCursor);
     } catch(cause: unknown) { setError(cause instanceof Error ? cause.message : String(cause)); }

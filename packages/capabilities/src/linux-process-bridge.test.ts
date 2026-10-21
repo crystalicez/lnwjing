@@ -5,7 +5,7 @@ describe('LinuxProcessBridge', () => {
   it('rejects an invalid operation before attempting to start the helper', async (): Promise<void> => {
     let started = false;
     const bridge = new LinuxProcessBridge({
-      executablePath: '/missing/lnwjud-linux-host',
+      executablePath: '/missing/lnwjing-linux-host',
       terminator: { stop: async (): Promise<void> => undefined },
       spawnProcess: (): never => {
         started = true;

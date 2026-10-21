@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ok, type Result } from '@lnwjud/domain';
+import { ok, type Result } from '@lnwjing/domain';
 import { HealthCapabilityBackend } from './health-backend.js';
 
 describe('HealthCapabilityBackend', () => {

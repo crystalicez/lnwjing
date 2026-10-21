@@ -1,6 +1,6 @@
 import { ActionButton, FormInput } from '../ui/UiPrimitives.js';
 import { useEffect, useState, type ReactElement } from 'react';
-import { EMPTY_REMOTE_MCP_STATUS, type DashboardSnapshot, type IncidentClassification, type UiLocale, type WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import { EMPTY_REMOTE_MCP_STATUS, type DashboardSnapshot, type IncidentClassification, type UiLocale, type WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { formatDateTime } from '../../date-time.js';
 import { createTranslator } from '../../i18n/index.js';
 import { tunnelRuntimeCredentialAvailable } from '../../tunnel-auth-readiness.js';

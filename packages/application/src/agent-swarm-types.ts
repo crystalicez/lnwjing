@@ -1,6 +1,6 @@
-import type { AgentSwarmState, AgentSwarmTaskState } from '@lnwjud/domain';
+import type { AgentSwarmState, AgentSwarmTaskState } from '@lnwjing/domain';
 
-export type { AgentSwarmState, AgentSwarmTaskState } from '@lnwjud/domain';
+export type { AgentSwarmState, AgentSwarmTaskState } from '@lnwjing/domain';
 
 export interface AgentSwarmTaskRequest {
   readonly id: string;

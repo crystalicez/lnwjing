@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 import XCTest
-@testable import LnwjudMacHost
+@testable import LnwjingMacHost
 
 final class MediaSessionTests: XCTestCase {
     func testSeventeenthOperationEvictsOnlyOldestCleanedTerminalHistory() {
@@ -71,13 +71,13 @@ final class MediaSessionTests: XCTestCase {
 
     func testOwnerReadsOnlyTrustedTopLevelMetadataAndNeverDowngradesPartialOwner() throws {
         let metadata: [String: Any] = ["clientId": "client", "sessionId": "session", "workspaceId": "workspace"]
-        let owner = try XCTUnwrap(MacMediaOwner.read(["metadata": ["lnwjud.taskOwner.v1": metadata], "parameters": ["metadata": ["lnwjud.taskOwner.v1": ["clientId": "spoof", "sessionId": "spoof"]]]]))
+        let owner = try XCTUnwrap(MacMediaOwner.read(["metadata": ["lnwjing.taskOwner.v1": metadata], "parameters": ["metadata": ["lnwjing.taskOwner.v1": ["clientId": "spoof", "sessionId": "spoof"]]]]))
         XCTAssertEqual(owner.client, "client")
         XCTAssertEqual(owner.session, "session")
         XCTAssertEqual(owner.workspace, "workspace")
-        XCTAssertNil(MacMediaOwner.read(["metadata": ["lnwjud.taskOwner.v1": ["clientId": "client"]]]))
-        XCTAssertNil(MacMediaOwner.read(["metadata": ["lnwjud.taskOwner.v1": ["clientId": "client", "sessionId": " "]]]))
-        XCTAssertNil(MacMediaOwner.read(["metadata": ["lnwjud.taskOwner.v1": false]]))
+        XCTAssertNil(MacMediaOwner.read(["metadata": ["lnwjing.taskOwner.v1": ["clientId": "client"]]]))
+        XCTAssertNil(MacMediaOwner.read(["metadata": ["lnwjing.taskOwner.v1": ["clientId": "client", "sessionId": " "]]]))
+        XCTAssertNil(MacMediaOwner.read(["metadata": ["lnwjing.taskOwner.v1": false]]))
     }
 
     func testForeignSessionClientAndExplicitWorkspaceCannotAccessAnOwnedHandle() {

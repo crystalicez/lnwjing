@@ -1,4 +1,4 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { capabilityToolNames, type CapabilityToolName } from './index.js';
 import { capabilityDescriptors } from './capability-descriptors.js';
 import type { CapabilityBackend } from './local-capability-service.js';

@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, lstat, mkdir, open, readFile, realpath, rename, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { assertSecretPlaintext, SECRET_ENVELOPE_PREFIX, type SecretProtector } from '@lnwjud/shared';
+import { assertSecretPlaintext, SECRET_ENVELOPE_PREFIX, type SecretProtector } from '@lnwjing/shared';
 
 const MAX_LEGACY_FILE_BYTES = 64 * 1024;
 const MAX_HELPER_OUTPUT_BYTES = 64 * 1024;
@@ -73,7 +73,7 @@ export async function migrateLegacyWindowsSecrets(options: LegacySecretMigration
   // SecureString format as the API key, even when that key file was absent.
   const dataDirectory = path.dirname(options.checkpointPath);
   const additionalSecrets = [
-    path.join(path.dirname(options.tunnelSecretPath), 'lnwjud.oauth.session.secret'),
+    path.join(path.dirname(options.tunnelSecretPath), 'lnwjing.oauth.session.secret'),
     path.join(dataDirectory, 'remote-mcp', 'oauth-state.secret'),
     path.join(dataDirectory, 'remote-mcp', 'ngrok-authtoken.secret'),
   ];
@@ -341,14 +341,14 @@ function sha256(value: string): string {
 }
 
 function resolveHelperPath(): string {
-  const configured = process.env.LNWJUD_WINDOWS_SECRET_MIGRATOR?.trim();
+  const configured = process.env.LNWJING_WINDOWS_SECRET_MIGRATOR?.trim();
   if (configured) return path.resolve(configured);
   const resourcesPath = (process as NodeJS.Process & { readonly resourcesPath?: string }).resourcesPath;
   const candidates = [
-    resourcesPath === undefined ? undefined : path.join(resourcesPath, 'windows-secret-migrator', 'lnwjud-windows-secret-migrator.exe'),
-    path.join(path.dirname(process.execPath), 'windows-secret-migrator', 'lnwjud-windows-secret-migrator.exe'),
-    path.join(path.dirname(process.execPath), 'lnwjud-windows-secret-migrator.exe'),
-    path.join(os.homedir(), 'AppData', 'Local', 'lnwjud', 'windows-secret-migrator', 'lnwjud-windows-secret-migrator.exe'),
+    resourcesPath === undefined ? undefined : path.join(resourcesPath, 'windows-secret-migrator', 'lnwjing-windows-secret-migrator.exe'),
+    path.join(path.dirname(process.execPath), 'windows-secret-migrator', 'lnwjing-windows-secret-migrator.exe'),
+    path.join(path.dirname(process.execPath), 'lnwjing-windows-secret-migrator.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'lnwjing', 'windows-secret-migrator', 'lnwjing-windows-secret-migrator.exe'),
   ].filter((candidate): candidate is string => candidate !== undefined);
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!;
 }

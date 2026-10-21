@@ -1,4 +1,4 @@
-import type { ToolCatalogItem, UiLocale } from '@lnwjud/ipc-contracts';
+import type { ToolCatalogItem, UiLocale } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 
 export function toolAvailabilityLabel(locale: UiLocale, item: ToolCatalogItem): string {

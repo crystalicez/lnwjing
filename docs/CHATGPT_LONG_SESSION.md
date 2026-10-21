@@ -1,12 +1,12 @@
-# ChatGPT Chat + lnwjud: Outcome-Driven Continuity
+# ChatGPT Chat + lnwjing: Outcome-Driven Continuity
 
-> สถานะ: ใช้กับ lnwjud v4.11.0+ ผ่าน ChatGPT Chat + Plugins / MCP
-> เป้าหมาย: ให้ ChatGPT ใช้ lnwjud ทำงานต่อเนื่องจนผลลัพธ์ที่ผู้ใช้สั่งเสร็จ และให้ Scheduled Task ปลุก turn ใหม่มารับงานเดิมต่อได้อย่างปลอดภัยเมื่อ turn ก่อนถูก platform ขัดจังหวะ
+> สถานะ: ใช้กับ lnwjing v4.11.0+ ผ่าน ChatGPT Chat + Plugins / MCP
+> เป้าหมาย: ให้ ChatGPT ใช้ lnwjing ทำงานต่อเนื่องจนผลลัพธ์ที่ผู้ใช้สั่งเสร็จ และให้ Scheduled Task ปลุก turn ใหม่มารับงานเดิมต่อได้อย่างปลอดภัยเมื่อ turn ก่อนถูก platform ขัดจังหวะ
 > นโยบาย: กลุ่ม `codex_*` ปิดเป็นค่าเริ่มต้นและไม่ advertise เว้นแต่ผู้ใช้เปิดเอง
 
 ## 1. กติกาหลัก: จบตามผลลัพธ์ ไม่ใช่เวลา
 
-lnwjud ไม่มี elapsed-time cutoff และไม่เติมข้อความให้ ChatGPT หยุด, handoff หรือรอคำว่า “ทำต่อ” ตามเวลาที่ผ่านไป
+lnwjing ไม่มี elapsed-time cutoff และไม่เติมข้อความให้ ChatGPT หยุด, handoff หรือรอคำว่า “ทำต่อ” ตามเวลาที่ผ่านไป
 
 เมื่อเชื่อม MCP สำเร็จ server จะประกาศกติกาให้ client ว่า:
 
@@ -62,7 +62,7 @@ ChatGPT ควรเรียก tools ปกติและทำ reasoning ต
 
 ## 6. Durable Goal Continuation
 
-Durable Goal Continuation เป็น state/coordination layer สำหรับ **ChatGPT Web turn ใหม่** ที่กลับมาทำ objective เดิมต่อ ไม่ใช่ AI worker และไม่รัน model ภายใน lnwjud
+Durable Goal Continuation เป็น state/coordination layer สำหรับ **ChatGPT Web turn ใหม่** ที่กลับมาทำ objective เดิมต่อ ไม่ใช่ AI worker และไม่รัน model ภายใน lnwjing
 
 Public tools:
 
@@ -99,9 +99,9 @@ Goal state เป็น SQLite durable state และใช้ monotonic revisi
 
 ทุก mutation ใน rolling mode ต้องแนบ `goalLease` ซึ่งมี goal ID, per-run lease token และ lease generation. Registry ตรวจ token/generation ก่อน handler dispatch, strip raw token ออกจาก handler/log, เพิ่ม durable activity sequence และบันทึก fenced call ที่กำลังรัน. การใช้ MCP session เดิมจึงไม่ทำให้ token รุ่นเก่ากลับมาเขียนได้หลัง takeover. ตั้งแต่ v4.52.1 เป็นต้นไป **Full Bypass ไม่ข้าม durable rolling-goal ownership fence** เมื่อ workspace มี live scheduled-goal fence: Full Bypass ยังคงข้าม approval/confirmation/command-policy/Active Project scope ตามหน้าที่ของมัน แต่ stale/missing `goalLease` ต้อง fail ก่อน mutation. ถ้า workspace ไม่มี live rolling-goal fence การใช้งาน Full Bypass แบบปกติยังไม่ต้องมี lease.
 
-เมื่อ recurring watchdog ตื่นต้องเรียก `claim_scheduled_continuation` เป็น lnwjud action แรกก่อน mutation. `recurring_acquired` หมายถึงได้ lease ใหม่และทำงานต่อโดย **ใช้ recurring native task ID เดิม**; `worker_busy_noop` หมายถึงมี live/uncertain worker หรือ blocking work อยู่และต้องคืนตัวโดยไม่ mutate workspace/lease/native task; `already_claimed` ใช้เฉพาะ true concurrent/stale duplicate ที่ liveness observation ยังเป็นก่อน lease acquisition ที่บันทึกไว้; runKey เดิมเพียงอย่างเดียวไม่ใช่ worker-liveness proof และ same-interval retry ที่เห็น lease ปัจจุบันต้องตรวจ liveness/stale recovery ต่อ; `terminal_cleanup_required` คือ cleanup-only และห้าม resume งาน; `terminal_noop` คือไม่มีงานให้ทำ. Ordinary interval wake ไม่สร้าง successor, ไม่ record `consumed`, และไม่ retime cadence. ถ้าพบ lease ยังไม่หมดแต่ trustworthy liveness ยืนยันว่าไม่มี live fenced call และ blocking task ทุกตัว terminal/absent แล้ว ให้ใช้ bounded stale-heartbeat grace เดียวกับ `run_goal` คือ 60 วินาที; เมื่อ heartbeat เก่ากว่า grace ต้อง takeover เป็น `recurring_acquired`/`orphan_recovered` **ภายใน hourly tick เดิม** โดยไม่รอ lease expiry และไม่รอ hourly tick ถัดไป. `orphan_probe_noop` เป็นเพียง compatibility กับข้อมูล pre-hardening; historical `occurrence=once` เท่านั้นที่ยังคง two-probe orphan fence และใช้ `acquired`, `successor_required`, `reschedule_required`, fresh one-time successor กับ consumed receipt ตาม compatibility path v4.52.x.
+เมื่อ recurring watchdog ตื่นต้องเรียก `claim_scheduled_continuation` เป็น lnwjing action แรกก่อน mutation. `recurring_acquired` หมายถึงได้ lease ใหม่และทำงานต่อโดย **ใช้ recurring native task ID เดิม**; `worker_busy_noop` หมายถึงมี live/uncertain worker หรือ blocking work อยู่และต้องคืนตัวโดยไม่ mutate workspace/lease/native task; `already_claimed` ใช้เฉพาะ true concurrent/stale duplicate ที่ liveness observation ยังเป็นก่อน lease acquisition ที่บันทึกไว้; runKey เดิมเพียงอย่างเดียวไม่ใช่ worker-liveness proof และ same-interval retry ที่เห็น lease ปัจจุบันต้องตรวจ liveness/stale recovery ต่อ; `terminal_cleanup_required` คือ cleanup-only และห้าม resume งาน; `terminal_noop` คือไม่มีงานให้ทำ. Ordinary interval wake ไม่สร้าง successor, ไม่ record `consumed`, และไม่ retime cadence. ถ้าพบ lease ยังไม่หมดแต่ trustworthy liveness ยืนยันว่าไม่มี live fenced call และ blocking task ทุกตัว terminal/absent แล้ว ให้ใช้ bounded stale-heartbeat grace เดียวกับ `run_goal` คือ 60 วินาที; เมื่อ heartbeat เก่ากว่า grace ต้อง takeover เป็น `recurring_acquired`/`orphan_recovered` **ภายใน hourly tick เดิม** โดยไม่รอ lease expiry และไม่รอ hourly tick ถัดไป. `orphan_probe_noop` เป็นเพียง compatibility กับข้อมูล pre-hardening; historical `occurrence=once` เท่านั้นที่ยังคง two-probe orphan fence และใช้ `acquired`, `successor_required`, `reschedule_required`, fresh one-time successor กับ consumed receipt ตาม compatibility path v4.52.x.
 
-`expedite_scheduled_continuation` ใช้ได้เฉพาะ historical `occurrence=once` ที่ยัง pending; recurring interval task ห้าม expedite หรือ retime cadence. ระหว่างมี durable background task ให้เก็บ `trackedTasks` ใน checkpoint และ bounded wait เฉพาะ `blocking_job` จนอ่าน terminal result จริง. เมื่อ acceptance ครบ, durable plan ทุก step ต้อง `completed`, blockers ว่าง และไม่มี blocking task ค้าง จึงเรียก `finish_goal(status: completed)`. ถ้าได้ `completionState=pending_native_cleanup`, ให้ทำ exact recurring native task เป็น **non-runnable** ผ่าน true delete หรือ host-confirmed disable แล้ว record receipt ตาม operation/state จริง. การที่ recurring task ยิงไปแล้วหนึ่งรอบไม่ใช่ cleanup proof และห้ามใช้ `consumed` กับ interval task. ถ้า hourly wake พบ `terminal_cleanup_required` ให้ทำ cleanup อย่างเดียวและห้าม resume work. หลัง cleanup ถ้า completion lease เดิมหมดแล้ว ให้ `run_goal` ด้วย workspace/goalKey เดิมเพื่อ reacquire lease สำหรับ administrative finalization เท่านั้น ห้าม resume workspace work จากนั้นเรียก `finish_goal` ซ้ำทันทีและอ่าน `get_goal` จน terminal ก่อนตอบผู้ใช้. ห้าม fallback ไป lnwjud scheduler, Windows Task Scheduler, cron, shell timer, browser automation หรือ undocumented OpenAI API.
+`expedite_scheduled_continuation` ใช้ได้เฉพาะ historical `occurrence=once` ที่ยัง pending; recurring interval task ห้าม expedite หรือ retime cadence. ระหว่างมี durable background task ให้เก็บ `trackedTasks` ใน checkpoint และ bounded wait เฉพาะ `blocking_job` จนอ่าน terminal result จริง. เมื่อ acceptance ครบ, durable plan ทุก step ต้อง `completed`, blockers ว่าง และไม่มี blocking task ค้าง จึงเรียก `finish_goal(status: completed)`. ถ้าได้ `completionState=pending_native_cleanup`, ให้ทำ exact recurring native task เป็น **non-runnable** ผ่าน true delete หรือ host-confirmed disable แล้ว record receipt ตาม operation/state จริง. การที่ recurring task ยิงไปแล้วหนึ่งรอบไม่ใช่ cleanup proof และห้ามใช้ `consumed` กับ interval task. ถ้า hourly wake พบ `terminal_cleanup_required` ให้ทำ cleanup อย่างเดียวและห้าม resume work. หลัง cleanup ถ้า completion lease เดิมหมดแล้ว ให้ `run_goal` ด้วย workspace/goalKey เดิมเพื่อ reacquire lease สำหรับ administrative finalization เท่านั้น ห้าม resume workspace work จากนั้นเรียก `finish_goal` ซ้ำทันทีและอ่าน `get_goal` จน terminal ก่อนตอบผู้ใช้. ห้าม fallback ไป lnwjing scheduler, Windows Task Scheduler, cron, shell timer, browser automation หรือ undocumented OpenAI API.
 
 Timeline อ้างอิง v4.53: worker lease ปกติ 600 วินาที; recurring watchdog ใหม่ที่ไม่ระบุ legacy first-delay จะมี first firing ประมาณ `T+60` แล้ววนทุก 1 ชั่วโมงด้วย native task ID เดิม. ทุก wake เริ่มด้วย claim: `recurring_acquired` -> lease ใหม่และทำงานต่อ, genuinely live/uncertain worker -> `worker_busy_noop` แล้วคืนตัวโดยไม่แตะ task, stale still-valid lease ที่ไม่มี worker จริงและ heartbeat เกิน 60 วินาที -> `recurring_acquired/orphan_recovered` ใน tick เดิม, true concurrent/stale duplicate -> `already_claimed`; existing runKey alone never suppresses a fresh same-interval liveness check. ถ้างานเสร็จให้ `finish_goal -> pending_native_cleanup -> delete/disable exact recurring task -> finish_goal again -> get_goal terminal`. ถ้า cleanup ยังไม่เสร็จและรอบชั่วโมงถัดไปยิง ให้ `terminal_cleanup_required` ทำ cleanup-only. Historical one-time rows เท่านั้นที่ยังใช้ successor/consumed/expedite/two-probe path.
 
@@ -120,7 +120,7 @@ Scheduled Task ควรใช้ `goalKey` ที่คงที่และส
 ตัวอย่าง prompt สำหรับ Scheduled Task:
 
 ```text
-ทำงาน objective เดิมต่อในแชทนี้โดยใช้ lnwjud เท่านั้น
+ทำงาน objective เดิมต่อในแชทนี้โดยใช้ lnwjing เท่านั้น
 
 1. เรียก run_goal ด้วย workspaceId เดิมและ goalKey="release-v4.11.0-durable-goal"
 2. ถ้า acquired=false ให้รายงานว่ายังมี lease อยู่และจบรอบ ห้ามเริ่มงานซ้ำ
@@ -152,7 +152,7 @@ Scheduled Task ควรใช้ `goalKey` ที่คงที่และส
 
 `codex_status`, `codex_run`, `codex_task_*`, `codex_stop` ไม่ register/advertise โดย default เพื่อไม่ใช้ Codex quota โดยไม่ได้ตั้งใจ
 
-ChatGPT Chat สามารถอ่าน เขียน รันคำสั่ง และตรวจผลผ่าน lnwjud tools โดยตรง การเปิด `codex_*` ทำเฉพาะเมื่อผู้ใช้ตั้งใจมอบงานให้ Codex CLI แยกต่างหาก Durable Goal Continuation ไม่ต้องใช้ Codex หรือ AI CLI ใด ๆ
+ChatGPT Chat สามารถอ่าน เขียน รันคำสั่ง และตรวจผลผ่าน lnwjing tools โดยตรง การเปิด `codex_*` ทำเฉพาะเมื่อผู้ใช้ตั้งใจมอบงานให้ Codex CLI แยกต่างหาก Durable Goal Continuation ไม่ต้องใช้ Codex หรือ AI CLI ใด ๆ
 
 ## 10. Prompt แนะนำสำหรับงานแบบสั่งครั้งเดียว
 

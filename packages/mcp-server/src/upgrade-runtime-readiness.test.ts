@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
+import { ok } from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
 import { UpgradeRuntimeService } from './upgrade-runtime.js';
 import { UPGRADE_TOOL_CATALOG } from './upgrade-catalog.js';
 import { SPECIALIZED_RUNTIME_TOOL_NAMES } from './tools/upgrade-tools.js';
@@ -27,7 +27,7 @@ describe('upgrade runtime readiness facades', () => {
       eventLogRuntimeOptions: {
         runner: async () => ok(JSON.stringify([{
           time: '2026-09-11T00:00:00.000Z',
-          provider: 'lnwjud-test',
+          provider: 'lnwjing-test',
           id: 1,
           level: 'Information',
           message: 'injected-contract-event',

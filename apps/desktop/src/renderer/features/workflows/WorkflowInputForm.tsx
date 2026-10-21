@@ -1,6 +1,6 @@
 import { ActionButton, FormInput, FormField } from '../ui/UiPrimitives.js';
 import { useEffect, useState, type ReactElement } from 'react';
-import type { UiLocale, WorkflowChoicesResult, WorkflowTemplate } from '@lnwjud/ipc-contracts';
+import type { UiLocale, WorkflowChoicesResult, WorkflowTemplate } from '@lnwjing/ipc-contracts';
 import { SearchableSelect } from '../../components/ui/SearchableSelect.js';
 import { v580Strings, workflowLocalized } from '../../i18n/v580-copy.js';
 
@@ -34,7 +34,7 @@ export function WorkflowInputForm(props: {
     let live = true;
     setVersion(null); setBranches([]);
     if (props.workspaceId) {
-      void window.lnwjud.inspectWorkflowChoices({workspaceId:props.workspaceId}).then(result => {
+      void window.lnwjing.inspectWorkflowChoices({workspaceId:props.workspaceId}).then(result => {
         if (live) {setVersion(result.projectVersion);setBranches(result.branches);}
       }).catch(() => { if(live) setVersion(null); });
 
@@ -48,7 +48,7 @@ export function WorkflowInputForm(props: {
     if (props.workspaceId && inputPath && /\.(csv|xlsx)$/i.test(inputPath)) {
       const workspaceId=props.workspaceId;
       const token=setTimeout(() => {
-        void window.lnwjud.inspectWorkflowChoices({workspaceId,filePath:inputPath}).then(result => {
+        void window.lnwjing.inspectWorkflowChoices({workspaceId,filePath:inputPath}).then(result => {
           if(live) { setInputInfo(result.file); setError(null); }
         }).catch(cause => { if(live) setError(String(cause)); });
       },250);
@@ -63,7 +63,7 @@ export function WorkflowInputForm(props: {
     if (props.workspaceId && templatePath && /\.xlsx$/i.test(templatePath)) {
       const workspaceId=props.workspaceId;
       const token=setTimeout(() => {
-        void window.lnwjud.inspectWorkflowChoices({workspaceId,filePath:templatePath}).then(result => {
+        void window.lnwjing.inspectWorkflowChoices({workspaceId,filePath:templatePath}).then(result => {
           if(live) {setTemplateInfo(result.file);setReportSheet(result.file?.sheets[0]?.name ?? '');setError(null);}
         }).catch(cause => {if(live) setError(String(cause));});
       },250);
@@ -106,7 +106,7 @@ export function WorkflowInputForm(props: {
     if(browsing) return;
     setBrowsing(key);setError(null);
     try {
-      const selected=await window.lnwjud.chooseWorkflowDataFile();
+      const selected=await window.lnwjing.chooseWorkflowDataFile();
       if(selected.filePath) change(key,selected.filePath);
     } catch(cause) {setError(String(cause));}
     finally {setBrowsing(null);}
@@ -115,7 +115,7 @@ export function WorkflowInputForm(props: {
     if(!props.workspaceId || !templatePath || !reportSheet || generating)return;
     setGenerating(true);setError(null);
     try {
-      const result=await window.lnwjud.generateWorkflowMapping({workspaceId:props.workspaceId,templatePath,sheet:reportSheet});
+      const result=await window.lnwjing.generateWorkflowMapping({workspaceId:props.workspaceId,templatePath,sheet:reportSheet});
       change('mappingPath',result.filePath);
     } catch(cause) {setError(String(cause));}
     finally {setGenerating(false);}

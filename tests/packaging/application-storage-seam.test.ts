@@ -12,19 +12,19 @@ describe('application-storage seam', () => {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
-    expect({ ...manifest.dependencies, ...manifest.devDependencies }).not.toHaveProperty('@lnwjud/storage');
+    expect({ ...manifest.dependencies, ...manifest.devDependencies }).not.toHaveProperty('@lnwjing/storage');
 
     for (const filename of await productionTypescriptFiles(applicationRoot)) {
       const source = await readFile(filename, 'utf8');
       expect(source, path.relative(repositoryRoot, filename)).not.toMatch(
-        /(?:from\s+['"]@lnwjud\/storage['"]|from\s+['"][^'"]*\/storage\/src\/)/,
+        /(?:from\s+['"]@lnwjing\/storage['"]|from\s+['"][^'"]*\/storage\/src\/)/,
       );
     }
 
     for (const filename of await productionTypescriptFiles(storageRoot)) {
       const source = await readFile(filename, 'utf8');
       expect(source, path.relative(repositoryRoot, filename)).not.toMatch(
-        /(?:from\s+['"]@lnwjud\/application['"]|from\s+['"][^'"]*\/application\/src\/)/,
+        /(?:from\s+['"]@lnwjing\/application['"]|from\s+['"][^'"]*\/application\/src\/)/,
       );
     }
   });

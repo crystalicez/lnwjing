@@ -2,8 +2,8 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import os from 'node:os';
 import path from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { CAPABILITY_TASK_OWNER_METADATA_KEY, ShellCapabilityBackend, readCapabilityTaskOwner, type CapabilityTaskOwner } from '@lnwjud/capabilities';
-import { appError, err } from '@lnwjud/domain';
+import { CAPABILITY_TASK_OWNER_METADATA_KEY, ShellCapabilityBackend, readCapabilityTaskOwner, type CapabilityTaskOwner } from '@lnwjing/capabilities';
+import { appError, err } from '@lnwjing/domain';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { startMcpHttp, type McpHttpServerHandle } from './http.js';
@@ -41,7 +41,7 @@ const cases: Array<{ protocol: 'modern' | 'legacy'; launchTool: 'shell' | 'task_
 
 describe('durable task ownership over HTTP', () => {
   it.each(cases)('$protocol $launchTool preserves outputs and ownership across provider replacement', async ({ protocol, launchTool }) => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-owned-http-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-owned-http-'));
     const rootA = path.join(directory, 'a');
     const rootB = path.join(directory, 'b');
     const taskDirectory = path.join(directory, 'tasks');

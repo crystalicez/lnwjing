@@ -1,5 +1,5 @@
 import os from 'node:os';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 
 export interface SystemInfoSnapshot {

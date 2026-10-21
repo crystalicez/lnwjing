@@ -24,8 +24,8 @@ const vendorRoot = path.join(buildRoot, 'vendor', `runtime-tools-v${RIPGREP_VERS
 
 // Exact release archives are declared in one manifest. Linux intentionally
 // uses static musl builds. No platform or architecture fallback is allowed.
-const platform = process.env.LNWJUD_RUNTIME_TARGET ?? process.platform;
-const rawArch = process.env.LNWJUD_RUNTIME_ARCH ?? process.arch;
+const platform = process.env.LNWJING_RUNTIME_TARGET ?? process.platform;
+const rawArch = process.env.LNWJING_RUNTIME_ARCH ?? process.arch;
 const targetKey = `${platform}-${rawArch}`;
 const ripgrep = ripgrepDependency.targets?.[targetKey];
 if (ripgrep === undefined) throw new Error(`Runtime tools do not support ${platform}/${rawArch}`);
@@ -78,7 +78,7 @@ async function stageRipgrep({ platform, rawArch, target, ripgrep }) {
   const executableSha256 = await sha256(destination);
   const manifest = {
     schemaVersion: 1,
-    product: 'lnwjud',
+    product: 'lnwjing',
     tool: 'ripgrep',
     version: RIPGREP_VERSION,
     platform,
@@ -93,7 +93,7 @@ async function stageRipgrep({ platform, rawArch, target, ripgrep }) {
   };
   await writeAtomic(path.join(bundleRoot, 'BUNDLED_RIPGREP.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeAtomic(path.join(bundleRoot, 'BUNDLED_RIPGREP.txt'), [
-    'ripgrep bundled by lnwjud',
+    'ripgrep bundled by lnwjing',
     `version=${RIPGREP_VERSION}`,
     `asset=${ripgrep.archive}`,
     `source=${RIPGREP_RELEASE_BASE}/${ripgrep.archive}`,
@@ -106,8 +106,8 @@ async function runTunnelStager(platform, rawArch) {
   const scriptPath = path.join(desktopRoot, 'scripts', 'prepare-tunnel-client.mjs');
   await runProcess(process.execPath, [scriptPath], sanitizedEnvironment({
     ...process.env,
-    LNWJUD_TUNNEL_TARGET: platform,
-    LNWJUD_TUNNEL_ARCH: rawArch,
+    LNWJING_TUNNEL_TARGET: platform,
+    LNWJING_TUNNEL_ARCH: rawArch,
   }));
 }
 

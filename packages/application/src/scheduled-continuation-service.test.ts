@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ScheduledContinuationWorkerLivenessPort } from '@lnwjud/domain';
+import type { ScheduledContinuationWorkerLivenessPort } from '@lnwjing/domain';
 import type { FileActor } from './file-service.js';
 import { GoalContinuationService, type RunGoalResult } from './goal-continuation-service.js';
 import { ScheduledContinuationService, type PrepareScheduledContinuationRequest } from './scheduled-continuation-service.js';
@@ -34,7 +34,7 @@ async function fixture(
   isoNow = '2026-08-27T10:00:00.000Z',
   workerLiveness?: ScheduledContinuationWorkerLivenessPort,
 ): Promise<ScheduledContinuationFixture> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-scheduled-application-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-scheduled-application-'));
   temporaryRoots.push(root);
   const database = new SqliteDatabase(path.join(root, 'state.sqlite'));
   const workspaces = new SqliteWorkspaceRepository(database);
@@ -412,9 +412,9 @@ describe('ScheduledContinuationService', () => {
     const { database, goals, scheduled } = await fixture();
     try {
       const started = await startGoal(goals, 'connector-bound schedule');
-      const appMention = `[$team-lnwjud](app://asdk_app_${'a'.repeat(32)})`;
+      const appMention = `[$team-lnwjing](app://asdk_app_${'a'.repeat(32)})`;
       await expect(scheduled.prepareScheduledContinuation(actor, validPrepare(started, {
-        connectorMention: '[$team-lnwjud](https://untrusted.invalid)',
+        connectorMention: '[$team-lnwjing](https://untrusted.invalid)',
       }))).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
       const result = await scheduled.prepareScheduledContinuation(actor, validPrepare(started, { connectorMention: appMention }));
       expect(result.ok).toBe(true);
@@ -441,7 +441,7 @@ describe('ScheduledContinuationService', () => {
         summary: markers.summary,
         nextAction: markers.next,
         evidence: [{ kind: 'note', value: markers.evidence }],
-        connectorMention: '@custom-lnwjud_42',
+        connectorMention: '@custom-lnwjing_42',
       }));
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('prepare failed');
@@ -450,10 +450,10 @@ describe('ScheduledContinuationService', () => {
       expect(serialized).not.toContain(started.leaseToken!);
       expect(result.value.scheduleRequest).toMatchObject({ occurrence: 'interval', intervalMinutes: 60 });
       expect(result.value.scheduleRequest.schedule).toContain('RRULE:FREQ=HOURLY;INTERVAL=1');
-      expect(result.value.scheduleRequest.prompt.startsWith('@custom-lnwjud_42 ')).toBe(true);
-      expect(result.value.scheduleRequest.prompt).toContain('connected lnwjud plugin/connector');
+      expect(result.value.scheduleRequest.prompt.startsWith('@custom-lnwjing_42 ')).toBe(true);
+      expect(result.value.scheduleRequest.prompt).toContain('connected lnwjing plugin/connector');
       expect(result.value.scheduleRequest.prompt).toContain('Do not send user-visible prose before the claim attempt');
-      expect(result.value.scheduleRequest.prompt).toContain('exact connected lnwjud mention');
+      expect(result.value.scheduleRequest.prompt).toContain('exact connected lnwjing mention');
       expect(result.value.scheduleRequest.prompt).toContain('claim_scheduled_continuation');
       expect(result.value.scheduleRequest.prompt).toContain('one hourly Native ChatGPT recurring watchdog');
       expect(result.value.scheduleRequest.prompt).toContain('same native task remains runnable across normal firings');
@@ -475,7 +475,7 @@ describe('ScheduledContinuationService', () => {
       expect(result.value.scheduleRequest.prompt).toContain('make this exact recurring native task non-runnable');
       expect(result.value.scheduleRequest.prompt).toContain('never hard-code an internal operation name');
       expect(result.value.scheduleRequest.prompt).not.toMatch(/Automations(?:\.|:)/i);
-      expect(result.value.scheduleRequest.prompt).toContain('If the lnwjud connector cannot be resolved or claim_scheduled_continuation cannot be invoked');
+      expect(result.value.scheduleRequest.prompt).toContain('If the lnwjing connector cannot be resolved or claim_scheduled_continuation cannot be invoked');
       expect(result.value.scheduleRequest.prompt).toContain('do not claim durable progress');
       expect(result.value.scheduleRequest.prompt).toContain('Scheduler transport failure alone never completes, fails, or blocks the durable goal');
       expect(result.value.scheduleRequest.prompt).toContain('Never report completion until finish_goal completes and get_goal is terminal');

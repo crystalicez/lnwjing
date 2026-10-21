@@ -1,5 +1,5 @@
-import { appError, err, ok, type GoalRepository, type ResourceSnapshot, type ResourceSnapshotRequest, type Result } from '@lnwjud/domain';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type GoalRepository, type ResourceSnapshot, type ResourceSnapshotRequest, type Result } from '@lnwjing/domain';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from '../file-service.js';
 import type { GoalContinuationService } from '../goal-continuation-service.js';
 

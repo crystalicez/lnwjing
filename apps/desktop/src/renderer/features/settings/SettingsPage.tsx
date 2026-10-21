@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement, type UIEvent } from 'react';
-import { EMPTY_REMOTE_MCP_STATUS, type DashboardSnapshot, type DestructiveDeletePolicy, type ExternalSetupTarget, type PdfProviderInstallResult, type PermissionProfileName, type PonytailModeOverride, type PonytailPolicyContext, type RemoteMcpTransport, type TunnelOAuthLoginStatus, type TunnelStatus, type UiLocale, type UserSettings } from '@lnwjud/ipc-contracts';
-import { parseDelimitedList } from '@lnwjud/shared/text-list';
+import { EMPTY_REMOTE_MCP_STATUS, type DashboardSnapshot, type DestructiveDeletePolicy, type ExternalSetupTarget, type PdfProviderInstallResult, type PermissionProfileName, type PonytailModeOverride, type PonytailPolicyContext, type RemoteMcpTransport, type TunnelOAuthLoginStatus, type TunnelStatus, type UiLocale, type UserSettings } from '@lnwjing/ipc-contracts';
+import { parseDelimitedList } from '@lnwjing/shared/text-list';
 import { formatDateTime } from '../../date-time.js';
 import { createTranslator, type Translator } from '../../i18n/index.js';
 import { tunnelRuntimeCredentialAvailable } from '../../tunnel-auth-readiness.js';
@@ -384,7 +384,7 @@ export function SettingsPage(props: SettingsPageProps): ReactElement {
     if (category === 'backups') setBackupError(null);
     else setRecoveryError(null);
     try {
-      const result = await window.lnwjud.purgeRecoveryData({ category, userConfirmed: true });
+      const result = await window.lnwjing.purgeRecoveryData({ category, userConfirmed: true });
       await props.onRefresh();
       const message = t('settingsPage.deletedRecoveryCount', { count: result.deleted });
       if (category === 'backups') setBackupMessage(message);
@@ -447,18 +447,18 @@ export function SettingsPage(props: SettingsPageProps): ReactElement {
     setRemoteMcpBusy(true);
     setRemoteMcpMessage(null);
     try {
-      if (action === 'install') await window.lnwjud.installRemoteMcpProvider();
+      if (action === 'install') await window.lnwjing.installRemoteMcpProvider();
       if (action === 'save') {
-        await window.lnwjud.saveRemoteMcpAuthtoken({ authtoken: remoteMcpAuthtoken });
+        await window.lnwjing.saveRemoteMcpAuthtoken({ authtoken: remoteMcpAuthtoken });
         setRemoteMcpAuthtoken('');
       }
       if (action === 'domain') {
-        const status = await window.lnwjud.setRemoteMcpPublicOrigin({ publicOrigin: remoteMcpPublicOrigin });
+        const status = await window.lnwjing.setRemoteMcpPublicOrigin({ publicOrigin: remoteMcpPublicOrigin });
         setRemoteMcpPublicOrigin(status.configuredPublicOrigin ?? '');
       }
-      if (action === 'start') await window.lnwjud.startRemoteMcp();
-      if (action === 'stop') await window.lnwjud.stopRemoteMcp();
-      if (action === 'resetOauth') await window.lnwjud.resetRemoteMcpOAuth();
+      if (action === 'start') await window.lnwjing.startRemoteMcp();
+      if (action === 'stop') await window.lnwjing.stopRemoteMcp();
+      if (action === 'resetOauth') await window.lnwjing.resetRemoteMcpOAuth();
       await props.onRefresh();
       setRemoteMcpMessage(t('settingsPage.remoteUpdated'));
     } catch (cause: unknown) {
@@ -472,7 +472,7 @@ export function SettingsPage(props: SettingsPageProps): ReactElement {
     setRemoteMcpBusy(true);
     setRemoteMcpMessage(null);
     try {
-      const status = await window.lnwjud.setRemoteMcpTransport({ transport });
+      const status = await window.lnwjing.setRemoteMcpTransport({ transport });
       setRemoteMcpPublicOrigin(status.configuredPublicOrigin ?? '');
       await props.onRefresh();
       setRemoteMcpMessage(t('settingsPage.remoteTransportUpdated'));

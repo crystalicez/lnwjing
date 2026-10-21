@@ -3,7 +3,7 @@ import {
   type GoalTaskProvider,
   type GoalTrackedTask,
   type Result,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 
 export type GoalTaskCancellationProviderName = 'process' | 'codex' | 'shell';
 

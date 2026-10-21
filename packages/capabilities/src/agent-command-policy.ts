@@ -1,1 +1,1 @@
-export { prohibitedAgentCommandReason, riskyAgentCommandReason } from '@lnwjud/shared';
+export { prohibitedAgentCommandReason, riskyAgentCommandReason } from '@lnwjing/shared';

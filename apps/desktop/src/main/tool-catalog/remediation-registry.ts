@@ -1,4 +1,4 @@
-import type { RemediationAction, ResolvedRemediation, UiLocale } from '@lnwjud/ipc-contracts';
+import type { RemediationAction, ResolvedRemediation, UiLocale } from '@lnwjing/ipc-contracts';
 import { KNOWN_TOOL_REQUIREMENT_IDS } from './catalog-definitions.js';
 
 interface RemediationDefinition {
@@ -16,13 +16,13 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
     'Register and activate a project workspace before using workspace-scoped tools.',
     'เพิ่มและเปิดใช้งาน project workspace ก่อนใช้เครื่องมือที่ต้องทำงานในโปรเจกต์',
     [{ kind: 'open_settings', target: 'projects' }],
-    ['Open Projects.', 'Add the folder you want lnwjud to work in.', 'Mark the project active, then recheck.'],
-    ['เปิดหน้าโปรเจกต์', 'เพิ่มโฟลเดอร์ที่ต้องการให้ lnwjud ทำงาน', 'เปิด Active ให้โปรเจกต์นั้น แล้วตรวจใหม่'],
+    ['Open Projects.', 'Add the folder you want lnwjing to work in.', 'Mark the project active, then recheck.'],
+    ['เปิดหน้าโปรเจกต์', 'เพิ่มโฟลเดอร์ที่ต้องการให้ lnwjing ทำงาน', 'เปิด Active ให้โปรเจกต์นั้น แล้วตรวจใหม่'],
   ),
   remediation(
     'install_git', 'Install Git', 'ติดตั้ง Git',
-    'Git is not available to the lnwjud runtime.',
-    'runtime ของ lnwjud ยังหา Git ไม่พบ',
+    'Git is not available to the lnwjing runtime.',
+    'runtime ของ lnwjing ยังหา Git ไม่พบ',
     [{ kind: 'open_official_url', target: 'git_download' }, { kind: 'recheck', requirementIds: ['executable_git'] }],
     ['Install Git from the official installer for your host.', 'Make sure git is available to newly started applications.', 'Recheck this item.'],
     ['ติดตั้ง Git จากตัวติดตั้งทางการสำหรับระบบของคุณ', 'ให้ git ใช้งานได้กับโปรแกรมที่เปิดใหม่', 'กลับมากดตรวจใหม่'],
@@ -32,8 +32,8 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
     'ripgrep is required for fast text search. The installer normally bundles it; use the official release only if the bundled runtime is missing.',
     'ripgrep จำเป็นสำหรับค้นหาข้อความแบบเร็ว ปกติ installer จะมีมาให้แล้ว ให้ติดตั้งจากเว็บทางการเฉพาะเมื่อ runtime ที่มากับโปรแกรมหายหรือเสีย',
     [{ kind: 'open_official_url', target: 'ripgrep_releases' }, { kind: 'recheck', requirementIds: ['executable_ripgrep'] }],
-    ['Recheck first after reinstalling/updating lnwjud.', 'If still missing, install ripgrep from the official release.', 'Reopen lnwjud and recheck.'],
-    ['ถ้าเพิ่งติดตั้ง/อัปเดต lnwjud ให้ตรวจใหม่ก่อน', 'หากยังไม่พบ ให้ติดตั้ง ripgrep จาก release ทางการ', 'เปิด lnwjud ใหม่แล้วตรวจอีกครั้ง'],
+    ['Recheck first after reinstalling/updating lnwjing.', 'If still missing, install ripgrep from the official release.', 'Reopen lnwjing and recheck.'],
+    ['ถ้าเพิ่งติดตั้ง/อัปเดต lnwjing ให้ตรวจใหม่ก่อน', 'หากยังไม่พบ ให้ติดตั้ง ripgrep จาก release ทางการ', 'เปิด lnwjing ใหม่แล้วตรวจอีกครั้ง'],
   ),
   remediation(
     'configure_codex', 'Enable and configure Codex', 'เปิดและตั้งค่า Codex',
@@ -57,11 +57,11 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
   ),
   remediation(
     'configure_secret_storage', 'Unlock secure secret storage', 'เปิดใช้ secure secret storage',
-    'lnwjud cannot persist checkpoint or tunnel secrets until the operating-system keychain is available. Linux basic_text is intentionally rejected.',
-    'lnwjud จะยังเก็บ checkpoint หรือ tunnel secret ไม่ได้จนกว่า keychain ของระบบจะพร้อมใช้งาน โดย Linux basic_text จะถูกปฏิเสธโดยตั้งใจ',
+    'lnwjing cannot persist checkpoint or tunnel secrets until the operating-system keychain is available. Linux basic_text is intentionally rejected.',
+    'lnwjing จะยังเก็บ checkpoint หรือ tunnel secret ไม่ได้จนกว่า keychain ของระบบจะพร้อมใช้งาน โดย Linux basic_text จะถูกปฏิเสธโดยตั้งใจ',
     [{ kind: 'open_settings', target: 'security_profile' }, { kind: 'recheck', requirementIds: ['secret_storage'] }],
-    ['Unlock/sign in to the OS keychain or Secret Service/KWallet.', 'Do not enable plaintext encryption or place secrets in environment snapshots.', 'Restart lnwjud if the desktop keychain became available, then recheck.'],
-    ['ปลดล็อก/ลงชื่อเข้าใช้ keychain หรือ Secret Service/KWallet ของระบบ', 'อย่าเปิด plaintext encryption หรือใส่ secret ใน environment snapshot', 'Restart lnwjud หาก keychain พร้อมแล้ว แล้วตรวจใหม่'],
+    ['Unlock/sign in to the OS keychain or Secret Service/KWallet.', 'Do not enable plaintext encryption or place secrets in environment snapshots.', 'Restart lnwjing if the desktop keychain became available, then recheck.'],
+    ['ปลดล็อก/ลงชื่อเข้าใช้ keychain หรือ Secret Service/KWallet ของระบบ', 'อย่าเปิด plaintext encryption หรือใส่ secret ใน environment snapshot', 'Restart lnwjing หาก keychain พร้อมแล้ว แล้วตรวจใหม่'],
   ),
   remediation(
     'connect_external_mcp', 'Connect an external MCP server', 'เชื่อมต่อ External MCP',
@@ -74,7 +74,7 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
   remediation(
     'configure_pdf_provider', 'Configure the PDF provider', 'ตั้งค่าตัวอ่าน PDF',
     'PDF extraction needs a native pdftotext provider. Windows x64 can use the pinned Poppler auto-installer, which verifies the archive SHA-256 before extraction; other supported hosts must install native pdftotext and configure its path.',
-    'การอ่านข้อความ PDF ต้องมี pdftotext แบบ native โดย Windows x64 ใช้ตัวติดตั้ง Poppler ที่ lnwjud กำหนดไว้และตรวจ SHA-256 ของ archive ก่อนแตกไฟล์ ส่วน host อื่นให้ติดตั้ง pdftotext ของระบบแล้วระบุพาธ',
+    'การอ่านข้อความ PDF ต้องมี pdftotext แบบ native โดย Windows x64 ใช้ตัวติดตั้ง Poppler ที่ lnwjing กำหนดไว้และตรวจ SHA-256 ของ archive ก่อนแตกไฟล์ ส่วน host อื่นให้ติดตั้ง pdftotext ของระบบแล้วระบุพาธ',
     [{ kind: 'open_settings', target: 'tools_local_providers' }, { kind: 'recheck', requirementIds: ['local_pdf_provider'] }],
     ['Open Tools → Local Providers.', 'On Windows x64, use the verified automatic Poppler installer if desired. On other hosts, install native pdftotext and enter its path.', 'Recheck the PDF provider.'],
     ['เปิด Tools → Local Providers', 'บน Windows x64 ใช้ตัวติดตั้ง Poppler อัตโนมัติที่ตรวจสอบแล้วได้ ส่วน host อื่นให้ติดตั้ง pdftotext แบบ native และระบุพาธ', 'กดตรวจ PDF Provider ใหม่'],
@@ -97,8 +97,8 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
   ),
   remediation(
     'configure_windows_sandbox', 'Enable Windows Sandbox', 'เปิดใช้ Windows Sandbox',
-    'Windows Sandbox is a Windows optional feature; it is not configured in lnwjud Tools settings.',
-    'Windows Sandbox เป็น Optional Feature ของ Windows ไม่ได้ตั้งค่าจากหน้า Tools ของ lnwjud',
+    'Windows Sandbox is a Windows optional feature; it is not configured in lnwjing Tools settings.',
+    'Windows Sandbox เป็น Optional Feature ของ Windows ไม่ได้ตั้งค่าจากหน้า Tools ของ lnwjing',
     [
       { kind: 'open_system_settings', target: 'windows_optional_features' },
       { kind: 'copy_command', commandId: 'enable_windows_sandbox' },
@@ -120,9 +120,9 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
     ['ใช้ wsl --install ใน Terminal แบบ Administrator บน Windows ที่รองรับ หรือเปิด Windows Feature ที่เกี่ยวข้องเอง', 'Restart Windows หากระบบร้องขอ', 'ตั้งค่า Linux distribution ครั้งแรกให้เสร็จ แล้วตรวจใหม่'],
   ),
   remediation(
-    'configure_browser_cdp', 'Start the lnwjud managed browser', 'เปิดเบราว์เซอร์ที่ lnwjud จัดการ',
-    'Browser/CDP tools need the managed browser runtime to be running. lnwjud can start it automatically; you do not need to add Chrome debugging flags yourself.',
-    'เครื่องมือ Browser/CDP ต้องมี Managed Browser ที่กำลังทำงาน lnwjud สามารถเปิดให้ได้อัตโนมัติ ไม่ต้องเพิ่ม Chrome debugging flags เอง',
+    'configure_browser_cdp', 'Start the lnwjing managed browser', 'เปิดเบราว์เซอร์ที่ lnwjing จัดการ',
+    'Browser/CDP tools need the managed browser runtime to be running. lnwjing can start it automatically; you do not need to add Chrome debugging flags yourself.',
+    'เครื่องมือ Browser/CDP ต้องมี Managed Browser ที่กำลังทำงาน lnwjing สามารถเปิดให้ได้อัตโนมัติ ไม่ต้องเพิ่ม Chrome debugging flags เอง',
     [{ kind: 'launch_managed_browser' }, { kind: 'recheck', requirementIds: ['browser_cdp'] }],
     ['Click Start managed browser.', 'Wait for the managed Chrome window to open.', 'Recheck. Tools that operate a page will still select/create an explicit tab_id at call time.'],
     ['กด เปิด Managed Browser', 'รอให้หน้าต่าง Managed Chrome เปิดขึ้น', 'กดตรวจใหม่ โดยตอนใช้งานจริงเครื่องมือจะเลือก/สร้าง tab_id ที่ชัดเจนอีกครั้ง'],
@@ -138,34 +138,34 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
   remediation(
     'repair_windows_ui_automation', 'Repair Windows UI Automation bridge', 'แก้ไข Windows UI Automation bridge',
     'Native desktop automation needs the packaged Windows UI Automation bridge. It does not depend on Chrome.',
-    'ระบบควบคุมแอป Windows ต้องใช้ Windows UI Automation bridge ที่มากับ lnwjud และไม่เกี่ยวกับ Chrome',
+    'ระบบควบคุมแอป Windows ต้องใช้ Windows UI Automation bridge ที่มากับ lnwjing และไม่เกี่ยวกับ Chrome',
     [{ kind: 'recheck', requirementIds: ['windows_ui_automation'] }],
-    ['Read the failed windows_ui_automation detail above.', 'Restart lnwjud once.', 'If the packaged bridge is missing or failed integrity verification, repair or reinstall the current official lnwjud build, then recheck.'],
-    ['อ่านรายละเอียด windows_ui_automation ที่ล้มเหลวด้านบน', 'Restart lnwjud หนึ่งครั้ง', 'หาก bridge ที่มากับโปรแกรมหายหรือตรวจ integrity ไม่ผ่าน ให้ซ่อมหรือติดตั้ง lnwjud รุ่นทางการปัจจุบันใหม่ แล้วตรวจอีกครั้ง'],
+    ['Read the failed windows_ui_automation detail above.', 'Restart lnwjing once.', 'If the packaged bridge is missing or failed integrity verification, repair or reinstall the current official lnwjing build, then recheck.'],
+    ['อ่านรายละเอียด windows_ui_automation ที่ล้มเหลวด้านบน', 'Restart lnwjing หนึ่งครั้ง', 'หาก bridge ที่มากับโปรแกรมหายหรือตรวจ integrity ไม่ผ่าน ให้ซ่อมหรือติดตั้ง lnwjing รุ่นทางการปัจจุบันใหม่ แล้วตรวจอีกครั้ง'],
   ),
   remediation(
     'repair_windows_input', 'Restore native input access', 'แก้ไขการเข้าถึงเมาส์และคีย์บอร์ดของ Windows',
     'Pointer and keyboard actions need the packaged native input bridge and the permission reported by windows_input.',
     'คำสั่งเมาส์และคีย์บอร์ดต้องใช้ native input bridge ที่มากับโปรแกรมและสิทธิ์ตามผลตรวจ windows_input',
     [{ kind: 'recheck', requirementIds: ['windows_input'] }],
-    ['Read the failed windows_input detail above.', 'Close any Windows security prompt that is still awaiting a decision, then restart lnwjud.', 'If the packaged bridge is missing or blocked, repair the official lnwjud installation and recheck.'],
-    ['อ่านรายละเอียด windows_input ที่ล้มเหลวด้านบน', 'จัดการ Windows security prompt ที่ยังรอคำตอบ แล้ว Restart lnwjud', 'หาก bridge ที่มากับโปรแกรมหายหรือถูกบล็อก ให้ซ่อมการติดตั้ง lnwjud รุ่นทางการแล้วตรวจอีกครั้ง'],
+    ['Read the failed windows_input detail above.', 'Close any Windows security prompt that is still awaiting a decision, then restart lnwjing.', 'If the packaged bridge is missing or blocked, repair the official lnwjing installation and recheck.'],
+    ['อ่านรายละเอียด windows_input ที่ล้มเหลวด้านบน', 'จัดการ Windows security prompt ที่ยังรอคำตอบ แล้ว Restart lnwjing', 'หาก bridge ที่มากับโปรแกรมหายหรือถูกบล็อก ให้ซ่อมการติดตั้ง lnwjing รุ่นทางการแล้วตรวจอีกครั้ง'],
   ),
   remediation(
     'repair_windows_window', 'Restore native window access', 'แก้ไขการเข้าถึงหน้าต่าง Windows',
     'Window discovery and activation need the packaged native window bridge reported by windows_window.',
     'การค้นหาและเปิดใช้งานหน้าต่างต้องใช้ native window bridge ที่มากับโปรแกรมตามผลตรวจ windows_window',
     [{ kind: 'recheck', requirementIds: ['windows_window'] }],
-    ['Read the failed windows_window detail above.', 'Restart lnwjud and recheck.', 'If the packaged bridge is missing or failed integrity verification, repair or reinstall the current official build.'],
-    ['อ่านรายละเอียด windows_window ที่ล้มเหลวด้านบน', 'Restart lnwjud แล้วตรวจอีกครั้ง', 'หาก bridge ที่มากับโปรแกรมหายหรือตรวจ integrity ไม่ผ่าน ให้ซ่อมหรือติดตั้งรุ่นทางการปัจจุบันใหม่'],
+    ['Read the failed windows_window detail above.', 'Restart lnwjing and recheck.', 'If the packaged bridge is missing or failed integrity verification, repair or reinstall the current official build.'],
+    ['อ่านรายละเอียด windows_window ที่ล้มเหลวด้านบน', 'Restart lnwjing แล้วตรวจอีกครั้ง', 'หาก bridge ที่มากับโปรแกรมหายหรือตรวจ integrity ไม่ผ่าน ให้ซ่อมหรือติดตั้งรุ่นทางการปัจจุบันใหม่'],
   ),
   remediation(
     'repair_windows_ocr', 'Restore Windows vision/OCR', 'แก้ไขระบบ Vision/OCR ของ Windows',
     'Visual targeting needs the packaged vision helper and a usable Windows package identity reported by windows_ocr.',
     'การเลือกเป้าหมายจากภาพต้องใช้ vision helper ที่มากับโปรแกรมและ Windows package identity ที่พร้อม ตามผลตรวจ windows_ocr',
     [{ kind: 'recheck', requirementIds: ['windows_ocr'] }],
-    ['Read the failed windows_ocr detail above.', 'Restart lnwjud and recheck.', 'If package identity or the packaged helper is unavailable, repair or reinstall the current official lnwjud build that supplies them.'],
-    ['อ่านรายละเอียด windows_ocr ที่ล้มเหลวด้านบน', 'Restart lnwjud แล้วตรวจอีกครั้ง', 'หาก package identity หรือ helper ที่มากับโปรแกรมไม่พร้อม ให้ซ่อมหรือติดตั้ง lnwjud รุ่นทางการปัจจุบันที่มีส่วนประกอบดังกล่าวใหม่'],
+    ['Read the failed windows_ocr detail above.', 'Restart lnwjing and recheck.', 'If package identity or the packaged helper is unavailable, repair or reinstall the current official lnwjing build that supplies them.'],
+    ['อ่านรายละเอียด windows_ocr ที่ล้มเหลวด้านบน', 'Restart lnwjing แล้วตรวจอีกครั้ง', 'หาก package identity หรือ helper ที่มากับโปรแกรมไม่พร้อม ให้ซ่อมหรือติดตั้ง lnwjing รุ่นทางการปัจจุบันที่มีส่วนประกอบดังกล่าวใหม่'],
   ),
   remediation(
     'configure_permissions', 'Allow the tool in Security settings', 'อนุญาตเครื่องมือใน Security',
@@ -177,11 +177,11 @@ const DEFINITIONS: readonly RemediationDefinition[] = [
   ),
   remediation(
     'feature_not_available', 'Runtime backend is not included in this version', 'เวอร์ชันนี้ยังไม่มีส่วนทำงานของเครื่องมือนี้',
-    'The tool is listed so its delivery state is visible, but this installed lnwjud version does not include the runtime/provider that executes it. This is not a missing Windows or user setting, and there is no Settings switch to turn it on.',
-    'รายการนี้ยังแสดงไว้เพื่อบอกสถานะตามจริง แต่ lnwjud เวอร์ชันที่ติดตั้งยังไม่มี runtime/provider ที่ใช้ทำงานจริง ไม่ใช่การตั้งค่า Windows หรือการตั้งค่าของคุณที่ขาด และไม่มีสวิตช์ใน Settings ที่เปิดแล้วจะใช้งานได้',
+    'The tool is listed so its delivery state is visible, but this installed lnwjing version does not include the runtime/provider that executes it. This is not a missing Windows or user setting, and there is no Settings switch to turn it on.',
+    'รายการนี้ยังแสดงไว้เพื่อบอกสถานะตามจริง แต่ lnwjing เวอร์ชันที่ติดตั้งยังไม่มี runtime/provider ที่ใช้ทำงานจริง ไม่ใช่การตั้งค่า Windows หรือการตั้งค่าของคุณที่ขาด และไม่มีสวิตช์ใน Settings ที่เปิดแล้วจะใช้งานได้',
     [],
-    ['Check the feature_delivery requirement above for the exact backend/provider this tool needs.', 'Do not change unrelated local settings.', 'When a lnwjud version containing that runtime/provider is installed, recheck the tool catalog.'],
-    ['ดูข้อกำหนด feature_delivery ด้านบนเพื่อดูชื่อ backend/provider ที่เครื่องมือนี้ยังขาด', 'ไม่ต้องเปลี่ยน Settings หรือการตั้งค่าของ Windows ที่ไม่เกี่ยวข้อง', 'เมื่อใช้ lnwjud รุ่นที่รวม runtime/provider นั้นแล้ว ให้กดตรวจใหม่อีกครั้ง'],
+    ['Check the feature_delivery requirement above for the exact backend/provider this tool needs.', 'Do not change unrelated local settings.', 'When a lnwjing version containing that runtime/provider is installed, recheck the tool catalog.'],
+    ['ดูข้อกำหนด feature_delivery ด้านบนเพื่อดูชื่อ backend/provider ที่เครื่องมือนี้ยังขาด', 'ไม่ต้องเปลี่ยน Settings หรือการตั้งค่าของ Windows ที่ไม่เกี่ยวข้อง', 'เมื่อใช้ lnwjing รุ่นที่รวม runtime/provider นั้นแล้ว ให้กดตรวจใหม่อีกครั้ง'],
   ),
   remediation(
     'feature_planned', 'Planned tool — not available yet', 'เครื่องมือที่วางแผนไว้ — ยังใช้ไม่ได้',

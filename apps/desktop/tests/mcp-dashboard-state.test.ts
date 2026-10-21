@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DashboardSnapshot, McpConnectionStatus } from '@lnwjud/ipc-contracts';
+import type { DashboardSnapshot, McpConnectionStatus } from '@lnwjing/ipc-contracts';
 import { McpDashboardState } from '../src/renderer/mcp-dashboard-state.js';
 
 const readyUrl = 'http://127.0.0.1:43123/mcp';
@@ -7,7 +7,7 @@ const readyDashboard = {
   mcp: { running: true, url: readyUrl, workspaceId: null },
   agentState: 'idle',
   inFlight: [],
-  connectionModes: { httpUrl: readyUrl, stdioCommand: 'lnwjud-mcp-stdio' },
+  connectionModes: { httpUrl: readyUrl, stdioCommand: 'lnwjing-mcp-stdio' },
 } as DashboardSnapshot;
 
 describe('McpDashboardState', () => {

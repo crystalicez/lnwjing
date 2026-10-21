@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { resolveSharedWorkspace, resolveWorkspaceForPath } from './workspace-locator.js';
 
 function repository(workspaces: readonly Workspace[]): WorkspaceRepository {

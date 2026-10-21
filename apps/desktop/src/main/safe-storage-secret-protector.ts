@@ -5,7 +5,7 @@ import {
   type SecretProtector,
   type SecretProtectionStatus,
   type SecretPurpose,
-} from '@lnwjud/shared';
+} from '@lnwjing/shared';
 
 export interface SafeStorageApi {
   isAsyncEncryptionAvailable(): Promise<boolean>;

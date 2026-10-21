@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
+import { appError, err, ok } from '@lnwjing/domain';
 import { OfficeRuntimeService } from './office-runtime.js';
 import type { McpApplicationServices } from './tools/tool-types.js';
 
@@ -215,7 +215,7 @@ describe('OfficeRuntimeService provider truthfulness', () => {
   });
 
   it('verifies conversion output at the canonical provider target for relative paths', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-office-convert-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-office-convert-'));
     try {
       const canonicalSource = path.join(root, 'source.docx');
       const canonicalTarget = path.join(root, 'out.pdf');
@@ -274,7 +274,7 @@ describe('OfficeRuntimeService provider truthfulness', () => {
   });
 
   it('rejects a conversion result whose bytes do not match the requested target type', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-office-convert-type-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-office-convert-type-'));
     try {
       const canonicalSource = path.join(root, 'source.docx');
       const canonicalTarget = path.join(root, 'out.pdf');

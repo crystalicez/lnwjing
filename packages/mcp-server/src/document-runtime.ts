@@ -9,9 +9,9 @@ import {
   ok,
   type InvocationAuthorization,
   type Result,
-} from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
-import { hostPathApi, isAbsoluteHostPath, isHostPathWithin, resolveHostPath } from '@lnwjud/workspace';
+} from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
+import { hostPathApi, isAbsoluteHostPath, isHostPathWithin, resolveHostPath } from '@lnwjing/workspace';
 import { withReplacementRecoveryDetails } from './replacement-recovery.js';
 import type { McpApplicationServices } from './tools/tool-types.js';
 
@@ -21,7 +21,7 @@ import type { McpApplicationServices } from './tools/tool-types.js';
  * cannot become a filesystem-policy bypass.
  */
 
-const PROVIDER_ENV = 'LNWJUD_PDF_PROVIDER';
+const PROVIDER_ENV = 'LNWJING_PDF_PROVIDER';
 const PROVIDER_CANDIDATES = ['pdftotext.exe', 'pdftotext'];
 const MAX_DOCUMENT_BYTES = 64 * 1024 * 1024;
 const MAX_TEXT_CHARS = 2_000_000;

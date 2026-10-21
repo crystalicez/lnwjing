@@ -1,6 +1,6 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { useId, useState, type ReactElement, type ReactNode } from 'react';
-import type { UiLocale } from '@lnwjud/ipc-contracts';
+import type { UiLocale } from '@lnwjing/ipc-contracts';
 import { v580Strings } from '../../i18n/v580-copy.js';
 import { CallHistoryPanel } from '../observability/CallHistoryPanel.js';
 import { GoalResultsPanel } from '../observability/GoalResultsPanel.js';

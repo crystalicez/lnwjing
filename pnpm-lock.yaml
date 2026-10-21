@@ -15,28 +15,28 @@ importers:
       '@eslint/js':
         specifier: 9.33.0
         version: 9.33.0
-      '@lnwjud/application':
+      '@lnwjing/application':
         specifier: workspace:*
         version: link:packages/application
-      '@lnwjud/audit':
+      '@lnwjing/audit':
         specifier: workspace:*
         version: link:packages/audit
-      '@lnwjud/codex':
+      '@lnwjing/codex':
         specifier: workspace:*
         version: link:packages/codex
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:packages/domain
-      '@lnwjud/mcp-server':
+      '@lnwjing/mcp-server':
         specifier: workspace:*
         version: link:packages/mcp-server
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:packages/process
-      '@lnwjud/storage':
+      '@lnwjing/storage':
         specifier: workspace:*
         version: link:packages/storage
-      '@lnwjud/workspace':
+      '@lnwjing/workspace':
         specifier: workspace:*
         version: link:packages/workspace
       '@types/node':
@@ -57,37 +57,37 @@ importers:
 
   apps/cli:
     dependencies:
-      '@lnwjud/application':
+      '@lnwjing/application':
         specifier: workspace:*
         version: link:../../packages/application
-      '@lnwjud/audit':
+      '@lnwjing/audit':
         specifier: workspace:*
         version: link:../../packages/audit
-      '@lnwjud/capabilities':
+      '@lnwjing/capabilities':
         specifier: workspace:*
         version: link:../../packages/capabilities
-      '@lnwjud/codex':
+      '@lnwjing/codex':
         specifier: workspace:*
         version: link:../../packages/codex
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@lnwjud/extensions':
+      '@lnwjing/extensions':
         specifier: workspace:*
         version: link:../../packages/extensions
-      '@lnwjud/mcp-server':
+      '@lnwjing/mcp-server':
         specifier: workspace:*
         version: link:../../packages/mcp-server
-      '@lnwjud/permissions':
+      '@lnwjing/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@lnwjud/storage':
+      '@lnwjing/storage':
         specifier: workspace:*
         version: link:../../packages/storage
-      '@lnwjud/workspace':
+      '@lnwjing/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
     devDependencies:
@@ -97,46 +97,46 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@lnwjud/application':
+      '@lnwjing/application':
         specifier: workspace:*
         version: link:../../packages/application
-      '@lnwjud/audit':
+      '@lnwjing/audit':
         specifier: workspace:*
         version: link:../../packages/audit
-      '@lnwjud/capabilities':
+      '@lnwjing/capabilities':
         specifier: workspace:*
         version: link:../../packages/capabilities
-      '@lnwjud/codex':
+      '@lnwjing/codex':
         specifier: workspace:*
         version: link:../../packages/codex
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@lnwjud/extensions':
+      '@lnwjing/extensions':
         specifier: workspace:*
         version: link:../../packages/extensions
-      '@lnwjud/ipc-contracts':
+      '@lnwjing/ipc-contracts':
         specifier: workspace:*
         version: link:../../packages/ipc-contracts
-      '@lnwjud/mcp-server':
+      '@lnwjing/mcp-server':
         specifier: workspace:*
         version: link:../../packages/mcp-server
-      '@lnwjud/permissions':
+      '@lnwjing/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../../packages/process
-      '@lnwjud/search':
+      '@lnwjing/search':
         specifier: workspace:*
         version: link:../../packages/search
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@lnwjud/storage':
+      '@lnwjing/storage':
         specifier: workspace:*
         version: link:../../packages/storage
-      '@lnwjud/workspace':
+      '@lnwjing/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
       ecc-agentshield:
@@ -200,37 +200,37 @@ importers:
 
   packages/application:
     dependencies:
-      '@lnwjud/audit':
+      '@lnwjing/audit':
         specifier: workspace:*
         version: link:../audit
-      '@lnwjud/codex':
+      '@lnwjing/codex':
         specifier: workspace:*
         version: link:../codex
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/filesystem':
+      '@lnwjing/filesystem':
         specifier: workspace:*
         version: link:../filesystem
-      '@lnwjud/git':
+      '@lnwjing/git':
         specifier: workspace:*
         version: link:../git
-      '@lnwjud/permissions':
+      '@lnwjing/permissions':
         specifier: workspace:*
         version: link:../permissions
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../process
-      '@lnwjud/project':
+      '@lnwjing/project':
         specifier: workspace:*
         version: link:../project
-      '@lnwjud/search':
+      '@lnwjing/search':
         specifier: workspace:*
         version: link:../search
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../shared
-      '@lnwjud/workspace':
+      '@lnwjing/workspace':
         specifier: workspace:*
         version: link:../workspace
 
@@ -238,22 +238,22 @@ importers:
 
   packages/capabilities:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../process
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../shared
 
   packages/codex:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../process
 
@@ -261,10 +261,10 @@ importers:
 
   packages/extensions:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../process
       '@modelcontextprotocol/client':
@@ -273,19 +273,19 @@ importers:
 
   packages/filesystem:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/workspace':
+      '@lnwjing/workspace':
         specifier: workspace:*
         version: link:../workspace
 
   packages/git:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../process
 
@@ -293,31 +293,31 @@ importers:
 
   packages/mcp-server:
     dependencies:
-      '@lnwjud/application':
+      '@lnwjing/application':
         specifier: workspace:*
         version: link:../application
-      '@lnwjud/audit':
+      '@lnwjing/audit':
         specifier: workspace:*
         version: link:../audit
-      '@lnwjud/capabilities':
+      '@lnwjing/capabilities':
         specifier: workspace:*
         version: link:../capabilities
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/extensions':
+      '@lnwjing/extensions':
         specifier: workspace:*
         version: link:../extensions
-      '@lnwjud/permissions':
+      '@lnwjing/permissions':
         specifier: workspace:*
         version: link:../permissions
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../process
-      '@lnwjud/search':
+      '@lnwjing/search':
         specifier: workspace:*
         version: link:../search
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../shared
       '@modelcontextprotocol/server':
@@ -342,31 +342,31 @@ importers:
 
   packages/permissions:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../shared
 
   packages/process:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
 
   packages/project:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
 
   packages/search:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/process':
+      '@lnwjing/process':
         specifier: workspace:*
         version: link:../process
 
@@ -374,25 +374,25 @@ importers:
 
   packages/storage:
     dependencies:
-      '@lnwjud/audit':
+      '@lnwjing/audit':
         specifier: workspace:*
         version: link:../audit
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../shared
-      '@lnwjud/workspace':
+      '@lnwjing/workspace':
         specifier: workspace:*
         version: link:../workspace
 
   packages/workspace:
     dependencies:
-      '@lnwjud/domain':
+      '@lnwjing/domain':
         specifier: workspace:*
         version: link:../domain
-      '@lnwjud/shared':
+      '@lnwjing/shared':
         specifier: workspace:*
         version: link:../shared
 

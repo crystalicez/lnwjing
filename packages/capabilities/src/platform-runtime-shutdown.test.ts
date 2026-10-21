@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
+import { appError, err, ok } from '@lnwjing/domain';
 import type { NativeHostProcessBridge } from './native-host-protocol.js';
 import { createPlatformCapabilitySet } from './platform-capability-set.js';
 
@@ -8,7 +8,7 @@ describe('platform capability shutdown', () => {
     const barrier = Promise.withResolvers<void>();
     const nativeClose = vi.fn(async () => { await barrier.promise; return ok(undefined); });
     const execute = vi.fn(async () => ok({ ready: true }));
-    const runtime = createPlatformCapabilitySet({ platform: 'linux', dataPath: '/tmp/lnwjud-shutdown-fixture', workspaceRootsProvider: async () => [],
+    const runtime = createPlatformCapabilitySet({ platform: 'linux', dataPath: '/tmp/lnwjing-shutdown-fixture', workspaceRootsProvider: async () => [],
       nativeHost: { execute, close: nativeClose } as unknown as NativeHostProcessBridge });
     const browserClose = vi.spyOn(runtime.domCdp, 'close').mockResolvedValue(undefined);
     const closing = runtime.close();
@@ -24,7 +24,7 @@ describe('platform capability shutdown', () => {
 
   it('retains cleanup failure and permits an explicit cleanup retry without reopening admission', async () => {
     const nativeClose = vi.fn().mockResolvedValueOnce(err(appError('PROCESS_TIMEOUT', 'Native cleanup unverified'))).mockResolvedValue(ok(undefined));
-    const runtime = createPlatformCapabilitySet({ platform: 'linux', dataPath: '/tmp/lnwjud-shutdown-fixture', workspaceRootsProvider: async () => [],
+    const runtime = createPlatformCapabilitySet({ platform: 'linux', dataPath: '/tmp/lnwjing-shutdown-fixture', workspaceRootsProvider: async () => [],
       nativeHost: { close: nativeClose } as unknown as NativeHostProcessBridge });
     const browserClose = vi.spyOn(runtime.domCdp, 'close').mockRejectedValueOnce(new Error('private-provider-message')).mockResolvedValue(undefined);
     await expect(runtime.close()).resolves.toMatchObject({ ok: false, error: { code: 'PROCESS_TIMEOUT' } });

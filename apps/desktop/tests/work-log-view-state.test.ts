@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AuditEvent } from '@lnwjud/audit';
+import type { AuditEvent } from '@lnwjing/audit';
 import { WorkLogViewState } from '../src/main/work-log-view-state.js';
 
 class MemoryStore {

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WorkspaceInfoService } from './workspace-info-service.js';
 import { preflightWorkspacePath } from './workspace-path-preflight.js';
-import { WorkspaceService, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { WorkspaceService, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 
 const temporaryRoots: string[] = [];
 
@@ -16,7 +16,7 @@ describe('WorkspaceInfoService.register', () => {
   it('revalidates after an advisory preflight and rejects a directory changed into a symlink', async () => {
     // macOS /var is a symlink to /private/var; isolate the intentional target
     // symlink regression from a symlink in the OS-provided temp path.
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-registration-race-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-registration-race-')));
     temporaryRoots.push(root);
     const target = path.join(root, 'project');
     const moved = path.join(root, 'moved');
@@ -44,7 +44,7 @@ describe('WorkspaceInfoService.register', () => {
   });
 
   it('registers an explicit absolute project without an automatically generated machine root', async () => {
-    const projectRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-register-direct-')));
+    const projectRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-register-direct-')));
     temporaryRoots.push(projectRoot);
     const projectRealRoot = await realpath(projectRoot);
 
@@ -68,7 +68,7 @@ describe('WorkspaceInfoService.register', () => {
   });
 
   it('registers a project under whichever drive-root machine root owns it and is idempotent', async () => {
-    const projectRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-register-')));
+    const projectRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-register-')));
     temporaryRoots.push(projectRoot);
     const machineRoot = path.parse(projectRoot).root;
     if (!/^[A-Za-z]:\\$/.test(machineRoot)) return;
@@ -100,7 +100,7 @@ describe('WorkspaceInfoService.register', () => {
     const alternateDrive = machineRoot[0]?.toUpperCase() === 'Z' ? 'Y' : 'Z';
     const outside = await service.register(actor, {
       parentWorkspaceId: machine.value.id,
-      path: `${alternateDrive}:\\outside-lnwjud`,
+      path: `${alternateDrive}:\\outside-lnwjing`,
     });
     expect(outside).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
   });

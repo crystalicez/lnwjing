@@ -1,11 +1,11 @@
-# lnwjud Phase 01 Compatibility Benchmark
+# lnwjing Phase 01 Compatibility Benchmark
 
 Generated: 2026-08-16T18:19:46.017Z
 Repository: `main` @ `3ba7d48da9eba432988414fb03322d1f33a84fca`
 
 ## Scope
 
-This is a post-Phase-01 compatibility snapshot. It starts the built lnwjud application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It retains the Phase 00 sequential scenarios so tool-catalog and transport changes can be compared without replacing the original baseline.
+This is a post-Phase-01 compatibility snapshot. It starts the built lnwjing application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It retains the Phase 00 sequential scenarios so tool-catalog and transport changes can be compared without replacing the original baseline.
 
 | Field | Value |
 | --- | --- |

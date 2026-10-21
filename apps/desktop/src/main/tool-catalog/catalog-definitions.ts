@@ -1,5 +1,5 @@
-import type { ToolCatalogDefinition, ToolCategory, ToolRiskMode } from '@lnwjud/ipc-contracts';
-import { ToolRegistry, upgradeCatalogEntry, type McpToolDefinition } from '@lnwjud/mcp-server';
+import type { ToolCatalogDefinition, ToolCategory, ToolRiskMode } from '@lnwjing/ipc-contracts';
+import { ToolRegistry, upgradeCatalogEntry, type McpToolDefinition } from '@lnwjing/mcp-server';
 
 export const KNOWN_TOOL_REQUIREMENT_IDS = Object.freeze([
   'platform_windows',
@@ -58,7 +58,7 @@ const DRY_RUN_TOOLS = new Set([
   'self_heal_apply', 'skills_import', 'ecc_security_scan',
 ]);
 
-const actor = { clientId: 'desktop-tool-catalog', clientName: 'lnwjud Desktop Tool Catalog' };
+const actor = { clientId: 'desktop-tool-catalog', clientName: 'lnwjing Desktop Tool Catalog' };
 const definitions = new ToolRegistry({}, actor, { codexToolsEnabled: true }).listAll();
 
 export const catalogSourceDescriptions: Readonly<Record<string, string>> = Object.freeze(Object.fromEntries(
@@ -82,7 +82,7 @@ function buildCatalogDefinition(definition: McpToolDefinition): ToolCatalogDefin
     riskMode: riskModeFor(definition.name),
     supportsCancel: CANCEL_TOOLS.has(definition.name),
     supportsDryRun: DRY_RUN_TOOLS.has(definition.name),
-    documentationTarget: `docs/LNWJUD_CAPABILITIES.md#${definition.name.replaceAll('_', '-')}`,
+    documentationTarget: `docs/LNWJING_CAPABILITIES.md#${definition.name.replaceAll('_', '-')}`,
   } satisfies ToolCatalogDefinition);
 }
 

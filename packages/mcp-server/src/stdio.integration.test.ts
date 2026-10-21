@@ -21,7 +21,7 @@ const fixturePath = fileURLToPath(new URL('../tests/fixtures/stdio-server.mjs', 
 function modernMeta(): Record<string, unknown> {
   return {
     [PROTOCOL_VERSION_META_KEY]: MODERN_PROTOCOL_VERSION,
-    [CLIENT_INFO_META_KEY]: { name: 'lnwjud-modern-stdio-wire-test', version: '0.1.0' },
+    [CLIENT_INFO_META_KEY]: { name: 'lnwjing-modern-stdio-wire-test', version: '0.1.0' },
     [CLIENT_CAPABILITIES_META_KEY]: {
       extensions: { [MODERN_TASKS_EXTENSION_ID]: {} },
     },
@@ -83,7 +83,7 @@ function createClientAndTransport(): { readonly client: Client; readonly transpo
     capturedDiagnostics += chunk.toString('utf8');
   });
   const client = new Client(
-    { name: 'lnwjud-stdio-test-client', version: '0.1.0' },
+    { name: 'lnwjing-stdio-test-client', version: '0.1.0' },
     {
       versionNegotiation: { mode: { pin: MODERN_PROTOCOL_VERSION } },
       capabilities: { extensions: { [MODERN_TASKS_EXTENSION_ID]: {} } },
@@ -111,7 +111,7 @@ describe('MCP stdio transport', () => {
       expect(second.tools.map((tool) => tool.name)).toEqual(first.tools.map((tool) => tool.name));
       expect(client.getServerCapabilities()?.tasks).toBeUndefined();
       expect(client.getServerCapabilities()?.extensions?.[MODERN_TASKS_EXTENSION_ID]).toEqual({});
-      expect(diagnostics()).toContain('lnwjud-stdio-test-diagnostic');
+      expect(diagnostics()).toContain('lnwjing-stdio-test-diagnostic');
     } finally {
       await client.close();
     }
@@ -133,7 +133,7 @@ describe('MCP stdio transport', () => {
         arguments: { operation: 'run', executable: 'fake-shell-command', arguments: [] },
       })));
       expect(created).toMatchObject({ resultType: 'task', status: 'working' });
-      expect(created.taskId).toEqual(expect.stringMatching(/^lnwjud-task-v1\./));
+      expect(created.taskId).toEqual(expect.stringMatching(/^lnwjing-task-v1\./));
       const taskId = String(created.taskId);
 
       const got = resultRecord(await sendRawRequest(transport, rawRequest('stdio-modern-get', 'tasks/get', { taskId })));

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createPlatformProfile, type PlatformProfileInput } from '../../packages/shared/src/platform-profile.js';
-import { resolveLnwjudDataPath } from '../../packages/shared/src/data-path.js';
+import { resolveLnwjingDataPath } from '../../packages/shared/src/data-path.js';
 import {
   classifyFilesystemRoot,
   isAbsoluteHostPath,
@@ -93,8 +93,8 @@ const mcpConfigScenarios: readonly Scenario[] = [
   ['046 empty MCP command is ignored', () => expect(normalizeLaunchConfig({ command: '   ' }, undefined, {})).toBeUndefined()],
   ['047 stable external MCP server name is accepted', () => expect(exclusionReason('serena-1', { command: 'serena' })).toBeUndefined()],
   ['048 MCP server name containing slash is rejected', () => expect(exclusionReason('bad/server', { command: 'node' })).toMatch(/namespace/i)],
-  ['049 lnwjud recursion by server name is rejected', () => expect(exclusionReason('lnwjud', { command: 'node' })).toMatch(/Refusing/i)],
-  ['050 lnwjud recursion by executable is rejected', () => expect(exclusionReason('helper', { command: 'C:\\Tools\\lnwjud.exe' })).toMatch(/Refusing/i)],
+  ['049 lnwjing recursion by server name is rejected', () => expect(exclusionReason('lnwjing', { command: 'node' })).toMatch(/Refusing/i)],
+  ['050 lnwjing recursion by executable is rejected', () => expect(exclusionReason('helper', { command: 'C:\\Tools\\lnwjing.exe' })).toMatch(/Refusing/i)],
 ];
 
 const secretScenarios: readonly Scenario[] = [
@@ -142,7 +142,7 @@ const processAndRuntimeScenarios: readonly Scenario[] = [
   ['067 POSIX empty executable is rejected', () => expect(toSpawnInvocation('   ', [], {}, 'linux')).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })],
   ['068 benchmark npm command uses npm.cmd only on Windows', () => expect(benchmarkPackageCommand('npm@11.6.0', 'bench', 'win32').executable).toBe('npm.cmd')],
   ['069 benchmark npm command uses npm on macOS', () => expect(benchmarkPackageCommand('npm@11.6.0', 'bench', 'darwin').executable).toBe('npm')],
-  ['070 bundled Linux runtime tool paths use POSIX separators', () => expect(bundledRuntimeToolDirectories('/opt/lnwjud/resources', 'linux')).toEqual(['/opt/lnwjud/resources/runtime-tools/ripgrep', '/opt/lnwjud/resources/tunnel-client'])],
+  ['070 bundled Linux runtime tool paths use POSIX separators', () => expect(bundledRuntimeToolDirectories('/opt/lnwjing/resources', 'linux')).toEqual(['/opt/lnwjing/resources/runtime-tools/ripgrep', '/opt/lnwjing/resources/tunnel-client'])],
 ];
 
 const remediationScenarios: readonly Scenario[] = [
@@ -180,10 +180,10 @@ const nativeCiScenarios: readonly Scenario[] = [
   ['096 native platform contract runs the release-scenario suite', () => expectWorkflowContains('tests/integration/cross-platform-release-scenarios.test.ts')],
   ['097 native contract keeps non-desktop packages and shards the desktop suite', async () => {
     const workflow = await workflowSource();
-    expect(workflow).toContain("run: pnpm -r --workspace-concurrency=2 --filter '!@lnwjud/desktop' --if-present test");
+    expect(workflow).toContain("run: pnpm -r --workspace-concurrency=2 --filter '!@lnwjing/desktop' --if-present test");
     expect(workflow).toContain('desktop-test-shards:');
     expect(workflow).toContain('--shard=${{ matrix.shard_index }}/${{ matrix.shard_total }}');
-    expect(workflow).toContain("--filter '@lnwjud/cli...' build");
+    expect(workflow).toContain("--filter '@lnwjing/cli...' build");
     // OS-specific dependency setup is allowed, but the native acceptance suite itself must run on every OS.
     const nativeSuiteStep = workflow.split('      - name: Run complete native unit and service acceptance suites')[1]?.split('\n      - name:')[0];
     expect(nativeSuiteStep).toBeDefined();
@@ -203,8 +203,8 @@ const nativeCiScenarios: readonly Scenario[] = [
   }],
   ['105 macOS 26 records the exact public v4.62.1 arm64 signing regression before accepting the fix', async () => {
     const workflow = await workflowSource();
-    expect(workflow).toContain('lnwjud-4.62.1-arm64.dmg');
-    expect(workflow).toContain('lnwjud-4.62.1-arm64.zip');
+    expect(workflow).toContain('lnwjing-4.62.1-arm64.dmg');
+    expect(workflow).toContain('lnwjing-4.62.1-arm64.zip');
     expect(workflow).toContain('d9cf74be1711a123fde49fc070c6fe055bf2c65bf6345395d4c8fa3816bed12c');
     expect(workflow).toContain('cf982b59a42c0ee6f91186212a03a683634e6c14675a718ddbdbf6fe1ba00db8');
     expect(workflow).toContain('v4.62.1 unexpectedly satisfies the fixed macOS signing policy');
@@ -300,35 +300,35 @@ const tunnelProfileCases = [
 ] as const;
 
 const dataPathCases = [
-  ['win-appdata', { APPDATA: 'D:\\Roaming' }, undefined, 'win32', 'D:\\Roaming\\lnwjud'],
-  ['win-appdata-trimmed', { APPDATA: '  D:\\Roaming  ' }, undefined, 'win32', 'D:\\Roaming\\lnwjud'],
-  ['win-relative-appdata-userprofile-fallback', { APPDATA: 'relative', USERPROFILE: 'C:\\Users\\alice' }, undefined, 'win32', 'C:\\Users\\alice\\AppData\\Roaming\\lnwjud'],
-  ['win-relative-appdata-electron-fallback', { APPDATA: 'relative' }, 'E:\\ElectronData', 'win32', 'E:\\ElectronData\\lnwjud'],
-  ['win-explicit', { LNWJUD_DATA_PATH: 'D:\\AgentData' }, undefined, 'win32', 'D:\\AgentData'],
-  ['win-explicit-trimmed', { LNWJUD_DATA_PATH: '  D:\\AgentData  ' }, undefined, 'win32', 'D:\\AgentData'],
-  ['win-relative-explicit-falls-back', { LNWJUD_DATA_PATH: 'relative-data', APPDATA: 'D:\\Roaming' }, undefined, 'win32', 'D:\\Roaming\\lnwjud'],
-  ['win-empty-explicit-falls-back', { LNWJUD_DATA_PATH: '   ', APPDATA: 'D:\\Roaming' }, undefined, 'win32', 'D:\\Roaming\\lnwjud'],
-  ['win-userprofile', { USERPROFILE: 'C:\\Users\\alice' }, undefined, 'win32', 'C:\\Users\\alice\\AppData\\Roaming\\lnwjud'],
-  ['win-electron', {}, 'E:\\ElectronData', 'win32', 'E:\\ElectronData\\lnwjud'],
-  ['win-relative-electron-falls-back', { APPDATA: 'D:\\Roaming' }, 'relative-electron', 'win32', 'D:\\Roaming\\lnwjud'],
-  ['win-unc-appdata', { APPDATA: '\\\\server\\share\\Roaming' }, undefined, 'win32', '\\\\server\\share\\Roaming\\lnwjud'],
-  ['win-unc-explicit', { LNWJUD_DATA_PATH: '\\\\server\\share\\lnwjud-data' }, undefined, 'win32', '\\\\server\\share\\lnwjud-data'],
-  ['win-root-appdata', { APPDATA: 'C:\\' }, undefined, 'win32', 'C:\\lnwjud'],
-  ['mac-home', { HOME: '/Users/alice' }, undefined, 'darwin', '/Users/alice/Library/Application Support/lnwjud'],
-  ['mac-electron', { HOME: '/Users/alice' }, '/Users/alice/Custom AppData', 'darwin', '/Users/alice/Custom AppData/lnwjud'],
-  ['mac-explicit', { LNWJUD_DATA_PATH: '/Volumes/Data/lnwjud-data' }, undefined, 'darwin', '/Volumes/Data/lnwjud-data'],
-  ['mac-explicit-trimmed', { LNWJUD_DATA_PATH: '  /Volumes/Data/lnwjud-data  ' }, undefined, 'darwin', '/Volumes/Data/lnwjud-data'],
-  ['mac-relative-explicit-falls-back', { LNWJUD_DATA_PATH: 'relative-data', HOME: '/Users/alice' }, undefined, 'darwin', '/Users/alice/Library/Application Support/lnwjud'],
-  ['mac-relative-electron-falls-back', { HOME: '/Users/alice' }, 'relative-electron', 'darwin', '/Users/alice/Library/Application Support/lnwjud'],
-  ['linux-xdg', { HOME: '/home/alice', XDG_DATA_HOME: '/srv/data' }, undefined, 'linux', '/srv/data/lnwjud'],
-  ['linux-xdg-trimmed', { HOME: '/home/alice', XDG_DATA_HOME: '  /srv/data  ' }, undefined, 'linux', '/srv/data/lnwjud'],
-  ['linux-relative-xdg', { HOME: '/home/alice', XDG_DATA_HOME: 'relative' }, undefined, 'linux', '/home/alice/.local/share/lnwjud'],
-  ['linux-empty-xdg', { HOME: '/home/alice', XDG_DATA_HOME: '   ' }, undefined, 'linux', '/home/alice/.local/share/lnwjud'],
-  ['linux-electron', { HOME: '/home/alice' }, '/var/lib/alice', 'linux', '/var/lib/alice/lnwjud'],
-  ['linux-relative-electron-falls-back', { HOME: '/home/alice', XDG_DATA_HOME: '/srv/data' }, 'relative-electron', 'linux', '/srv/data/lnwjud'],
-  ['linux-explicit', { LNWJUD_DATA_PATH: '/srv/lnwjud-data' }, undefined, 'linux', '/srv/lnwjud-data'],
-  ['linux-relative-explicit-falls-back', { LNWJUD_DATA_PATH: 'relative-data', HOME: '/home/alice', XDG_DATA_HOME: '/srv/data' }, undefined, 'linux', '/srv/data/lnwjud'],
-  ['linux-root-xdg', { HOME: '/home/alice', XDG_DATA_HOME: '/' }, undefined, 'linux', '/lnwjud'],
+  ['win-appdata', { APPDATA: 'D:\\Roaming' }, undefined, 'win32', 'D:\\Roaming\\lnwjing'],
+  ['win-appdata-trimmed', { APPDATA: '  D:\\Roaming  ' }, undefined, 'win32', 'D:\\Roaming\\lnwjing'],
+  ['win-relative-appdata-userprofile-fallback', { APPDATA: 'relative', USERPROFILE: 'C:\\Users\\alice' }, undefined, 'win32', 'C:\\Users\\alice\\AppData\\Roaming\\lnwjing'],
+  ['win-relative-appdata-electron-fallback', { APPDATA: 'relative' }, 'E:\\ElectronData', 'win32', 'E:\\ElectronData\\lnwjing'],
+  ['win-explicit', { LNWJING_DATA_PATH: 'D:\\AgentData' }, undefined, 'win32', 'D:\\AgentData'],
+  ['win-explicit-trimmed', { LNWJING_DATA_PATH: '  D:\\AgentData  ' }, undefined, 'win32', 'D:\\AgentData'],
+  ['win-relative-explicit-falls-back', { LNWJING_DATA_PATH: 'relative-data', APPDATA: 'D:\\Roaming' }, undefined, 'win32', 'D:\\Roaming\\lnwjing'],
+  ['win-empty-explicit-falls-back', { LNWJING_DATA_PATH: '   ', APPDATA: 'D:\\Roaming' }, undefined, 'win32', 'D:\\Roaming\\lnwjing'],
+  ['win-userprofile', { USERPROFILE: 'C:\\Users\\alice' }, undefined, 'win32', 'C:\\Users\\alice\\AppData\\Roaming\\lnwjing'],
+  ['win-electron', {}, 'E:\\ElectronData', 'win32', 'E:\\ElectronData\\lnwjing'],
+  ['win-relative-electron-falls-back', { APPDATA: 'D:\\Roaming' }, 'relative-electron', 'win32', 'D:\\Roaming\\lnwjing'],
+  ['win-unc-appdata', { APPDATA: '\\\\server\\share\\Roaming' }, undefined, 'win32', '\\\\server\\share\\Roaming\\lnwjing'],
+  ['win-unc-explicit', { LNWJING_DATA_PATH: '\\\\server\\share\\lnwjing-data' }, undefined, 'win32', '\\\\server\\share\\lnwjing-data'],
+  ['win-root-appdata', { APPDATA: 'C:\\' }, undefined, 'win32', 'C:\\lnwjing'],
+  ['mac-home', { HOME: '/Users/alice' }, undefined, 'darwin', '/Users/alice/Library/Application Support/lnwjing'],
+  ['mac-electron', { HOME: '/Users/alice' }, '/Users/alice/Custom AppData', 'darwin', '/Users/alice/Custom AppData/lnwjing'],
+  ['mac-explicit', { LNWJING_DATA_PATH: '/Volumes/Data/lnwjing-data' }, undefined, 'darwin', '/Volumes/Data/lnwjing-data'],
+  ['mac-explicit-trimmed', { LNWJING_DATA_PATH: '  /Volumes/Data/lnwjing-data  ' }, undefined, 'darwin', '/Volumes/Data/lnwjing-data'],
+  ['mac-relative-explicit-falls-back', { LNWJING_DATA_PATH: 'relative-data', HOME: '/Users/alice' }, undefined, 'darwin', '/Users/alice/Library/Application Support/lnwjing'],
+  ['mac-relative-electron-falls-back', { HOME: '/Users/alice' }, 'relative-electron', 'darwin', '/Users/alice/Library/Application Support/lnwjing'],
+  ['linux-xdg', { HOME: '/home/alice', XDG_DATA_HOME: '/srv/data' }, undefined, 'linux', '/srv/data/lnwjing'],
+  ['linux-xdg-trimmed', { HOME: '/home/alice', XDG_DATA_HOME: '  /srv/data  ' }, undefined, 'linux', '/srv/data/lnwjing'],
+  ['linux-relative-xdg', { HOME: '/home/alice', XDG_DATA_HOME: 'relative' }, undefined, 'linux', '/home/alice/.local/share/lnwjing'],
+  ['linux-empty-xdg', { HOME: '/home/alice', XDG_DATA_HOME: '   ' }, undefined, 'linux', '/home/alice/.local/share/lnwjing'],
+  ['linux-electron', { HOME: '/home/alice' }, '/var/lib/alice', 'linux', '/var/lib/alice/lnwjing'],
+  ['linux-relative-electron-falls-back', { HOME: '/home/alice', XDG_DATA_HOME: '/srv/data' }, 'relative-electron', 'linux', '/srv/data/lnwjing'],
+  ['linux-explicit', { LNWJING_DATA_PATH: '/srv/lnwjing-data' }, undefined, 'linux', '/srv/lnwjing-data'],
+  ['linux-relative-explicit-falls-back', { LNWJING_DATA_PATH: 'relative-data', HOME: '/home/alice', XDG_DATA_HOME: '/srv/data' }, undefined, 'linux', '/srv/data/lnwjing'],
+  ['linux-root-xdg', { HOME: '/home/alice', XDG_DATA_HOME: '/' }, undefined, 'linux', '/lnwjing'],
 ] as const;
 
 const profileAndEnvironmentScenarios: readonly Scenario[] = [
@@ -345,18 +345,18 @@ const profileAndEnvironmentScenarios: readonly Scenario[] = [
     const environment = platform === 'win32' ? { APPDATA: 'D:\\Roaming' } : platform === 'linux' ? { XDG_DATA_HOME: '/srv/data' } : {};
     const separator = platform === 'win32' ? '\\' : '/';
     return [
-      [`profile-extra legacy secret suffix ${platform}`, () => expect(legacyTunnelSecretPath(environment, home, platform).endsWith(`${separator}lnwjud.runtime.secret`)).toBe(true)],
-      [`profile-extra OAuth secret suffix ${platform}`, () => expect(oauthTunnelSessionPath(environment, home, platform).endsWith(`${separator}lnwjud.oauth.session.secret`)).toBe(true)],
+      [`profile-extra legacy secret suffix ${platform}`, () => expect(legacyTunnelSecretPath(environment, home, platform).endsWith(`${separator}lnwjing.runtime.secret`)).toBe(true)],
+      [`profile-extra OAuth secret suffix ${platform}`, () => expect(oauthTunnelSessionPath(environment, home, platform).endsWith(`${separator}lnwjing.oauth.session.secret`)).toBe(true)],
     ];
   }),
   ...dataPathCases.map(([label, environment, electronAppData, platform, expected]): Scenario => [
     `profile-extra data path ${label}`,
-    () => expect(resolveLnwjudDataPath(environment, electronAppData, platform)).toBe(expected),
+    () => expect(resolveLnwjingDataPath(environment, electronAppData, platform)).toBe(expected),
   ]),
 ];
 
 const validMcpNames = ['serena', 'playwright-mcp', 'context7_1', 'github.mcp', 'A1', 'a-b_c.d', 'MCP123', 'server-01', 'tool.bridge', 'x'] as const;
-const invalidMcpNames = ['', 'bad server', 'bad/server', 'bad\\server', '.leading', '-leading', '_leading', 'name#hash', 'lnwjud-helper'] as const;
+const invalidMcpNames = ['', 'bad server', 'bad/server', 'bad\\server', '.leading', '-leading', '_leading', 'name#hash', 'lnwjing-helper'] as const;
 const mcpEnvironmentCases = [
   ['TOKEN', 'abc123'], ['HOME_DIR', '/home/alice'], ['WIN_PATH', 'C:\\Tools'], ['SPACE_VALUE', 'two words'], ['UNICODE', 'ทดสอบ'],
   ['EMPTY_OK', ''], ['DASH_VALUE', 'a-b-c'], ['DOT_VALUE', 'a.b.c'], ['SLASH_VALUE', '/srv/a/b'], ['JSONISH', '{value}'],
@@ -477,7 +477,7 @@ const extendedCiScenarios: readonly Scenario[] = [
   ['ci-extra dev workflow builds Windows Setup and Portable when manually dispatched', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', 'Build Windows Setup and Portable')],
   ['ci-extra dev workflow installs cosign before provenance-bound packaging', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', 'Install cosign for tunnel provenance verification')],
   ['ci-extra dev workflow pins the required cosign release', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', "cosign-release: 'v3.1.3'")],
-  ['ci-extra dev workflow exposes cosign to the Windows package contract', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', 'LNWJUD_COSIGN_PATH: cosign')],
+  ['ci-extra dev workflow exposes cosign to the Windows package contract', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', 'LNWJING_COSIGN_PATH: cosign')],
   ['ci-extra dev workflow runs packaged Windows MCP smoke', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', 'Run packaged Windows Electron MCP and security smoke')],
   ['ci-extra dev Windows smoke exercises MCP client', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', 'desktop-mcp-client.e2e.ts')],
   ['ci-extra dev Windows smoke exercises security', () => expectRepositoryFileContains('.github/workflows/dev-installer.yml', 'electron-security.e2e.ts')],
@@ -515,7 +515,7 @@ describe(`cross-platform release audit: ${scenarioCount} deterministic scenarios
 });
 
 async function expectPosixPathResolver(kind: 'process' | 'search' | 'codex', platform: 'darwin' | 'linux'): Promise<void> {
-  const root = await mkdtemp(path.join(process.cwd(), '.lnwjud-posix-path-'));
+  const root = await mkdtemp(path.join(process.cwd(), '.lnwjing-posix-path-'));
   try {
     const first = path.join(root, 'first');
     const second = path.join(root, 'second');
@@ -558,8 +558,8 @@ async function expectRestoreCompatibility(
   targetArch: string,
   expectedCompatibility: 'same_host' | 'cross_host',
 ): Promise<void> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-xplat-release-'));
-  const databaseFilename = path.join(root, 'lnwjud.sqlite');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-xplat-release-'));
+  const databaseFilename = path.join(root, 'lnwjing.sqlite');
   const backupDirectory = path.join(root, 'backups');
   let database: SqliteDatabase | null = new SqliteDatabase(databaseFilename, { backupDirectory });
   try {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus } from '@lnwjing/ipc-contracts';
 import { tunnelAuthPresentation } from '../src/renderer/tunnel-auth-presentation.js';
 
 function tunnel(overrides: Partial<TunnelStatus> = {}): TunnelStatus {

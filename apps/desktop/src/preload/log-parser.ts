@@ -1,4 +1,4 @@
-import type { LogLine, TunnelLifecycleCategory } from '@lnwjud/ipc-contracts';
+import type { LogLine, TunnelLifecycleCategory } from '@lnwjing/ipc-contracts';
 
 const tunnelLifecycles = new Set<TunnelLifecycleCategory>([
   'ttl_expired',

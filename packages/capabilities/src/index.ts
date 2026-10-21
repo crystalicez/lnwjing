@@ -1,4 +1,4 @@
-import type { InvocationAuthorization, Result } from '@lnwjud/domain';
+import type { InvocationAuthorization, Result } from '@lnwjing/domain';
 
 export const capabilityToolNames = Object.freeze([
   'shell',

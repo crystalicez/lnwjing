@@ -332,7 +332,7 @@ function isReleaseAdministrativeEntry(entry) {
     .replace(/\s+by\s+@[\w-]+\s+in\s+https:\/\/github\.com\/\S+$/i, '')
     .replace(/\s+\(\[`[0-9a-f]+`\]\(https:\/\/github\.com\/\S+\/commit\/[0-9a-f]+\)\)$/i, '')
     .trim();
-  return /^release(?::|\s)\s*(?:lnwjud\s+)?v\d+\.\d+\.\d+$/i.test(title);
+  return /^release(?::|\s)\s*(?:lnwjing\s+)?v\d+\.\d+\.\d+$/i.test(title);
 }
 
 function listPublishedReleases(repository) {

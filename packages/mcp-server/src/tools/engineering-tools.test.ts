@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { appError, err, ok, type EngineeringGoalMetadata } from '@lnwjud/domain';
+import { appError, err, ok, type EngineeringGoalMetadata } from '@lnwjing/domain';
 import { engineeringTools } from './engineering-tools.js';
 
 const actor = { clientId: 'test-client', clientName: 'Engineering test' };

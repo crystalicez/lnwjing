@@ -15,7 +15,7 @@ afterEach(async () => {
 describe('SqliteBackupService', { timeout: 30_000 }, () => {
   it.each([null, '2026-09-01'])('treats foreign workspace paths as runtime authority only when not archived (%s)', async (archivedAt) => {
     const root = await temporaryRoot();
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile);
     database.connection.prepare('INSERT INTO workspaces (id, display_name, root_path, real_root_path, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -44,12 +44,12 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
     await mkdir(dataPath);
     await mkdir(tunnelPath);
     await mkdir(path.join(dataPath, 'remote-mcp'));
-    const databaseFile = path.join(dataPath, 'lnwjud.sqlite');
+    const databaseFile = path.join(dataPath, 'lnwjing.sqlite');
     const backupDirectory = path.join(dataPath, 'backups');
     const files = [
       path.join(dataPath, 'remote-mcp', 'oauth-state.secret'),
       path.join(dataPath, 'remote-mcp', 'ngrok-authtoken.secret'),
-      path.join(tunnelPath, 'lnwjud.oauth.session.secret'),
+      path.join(tunnelPath, 'lnwjing.oauth.session.secret'),
     ];
     for (const filename of files) await writeFile(filename, 'host-bound-ciphertext', 'utf8');
     const database = new SqliteDatabase(databaseFile);
@@ -58,7 +58,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
     await service.scheduleRestore(snapshot.id);
     database.close();
     const result = applyPendingSqliteRestoreSync(databaseFile, backupDirectory, {
-      platform: 'linux', arch: 'x64', hostBoundPaths: [path.join(tunnelPath, 'lnwjud.runtime.secret')],
+      platform: 'linux', arch: 'x64', hostBoundPaths: [path.join(tunnelPath, 'lnwjing.runtime.secret')],
     });
     expect(result).toMatchObject({ applied: true, crossHost: true });
     for (const filename of files) {
@@ -70,7 +70,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 
   it('records the source host and data schema in every new manifest', async () => {
     const root = await temporaryRoot();
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile, { backupDirectory });
     const service = new SqliteBackupService(database, {
@@ -90,7 +90,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 
   it('quarantines host-bound state and preserves foreign workspace paths during cross-host restore', async () => {
     const root = await temporaryRoot();
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile, { backupDirectory });
     database.connection.prepare('INSERT INTO workspaces (id, display_name, root_path, real_root_path, created_at, archived_at) VALUES (?, ?, ?, ?, ?, NULL)')
@@ -192,7 +192,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 
   it('creates a WAL-consistent snapshot and restores it on the next startup', async () => {
     const root = await temporaryRoot();
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile, { backupDirectory });
     database.connection.exec('CREATE TABLE restore_fixture (value TEXT NOT NULL);');
@@ -216,7 +216,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 
   it('does not duplicate the automatic daily backup inside the 24-hour window', async () => {
     const root = await temporaryRoot();
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile, { backupDirectory });
     let now = new Date('2026-08-01T00:00:00.000Z');
@@ -232,7 +232,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 
   it('coordinates the daily backup lease across concurrent database runtimes', async () => {
     const root = await temporaryRoot();
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const firstDatabase = new SqliteDatabase(databaseFile, { backupDirectory });
     const secondDatabase = new SqliteDatabase(databaseFile, { backupDirectory });
@@ -280,7 +280,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 
   it('retains seven recent daily snapshots plus four older weekly representatives', async () => {
     const root = await temporaryRoot();
-    const databaseFile = path.join(root, 'lnwjud.sqlite');
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
     const database = new SqliteDatabase(databaseFile, { backupDirectory });
     try {
@@ -301,7 +301,7 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 });
 
 async function temporaryRoot(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-backup-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-backup-'));
   temporaryRoots.push(root);
   return root;
 }

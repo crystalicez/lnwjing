@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 import { sanitizedChildEnvironment } from './sanitized-child-environment.js';
 

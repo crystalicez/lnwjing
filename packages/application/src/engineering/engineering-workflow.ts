@@ -4,8 +4,8 @@ import type {
   EngineeringGoalMetadata,
   EngineeringRiskTier,
   EngineeringTaskKind,
-} from '@lnwjud/domain';
-import { projectEngineeringSettings, type EngineeringHarnessSettings, type EngineeringProfile, type ProjectEngineeringSettings } from '@lnwjud/shared';
+} from '@lnwjing/domain';
+import { projectEngineeringSettings, type EngineeringHarnessSettings, type EngineeringProfile, type ProjectEngineeringSettings } from '@lnwjing/shared';
 import type { EngineeringProjectAssessment } from './engineering-project-assessment.js';
 
 export type EngineeringCodeIntelligence = 'codegraph' | 'lsp_search';

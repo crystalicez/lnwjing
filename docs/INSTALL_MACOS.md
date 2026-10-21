@@ -1,4 +1,4 @@
-# Install lnwjud on macOS
+# Install lnwjing on macOS
 
 This guide covers the v5.8.7 native macOS release target. macOS 13 or newer is
 supported on both Apple silicon (`arm64`) and Intel (`x64`). The package is
@@ -19,16 +19,16 @@ claim until every native helper and runtime has been verified as universal.
    Library Validation enabled, and require notarization/stapling when that
    release mode is configured. Wholly unsigned distributable macOS artifacts
    are rejected.
-3. Copy `lnwjud.app` to `Applications` and open it. macOS may ask for the
+3. Copy `lnwjing.app` to `Applications` and open it. macOS may ask for the
    normal first-launch confirmation.
-4. Add an explicit project in Projects. lnwjud never treats `/`, `/Volumes`,
+4. Add an explicit project in Projects. lnwjing never treats `/`, `/Volumes`,
    or a home directory as an implicit trusted project.
 
 Release CI builds the target-native DMG/ZIP on macOS 15, then verifies and launches the exact same artifact bytes on macOS 26 for arm64 and x64 before publication.
 
 The app contains Electron, the target-native ripgrep binary, and the official
 OpenAI `tunnel-client` selected for the artifact architecture. A system Node.js
-installation is not required for the packaged Desktop app or `lnwjud-mcp-stdio`.
+installation is not required for the packaged Desktop app or `lnwjing-mcp-stdio`.
 
 ## Updating from v5.8.0 / v5.8.1 on macOS
 
@@ -37,11 +37,11 @@ Squirrel.Mac designated requirement is tied to that build's CDHash; a newer
 package cannot satisfy it even when the download completes. A code-only change
 to v5.8.2 cannot alter the signature embedded in the already-installed app.
 
-1. Quit lnwjud and stop its Secure Tunnel before replacing the application.
+1. Quit lnwjing and stop its Secure Tunnel before replacing the application.
 2. Download the correct architecture's verified v5.8.2 DMG/ZIP from
    [GitHub Releases](https://github.com/engasnm111/lnwjud/releases).
-3. Replace `/Applications/lnwjud.app` with the downloaded app. Do not delete
-   lnwjud's user data, settings or Keychain items.
+3. Replace `/Applications/lnwjing.app` with the downloaded app. Do not delete
+   lnwjing's user data, settings or Keychain items.
 4. Open the new app. An ad-hoc-signed release intentionally disables in-app
    auto-install and displays instructions for manually downloading future versions.
 
@@ -83,7 +83,7 @@ For local MCP clients, use the packaged executable launcher shown in the app's
 MCP panel:
 
 ```text
-/Applications/lnwjud.app/Contents/Resources/lnwjud-mcp-stdio --workspace /path/to/project
+/Applications/lnwjing.app/Contents/Resources/lnwjing-mcp-stdio --workspace /path/to/project
 ```
 
 The launcher invokes the packaged Electron host with `--mcp-stdio`, preserves
@@ -94,7 +94,7 @@ For ChatGPT Secure MCP Tunnel:
 
 1. Create/authorize the Platform tunnel and runtime key using OpenAI's tunnel
    permissions.
-2. In lnwjud Settings, leave the `tunnel-client` override empty so the
+2. In lnwjing Settings, leave the `tunnel-client` override empty so the
    verified bundled client is selected.
 3. Save the runtime key through the UI. It is stored using macOS secure
    storage; it is never written to a profile, argv, logs, or environment dump.
@@ -104,7 +104,7 @@ For ChatGPT Secure MCP Tunnel:
 The official release source is the
 [OpenAI tunnel-client release page](https://github.com/openai/tunnel-client/releases).
 If the target asset is absent or its hash/version check fails, tunnel readiness
-is dependency-gated and lnwjud does not use an unverified system binary.
+is dependency-gated and lnwjing does not use an unverified system binary.
 
 ## What is intentionally not available
 
@@ -120,7 +120,7 @@ core MCP, workspace, file, search, Git, backup, and tunnel surfaces.
 ## Troubleshooting
 
 - **Secure storage unavailable:** unlock/enable the macOS Keychain and restart
-  lnwjud. `basic_text` or an unknown backend is never accepted for persisted
+  lnwjing. `basic_text` or an unknown backend is never accepted for persisted
   secrets.
 - **Accessibility or capture not ready:** grant the requested permission in
   System Settings → Privacy & Security, then restart the app if macOS requests

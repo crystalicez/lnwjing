@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { lstat, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { DurableShellTaskStore } from './durable-shell-task-store.js';
 import { windowsRepositoryImportAnchorSource } from './windows-repository-import-anchor.js';
 import { repositoryImportStageAclScript, repositoryImportStageIdentityScript, repositoryImportPublishScript, repositoryImportVerifyPublishedScript } from './repository-import-scripts.js';
@@ -103,7 +103,7 @@ export class SecureRepositoryImportRuntime {
         manifest = existing;
       } catch (error: unknown) {
         if (!isMissing(error)) return err(appError('CONFLICT', 'Repository import manifest could not be verified', true));
-        const stagePath = path.join(path.win32.dirname(canonicalWorkspace), '.lnwjud-import-stage-' + randomUUID());
+        const stagePath = path.join(path.win32.dirname(canonicalWorkspace), '.lnwjing-import-stage-' + randomUUID());
         manifest = {
           version: 1, requestDigest: digest, owner, requestId: request.requestId,
           url: request.url, commit: request.commit.toLowerCase(), workspaceRoot: canonicalWorkspace,

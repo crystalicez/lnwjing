@@ -11,9 +11,9 @@ afterEach(async (): Promise<void> => {
 });
 
 async function fixture(): Promise<{ readonly root: string; readonly secretPath: string; readonly provider: LegacyApiKeyCredentialProvider }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tunnel-auth-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tunnel-auth-'));
   roots.push(root);
-  const secretPath = path.join(root, 'tunnel-client', 'lnwjud.runtime.secret');
+  const secretPath = path.join(root, 'tunnel-client', 'lnwjing.runtime.secret');
   const provider = new LegacyApiKeyCredentialProvider({
     secretPath: (): string => secretPath,
     encryptSecret: async (plainText: string): Promise<string> => `dpapi-fixture:${plainText}`,

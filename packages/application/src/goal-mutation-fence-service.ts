@@ -10,7 +10,7 @@ import {
   type ScheduledContinuationRepository,
   type ScheduledContinuationWorkerLiveness,
   type ScheduledContinuationWorkerLivenessPort,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import type { FileActor } from './file-service.js';
 
 // Keep liveness bounded without pre-empting the durable shell provider's own bounded process/finalization probes.

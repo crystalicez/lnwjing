@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { DurableShellTaskIndex } from './durable-shell-task-index.js';
 import { DurableShellTaskStore } from './durable-shell-task-store.js';
 
@@ -42,7 +42,7 @@ export class SharedManagedWriterAdmission {
       taskId: id,
       requestDigest,
       mutationKind: 'repository_import',
-      ownerClientId: 'lnwjud-workspace-writer-fence',
+      ownerClientId: 'lnwjing-workspace-writer-fence',
       ownerWorkspaceId: workspaceId,
     });
     if (!reserved.ok) return reserved;

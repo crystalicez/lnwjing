@@ -21,7 +21,7 @@ if (githubSha && githubSha.toLowerCase() !== commit.toLowerCase()) {
   throw new Error(`GITHUB_SHA does not match checked-out commit: github=${githubSha} git=${commit}`);
 }
 const workingTreeStatusAtEvidence = git(['status', '--porcelain=v1', '--untracked-files=normal']).trim();
-const sourceDirtyAtStart = parseSourceDirtyAtStart(process.env.LNWJUD_SOURCE_DIRTY_AT_START);
+const sourceDirtyAtStart = parseSourceDirtyAtStart(process.env.LNWJING_SOURCE_DIRTY_AT_START);
 const workingTreeDirtyAtEvidence = workingTreeStatusAtEvidence.length > 0;
 const dirty = sourceDirtyAtStart ?? workingTreeDirtyAtEvidence;
 
@@ -29,7 +29,7 @@ const runtimeEvidence = JSON.parse(await readFile(runtimeEvidencePath, 'utf8'));
 if (runtimeEvidence?.schemaVersion !== 1 || !Array.isArray(runtimeEvidence.files)) {
   throw new Error('Packaged runtime evidence is missing or invalid');
 }
-const platform = normalizePlatform(process.env.LNWJUD_RELEASE_PLATFORM ?? runtimeEvidence.platform);
+const platform = normalizePlatform(process.env.LNWJING_RELEASE_PLATFORM ?? runtimeEvidence.platform);
 if (runtimeEvidence.platform !== platform) throw new Error(`Runtime evidence platform mismatch: ${String(runtimeEvidence.platform)} != ${platform}`);
 const capabilityBridge = platform === 'win32' ? validateCapabilityBridge(runtimeEvidence) : null;
 const macSigning = platform === 'darwin' ? validateMacSigning(runtimeEvidence) : null;
@@ -45,12 +45,12 @@ const windowsAuthenticode = platform === 'win32' ? inspectWindowsAuthenticode(ar
 
 const provenance = {
   schemaVersion: 1,
-  product: 'lnwjud',
+  product: 'lnwjing',
   version,
   platform,
   arch: runtimeEvidence.arch,
   source: {
-    repository: 'https://github.com/engasnm111/lnwjud',
+    repository: 'https://github.com/crystalicez/lnwjing',
     commit,
     dirty,
   },
@@ -81,7 +81,7 @@ const sumLines = [
 ];
 await writeFile(path.join(installerDirectory, 'SHA256SUMS.txt'), `${sumLines.join('\n')}\n`, 'utf8');
 
-process.stdout.write(`Release evidence written for lnwjud ${version} ${platform}/${String(runtimeEvidence.arch)} commit ${commit}${dirty ? ' (dirty)' : ''}\n`);
+process.stdout.write(`Release evidence written for lnwjing ${version} ${platform}/${String(runtimeEvidence.arch)} commit ${commit}${dirty ? ' (dirty)' : ''}\n`);
 
 function normalizePlatform(value) {
   if (value === 'win32' || value === 'darwin' || value === 'linux') return value;
@@ -90,20 +90,20 @@ function normalizePlatform(value) {
 
 function expectedArtifactNames(platformName, releaseVersion, releaseArch) {
   if (platformName === 'win32') return [
-    `lnwjud-Setup-${releaseVersion}.exe`,
-    `lnwjud-Setup-${releaseVersion}.exe.blockmap`,
-    `lnwjud-Portable-${releaseVersion}.exe`,
+    `lnwjing-Setup-${releaseVersion}.exe`,
+    `lnwjing-Setup-${releaseVersion}.exe.blockmap`,
+    `lnwjing-Portable-${releaseVersion}.exe`,
     'latest.yml',
     'portable.yml',
   ];
   if (platformName === 'darwin') return [
-    `lnwjud-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.dmg`,
-    `lnwjud-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.zip`,
+    `lnwjing-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.dmg`,
+    `lnwjing-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.zip`,
     'latest-mac.yml',
   ];
   return [
-    `lnwjud-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.AppImage`,
-    `lnwjud-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.deb`,
+    `lnwjing-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.AppImage`,
+    `lnwjing-${releaseVersion}-${normalizeArtifactArch(releaseArch)}.deb`,
     releaseArch === 'x64' ? 'latest-linux.yml' : `latest-linux-${normalizeArtifactArch(releaseArch)}.yml`,
   ];
 }
@@ -119,7 +119,7 @@ function inspectWindowsAuthenticode(artifacts) {
   const targets = executableArtifacts.map((entry) => path.join(installerDirectory, entry.name));
   const command = [
     "$ErrorActionPreference = 'Stop'",
-    '$targets = ConvertFrom-Json -InputObject $env:LNWJUD_AUTHENTICODE_TARGETS',
+    '$targets = ConvertFrom-Json -InputObject $env:LNWJING_AUTHENTICODE_TARGETS',
     '$results = @($targets | ForEach-Object {',
     '  $signature = Get-AuthenticodeSignature -LiteralPath $_',
     '  $thumbprint = $null',
@@ -145,7 +145,7 @@ function inspectWindowsAuthenticode(artifacts) {
     env: {
       ...process.env,
       PSModulePath: windowsPowerShellModulePath,
-      LNWJUD_AUTHENTICODE_TARGETS: JSON.stringify(targets),
+      LNWJING_AUTHENTICODE_TARGETS: JSON.stringify(targets),
     },
   }).trim();
   const parsed = JSON.parse(raw);
@@ -204,7 +204,7 @@ function validateMacSigning(evidence) {
     || signing.mode !== 'certificate' && signing.certificateSha1 !== undefined) {
     throw new Error('Packaged macOS signing evidence is missing or invalid');
   }
-  const rootExecutable = evidence.files.find((entry) => entry?.relativePath === 'Contents/MacOS/lnwjud');
+  const rootExecutable = evidence.files.find((entry) => entry?.relativePath === 'Contents/MacOS/lnwjing');
   validateMacosSigningPolicyEvidence(signing.policy, {
     mode: signing.mode,
     arch: evidence.arch,
@@ -232,7 +232,7 @@ function parseSourceDirtyAtStart(value) {
   if (!normalized) return null;
   if (normalized === '0') return false;
   if (normalized === '1') return true;
-  throw new Error(`LNWJUD_SOURCE_DIRTY_AT_START must be 0 or 1, received: ${normalized}`);
+  throw new Error(`LNWJING_SOURCE_DIRTY_AT_START must be 0 or 1, received: ${normalized}`);
 }
 
 function optionalEnv(name) {

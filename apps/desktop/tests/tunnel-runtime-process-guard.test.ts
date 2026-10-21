@@ -7,7 +7,7 @@ import {
 } from '../src/main/tunnel-runtime-process-guard.js';
 
 const tunnelId = 'tunnel_fixture012345';
-const clientPath = 'C:\\Program Files\\lnwjud\\resources\\tunnel-client\\tunnel-client.exe';
+const clientPath = 'C:\\Program Files\\lnwjing\\resources\\tunnel-client\\tunnel-client.exe';
 const profileDirectory = 'C:\\Users\\Ada\\AppData\\Roaming\\tunnel-client';
 
 function runtime(pid: number, overrides: Partial<LocalTunnelRuntimeProcess> = {}): LocalTunnelRuntimeProcess {
@@ -15,7 +15,7 @@ function runtime(pid: number, overrides: Partial<LocalTunnelRuntimeProcess> = {}
     pid,
     startedAt: '2026-09-27T07:30:00.000Z',
     executablePath: clientPath,
-    commandLine: `"${clientPath}" run --profile-dir "${profileDirectory}" --profile lnwjud --log.file ""`,
+    commandLine: `"${clientPath}" run --profile-dir "${profileDirectory}" --profile lnwjing --log.file ""`,
     ports: [40_000 + pid],
     ...overrides,
   };
@@ -30,7 +30,7 @@ function dependencies(processes: readonly LocalTunnelRuntimeProcess[], ids: Read
 }
 
 function request(keepPid: number | null): LocalTunnelRuntimeGuardRequest {
-  return { clientPath, profileDirectory, alias: 'lnwjud', tunnelId, keepPid };
+  return { clientPath, profileDirectory, alias: 'lnwjing', tunnelId, keepPid };
 }
 
 describe('local tunnel runtime process guard', () => {
@@ -102,7 +102,7 @@ describe('local tunnel runtime process guard', () => {
   });
 
   it('does not take over a manually started profile runtime', async () => {
-    const manual = runtime(100, { commandLine: `"${clientPath}" run --profile-dir "${profileDirectory}" --profile lnwjud --log.file "C:\\logs\\manual.log"` });
+    const manual = runtime(100, { commandLine: `"${clientPath}" run --profile-dir "${profileDirectory}" --profile lnwjing --log.file "C:\\logs\\manual.log"` });
     const deps = dependencies([manual], { 40100: tunnelId });
 
     await expect(reconcileLocalTunnelRuntimeProcesses(request(null), deps)).rejects.toThrow('outside the managed runtime');

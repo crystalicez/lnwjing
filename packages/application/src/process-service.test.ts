@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ok, type CommandSpec, type Result } from '@lnwjud/domain';
-import { permissionProfiles } from '@lnwjud/permissions';
-import type { ManagedProcess, ManagedProcessStart, ProcessLogResult } from '@lnwjud/process';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import { ok, type CommandSpec, type Result } from '@lnwjing/domain';
+import { permissionProfiles } from '@lnwjing/permissions';
+import type { ManagedProcess, ManagedProcessStart, ProcessLogResult } from '@lnwjing/process';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { ProcessService, type ProcessServiceDependencies, type ProjectCommandSource } from './process-service.js';
 
 const temporaryRoots: string[] = [];
@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 async function createWorkspace(): Promise<Workspace> {
-  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-process-service-'));
+  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-process-service-'));
   temporaryRoots.push(rawRoot);
   const root = await realpath(rawRoot);
   await mkdir(path.join(root, 'src'));
@@ -108,7 +108,7 @@ describe('ProcessService', () => {
 
   it('allows an explicitly absolute cwd outside the workspace in unrestricted mode', async () => {
     const workspace = await createWorkspace();
-    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-process-outside-'));
+    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-process-outside-'));
     temporaryRoots.push(outsideRaw);
     const outside = await realpath(outsideRaw);
     const calls: ManagedProcessStart[] = [];
@@ -130,7 +130,7 @@ describe('ProcessService', () => {
 
   it('rejects a workspace junction or symlink whose canonical cwd escapes the workspace', async () => {
     const workspace = await createWorkspace();
-    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-process-junction-outside-'));
+    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-process-junction-outside-'));
     temporaryRoots.push(outsideRaw);
     const outside = await realpath(outsideRaw);
     const escape = path.join(workspace.realRootPath, 'escape');
@@ -174,7 +174,7 @@ describe('ProcessService', () => {
 
   it('accepts trusted Full Bypass for a risky command outside the workspace without caller confirmation', async () => {
     const workspace = await createWorkspace();
-    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-process-full-bypass-'));
+    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-process-full-bypass-'));
     temporaryRoots.push(outsideRaw);
     const outside = await realpath(outsideRaw);
     const calls: ManagedProcessStart[] = [];

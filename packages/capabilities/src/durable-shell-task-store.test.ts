@@ -25,11 +25,11 @@ afterEach(async () => {
 
 describe('durable shell background tasks', () => {
   it('isolates repository import child environment without changing ordinary shell behavior', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-env-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-env-'));
     temporaryRoots.push(root);
     const store = new DurableShellTaskStore(path.join(root, '.tasks'));
     const owner = { clientId: 'env-owner', sessionId: 'env-session', workspaceId: 'env-workspace' };
-    const key = 'LNWJUD_IMPORT_CANARY_SECRET';
+    const key = 'LNWJING_IMPORT_CANARY_SECRET';
     const previous = process.env[key];
     process.env[key] = 'should-not-leak-to-repository-import';
     try {
@@ -37,7 +37,7 @@ describe('durable shell background tasks', () => {
         const id = kind === 'repository_import' ? 'isolated-import' : 'ordinary-shell';
         const launched = await store.launch({
           mutationKind: kind, taskId: id, executable: process.execPath,
-          arguments: ['-e', 'process.stdout.write(process.env.LNWJUD_IMPORT_CANARY_SECRET ? "leaked" : "isolated")'],
+          arguments: ['-e', 'process.stdout.write(process.env.LNWJING_IMPORT_CANARY_SECRET ? "leaked" : "isolated")'],
           cwd: root, timeoutSeconds: process.env.CI ? 100 : 15, maxOutputBytes: 256,
           includeStdout: true, includeStderr: false, owner,
         });
@@ -58,7 +58,7 @@ describe('durable shell background tasks', () => {
   }, process.env.CI ? 160000 : 30000);
 
   it('holds an import-exclusive reservation through real contained worker lifetime', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-worker-lifetime-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-worker-lifetime-'));
     temporaryRoots.push(root);
     const state = path.join(root, '.tasks');
     const first = new DurableShellTaskStore(state);
@@ -92,7 +92,7 @@ describe('durable shell background tasks', () => {
   }, process.env.CI ? 160000 : 30000);
 
   it.skipIf(process.platform !== 'win32')('keeps durable ownership until detached descendants finish and persists native zero-active proof', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-contained-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-contained-'));
     temporaryRoots.push(root);
     const state = path.join(root, '.tasks');
     const store = new DurableShellTaskStore(state);
@@ -117,7 +117,7 @@ describe('durable shell background tasks', () => {
   }, 15000);
 
   it('keeps liveness output-free but returns bounded terminal CI proof only to its workspace', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-evidence-proof-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-evidence-proof-'));
     temporaryRoots.push(root);
     const store = new DurableShellTaskStore(path.join(root, '.tasks'));
     const owner = { clientId: 'proof-client', sessionId: 'proof-session', workspaceId: 'workspace-evidence' };
@@ -142,7 +142,7 @@ describe('durable shell background tasks', () => {
   }, 15000);
 
   it('fails closed for truncated terminal stdout evidence', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-evidence-truncated-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-evidence-truncated-'));
     temporaryRoots.push(root);
     const store = new DurableShellTaskStore(path.join(root, '.tasks'));
     const owner = { clientId: 'proof', sessionId: 'proof', workspaceId: 'workspace-evidence' };
@@ -171,7 +171,7 @@ describe('durable shell background tasks', () => {
   });
 
   it.skipIf(process.platform === 'win32')('cancels the detached child group before retiring its durable worker', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-groups-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-groups-'));
     temporaryRoots.push(root);
     const backend = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory: path.join(root, '.tasks') });
     const started = await backend.execute({
@@ -209,7 +209,7 @@ describe('durable shell background tasks', () => {
   }, 15000);
 
   it('survives a backend/runtime replacement and returns logs and result by task id', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-shell-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-shell-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const firstRuntime = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory });
@@ -241,7 +241,7 @@ describe('durable shell background tasks', () => {
   }, 15_000);
 
   it('does not overwrite terminal metadata when Windows-style PID reuse is observed during reconciliation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-pid-reuse-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-pid-reuse-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const taskId = 'pid-reused-finalizing';
@@ -281,7 +281,7 @@ describe('durable shell background tasks', () => {
   }, 15_000);
 
   it('does not overwrite a concurrent completion when worker identity probing is unverifiable', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-probe-race-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-probe-race-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const taskId = 'probe-unverifiable-finalizing';
@@ -326,7 +326,7 @@ describe('durable shell background tasks', () => {
   }, 15_000);
 
   it('does not overwrite a very fast durable completion back to running', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-shell-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-shell-'));
     temporaryRoots.push(root);
     const backend = new ShellCapabilityBackend({
       allowedRoots: [root],
@@ -370,7 +370,7 @@ describe('durable shell background tasks', () => {
   }, 15_000);
 
   it('retains Windows containment until a detached descendant closes inherited stdio', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-shell-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-shell-'));
     temporaryRoots.push(root);
     const backend = new ShellCapabilityBackend({
       allowedRoots: [root],
@@ -419,7 +419,7 @@ describe('durable shell background tasks', () => {
   // Replacement cancellation probes worker identity and may invoke taskkill;
   // PowerShell startup can exceed Vitest's 5s default on a busy Windows host.
   it('cancels a durable task from a replacement backend', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-shell-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-shell-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const firstRuntime = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory });
@@ -452,7 +452,7 @@ describe('durable shell background tasks', () => {
   }, 45_000);
 
   it('keeps a durable auto task running when the original MCP caller aborts after submission', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-shell-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-shell-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const backend = new ShellCapabilityBackend({
@@ -486,7 +486,7 @@ describe('durable shell background tasks', () => {
   });
 
   it('caps concurrent durable workers so many chats cannot exhaust a Windows 10/11 machine with child consoles', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-shell-cap-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-shell-cap-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const store = new DurableShellTaskStore(taskStateDirectory, { maxConcurrentTasks: 1 });
@@ -519,7 +519,7 @@ describe('durable shell background tasks', () => {
     }
   }, 15_000);
   it('does not hydrate historical durable output while enforcing the concurrency limit', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-memory-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-memory-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const historicalId = 'historical-completed';
@@ -566,7 +566,7 @@ describe('durable shell background tasks', () => {
   }, 15_000);
 
   it('uses the persisted active index on warm launch without rescanning terminal task sidecars', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-warm-index-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-warm-index-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const owner = { clientId: 'chatgpt', sessionId: 'session-a', workspaceId: 'workspace-a' };
@@ -630,7 +630,7 @@ describe('durable shell background tasks', () => {
   }, 20_000);
 
   it('hydrates only one owner-scoped journal page instead of all durable histories', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-page-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-page-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const ownerA = { clientId: 'chatgpt', sessionId: 'session-a', workspaceId: 'workspace-a' };
@@ -679,7 +679,7 @@ describe('durable shell background tasks', () => {
   });
 
   it('lists durable task metadata without hydrating historical output', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-list-memory-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-list-memory-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const taskId = 'listed-completed';
@@ -709,7 +709,7 @@ describe('durable shell background tasks', () => {
     expect(listed[0]).not.toHaveProperty('stderr');
   });
   it('reads oversized legacy task output without whole-file readFile allocation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-durable-bounded-read-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-bounded-read-'));
     temporaryRoots.push(root);
     const taskStateDirectory = path.join(root, '.tasks');
     const taskId = 'legacy-oversized';

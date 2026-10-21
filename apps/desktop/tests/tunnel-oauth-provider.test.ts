@@ -9,7 +9,7 @@ const roots: string[] = [];
 afterEach(async (): Promise<void> => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 
 async function fixture(overrides: Partial<TunnelOAuthProvisioningBackend['descriptor']> = {}): Promise<{ readonly filePath: string; readonly store: TunnelOAuthSessionStore; readonly backend: TunnelOAuthProvisioningBackend; readonly provider: OAuthTunnelAuthProvider }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-oauth-provider-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-oauth-provider-'));
   roots.push(root);
   const filePath = path.join(root, 'oauth-session.dpapi');
   const store = new TunnelOAuthSessionStore({

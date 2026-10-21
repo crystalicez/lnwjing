@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { ContextEconomyRuntime } from '../context-economy.js';
 import { ActivityTracker, type ActivitySinkEvent } from '../activity-tracker.js';
 import { ToolRegistry } from '../tool-registry.js';
@@ -177,7 +177,7 @@ describe('durable goal MCP tools', () => {
         goalId: 'goal-1',
         continuationDirective: {
           mode: 'auto',
-          skillId: 'workspace-agents-skills/lnwjud-scheduled-continuation',
+          skillId: 'workspace-agents-skills/lnwjing-scheduled-continuation',
           nativeTaskHostRequired: true,
           userMustPromptAgain: false,
           nextRequiredAction: 'checkpoint_then_ensure_one_cloud_successor',

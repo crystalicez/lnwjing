@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { ContextEconomyRuntime } from '../context-economy.js';
 import { processTools } from './process-tools.js';
 import type { McpToolContext } from './tool-types.js';

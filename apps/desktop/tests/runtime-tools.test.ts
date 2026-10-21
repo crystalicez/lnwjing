@@ -7,15 +7,15 @@ import { resolveBundledTunnelClientPath } from '../src/main/desktop-services.js'
 
 describe('bundled target-native runtime tools', () => {
   it('resolves ripgrep and tunnel-client directories under Windows Electron resources', () => {
-    expect(bundledRuntimeToolDirectories('C:\\Program Files\\lnwjud\\resources', 'win32')).toEqual([
-      path.win32.join('C:\\Program Files\\lnwjud\\resources', 'runtime-tools', 'ripgrep'),
-      path.win32.join('C:\\Program Files\\lnwjud\\resources', 'tunnel-client'),
+    expect(bundledRuntimeToolDirectories('C:\\Program Files\\lnwjing\\resources', 'win32')).toEqual([
+      path.win32.join('C:\\Program Files\\lnwjing\\resources', 'runtime-tools', 'ripgrep'),
+      path.win32.join('C:\\Program Files\\lnwjing\\resources', 'tunnel-client'),
     ]);
   });
 
   it('prepends an existing bundled tool directory without dropping the system PATH', () => {
     const environment: NodeJS.ProcessEnv = { Path: ['C:\\Windows\\System32', 'C:\\Tools'].join(';') };
-    const resources = 'C:\\Program Files\\lnwjud\\resources';
+    const resources = 'C:\\Program Files\\lnwjing\\resources';
     const bundled = path.win32.join(resources, 'runtime-tools', 'ripgrep');
 
     expect(prependBundledRuntimeToolsToPath(environment, resources, (candidate) => candidate === bundled, 'win32')).toEqual([bundled]);
@@ -24,9 +24,9 @@ describe('bundled target-native runtime tools', () => {
 
   it('uses POSIX separators and PATH when simulating a macOS package on Windows', () => {
     const environment: NodeJS.ProcessEnv = { PATH: '/usr/bin:/bin' };
-    const resources = '/Applications/lnwjud.app/Contents/Resources';
-    const ripgrep = '/Applications/lnwjud.app/Contents/Resources/runtime-tools/ripgrep';
-    const tunnel = '/Applications/lnwjud.app/Contents/Resources/tunnel-client';
+    const resources = '/Applications/lnwjing.app/Contents/Resources';
+    const ripgrep = '/Applications/lnwjing.app/Contents/Resources/runtime-tools/ripgrep';
+    const tunnel = '/Applications/lnwjing.app/Contents/Resources/tunnel-client';
 
     expect(prependBundledRuntimeToolsToPath(environment, resources, (candidate) => candidate === ripgrep || candidate === tunnel, 'darwin')).toEqual([ripgrep, tunnel]);
     expect(environment.PATH).toBe(`${ripgrep}:${tunnel}:/usr/bin:/bin`);
@@ -47,7 +47,7 @@ describe('bundled target-native runtime tools', () => {
     const asset = `${prefix}.zip`;
     const licenseAsset = `${prefix}-licenses.txt`;
     const spdxAsset = `${prefix}.spdx.json`;
-    const resources = await mkdtemp(path.join(process.cwd(), '.lnwjud-bundled-tunnel-'));
+    const resources = await mkdtemp(path.join(process.cwd(), '.lnwjing-bundled-tunnel-'));
     const directory = path.join(resources, 'tunnel-client');
     const executable = path.join(directory, 'tunnel-client.exe');
     try {
@@ -59,7 +59,7 @@ describe('bundled target-native runtime tools', () => {
       }
       const manifest = {
         schemaVersion: 1,
-        product: 'lnwjud',
+        product: 'lnwjing',
         version,
         platform: 'win32',
         arch: 'x64',

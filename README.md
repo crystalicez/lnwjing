@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo/logo-256x256.png" width="160" alt="lnwjud logo" />
+  <img src="assets/logo/logo-256x256.png" width="160" alt="lnwjing logo" />
 </p>
 
-<h1 align="center">lnwjud</h1>
+<h1 align="center">lnwjing</h1>
 
 <p align="center">
   <strong>Cross-platform local AI-agent runtime and MCP gateway</strong><br />
@@ -14,40 +14,40 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/engasnm111/lnwjud/releases/latest"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/engasnm111/lnwjud" /></a>
+  <a href="https://github.com/crystalicez/lnwjing/releases/latest"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/crystalicez/lnwjing" /></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4" />
   <img alt="Node" src="https://img.shields.io/badge/Node.js-24.x-339933" />
   <img alt="MCP" src="https://img.shields.io/badge/MCP-294%20tools-6f42c1" />
 </p>
 
-<h2 align="center">Download lnwjud</h2>
-<p align="center">Choose your platform and download the current v5.8.7 release directly.</p>
+<h2 align="center">Download lnwjing</h2>
+<p align="center">Fork download links become available only after lnwjing publishes matching release assets. For an immediate local Windows x64 Portable, use the one-click builder below.</p>
 
 <table align="center">
   <tr>
     <td align="center" width="33%">
-      <a href="https://github.com/engasnm111/lnwjud/releases/latest/download/lnwjud-Setup-5.8.7.exe">
-        <img src="assets/download/download-windows.svg" width="300" alt="Download lnwjud for Windows" />
+      <a href="https://github.com/crystalicez/lnwjing/releases/latest/download/lnwjing-Setup-5.8.7.exe">
+        <img src="assets/download/download-windows.svg" width="300" alt="Download lnwjing for Windows" />
       </a><br />
-      <sub><a href="https://github.com/engasnm111/lnwjud/releases/latest/download/lnwjud-Portable-5.8.7.exe">Portable x64</a></sub>
+      <sub><a href="https://github.com/crystalicez/lnwjing/releases/latest/download/lnwjing-Portable-5.8.7.exe">Portable x64</a></sub>
     </td>
     <td align="center" width="33%">
-      <a href="https://github.com/engasnm111/lnwjud/releases/latest/download/lnwjud-5.8.7-arm64.dmg">
-        <img src="assets/download/download-macos.svg" width="300" alt="Download lnwjud for macOS" />
+      <a href="https://github.com/crystalicez/lnwjing/releases/latest/download/lnwjing-5.8.7-arm64.dmg">
+        <img src="assets/download/download-macos.svg" width="300" alt="Download lnwjing for macOS" />
       </a><br />
-      <sub><a href="https://github.com/engasnm111/lnwjud/releases/latest/download/lnwjud-5.8.7-x64.dmg">Intel x64 DMG</a> · <a href="docs/INSTALL_MACOS.md">Install guide</a></sub>
+      <sub><a href="https://github.com/crystalicez/lnwjing/releases/latest/download/lnwjing-5.8.7-x64.dmg">Intel x64 DMG</a> · <a href="docs/INSTALL_MACOS.md">Install guide</a></sub>
     </td>
     <td align="center" width="33%">
-      <a href="https://github.com/engasnm111/lnwjud/releases/latest/download/lnwjud-5.8.7-x64.deb">
-        <img src="assets/download/download-linux.svg" width="300" alt="Download lnwjud for Linux" />
+      <a href="https://github.com/crystalicez/lnwjing/releases/latest/download/lnwjing-5.8.7-x64.deb">
+        <img src="assets/download/download-linux.svg" width="300" alt="Download lnwjing for Linux" />
       </a><br />
-      <sub><a href="https://github.com/engasnm111/lnwjud/releases/latest/download/lnwjud-5.8.7-x64.AppImage">x64 AppImage</a> · <a href="docs/INSTALL_LINUX.md">Other architectures</a></sub>
+      <sub><a href="https://github.com/crystalicez/lnwjing/releases/latest/download/lnwjing-5.8.7-x64.AppImage">x64 AppImage</a> · <a href="docs/INSTALL_LINUX.md">Other architectures</a></sub>
     </td>
   </tr>
 </table>
 
-<p align="center"><a href="https://github.com/engasnm111/lnwjud/releases/latest"><strong>View all release files →</strong></a></p>
+<p align="center"><a href="https://github.com/crystalicez/lnwjing/releases/latest"><strong>View all release files →</strong></a></p>
 
 ---
 
@@ -57,16 +57,16 @@
 
 ### What's new in v5.8.7
 
-- **Published release:** v5.8.7 is officially published with Windows Setup/Portable, macOS (arm64/x64) and Linux (arm64/x64) installers, SHA256 checksums, a release manifest and five platform provenance records. Protected PR #210 merged as `1a0453ed0ef1de4cdf9ce1ba9edee8da0de8426b`; exact-main CI passed all 18 jobs, and Release workflow #38965349765 completed successfully.
-- **Tunnel Reset All Settings / persistent alias:** Factory reset reconciles only the verified stopped local `lnwjud` runtime alias through the official tunnel-client command, preserving unrelated tunnels and rejecting running, foreign or unverifiable ownership. Targeted desktop regressions passed; a separate real-notebook post-install smoke test is still recommended.
+- **Upstream baseline release (engasnm111/lnwjud):** v5.8.7 was officially published with Windows Setup/Portable, macOS (arm64/x64) and Linux (arm64/x64) installers, SHA256 checksums, a release manifest and five platform provenance records. Protected PR #210 merged as `1a0453ed0ef1de4cdf9ce1ba9edee8da0de8426b`; exact-main CI passed all 18 jobs, and Release workflow #38965349765 completed successfully.
+- **Tunnel Reset All Settings / persistent alias:** Factory reset reconciles only the verified stopped local `lnwjing` runtime alias through the official tunnel-client command, preserving unrelated tunnels and rejecting running, foreign or unverifiable ownership. Targeted desktop regressions passed; a separate real-notebook post-install smoke test is still recommended.
 - **External MCP direct invocation:** Content-only child providers no longer require an invented outer structured-result schema. Direct calls to Playwright, Context7 and codebase-memory-mcp were successfully verified on the v5.8.7 development runtime.
 - **Issue #208 — guarded Git import:** Dedicated `git_clone_safe` supports policy-approved, workspace-scoped HTTPS import pinned to an exact commit with native Windows create-only staging, NTFS identity checks, non-replace publication and fail-closed unknown-state recovery. Existing generic Git command restrictions and host authorization remain in force.
 - **Native Git stage integrity:** Verify trusted Git HEAD, reject tracked/untracked modifications and concealed index changes (`assume-unchanged` / `skip-worktree`) before publication. The Windows regression suite passed 5/5 after reproducing the original flaw.
 - **Issue #209 — write safety:** Strict create-only protection is enforced even under the Full permission profile. Workspace writer leases, global managed-writer admission, `workspace_path_preflight`, and process-lifetime fencing passed targeted and exact-main hosted validation. Explicit recovery of an abandoned same-client writer lease is allowed only when idle ownership is proven; unknown or live work remains blocked.
-- **Security boundary:** Safety claims cover untrusted caller input and writers mediated by the lnwjud Gateway. No guarantee is made against arbitrary same-Windows-user/administrator native processes operating outside the gateway; those processes are outside the tested contract.
+- **Security boundary:** Safety claims cover untrusted caller input and writers mediated by the lnwjing Gateway. No guarantee is made against arbitrary same-Windows-user/administrator native processes operating outside the gateway; those processes are outside the tested contract.
 - **Process startup safety:** Failed pre-spawn process admission releases the reservation; a successfully spawned process retains it until verified zero-active native termination. The 35 process regressions and package typecheck passed.
 - **Scheduled Task truthfulness:** Disabled Native ChatGPT continuation was not silently recreated. No recurring native task has been claimed active for this release goal.
-- **ภาษาไทย:** เผยแพร่ v5.8.7 อย่างเป็นทางการแล้ว ตรวจ CI ที่ Merge SHA ตรงครบ 18 Jobs พร้อม Manifest, SHA256 และ Provenance ครบทุกแพลตฟอร์ม แก้ Git Import, Strict Create-Only, Writer Lease, Tunnel Reset และ Direct MCP; รับประกันความปลอดภัยในขอบเขต Writer ที่ผ่าน lnwjud Gateway เท่านั้น ไม่ครอบคลุมโปรเซสภายนอกที่ใช้สิทธิ์ Windows User เดียวกัน
+- **ภาษาไทย:** เผยแพร่ v5.8.7 อย่างเป็นทางการแล้ว ตรวจ CI ที่ Merge SHA ตรงครบ 18 Jobs พร้อม Manifest, SHA256 และ Provenance ครบทุกแพลตฟอร์ม แก้ Git Import, Strict Create-Only, Writer Lease, Tunnel Reset และ Direct MCP; รับประกันความปลอดภัยในขอบเขต Writer ที่ผ่าน lnwjing Gateway เท่านั้น ไม่ครอบคลุมโปรเซสภายนอกที่ใช้สิทธิ์ Windows User เดียวกัน
 
 ### What's new in v5.8.6
 
@@ -111,7 +111,7 @@
 
 **ภาษาไทย — ต่างจาก 5.7.4:** เพิ่มเทมเพลต 6 แบบ, ประวัติ MCP และผลงาน Goal ที่มีหลักฐาน, RAM/CPU จริงของโปรเซสที่ตรวจเจ้าของได้, Context Economy แบบรวมระดับ Transport, ตรวจ CSV/XLSX, Git tree/preview ที่ครบขึ้น, UI และ dropdown กลาง, กากบาท Modal ขนาดชัดเจน, Work Log ที่กรองง่ายขึ้น, แก้ Tunnel reconnect ก่อนพร้อม และอัปเดต tunnel-client 0.0.16 พร้อมการทดสอบ/แพ็กเกจตาม SHA จริง ค่าไม่ทราบจะไม่แสดงเป็น 0 หรืออ้างว่าสำเร็จโดยไม่มีข้อมูล
 
-Latest published release: **v5.8.7**. The download buttons above point directly to the verified v5.8.7 assets. The release was published after the exact tagged main commit passed the target-native release gates.
+Latest published release: **v5.8.7** (upstream baseline). Fork lnwjing releases are independently published; check whether the target files actually exist before relying on the download links.
 
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for previous releases and the complete release history.
 
@@ -119,9 +119,11 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for previous releases and the complete 
 
 ### Windows 10 / 11
 
-1. Open [GitHub Releases](https://github.com/engasnm111/lnwjud/releases/latest).
-2. Download `lnwjud-Setup-<version>.exe` for the normal installer, or `lnwjud-Portable-<version>.exe` if you prefer a portable executable.
-3. Launch lnwjud, add the project/workspace you want to use, then configure the MCP connection method you need.
+**Build a Portable x64 EXE locally (one click):** Double-click `BUILD-LNWJING-PORTABLE-X64.cmd` in the repository root. The script installs workspace dependencies and prepares the verified runtime tools and local .NET 8 SDK cache when required, then packages **Portable only** (no installer or publishing). The output is `apps/desktop/dist/installers/lnwjing-Portable-5.8.7.exe`, with a portable update manifest and a SHA-256 checksum shown at the end. A first build needs an internet connection. Locally built executables may be unsigned.
+
+1. Open [GitHub Releases](https://github.com/crystalicez/lnwjing/releases/latest).
+2. Download `lnwjing-Setup-<version>.exe` for the normal installer, or `lnwjing-Portable-<version>.exe` if you prefer a portable executable.
+3. Launch lnwjing, add the project/workspace you want to use, then configure the MCP connection method you need.
 
 Community Windows artifacts may be unsigned when production code-signing credentials are not configured. Release verification still checks the declared signing mode, SHA-256 manifests, runtime provenance, and packaged-app smoke evidence; verify the release assets if Windows shows an unknown-publisher warning.
 
@@ -131,21 +133,21 @@ Windows-only features such as WSL, Registry, Windows Sandbox, Windows OCR and Ou
 
 Download the artifact that matches the Mac architecture (`arm64` for Apple silicon or `x64` for Intel). Do not swap architectures just because both filenames contain the word “Mac”. Computers remain unusually literal about this.
 
-See [Install lnwjud on macOS](docs/INSTALL_MACOS.md) for DMG/ZIP installation, permissions, MCP launcher paths, Gatekeeper/signing expectations, and troubleshooting.
+See [Install lnwjing on macOS](docs/INSTALL_MACOS.md) for DMG/ZIP installation, permissions, MCP launcher paths, Gatekeeper/signing expectations, and troubleshooting.
 
 ### Linux
 
 Choose the release artifact that matches the Linux architecture and package type. Ubuntu 24.04 LTS x64 is the primary Linux release target; arm64 remains architecture-specific and evidence-gated.
 
-See [Install lnwjud on Linux](docs/INSTALL_LINUX.md) for AppImage/DEB installation, Wayland/X11 behavior, secure storage, MCP, and platform limits.
+See [Install lnwjing on Linux](docs/INSTALL_LINUX.md) for AppImage/DEB installation, Wayland/X11 behavior, secure storage, MCP, and platform limits.
 
 ### Local data vs workspace metadata
 
-Installed lnwjud keeps per-user runtime data outside your source repository: `%APPDATA%\lnwjud` on Windows, `~/Library/Application Support/lnwjud` on macOS, and `$XDG_DATA_HOME/lnwjud` (or `~/.local/share/lnwjud`) on Linux unless `LNWJUD_DATA_PATH` is explicitly set. A workspace may contain `.lnwjud/project-profile.json` for project-scoped policy such as Ponytail or Engineering Harness mode/profile; `.lnwjud/` is local metadata and is ignored by this repository.
+Installed lnwjing keeps per-user runtime data outside your source repository: `%APPDATA%\lnwjing` on Windows, `~/Library/Application Support/lnwjing` on macOS, and `$XDG_DATA_HOME/lnwjing` (or `~/.local/share/lnwjing`) on Linux unless `LNWJING_DATA_PATH` is explicitly set. A workspace may contain `.lnwjing/project-profile.json` for project-scoped policy such as Ponytail or Engineering Harness mode/profile; `.lnwjing/` is local metadata and is ignored by this repository.
 
 ### Engineering Harness (opt-in)
 
-Engineering Harness is **Off by default**. Enable it in **Settings → Engineering Harness** when you want lnwjud to turn a substantive coding request into a durable, risk-based workflow instead of treating every request the same way.
+Engineering Harness is **Off by default**. Enable it in **Settings → Engineering Harness** when you want lnwjing to turn a substantive coding request into a durable, risk-based workflow instead of treating every request the same way.
 
 - **Presets:** Standard, **Senior** (recommended), Strict, or Custom.
 - **Scope:** coding projects/tasks by default, with an optional per-workspace On/Off + preset override.
@@ -158,9 +160,9 @@ Engineering Harness is **Off by default**. Enable it in **Settings → Engineeri
 
 For the Thai setup and workflow guide, see [docs/USAGE_TH.md](docs/USAGE_TH.md#8a-engineering-harness--senior-coding-workflow).
 
-## What can lnwjud do?
+## What can lnwjing do?
 
-lnwjud exposes **294 tool definitions** through one local runtime and MCP gateway. The default advertised set is 282; all 294 are available when Codex delegation plus Agent Swarm is enabled.
+lnwjing exposes **294 tool definitions** through one local runtime and MCP gateway. The default advertised set is 282; all 294 are available when Codex delegation plus Agent Swarm is enabled.
 
 | Area | Examples |
 | --- | --- |
@@ -175,11 +177,11 @@ lnwjud exposes **294 tool definitions** through one local runtime and MCP gatewa
 | Native capabilities | UI/input/media/Office/scheduler providers when the current OS supports them |
 | Windows-specific | WSL, Registry, Windows Sandbox, Windows Event Log/OCR, Outlook/COM |
 
-For the complete generated catalog, see [MCP Tool Catalog](docs/mcp/MCP_TOOL_CATALOG.md). For the broader capability explanation, see [lnwjud capabilities](docs/LNWJUD_CAPABILITIES.md).
+For the complete generated catalog, see [MCP Tool Catalog](docs/mcp/MCP_TOOL_CATALOG.md). For the broader capability explanation, see [lnwjing capabilities](docs/LNWJING_CAPABILITIES.md).
 
 ## Platform compatibility
 
-lnwjud composes providers for the detected host instead of instantiating a Windows provider everywhere and hoping for the best.
+lnwjing composes providers for the detected host instead of instantiating a Windows provider everywhere and hoping for the best.
 
 | Feature | Windows | macOS | Linux |
 | --- | --- | --- | --- |
@@ -198,19 +200,19 @@ The authoritative matrix is [Native platform support contract](docs/architecture
 ## MCP connection choices
 
 - **Local MCP:** use the packaged stdio launcher or Desktop loopback MCP endpoint directly. The Local transport starts the local listener without ngrok, a public URL, or Remote MCP OAuth.
-- **Remote MCP via ngrok + OAuth:** remains the default/backward-compatible Remote MCP transport. lnwjud owns the protected loopback OAuth gateway and ngrok child runtime.
-- **Remote MCP via Cloudflare:** opt-in for a Cloudflare Tunnel/reverse proxy that you manage. lnwjud provides a stable local OAuth-gateway target and verifies the configured public HTTPS origin; it does not claim to create or manage the Cloudflare tunnel.
+- **Remote MCP via ngrok + OAuth:** remains the default/backward-compatible Remote MCP transport. lnwjing owns the protected loopback OAuth gateway and ngrok child runtime.
+- **Remote MCP via Cloudflare:** opt-in for a Cloudflare Tunnel/reverse proxy that you manage. lnwjing provides a stable local OAuth-gateway target and verifies the configured public HTTPS origin; it does not claim to create or manage the Cloudflare tunnel.
 - **Remote MCP via Custom URL:** opt-in for another externally managed HTTPS reverse proxy. No ngrok token/install is required; the public origin must route to the stable local protected gateway.
-- **OpenAI Secure MCP Tunnel:** separate outbound-only OpenAI tunnel path using the verified target-native bundled `tunnel-client`. One lnwjud tunnel endpoint is intended to serve multiple simultaneous ChatGPT chats/workspaces; do not create one tunnel/profile per chat. v4.62.0 explicitly gives the tunnel transport 32 active MCP-request slots so normal multi-chat tool fan-out does not hit tunnel-client's lower default ceiling. If several physical lnwjud hosts (for example Mac + Windows) must be independently selectable, give each host a distinct Tunnel ID/ChatGPT connection: HTTP replicas sharing one Tunnel ID are work-sharing replicas, so a request goes to whichever replica polls it first rather than to a chat-selected host.
-- **External MCP servers:** lnwjud can discover supported Cursor/Claude Desktop/custom MCP definitions and keep child MCP servers separate from the first-party catalog.
+- **OpenAI Secure MCP Tunnel:** separate outbound-only OpenAI tunnel path using the verified target-native bundled `tunnel-client`. One lnwjing tunnel endpoint is intended to serve multiple simultaneous ChatGPT chats/workspaces; do not create one tunnel/profile per chat. v4.62.0 explicitly gives the tunnel transport 32 active MCP-request slots so normal multi-chat tool fan-out does not hit tunnel-client's lower default ceiling. If several physical lnwjing hosts (for example Mac + Windows) must be independently selectable, give each host a distinct Tunnel ID/ChatGPT connection: HTTP replicas sharing one Tunnel ID are work-sharing replicas, so a request goes to whichever replica polls it first rather than to a chat-selected host.
+- **External MCP servers:** lnwjing can discover supported Cursor/Claude Desktop/custom MCP definitions and keep child MCP servers separate from the first-party catalog.
 
 See the [Thai usage guide](docs/USAGE_TH.md) and [full expanded README](FULL_README.md) for the long-form setup and architecture notes.
 
 ## Durable goals + scheduled continuation / Goal แบบทำงานต่อเนื่อง
 
-lnwjud can keep long-running work alive across chat turns with a **durable goal** plus the bundled `lnwjud-scheduled-continuation` skill. The intended model is simple: one stable goal, one recurring Native ChatGPT Scheduled Task, periodic checkpoints, and an explicit finish only when the work is genuinely complete.
+lnwjing can keep long-running work alive across chat turns with a **durable goal** plus the bundled `lnwjing-scheduled-continuation` skill. The intended model is simple: one stable goal, one recurring Native ChatGPT Scheduled Task, periodic checkpoints, and an explicit finish only when the work is genuinely complete.
 
-lnwjud สามารถทำงานยาวข้ามหลายรอบแชทได้ด้วย **durable goal** ร่วมกับสกิล `lnwjud-scheduled-continuation` แนวทางที่ควรใช้คือ: 1 งาน = 1 goal ที่ใช้ `goalKey` เดิม, มี Native ChatGPT Scheduled Task แบบ recurring เพียง 1 ตัว, บันทึก checkpoint ระหว่างทาง และปิด goal เมื่อทุกอย่างเสร็จจริงเท่านั้น
+lnwjing สามารถทำงานยาวข้ามหลายรอบแชทได้ด้วย **durable goal** ร่วมกับสกิล `lnwjing-scheduled-continuation` แนวทางที่ควรใช้คือ: 1 งาน = 1 goal ที่ใช้ `goalKey` เดิม, มี Native ChatGPT Scheduled Task แบบ recurring เพียง 1 ตัว, บันทึก checkpoint ระหว่างทาง และปิด goal เมื่อทุกอย่างเสร็จจริงเท่านั้น
 
 The scheduled continuation should be a **Native ChatGPT Scheduled Task running in cloud mode every 1 hour**. It is a watchdog that wakes the workflow back up; the durable goal remains the source of truth for plan state, progress, blockers, evidence, and tracked background tasks. Do not create a new goal or timer on every wake.
 
@@ -219,14 +221,14 @@ The scheduled continuation should be a **Native ChatGPT Scheduled Task running i
 ### Recommended prompt — English
 
 ```text
-@lnwjud
+@lnwjing
 
 Workspace:
 C:\path\to\my-project
 
 Continue this task until it is genuinely complete. Do not stop only because the current chat turn ends.
 
-- Use the lnwjud-scheduled-continuation skill.
+- Use the lnwjing-scheduled-continuation skill.
 - Create or resume the same durable goal using one stable goalKey. Treat that Durable Goal as the authoritative task state and never create duplicate goals for the same job. When plan or step progress changes, use update_goal_plan so the Watcher-visible plan stays current.
 - Create exactly one recurring Native ChatGPT Scheduled Task, run it in cloud mode every 1 hour, and reuse that same scheduled continuation for this goal.
 - Checkpoint immediately after every meaningful milestone, and refresh active progress at least every 10 minutes when sustained work has no natural milestone. Persist current phase, step status, next action, blockers, evidence, tracked background tasks, and reconstruction-grade resumeContext: changed files, exact commands/results, decisions, failed attempts, pending validation, resume prerequisites, state facts, and artifacts. A checkpoint records progress; it is not a reason to stop useful work.
@@ -239,14 +241,14 @@ Continue this task until it is genuinely complete. Do not stop only because the 
 ### Prompt แนะนำ — ภาษาไทย
 
 ```text
-@lnwjud
+@lnwjing
 
 Workspace:
 C:\path\to\my-project
 
 ทำงานนี้ต่อเนื่องจนเสร็จจริง ห้ามหยุดกลางทางเพียงเพราะแชทจบรอบ
 
-- ใช้สกิล lnwjud-scheduled-continuation
+- ใช้สกิล lnwjing-scheduled-continuation
 - สร้างหรือ resume durable goal เดิมด้วย goalKey ที่คงที่ และให้ Durable Goal เป็น state หลักของงาน ห้ามสร้าง goal ซ้ำสำหรับงานเดียวกัน เมื่อ plan หรือสถานะ step เปลี่ยน ให้ใช้ update_goal_plan เพื่อให้ plan/progress ที่ Watcher แสดงเป็นปัจจุบัน
 - สร้าง Native ChatGPT Scheduled Task แบบ recurring เพียง 1 ตัว ให้รันบน cloud ทุก 1 ชั่วโมง และใช้ scheduled continuation ตัวเดิมกับ goal นี้ไปตลอด
 - หลัง milestone สำคัญทุกครั้งให้ checkpoint ทันที และถ้าทำงานต่อเนื่องโดยไม่มี milestone ตามธรรมชาติให้ refresh อย่างน้อยทุก 10 นาที โดยบันทึก current phase, step status, next action, blockers, evidence, tracked background task และ resumeContext ที่สร้างงานต่อได้จริง เช่นไฟล์ที่เปลี่ยน, คำสั่งและผลลัพธ์, การตัดสินใจ, failed attempts, pending validation, prerequisites, state facts และ artifacts การ checkpoint คือการบันทึก progress ไม่ใช่เหตุผลให้หยุดทำงาน
@@ -293,13 +295,13 @@ C:\path\to\my-project
 ### Short prompt — English
 
 ```text
-Use lnwjud-scheduled-continuation. Create or resume one durable goal for this job, keep exactly one Native ChatGPT Scheduled Task running in cloud mode every 1 hour, and resume from the latest checkpoint until the goal is genuinely complete. Checkpoint every meaningful milestone, never duplicate the goal or timer, and when all steps are complete with no blockers or blocking tasks left, cancel the scheduled continuation first and then finish_goal with final evidence.
+Use lnwjing-scheduled-continuation. Create or resume one durable goal for this job, keep exactly one Native ChatGPT Scheduled Task running in cloud mode every 1 hour, and resume from the latest checkpoint until the goal is genuinely complete. Checkpoint every meaningful milestone, never duplicate the goal or timer, and when all steps are complete with no blockers or blocking tasks left, cancel the scheduled continuation first and then finish_goal with final evidence.
 ```
 
 ### Prompt แบบสั้น — ภาษาไทย
 
 ```text
-ใช้สกิล lnwjud-scheduled-continuation สร้างหรือ resume durable goal เดิมสำหรับงานนี้ และสร้าง Native ChatGPT Scheduled Task บน cloud แบบ recurring ทุก 1 ชั่วโมงเพียง 1 ตัว เพื่อกลับมาทำงานต่อจาก checkpoint ล่าสุดจน goal เสร็จจริง ระหว่างทางให้ checkpoint ทุก milestone สำคัญ ห้ามสร้าง goal หรือตัวตั้งเวลาซ้ำ และเมื่อทุก step เสร็จ ไม่มี blocker หรือ blocking task ค้าง ให้ปิด scheduled continuation ก่อน แล้ว finish_goal พร้อมหลักฐานสุดท้าย
+ใช้สกิล lnwjing-scheduled-continuation สร้างหรือ resume durable goal เดิมสำหรับงานนี้ และสร้าง Native ChatGPT Scheduled Task บน cloud แบบ recurring ทุก 1 ชั่วโมงเพียง 1 ตัว เพื่อกลับมาทำงานต่อจาก checkpoint ล่าสุดจน goal เสร็จจริง ระหว่างทางให้ checkpoint ทุก milestone สำคัญ ห้ามสร้าง goal หรือตัวตั้งเวลาซ้ำ และเมื่อทุก step เสร็จ ไม่มี blocker หรือ blocking task ค้าง ให้ปิด scheduled continuation ก่อน แล้ว finish_goal พร้อมหลักฐานสุดท้าย
 ```
 
 This pattern is especially useful for long CI/release jobs, multi-stage refactors, deployments, packaging, migrations, or any task where “continue later” should be backed by durable state rather than wishful thinking.
@@ -313,7 +315,7 @@ This pattern is especially useful for long CI/release jobs, multi-stage refactor
 - [macOS installation](docs/INSTALL_MACOS.md)
 - [Linux installation](docs/INSTALL_LINUX.md)
 - [Platform support matrix](docs/architecture/PLATFORM_SUPPORT.md)
-- [Complete capabilities](docs/LNWJUD_CAPABILITIES.md)
+- [Complete capabilities](docs/LNWJING_CAPABILITIES.md)
 - [MCP Tool Catalog](docs/mcp/MCP_TOOL_CATALOG.md)
 - [Tool contract](docs/architecture/TOOL_CONTRACT.md)
 - [Release process](docs/development/RELEASE_PROCESS.md)
@@ -322,7 +324,7 @@ This pattern is especially useful for long CI/release jobs, multi-stage refactor
 
 ## Security boundary
 
-lnwjud is intentionally powerful because it operates on the local machine. Tool availability does **not** bypass Active Project scope, permission policy, mutation approval, recovery, host OS permissions, or platform capability gates. Unknown/unsupported platforms and missing native providers should fail closed rather than silently substituting a different OS implementation.
+lnwjing is intentionally powerful because it operates on the local machine. Tool availability does **not** bypass Active Project scope, permission policy, mutation approval, recovery, host OS permissions, or platform capability gates. Unknown/unsupported platforms and missing native providers should fail closed rather than silently substituting a different OS implementation.
 
 ## Community
 

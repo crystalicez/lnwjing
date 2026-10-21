@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import type { FileActor } from '../file-service.js';
 import type { GoalContinuationService } from '../goal-continuation-service.js';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import { ResourceSnapshotService } from './resource-snapshot-service.js';
 
 const actor: FileActor = { clientId:'own-client', clientName:'Test' };

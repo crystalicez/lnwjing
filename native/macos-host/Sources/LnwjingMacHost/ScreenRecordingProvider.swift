@@ -74,7 +74,7 @@ enum MacScreenRecordingProvider {
 private final class MacScreenSession: NSObject, SCStreamOutput, SCStreamDelegate {
     let owner: MacMediaOwner
     private let lock = NSRecursiveLock()
-    private let outputQueue = DispatchQueue(label: "lnwjud.screen.samples", qos: .utility)
+    private let outputQueue = DispatchQueue(label: "lnwjing.screen.samples", qos: .utility)
     private let target: URL
     private let temporary: URL
     private let duration: Double

@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { access, lstat, realpath } from 'node:fs/promises';
-import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import { hostPathApi, isAbsoluteHostPath, resolveHostPath } from '@lnwjud/workspace';
+import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import { hostPathApi, isAbsoluteHostPath, resolveHostPath } from '@lnwjing/workspace';
 
 /**
  * Single exact-target probe. No registration, directory enumeration, shell,

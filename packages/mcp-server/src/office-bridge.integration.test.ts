@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { PowerShellWindowsCapabilityBridge } from '@lnwjud/capabilities';
+import { PowerShellWindowsCapabilityBridge } from '@lnwjing/capabilities';
 
 describe.skipIf(process.platform !== 'win32')('Windows Office bridge boundary integration', () => {
   it('executes the integrity-checked bridge from a literal path containing spaces, apostrophes, Thai and emoji', async () => {
-    const root = await mkdtemp(path.join(await realpath(tmpdir()), "lnwjud Office O'Brien ไทย 😀-"));
+    const root = await mkdtemp(path.join(await realpath(tmpdir()), "lnwjing Office O'Brien ไทย 😀-"));
     try {
       const source = fileURLToPath(new URL('../../capabilities/src/windows-capability-bridge.ps1', import.meta.url));
       const scriptPath = path.join(root, "bridge O'Brien ไทย 😀.ps1");
@@ -61,9 +61,9 @@ describe.skipIf(process.platform !== 'win32')('Windows Office bridge boundary in
   });
 });
 
-describe.skipIf(process.platform !== 'win32' || process.env.LNWJUD_RUN_OFFICE_COM_ACCEPTANCE !== '1')('Windows Office disposable COM artifact acceptance', () => {
+describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_OFFICE_COM_ACCEPTANCE !== '1')('Windows Office disposable COM artifact acceptance', () => {
   it('keeps UTF16 run boundaries lossless across actual UTF8 process output and bounded continuation', async () => {
-    const root = await mkdtemp(path.join(await realpath(tmpdir()), 'lnwjud Word Unicode runs-'));
+    const root = await mkdtemp(path.join(await realpath(tmpdir()), 'lnwjing Word Unicode runs-'));
     try {
       const scriptPath = fileURLToPath(new URL('../../capabilities/src/windows-capability-bridge.ps1', import.meta.url));
       const bridge = new PowerShellWindowsCapabilityBridge({ scriptPath });
@@ -88,7 +88,7 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJUD_RUN_OFFICE_CO
     } finally { await rm(root, { recursive: true, force: true }); }
   }, 90_000);
   it('persists exact Unicode and whitespace through Node stdin, closed DOCX and a fresh provider reopening', async () => {
-    const root = await mkdtemp(path.join(await realpath(tmpdir()), "lnwjud O'Brien ไทย 😀-"));
+    const root = await mkdtemp(path.join(await realpath(tmpdir()), "lnwjing O'Brien ไทย 😀-"));
     try {
       const scriptPath = fileURLToPath(new URL('../../capabilities/src/windows-capability-bridge.ps1', import.meta.url));
       const file = path.join(root, "document O'Brien ไทย 😀.docx");
@@ -103,7 +103,7 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJUD_RUN_OFFICE_CO
     } finally { await rm(root, { recursive: true, force: true }); }
   }, 75_000);
   it('retains Excel row and column identities, literal escapes, Unicode and empty cells after reopening', async () => {
-    const root = await mkdtemp(path.join(await realpath(tmpdir()), 'lnwjud-excel-'));
+    const root = await mkdtemp(path.join(await realpath(tmpdir()), 'lnwjing-excel-'));
     try {
       const scriptPath = fileURLToPath(new URL('../../capabilities/src/windows-capability-bridge.ps1', import.meta.url));
       const file = path.join(root, 'book.xlsx');

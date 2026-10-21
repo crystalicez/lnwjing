@@ -36,7 +36,7 @@ case "$artifact" in
   *.AppImage|*.appimage)
     test -x "$artifact"
     file "$artifact" | grep -Eiq 'ELF|AppImage' || { echo "AppImage is not an executable Linux artifact" >&2; exit 1; }
-    staging="$(mktemp -d "${TMPDIR:-/tmp}/lnwjud-linux-verify.XXXXXX")"
+    staging="$(mktemp -d "${TMPDIR:-/tmp}/lnwjing-linux-verify.XXXXXX")"
     trap 'rm -rf "$staging"' EXIT
     (cd "$staging" && "$artifact" --appimage-extract >/dev/null)
     root="$staging/squashfs-root"
@@ -44,10 +44,10 @@ case "$artifact" in
   *.deb)
     command -v dpkg-deb >/dev/null
     dpkg-deb --info "$artifact" >/dev/null
-    staging="$(mktemp -d "${TMPDIR:-/tmp}/lnwjud-linux-verify.XXXXXX")"
+    staging="$(mktemp -d "${TMPDIR:-/tmp}/lnwjing-linux-verify.XXXXXX")"
     trap 'rm -rf "$staging"' EXIT
     dpkg-deb --extract "$artifact" "$staging"
-    root="$staging/opt/lnwjud"
+    root="$staging/opt/lnwjing"
     ;;
   *)
     echo "expected an AppImage or DEB artifact" >&2
@@ -55,18 +55,18 @@ case "$artifact" in
     ;;
 esac
 
-if [[ -x "$root/usr/bin/lnwjud" && ! -L "$root/usr/bin/lnwjud" ]]; then
-  require_regular_executable "$root/usr/bin/lnwjud"
+if [[ -x "$root/usr/bin/lnwjing" && ! -L "$root/usr/bin/lnwjing" ]]; then
+  require_regular_executable "$root/usr/bin/lnwjing"
 else
-  require_regular_executable "$root/lnwjud"
+  require_regular_executable "$root/lnwjing"
 fi
-launcher="$(find "$root" -type f -name 'lnwjud-mcp-stdio' -perm -u+x -print -quit)"
+launcher="$(find "$root" -type f -name 'lnwjing-mcp-stdio' -perm -u+x -print -quit)"
 test -n "$launcher" && require_regular_executable "$launcher"
 rg_binary="$(find "$root" -type f -name rg -perm -u+x -print -quit)"
 test -n "$rg_binary" && require_regular_executable "$rg_binary"
 tunnel_binary="$(find "$root" -type f -name tunnel-client -perm -u+x -print -quit)"
 test -n "$tunnel_binary" && require_regular_executable "$tunnel_binary"
-host_binary="$(find "$root" -type f -name lnwjud-linux-host -perm -u+x -print -quit)"
+host_binary="$(find "$root" -type f -name lnwjing-linux-host -perm -u+x -print -quit)"
 test -n "$host_binary" && require_regular_executable "$host_binary"
 manifest="$(dirname "$host_binary")/NATIVE_HOST.json"
 require_regular_file "$manifest"

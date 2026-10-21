@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from '../file-service.js';
 import type { GoalContinuationService } from '../goal-continuation-service.js';
 import { WorkflowTemplateService } from './workflow-template-service.js';
@@ -12,7 +12,7 @@ const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 const actor: FileActor = { clientId: 'workflow-client', clientName: 'Workflow Tester', sessionId: 'test-session' };
 async function fixture(): Promise<{root:string;templates:WorkflowTemplateService;unknownProvider:WorkflowTemplateService}> {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-v580-workflow-'));
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-v580-workflow-'));
   roots.push(temporaryRoot);
   // macOS /var is often a symlink to /private/var. The real workspace repository
   // provides canonical realRootPath; keep the fixture faithful to that contract.

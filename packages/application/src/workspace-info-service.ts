@@ -1,4 +1,4 @@
-import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import { preflightWorkspacePath, type WorkspacePathPreflightResult } from './workspace-path-preflight.js';
 import {
   hostPathApi,
@@ -9,7 +9,7 @@ import {
   type Workspace,
   type WorkspaceRepository,
   type WorkspaceService,
-} from '@lnwjud/workspace';
+} from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 
 export type WorkspaceKind = 'machine_root' | 'project';

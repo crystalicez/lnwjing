@@ -11,7 +11,7 @@
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <AssemblyName>lnwjud-windows-secret-migrator</AssemblyName>
-    <RootNamespace>Lnwjud.WindowsSecretMigrator</RootNamespace>
+    <AssemblyName>lnwjing-windows-ocr</AssemblyName>
+    <RootNamespace>Lnwjing.WindowsOcr</RootNamespace>
   </PropertyGroup>
 </Project>

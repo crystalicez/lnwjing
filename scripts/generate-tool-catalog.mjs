@@ -7,7 +7,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const contractPath = path.join(repositoryRoot, 'docs', 'architecture', 'TOOL_CONTRACT.md');
 const readmePath = path.join(repositoryRoot, 'FULL_README.md');
 const conciseReadmePath = path.join(repositoryRoot, 'README.md');
-const capabilityPath = path.join(repositoryRoot, 'docs', 'LNWJUD_CAPABILITIES.md');
+const capabilityPath = path.join(repositoryRoot, 'docs', 'LNWJING_CAPABILITIES.md');
 const releaseChecklistPath = path.join(repositoryRoot, '.github', 'RELEASE_CHECKLIST.md');
 const registryModulePath = path.join(repositoryRoot, 'packages', 'mcp-server', 'dist', 'tool-registry.js');
 const upgradeCatalogModulePath = path.join(repositoryRoot, 'packages', 'mcp-server', 'dist', 'upgrade-catalog.js');
@@ -157,7 +157,7 @@ expectedConciseReadme = replaceRequired(
 );
 expectedConciseReadme = replaceRequired(
   expectedConciseReadme,
-  /(lnwjud exposes \*\*)\d+( tool definitions\*\* through one local runtime and MCP gateway\. The default advertised set is )\d+(; all )\d+( are available when Codex delegation plus Agent Swarm is enabled\.)/,
+  /(lnwjing exposes \*\*)\d+( tool definitions\*\* through one local runtime and MCP gateway\. The default advertised set is )\d+(; all )\d+( are available when Codex delegation plus Agent Swarm is enabled\.)/,
   (_m, a, b, c, d) => a + tools.length + b + defaultAdvertisedCount + c + codexEnabledAdvertisedCount + d,
   'README capability summary',
 );

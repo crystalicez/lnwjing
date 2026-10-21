@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RequirementRegistry } from '../src/main/tool-catalog/requirement-registry.js';
 import { RemediationRegistry } from '../src/main/tool-catalog/remediation-registry.js';
-import type { ToolAvailabilitySnapshot } from '@lnwjud/shared';
+import type { ToolAvailabilitySnapshot } from '@lnwjing/shared';
 import { ToolCatalogService } from '../src/main/tool-catalog/tool-catalog-service.js';
 
 function service(statuses: Readonly<Record<string, 'pass' | 'warn' | 'fail' | 'unknown'>>, options: { profileDecision?: 'ALLOW' | 'ASK' | 'DENY' | 'UNKNOWN'; codexEnabled?: boolean; eccEnabled?: boolean; availabilityOverrides?: Record<string, 'enabled' | 'disabled'> } = {}): { registry: RequirementRegistry; catalog: ToolCatalogService; probes: Record<string, ReturnType<typeof vi.fn>> } {

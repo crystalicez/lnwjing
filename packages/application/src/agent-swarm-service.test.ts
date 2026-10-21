@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appError, err, ok, type InvocationAuthorization } from '@lnwjud/domain';
-import { ProcessManager, type ManagedProcess } from '@lnwjud/process';
-import { CodexAdapter, type CodexDiscoveryResult } from '@lnwjud/codex';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type InvocationAuthorization } from '@lnwjing/domain';
+import { ProcessManager, type ManagedProcess } from '@lnwjing/process';
+import { CodexAdapter, type CodexDiscoveryResult } from '@lnwjing/codex';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { CodexService } from './codex-service.js';
 import { SqliteAgentSwarmRepository } from '../../storage/src/agent-swarm-repository.js';
 import { SqliteDatabase } from '../../storage/src/database.js';
@@ -28,7 +28,7 @@ function managed(codexTaskId: string, state: ManagedProcess['state'] = 'running'
     processId: `process-${codexTaskId}`,
     executable: 'codex',
     args: ['exec'],
-    cwd: 'E:\\lnwjud',
+    cwd: 'E:\\lnwjing',
     state,
     startedAt: '2026-08-31T00:00:00.000Z',
     ...(state === 'exited' ? { finishedAt: '2026-08-31T00:00:01.000Z', exitCode: 0 } : {}),
@@ -36,7 +36,7 @@ function managed(codexTaskId: string, state: ManagedProcess['state'] = 'running'
 }
 
 async function fixture(codex: AgentSwarmCodexPort): Promise<{ database: SqliteDatabase; repository: SqliteAgentSwarmRepository; service: AgentSwarmService }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-agent-swarm-service-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-agent-swarm-service-'));
   temporaryRoots.push(root);
   const database = new SqliteDatabase(path.join(root, 'state.sqlite'));
   const repository = new SqliteAgentSwarmRepository(database);
@@ -184,7 +184,7 @@ describe('AgentSwarmService', () => {
   });
 
   it('runs three read-only agents through actual managed processes and collects their EOF-driven results after request cancellation', async () => {
-    const workdir = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-real-swarm-cli-'));
+    const workdir = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-real-swarm-cli-'));
     temporaryRoots.push(workdir);
     await mkdir(path.join(workdir, 'workspace'));
     const root = path.join(workdir, 'workspace');

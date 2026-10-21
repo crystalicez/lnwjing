@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { link, lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { assertSecretPlaintext, type SecretProtector } from '@lnwjud/shared';
+import { assertSecretPlaintext, type SecretProtector } from '@lnwjing/shared';
 
 export interface CheckpointKeyStoreOptions {
   readonly filePath: string;

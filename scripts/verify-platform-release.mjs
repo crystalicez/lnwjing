@@ -8,8 +8,8 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = process.cwd();
-const target = process.env.LNWJUD_VERIFY_PLATFORM?.trim() || process.platform;
-const architecture = process.env.LNWJUD_VERIFY_ARCH?.trim() || process.arch;
+const target = process.env.LNWJING_VERIFY_PLATFORM?.trim() || process.platform;
+const architecture = process.env.LNWJING_VERIFY_ARCH?.trim() || process.arch;
 const packageRequested = process.argv.includes('--package');
 
 if (!['win32', 'darwin', 'linux'].includes(target)) throw new Error(`Unsupported verification platform: ${target}`);
@@ -64,11 +64,11 @@ async function runCheck(name, command, args) {
       cwd: repositoryRoot,
       env: {
         ...process.env,
-        LNWJUD_SOURCE_DIRTY_AT_START: sourceDirtyAtStart ? '1' : '0',
-        LNWJUD_RUNTIME_TARGET: target,
-        LNWJUD_RUNTIME_ARCH: architecture,
-        LNWJUD_TUNNEL_TARGET: target,
-        LNWJUD_TUNNEL_ARCH: architecture,
+        LNWJING_SOURCE_DIRTY_AT_START: sourceDirtyAtStart ? '1' : '0',
+        LNWJING_RUNTIME_TARGET: target,
+        LNWJING_RUNTIME_ARCH: architecture,
+        LNWJING_TUNNEL_TARGET: target,
+        LNWJING_TUNNEL_ARCH: architecture,
       },
       shell: false,
       windowsHide: true,
@@ -114,7 +114,7 @@ async function writeEvidence(results) {
   await mkdir(directory, { recursive: true });
   await writeFile(path.join(directory, `platform-verification-${target}-${architecture}.json`), `${JSON.stringify({
     schemaVersion: 1,
-    product: 'lnwjud',
+    product: 'lnwjing',
     platform: target,
     arch: architecture,
     commit: await commitSha(),

@@ -1,4 +1,4 @@
-# lnwjud tool contract
+# lnwjing tool contract
 
 Status: God-Tier Wave 0–8 additive contract snapshot synchronized for `v5.8.7`.
 
@@ -346,7 +346,7 @@ Run `pnpm docs:tools` after intentionally changing the registry; CI runs `pnpm d
 - `readOnlyHint` is advisory metadata for clients. It never grants permission.
 - `destructiveHint` is advisory metadata for clients. In standard mode permission
   policy and application hard blocks remain authoritative; trusted Full Bypass
-  intentionally skips those lnwjud checks.
+  intentionally skips those lnwjing checks.
 - A bounded result must report truncation, continuation, or a bounded-window
   contract. A new compound tool cannot hide data that a primitive tool can read.
 - `workspaceId` is required where the operation is workspace-scoped unless an
@@ -362,13 +362,13 @@ Run `pnpm docs:tools` after intentionally changing the registry; CI runs `pnpm d
 | `READ` | No intentional mutation; inspection or local diagnostics | allowed by Safe/Balanced/Full |
 | `WRITE` | Changes workspace files or registration state | prompts in Safe; allowed in Balanced/Full |
 | `EXECUTE` | Starts/controls an owned command, process, project, or Codex task | prompts in Safe; allowed in Balanced/Full |
-| `DANGEROUS` | Destructive, interactive, external, or full-access meta capability | denied in Safe; prompts in Balanced; allowed in Full subject to standard-mode policy, or dispatched without lnwjud approval when Full Bypass is ON |
+| `DANGEROUS` | Destructive, interactive, external, or full-access meta capability | denied in Safe; prompts in Balanced; allowed in Full subject to standard-mode policy, or dispatched without lnwjing approval when Full Bypass is ON |
 
 Desktop uses its configured local permission profile. Packaged stdio keeps `full` as the backward-compatible default but accepts `safe|balanced|full|custom` through the launcher, environment, or Desktop STDIO policy settings. Desktop HTTP/Secure Tunnel and direct STDIO have independent Full Bypass toggles under the Full Access (Unrestricted) group; both default OFF and are effective only with profile `full`.
 
-No mode scans or registers drive letters automatically. With Full Bypass OFF, optional strict-root mode constrains access to explicit canonical roots and the normal ownership/path/Active Project/host approval/command-policy boundaries remain enforced. With Full Bypass ON, the gateway and inner runtimes skip ordinary lnwjud application approval and scope checks, including always-confirm tools, protected paths, and explicit absolute outside paths. A live rolling scheduled-Goal mutation fence is different: workspace mutations and native automation mutations still require the exact current `goalLease` goal/token/generation proof so a stale worker cannot mutate after handoff. The authorization is carried separately from tool input and must never be forged as caller `userConfirmed: true`. Schema validation, relative-traversal rejection, exact task/process/worktree ownership, Windows ACL/UAC, provider availability, remote/child policy, and runtime errors remain.
+No mode scans or registers drive letters automatically. With Full Bypass OFF, optional strict-root mode constrains access to explicit canonical roots and the normal ownership/path/Active Project/host approval/command-policy boundaries remain enforced. With Full Bypass ON, the gateway and inner runtimes skip ordinary lnwjing application approval and scope checks, including always-confirm tools, protected paths, and explicit absolute outside paths. A live rolling scheduled-Goal mutation fence is different: workspace mutations and native automation mutations still require the exact current `goalLease` goal/token/generation proof so a stale worker cannot mutate after handoff. The authorization is carried separately from tool input and must never be forged as caller `userConfirmed: true`. Schema validation, relative-traversal rejection, exact task/process/worktree ownership, Windows ACL/UAC, provider availability, remote/child policy, and runtime errors remain.
 
-Mutations still receive typed policy classification for audit/dispatch behavior. With Full Bypass OFF, the only configurable scoped auto-approval exception is exact recoverable `delete_file`; every other approval-required mutation needs independent trusted host exact-action approval and providerless runtimes fail closed. Full Bypass ON supersedes those lnwjud authorization checks for its transport. Arbitrary commands and project-owned scripts remain opaque execution, not an OS sandbox, and outside-project changes are not automatically recoverable through Recovery Trash.
+Mutations still receive typed policy classification for audit/dispatch behavior. With Full Bypass OFF, the only configurable scoped auto-approval exception is exact recoverable `delete_file`; every other approval-required mutation needs independent trusted host exact-action approval and providerless runtimes fail closed. Full Bypass ON supersedes those lnwjing authorization checks for its transport. Arbitrary commands and project-owned scripts remain opaque execution, not an OS sandbox, and outside-project changes are not automatically recoverable through Recovery Trash.
 
 ## Core primitive runtime catalog
 
@@ -520,9 +520,9 @@ capability backends. Important invariants are:
 - `mcp_call` intentionally omits an outer MCP `outputSchema`: a conforming child
   may return valid text/image `content` without `structuredContent`. A fake
   structured result would misrepresent the child; direct calls and `tool_batch`
-  must preserve original content and `isError`. Other lnwjud tools retain their
+  must preserve original content and `isError`. Other lnwjing tools retain their
   declared structured output schemas.
-- When lnwjud receives a host exact-action denial, MCP clients still see `PERMISSION_DENIED`. The error details distinguish `denialSource: host_approval_adapter` with `approvalState: unavailable` versus `denied_or_unverified`; activity/watch telemetry emits `HOST_APPROVAL_UNAVAILABLE` or `HOST_APPROVAL_DENIED_OR_UNVERIFIED` without logging tool arguments. An OpenAI safety rejection **before connector dispatch** is outside lnwjud's runtime and cannot create a local activity receipt or be bypassed by editing ChatGPT Project Instructions, changing connector display names, or retrying a privileged action. Diagnose the exact host error and continue only permitted actions.
+- When lnwjing receives a host exact-action denial, MCP clients still see `PERMISSION_DENIED`. The error details distinguish `denialSource: host_approval_adapter` with `approvalState: unavailable` versus `denied_or_unverified`; activity/watch telemetry emits `HOST_APPROVAL_UNAVAILABLE` or `HOST_APPROVAL_DENIED_OR_UNVERIFIED` without logging tool arguments. An OpenAI safety rejection **before connector dispatch** is outside lnwjing's runtime and cannot create a local activity receipt or be bypassed by editing ChatGPT Project Instructions, changing connector display names, or retrying a privileged action. Diagnose the exact host error and continue only permitted actions.
 
 The additive Windows gateway contract is:
 

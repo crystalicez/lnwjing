@@ -1,4 +1,4 @@
-import { appError, ok, type AppError } from '@lnwjud/domain';
+import { appError, ok, type AppError } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import {
   projectSnapshotSchema,
@@ -21,7 +21,7 @@ export function workspaceTools(context: McpToolContext): McpToolDefinition[] {
   return [
     defineTool({
       name: 'workspace_list',
-      description: 'List registered project workspaces available to lnwjud. Legacy explicitly registered drive roots may also appear as kind=machine_root.',
+      description: 'List registered project workspaces available to lnwjing. Legacy explicitly registered drive roots may also appear as kind=machine_root.',
       permission: 'READ',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: workspaceListSchema,

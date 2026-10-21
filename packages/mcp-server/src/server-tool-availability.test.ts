@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { describe, expect, it, vi } from 'vitest';
-import type { FileActor } from '@lnwjud/application';
-import { ok } from '@lnwjud/domain';
-import { APP_VERSION } from '@lnwjud/shared';
-import type { ToolAvailabilitySnapshot } from '@lnwjud/shared';
+import type { FileActor } from '@lnwjing/application';
+import { ok } from '@lnwjing/domain';
+import { APP_VERSION } from '@lnwjing/shared';
+import type { ToolAvailabilitySnapshot } from '@lnwjing/shared';
 import { createMcpServer } from './server.js';
 import type { McpApplicationServices } from './tool-registry.js';
 
@@ -117,7 +117,7 @@ describe('MCP server live tool availability', () => {
         status: 'available',
         appVersion: APP_VERSION,
         toolName: 'checkpoint_goal',
-        schemaSource: 'lnwjud_tool_registry',
+        schemaSource: 'lnwjing_tool_registry',
         publicationTarget: 'mcp.tools/list.inputSchema',
         digestAlgorithm: 'SHA-256',
         digestFormatVersion: 1,

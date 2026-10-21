@@ -1,5 +1,5 @@
-import type { ActivitySessionSummary, AuditEventRepository } from '@lnwjud/audit';
-import type { LogSessionSummary } from '@lnwjud/ipc-contracts';
+import type { ActivitySessionSummary, AuditEventRepository } from '@lnwjing/audit';
+import type { LogSessionSummary } from '@lnwjing/ipc-contracts';
 
 const MAX_CACHED_SESSIONS = 500;
 

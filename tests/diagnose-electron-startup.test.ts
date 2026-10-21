@@ -7,7 +7,7 @@ describe('Electron startup diagnostic cleanup', () => {
     let attempts = 0;
     const delays: number[] = [];
 
-    await removeTemporaryDirectory('C:\\Temp\\lnwjud-electron-startup', {
+    await removeTemporaryDirectory('C:\\Temp\\lnwjing-electron-startup', {
       remove: async () => {
         attempts += 1;
         if (attempts === 1) throw Object.assign(new Error(code), { code });

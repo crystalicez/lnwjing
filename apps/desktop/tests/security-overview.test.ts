@@ -1,7 +1,7 @@
 ﻿import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { EMPTY_TUNNEL_STATUS, type DashboardSnapshot } from '@lnwjud/ipc-contracts';
+import { EMPTY_TUNNEL_STATUS, type DashboardSnapshot } from '@lnwjing/ipc-contracts';
 import { ControlCenterPage } from '../src/renderer/features/home/ControlCenterPage.js';
 
 const baseDashboard: DashboardSnapshot = {
@@ -24,7 +24,7 @@ const baseDashboard: DashboardSnapshot = {
   stdioStrictRoots: true,
   stdioAllowedRoots: ['C:\\workspace'],
   backups: [],
-  connectionModes: { httpUrl: null, stdioCommand: 'lnwjud-mcp-stdio.cmd' },
+  connectionModes: { httpUrl: null, stdioCommand: 'lnwjing-mcp-stdio.cmd' },
   workLog: [],
   inFlight: [],
   tunnel: EMPTY_TUNNEL_STATUS,
@@ -114,7 +114,7 @@ describe('Security Overview', () => {
         persistent: null,
       },
     });
-    expect(markup).toContain('A tunnel process is still running, but lnwjud setup is incomplete.');
+    expect(markup).toContain('A tunnel process is still running, but lnwjing setup is incomplete.');
     expect(markup).not.toContain('Tunnel connected (from script) — Start is disabled');
   });
 

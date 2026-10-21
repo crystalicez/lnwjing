@@ -5,24 +5,24 @@ import { describe, expect, it } from 'vitest';
 
 describe('PowerShell tunnel launcher ownership contract', () => {
   it('parses and delegates ownership to the side-effect-free helper without local lock definitions', async () => {
-    const starter = path.resolve('scripts/start-lnwjud-tunnel.ps1').replace(/'/g, "''");
-    const helper = path.resolve('scripts/lib/lnwjud-tunnel-lock.ps1').replace(/'/g, "''");
+    const starter = path.resolve('scripts/start-lnwjing-tunnel.ps1').replace(/'/g, "''");
+    const helper = path.resolve('scripts/lib/lnwjing-tunnel-lock.ps1').replace(/'/g, "''");
     const result = await runPowerShell(`
       $tokens=$null; $errors=$null
       $ast=[Management.Automation.Language.Parser]::ParseFile('${starter}',[ref]$tokens,[ref]$errors)
       $helperTokens=$null; $helperErrors=$null
       $helperAst=[Management.Automation.Language.Parser]::ParseFile('${helper}',[ref]$helperTokens,[ref]$helperErrors)
-      $functions=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -like '*LnwjudTunnelLock*'},$true)).Count
+      $functions=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -like '*LnwjingTunnelLock*'},$true)).Count
       $dotSources=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Dot},$true) | ForEach-Object { $_.Extent.Text })
       $commands=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst]},$true) | ForEach-Object { $_.GetCommandName() })
       $helperSideEffects=@($helperAst.EndBlock.Statements | Where-Object {$_ -isnot [Management.Automation.Language.FunctionDefinitionAst]}).Count
-      [pscustomobject]@{ errors=$errors.Count; helperErrors=$helperErrors.Count; helperSideEffects=$helperSideEffects; functions=$functions; dotSources=$dotSources; enter=(@($commands | Where-Object {$_ -eq 'Enter-LnwjudTunnelLock'}).Count); release=(@($commands | Where-Object {$_ -eq 'Release-LnwjudTunnelLock'}).Count) } | ConvertTo-Json -Compress
+      [pscustomobject]@{ errors=$errors.Count; helperErrors=$helperErrors.Count; helperSideEffects=$helperSideEffects; functions=$functions; dotSources=$dotSources; enter=(@($commands | Where-Object {$_ -eq 'Enter-LnwjingTunnelLock'}).Count); release=(@($commands | Where-Object {$_ -eq 'Release-LnwjingTunnelLock'}).Count) } | ConvertTo-Json -Compress
     `);
 
     expect(JSON.parse(result)).toMatchObject({ errors: 0, helperErrors: 0, helperSideEffects: 0, functions: 0, enter: 1, release: 1 });
     expect(JSON.parse(result).dotSources).toEqual(expect.arrayContaining([expect.stringContaining('$lockHelperResolved')]));
-    const starterSource = await readFile(path.resolve('scripts/start-lnwjud-tunnel.ps1'), 'utf8');
-    expect(starterSource).toContain('lnwjud-tunnel-lock.ps1');
+    const starterSource = await readFile(path.resolve('scripts/start-lnwjing-tunnel.ps1'), 'utf8');
+    expect(starterSource).toContain('lnwjing-tunnel-lock.ps1');
     expect(starterSource).toContain('Resolve-Path -LiteralPath $lockHelperRequested');
     expect(starterSource).toContain('[IO.FileAttributes]::ReparsePoint');
   });

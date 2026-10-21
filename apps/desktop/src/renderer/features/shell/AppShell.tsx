@@ -1,6 +1,6 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import { useCallback, useState, type ReactElement, type ReactNode } from 'react';
-import type { DashboardSnapshot, UiLocale, UpdateStatus } from '@lnwjud/ipc-contracts';
+import type { DashboardSnapshot, UiLocale, UpdateStatus } from '@lnwjing/ipc-contracts';
 import { createTranslator, type Translator } from '../../i18n/index.js';
 import type { MessageKey } from '../../i18n/messages.js';
 import { WhatsNewModal } from '../release-notes/WhatsNewModal.js';
@@ -50,7 +50,7 @@ export function AppShell(props: AppShellProps): ReactElement {
       <header className="custom-titlebar">
         <div className="titlebar-drag-region">
           <div className="titlebar-brand">
-            <img src="./favicon.ico" alt="lnwjud logo" className="titlebar-logo" />
+            <img src="./favicon.ico" alt="lnwjing logo" className="titlebar-logo" />
             <span className="titlebar-title">{t('brand')}</span>
             <ActionButton
               type="button"

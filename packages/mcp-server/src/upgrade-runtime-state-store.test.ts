@@ -6,7 +6,7 @@ import { UpgradeRuntimeStateStore } from './upgrade-runtime-state-store.js';
 
 describe('UpgradeRuntimeStateStore', () => {
   it('merges simultaneous writes for the same session without losing checkpoints', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-state-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-state-'));
     const legacyPath = path.join(directory, 'upgrade-runtime.json');
     const stores = Array.from({ length: 16 }, () => new UpgradeRuntimeStateStore(legacyPath, 'client\0session-a'));
 
@@ -23,7 +23,7 @@ describe('UpgradeRuntimeStateStore', () => {
   });
 
   it('fails closed instead of overwriting unreadable authoritative session state', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-state-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-state-'));
     const legacyPath = path.join(directory, 'upgrade-runtime.json');
     const store = new UpgradeRuntimeStateStore(legacyPath, 'client\0session-a');
     await store.updateSession((current) => ({ ...current, checkpoints: [...current.checkpoints, { id: 'checkpoint-a' }] }));
@@ -37,7 +37,7 @@ describe('UpgradeRuntimeStateStore', () => {
   });
 
   it('isolates session state while merging shared state across owners', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-state-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-state-'));
     const legacyPath = path.join(directory, 'upgrade-runtime.json');
     const sessionA = new UpgradeRuntimeStateStore(legacyPath, 'client\0session-a');
     const sessionB = new UpgradeRuntimeStateStore(legacyPath, 'client\0session-b');
@@ -57,7 +57,7 @@ describe('UpgradeRuntimeStateStore', () => {
   });
 
   it('migrates legacy state once, claims legacy session data for one session, and preserves shared ledgers', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-state-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-state-'));
     const legacyPath = path.join(directory, 'upgrade-runtime.json');
     const legacy = {
       tasks: [{ id: 'legacy-task' }],

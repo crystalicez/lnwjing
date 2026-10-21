@@ -12,7 +12,7 @@ afterEach(async () => {
 
 describe('safe ZIP extraction', () => {
   it('extracts ordinary files inside the destination', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-safe-zip-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-safe-zip-'));
     roots.push(root);
     const archivePath = path.join(root, 'valid.zip');
     const destination = path.join(root, 'dest');
@@ -26,7 +26,7 @@ describe('safe ZIP extraction', () => {
   });
 
   it('rejects parent traversal without writing outside the destination', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-safe-zip-traversal-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-safe-zip-traversal-'));
     roots.push(root);
     const archivePath = path.join(root, 'traversal.zip');
     const destination = path.join(root, 'dest');
@@ -41,7 +41,7 @@ describe('safe ZIP extraction', () => {
   });
 
   it('rejects symlink and duplicate-name overwrite archives without escaping the destination', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-safe-zip-symlink-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-safe-zip-symlink-'));
     roots.push(root);
     const archivePath = path.join(root, 'symlink.zip');
     const destination = path.join(root, 'dest');
@@ -57,7 +57,7 @@ describe('safe ZIP extraction', () => {
   });
 
   it('rejects names that collide after the UTF-8 decoding used by unzipper', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-safe-zip-decoding-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-safe-zip-decoding-'));
     roots.push(root);
     const archivePath = path.join(root, 'decoding-collision.zip');
     const destination = path.join(root, 'dest');
@@ -75,7 +75,7 @@ describe('safe ZIP extraction', () => {
   });
 
   it('rejects archives whose declared expanded size exceeds the safety limit before extraction', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-safe-zip-expansion-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-safe-zip-expansion-'));
     roots.push(root);
     const archivePath = path.join(root, 'expansion.zip');
     const destination = path.join(root, 'dest');

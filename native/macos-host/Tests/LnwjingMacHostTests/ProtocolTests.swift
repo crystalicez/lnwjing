@@ -6,7 +6,7 @@ final class ProtocolTests: XCTestCase {
         var directory = Bundle(for: ProtocolTests.self).bundleURL
         var executable: URL?
         for _ in 0..<8 {
-            let candidate = directory.appendingPathComponent("lnwjud-macos-host")
+            let candidate = directory.appendingPathComponent("lnwjing-macos-host")
             if FileManager.default.isExecutableFile(atPath: candidate.path) { executable = candidate; break }
             directory.deleteLastPathComponent()
         }

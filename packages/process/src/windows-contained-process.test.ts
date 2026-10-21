@@ -11,7 +11,7 @@ const run = promisify(execFile);
 
 describe.skipIf(process.platform !== 'win32')('Windows contained process', () => {
   it('retains the job until a detached descendant completes after the root exits', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud job proof '));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing job proof '));
     const marker = path.join(root, 'descendant.txt');
     await writeFile(path.join(root, 'breakaway.cs'), windowsContainedProcessSource.replace('CreateSuspended|CreateNoWindow,', 'CreateSuspended|CreateNoWindow|0x01000000,'));
     await writeFile(path.join(root, 'breakaway.ps1'), [
@@ -59,7 +59,7 @@ describe.skipIf(process.platform !== 'win32')('Windows contained process', () =>
   }, 40_000);
 
   it('kills contained descendants when its native helper dies abruptly', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud job death '));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing job death '));
     await writeFile(path.join(root, 'job.cs'), windowsContainedProcessSource);
     await writeFile(path.join(root, 'hold.cjs'), [
       "const {spawn}=require('node:child_process');",

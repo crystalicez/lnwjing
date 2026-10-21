@@ -1,4 +1,4 @@
-import { appError, type AppError } from '@lnwjud/domain';
+import { appError, type AppError } from '@lnwjing/domain';
 
 export function nodeErrorCode(error: unknown): string | undefined {
   if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;

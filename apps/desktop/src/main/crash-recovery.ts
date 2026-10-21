@@ -1,8 +1,8 @@
 ﻿import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { redactDiagnosticText } from '@lnwjud/application';
-import { DEFAULT_DISPLAY_TIME_ZONE, formatOffsetIsoTimestamp } from '@lnwjud/shared/date-time-display';
+import { redactDiagnosticText } from '@lnwjing/application';
+import { DEFAULT_DISPLAY_TIME_ZONE, formatOffsetIsoTimestamp } from '@lnwjing/shared/date-time-display';
 
 const MAX_CRASH_LOG_BYTES = 512 * 1024;
 const RETAINED_CRASH_EVENTS = 128;

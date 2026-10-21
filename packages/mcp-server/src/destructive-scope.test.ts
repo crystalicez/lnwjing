@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY, type DestructiveApprovalKey, type DestructiveAutoApprovalPolicy } from '@lnwjud/shared';
+import { DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY, type DestructiveApprovalKey, type DestructiveAutoApprovalPolicy } from '@lnwjing/shared';
 import { isScopedAutoApprovalAllowed } from './destructive-scope.js';
 import { inspectMutationOperation } from './mutation-policy.js';
 

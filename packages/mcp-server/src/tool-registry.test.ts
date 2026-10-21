@@ -4,13 +4,13 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { appError, err, ok } from '@lnwjud/domain';
-import { LocalCapabilityService, ShellCapabilityBackend, SqliteWorkspaceWriterLease } from '@lnwjud/capabilities';
-import { permissionProfiles, type PermissionProfile } from '@lnwjud/permissions';
-import { DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY, type DestructiveAutoApprovalPolicy, type ToolAvailabilitySnapshot } from '@lnwjud/shared';
+import { appError, err, ok } from '@lnwjing/domain';
+import { LocalCapabilityService, ShellCapabilityBackend, SqliteWorkspaceWriterLease } from '@lnwjing/capabilities';
+import { permissionProfiles, type PermissionProfile } from '@lnwjing/permissions';
+import { DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY, type DestructiveAutoApprovalPolicy, type ToolAvailabilitySnapshot } from '@lnwjing/shared';
 import { ActivityTracker, type ActivitySinkEvent } from './activity-tracker.js';
 import { CODEX_DELEGATION_TOOL_NAMES, isCodexDelegationTool, ToolRegistry, type McpApplicationServices, type ToolRegistryOptions, type WorkspaceScope } from './tool-registry.js';
-import { GoalRequestCancellationService, RepositoryImportService } from '@lnwjud/application';
+import { GoalRequestCancellationService, RepositoryImportService } from '@lnwjing/application';
 import { CODEX_TOOL_NAMES } from './tools/codex-tools.js';
 import { AUTOMATION_TOOL_NAMES } from './tools/automation-tools.js';
 import { isAdvertisedDeliveryState } from './tool-delivery-contract.js';
@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('MCP tool registry', () => {
   it('prevents lease takeover while a previously unleased MCP mutation remains in flight', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-mcp-unleased-race-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-unleased-race-'));
     try {
       const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'));
       let entered!: () => void;
@@ -94,7 +94,7 @@ describe('MCP tool registry', () => {
   });
 
   it('enforces durable workspace writer lease across registry clients including Full Bypass', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-mcp-writer-fence-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-writer-fence-'));
     try {
       const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'));
       const edits: string[] = [];
@@ -128,7 +128,7 @@ describe('MCP tool registry', () => {
   });
 
   it('requires explicit confirmation when the same client recovers an idle older MCP session', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-mcp-recover-fence-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-recover-fence-'));
     try {
       let time = 100_000;
       const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'), () => time);
@@ -153,7 +153,7 @@ describe('MCP tool registry', () => {
   });
 
   it('fences workspace indexing mutations as well as file writes across independent clients', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-writer-lease-index-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-writer-lease-index-'));
     try {
       const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'));
       const indexed = vi.fn(async (): Promise<ReturnType<typeof ok>> => ok({ status: 'ready' }));
@@ -268,7 +268,7 @@ describe('MCP tool registry', () => {
       expect(result.isError).not.toBe(true);
       expect(calls.at(-1)).toMatchObject({ tool: 'shell', input: {
         cwd: cwd === undefined ? rootPath : expectedCwd,
-        metadata: { 'lnwjud.activeWorkspaceRoot.v1': rootPath },
+        metadata: { 'lnwjing.activeWorkspaceRoot.v1': rootPath },
       } });
     }
   });
@@ -305,13 +305,13 @@ describe('MCP tool registry', () => {
       hostMutationApprovalProvider: approval,
     });
     const input = { workspaceId: 'workspace-a', operation: 'run', executable: 'node', arguments: ['--version'],
-      cwd: '/tmp/project', userConfirmed: true, metadata: { 'lnwjud.activeWorkspaceRoot.v1': '/tmp/Project' } };
+      cwd: '/tmp/project', userConfirmed: true, metadata: { 'lnwjing.activeWorkspaceRoot.v1': '/tmp/Project' } };
     expect((await registry.invoke('shell', input)).isError).toBe(true);
     expect(calls).toHaveLength(0);
     approval.mockResolvedValue(true);
     expect((await registry.invoke('shell', input)).isError).not.toBe(true);
     expect(calls).toEqual([{ tool: 'shell', input: expect.objectContaining({ cwd: '/tmp/project',
-      metadata: expect.not.objectContaining({ 'lnwjud.activeWorkspaceRoot.v1': expect.anything() }) }) }]);
+      metadata: expect.not.objectContaining({ 'lnwjing.activeWorkspaceRoot.v1': expect.anything() }) }) }]);
   });
 
   it('returns the exact deterministic tool order', () => {
@@ -774,7 +774,7 @@ describe('MCP tool registry', () => {
         async info(): Promise<ReturnType<typeof err>> { return err(appError('WORKSPACE_NOT_FOUND', 'not used')); },
         async list(): Promise<ReturnType<typeof ok>> { return ok([
           { id: 'machine-root', displayName: 'E', rootPath: 'E:\\', realRootPath: 'E:\\' },
-          { id: 'workspace-project', displayName: 'lnwjud', rootPath: 'E:\\lnwjud', realRootPath: 'E:\\lnwjud' },
+          { id: 'workspace-project', displayName: 'lnwjing', rootPath: 'E:\\lnwjing', realRootPath: 'E:\\lnwjing' },
         ]); },
       },
       capabilities: { async execute(tool, input): Promise<ReturnType<typeof ok>> {
@@ -787,7 +787,7 @@ describe('MCP tool registry', () => {
       activity: { async record(event: ActivitySinkEvent): Promise<void> { events.push(event); } },
       hostMutationApprovalProvider: approveMutation,
     });
-    await registry.invoke('shell', { operation: 'run', executable: 'node', arguments: ['--version'], cwd: 'E:\\lnwjud\\packages\\mcp-server', userConfirmed: true });
+    await registry.invoke('shell', { operation: 'run', executable: 'node', arguments: ['--version'], cwd: 'E:\\lnwjing\\packages\\mcp-server', userConfirmed: true });
     await registry.invoke('shell', { operation: 'wait', task_id: 'task-1' });
     await registry.invoke('shell', { operation: 'run', executable: 'node', arguments: ['--version'], cwd: 'C:\\outside', userConfirmed: true });
     expect(events[0]?.targetSummary).toBe('node --version');
@@ -870,7 +870,7 @@ describe('MCP tool registry', () => {
       capabilities: { async execute(): Promise<ReturnType<typeof ok>> { return ok({ ok: true }); } },
     }, actor, {
       allowAiDeleteProvider: (): boolean => true,
-      activeWorkspaceScopeProvider: async (): Promise<WorkspaceScope | null> => ({ workspaceId: 'workspace-1', rootPath: path.resolve(tmpdir(), 'lnwjud-policy-fixture') }),
+      activeWorkspaceScopeProvider: async (): Promise<WorkspaceScope | null> => ({ workspaceId: 'workspace-1', rootPath: path.resolve(tmpdir(), 'lnwjing-policy-fixture') }),
     });
     const deleted = await registry.invoke('delete_file', { workspaceId: 'workspace-1', path: 'tmp.txt' });
     expect(deleted.isError).not.toBe(true);
@@ -887,7 +887,7 @@ describe('MCP tool registry', () => {
       git: { async run(): Promise<ReturnType<typeof ok>> { gitRuns += 1; return ok({ exitCode: 0, stdout: '', stderr: '' }); } } as McpApplicationServices['git'],
     }, actor, {
       destructivePolicyProvider: (): DestructiveAutoApprovalPolicy => ({ ...DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY, approvals: { ...DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY.approvals, git_rm: true, shell_rm_unlink: true } }),
-      activeWorkspaceScopeProvider: async (): Promise<WorkspaceScope | null> => ({ workspaceId: 'workspace-1', rootPath: path.resolve(tmpdir(), 'lnwjud-policy-fixture') }),
+      activeWorkspaceScopeProvider: async (): Promise<WorkspaceScope | null> => ({ workspaceId: 'workspace-1', rootPath: path.resolve(tmpdir(), 'lnwjing-policy-fixture') }),
     });
 
     await expect(registry.invoke('git', { workspaceId: 'workspace-1', args: ['rm', '--', 'src/old.ts'] })).resolves.not.toMatchObject({ isError: true });
@@ -905,7 +905,7 @@ describe('MCP tool registry', () => {
   });
 
   it('binds mutation authority to the host active workspace instead of request workspaceId', async () => {
-    const rootPath = path.resolve(tmpdir(), 'lnwjud-policy-fixture');
+    const rootPath = path.resolve(tmpdir(), 'lnwjing-policy-fixture');
     let deletes = 0;
     let projectStarts = 0;
     const registry = new ToolRegistry({
@@ -926,8 +926,8 @@ describe('MCP tool registry', () => {
   });
 
   it.each(['shell', 'wsl_exec', 'task_create', 'process_start'])('rejects an explicit %s workspace conflict before creating an inaccessible owned handle', async (toolName) => {
-    const rootA = path.join(tmpdir(), 'lnwjud-explicit-owner-a');
-    const rootB = path.join(tmpdir(), 'lnwjud-explicit-owner-b');
+    const rootA = path.join(tmpdir(), 'lnwjing-explicit-owner-a');
+    const rootB = path.join(tmpdir(), 'lnwjing-explicit-owner-b');
     const calls: Array<{ tool: string; input: unknown }> = [];
     const registry = new ToolRegistry({
       capabilities: {
@@ -959,8 +959,8 @@ describe('MCP tool registry', () => {
   });
 
   it('routes absolute file, database, and command targets to any matching member of the active workspace set', async () => {
-    const rawRootA = await mkdtemp(path.join(tmpdir(), 'lnwjud-active-a-'));
-    const rawRootB = await mkdtemp(path.join(tmpdir(), 'lnwjud-active-b-'));
+    const rawRootA = await mkdtemp(path.join(tmpdir(), 'lnwjing-active-a-'));
+    const rawRootB = await mkdtemp(path.join(tmpdir(), 'lnwjing-active-b-'));
     const rootA = await realpath(rawRootA);
     const rootB = await realpath(rawRootB);
     try {
@@ -1024,7 +1024,7 @@ describe('MCP tool registry', () => {
         input: {
           workspaceId: 'workspace-b',
           cwd: rootB,
-          metadata: { 'lnwjud.activeWorkspaceRoot.v1': rootB },
+          metadata: { 'lnwjing.activeWorkspaceRoot.v1': rootB },
         },
       });
       const matching = await registry.invoke('shell', {
@@ -1048,8 +1048,8 @@ describe('MCP tool registry', () => {
     expect(capabilityCalls).toHaveLength(2);
     expect(capabilityCalls[0]).toMatchObject({ tool: 'shell', input: { cwd: 'E:\\project-b' } });
     expect(capabilityCalls[1]).toMatchObject({ tool: 'wsl_exec', input: { cwd: 'E:\\project-b' } });
-    expect((capabilityCalls[0] as { input: { metadata?: Record<string, unknown> } }).input.metadata).not.toHaveProperty('lnwjud.activeWorkspaceRoot.v1');
-    expect((capabilityCalls[1] as { input: { metadata?: Record<string, unknown> } }).input.metadata).not.toHaveProperty('lnwjud.activeWorkspaceRoot.v1');
+    expect((capabilityCalls[0] as { input: { metadata?: Record<string, unknown> } }).input.metadata).not.toHaveProperty('lnwjing.activeWorkspaceRoot.v1');
+    expect((capabilityCalls[1] as { input: { metadata?: Record<string, unknown> } }).input.metadata).not.toHaveProperty('lnwjing.activeWorkspaceRoot.v1');
   });
 
   it('anchors missing and relative Shell or WSL cwd values to the host active workspace root', async () => {
@@ -1061,12 +1061,12 @@ describe('MCP tool registry', () => {
     await registry.invoke('shell', { workspaceId: 'workspace-a', operation: 'run', executable: 'node.exe', arguments: ['script.js'], cwd: 'src', userConfirmed: true });
     await registry.invoke('wsl_exec', { workspaceId: 'workspace-a', operation: 'run', executable: 'node', arguments: ['script.js'], userConfirmed: true });
     expect(capabilityCalls).toHaveLength(2);
-    expect(capabilityCalls[0]).toMatchObject({ tool: 'shell', input: { cwd: 'E:\\project-a\\src', metadata: { 'lnwjud.activeWorkspaceRoot.v1': 'E:\\project-a' } } });
-    expect(capabilityCalls[1]).toMatchObject({ tool: 'wsl_exec', input: { cwd: 'E:\\project-a', metadata: { 'lnwjud.activeWorkspaceRoot.v1': 'E:\\project-a' } } });
+    expect(capabilityCalls[0]).toMatchObject({ tool: 'shell', input: { cwd: 'E:\\project-a\\src', metadata: { 'lnwjing.activeWorkspaceRoot.v1': 'E:\\project-a' } } });
+    expect(capabilityCalls[1]).toMatchObject({ tool: 'wsl_exec', input: { cwd: 'E:\\project-a', metadata: { 'lnwjing.activeWorkspaceRoot.v1': 'E:\\project-a' } } });
   });
 
   it('lets a host-native exact-action approval veto risky execution while scoped recoverable auto-delete stays non-interactive', async () => {
-    const rootPath = path.resolve(tmpdir(), 'lnwjud-policy-fixture');
+    const rootPath = path.resolve(tmpdir(), 'lnwjing-policy-fixture');
     let hostApproved = false;
     let capabilityExecutions = 0;
     let deletes = 0;
@@ -1684,8 +1684,8 @@ describe('MCP tool registry', () => {
   });
 
   it('propagates Full Bypass through the real local capability dispatcher and shell backend', async () => {
-    const activeRoot = await mkdtemp(path.join(tmpdir(), 'lnwjud-registry-active-'));
-    const outsideRoot = await mkdtemp(path.join(tmpdir(), 'lnwjud-registry-outside-'));
+    const activeRoot = await mkdtemp(path.join(tmpdir(), 'lnwjing-registry-active-'));
+    const outsideRoot = await mkdtemp(path.join(tmpdir(), 'lnwjing-registry-outside-'));
     try {
       const noopBackend = { async execute(): Promise<ReturnType<typeof ok>> { return ok({}); } };
       const capabilities = new LocalCapabilityService({

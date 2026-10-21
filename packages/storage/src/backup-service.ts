@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, 
 import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync, type SQLInputValue } from 'node:sqlite';
-import { isForeignAbsolutePath } from '@lnwjud/workspace';
+import { isForeignAbsolutePath } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 
@@ -717,9 +717,9 @@ function quarantineHostBoundFiles(databaseFilename: string, backupIdValue: strin
   const defaultCandidates = [
     path.join(dataDirectory, 'checkpoint-master.key'),
     path.join(dataDirectory, 'checkpoint-master.key.migration.json'),
-    path.join(dataDirectory, 'lnwjud.runtime.secret'),
-    path.join(dataDirectory, 'tunnel-client', 'lnwjud.runtime.secret'),
-    path.join(dataDirectory, 'tunnel-client', 'lnwjud.oauth.session.secret'),
+    path.join(dataDirectory, 'lnwjing.runtime.secret'),
+    path.join(dataDirectory, 'tunnel-client', 'lnwjing.runtime.secret'),
+    path.join(dataDirectory, 'tunnel-client', 'lnwjing.oauth.session.secret'),
     path.join(dataDirectory, 'remote-mcp', 'oauth-state.secret'),
     path.join(dataDirectory, 'remote-mcp', 'ngrok-authtoken.secret'),
   ];
@@ -727,8 +727,8 @@ function quarantineHostBoundFiles(databaseFilename: string, backupIdValue: strin
   // userData. Its OAuth sibling belongs to that same profile even if the API
   // key itself does not exist (OAuth-only accounts).
   const tunnelSessions = (configuredPaths ?? [])
-    .filter((candidate) => path.basename(candidate) === 'lnwjud.runtime.secret')
-    .map((candidate) => path.join(path.dirname(candidate), 'lnwjud.oauth.session.secret'));
+    .filter((candidate) => path.basename(candidate) === 'lnwjing.runtime.secret')
+    .map((candidate) => path.join(path.dirname(candidate), 'lnwjing.oauth.session.secret'));
   const candidates = [...new Set([...(configuredPaths ?? []), ...defaultCandidates, ...tunnelSessions])];
   const moved: string[] = [];
   for (const candidate of candidates) {

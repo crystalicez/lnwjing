@@ -9,7 +9,7 @@ import {
   type InvocationAuthorizationMode,
   type InvocationAuthorizationSource,
   type Result,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import { z } from 'zod';
 import {
   sanitizeException,
@@ -17,9 +17,9 @@ import {
   type AutomationDispatchRequest,
   type DiagnosticLogger,
   type FileActor,
-} from '@lnwjud/application';
-import { CAPABILITY_ACTIVE_WORKSPACE_ROOT_METADATA_KEY } from '@lnwjud/capabilities';
-import { DefaultPermissionEngine, permissionProfiles, type PermissionProfile } from '@lnwjud/permissions';
+} from '@lnwjing/application';
+import { CAPABILITY_ACTIVE_WORKSPACE_ROOT_METADATA_KEY } from '@lnwjing/capabilities';
+import { DefaultPermissionEngine, permissionProfiles, type PermissionProfile } from '@lnwjing/permissions';
 import {
   DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY,
   DEFAULT_PONYTAIL_MODE,
@@ -36,7 +36,7 @@ import {
   type PonytailMode,
   type ResolvedPonytailPolicy,
   type ToolAvailabilitySnapshot,
-} from '@lnwjud/shared';
+} from '@lnwjing/shared';
 import { ActivityTracker, describeStructuredResultDetail, summarizeStructuredResultTarget, summarizeToolTarget, type ActivitySink, type TraceContext } from './activity-tracker.js';
 import { ContextEngine, type ContextContinuation, type ScanContinuation } from './context-engine.js';
 import { ContextEconomyRuntime } from './context-economy.js';
@@ -84,7 +84,7 @@ import { skillTools } from './tools/skill-tools.js';
 import { workspaceTools } from './tools/workspace-tools.js';
 import type { McpApplicationServices, McpInternalInvocationContext, McpToolContext, McpToolDefinition } from './tools/tool-types.js';
 import { workspaceWriterLeaseProofSchema } from './tools/schemas.js';
-import type { WorkspaceWriterLeaseProof } from '@lnwjud/capabilities';
+import type { WorkspaceWriterLeaseProof } from '@lnwjing/capabilities';
 import {
   engineeringTaskBindingSchema,
   goalLeaseProofSchema,
@@ -826,7 +826,7 @@ export class ToolRegistry {
     let workspaceMode = parsePonytailModeOverride(undefined);
     if (this.services.file?.readFile !== undefined) {
       try {
-        const loaded = await this.services.file.readFile(this.actor, resolvedWorkspaceId, { path: '.lnwjud/project-profile.json' });
+        const loaded = await this.services.file.readFile(this.actor, resolvedWorkspaceId, { path: '.lnwjing/project-profile.json' });
         if (loaded.ok && typeof loaded.value.content === 'string') {
           try {
             workspaceMode = workspacePonytailMode(JSON.parse(loaded.value.content));
@@ -915,7 +915,7 @@ export class ToolRegistry {
     if (!preview.ok) {
       return { ok: false, response: mapError(preview.error), code: preview.error.code, message: preview.error.message };
     }
-    return { ok: true, value: { ...input, __lnwjudApprovedProjectCommand: preview.value } };
+    return { ok: true, value: { ...input, __lnwjingApprovedProjectCommand: preview.value } };
   }
 
   private async resolveActivityWorkspaceId(name: string, input: unknown): Promise<string | undefined> {
@@ -1904,7 +1904,7 @@ function isSensitiveApprovalKey(key: string): boolean {
 }
 
 function readApprovedProjectCommand(input: Record<string, unknown>): CommandSpec | undefined {
-  const value = input.__lnwjudApprovedProjectCommand;
+  const value = input.__lnwjingApprovedProjectCommand;
   if (!isRecord(value)) return undefined;
   const executable = readTrimmedString(value.executable);
   const args = readStringArray(value.args);

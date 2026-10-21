@@ -2,7 +2,7 @@ import {
   EXTERNAL_SETUP_URLS,
   type ExternalSetupTarget,
   type OpenExternalSetupPageRequest,
-} from '@lnwjud/ipc-contracts';
+} from '@lnwjing/ipc-contracts';
 
 const externalSetupTargets = new Set<ExternalSetupTarget>([
   'openai_tunnels',

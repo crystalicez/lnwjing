@@ -1,14 +1,14 @@
 # Windows packaging
 
-The lnwjud desktop package is built with Electron and packaged for **Windows 10/11 x64** as both an NSIS installer and a single-file portable executable. The graphical Electron application carries its own Electron runtime; a separate system Node installation is not required merely to open the dashboard.
+The lnwjing desktop package is built with Electron and packaged for **Windows 10/11 x64** as both an NSIS installer and a single-file portable executable. The graphical Electron application carries its own Electron runtime; a separate system Node installation is not required merely to open the dashboard.
 
-The packaged MCP stdio launcher is self-contained: `lnwjud-mcp-stdio.cmd` launches the packaged Electron host with `--mcp-stdio`. No private Node executable or generated CJS bundle is shipped, and installed users do not need a separate system Node.js installation for stdio MCP or OpenAI Secure MCP Tunnel.
+The packaged MCP stdio launcher is self-contained: `lnwjing-mcp-stdio.cmd` launches the packaged Electron host with `--mcp-stdio`. No private Node executable or generated CJS bundle is shipped, and installed users do not need a separate system Node.js installation for stdio MCP or OpenAI Secure MCP Tunnel.
 
-Core text/file search is also self-contained. Packaging downloads the pinned official Windows x64 ripgrep archive, verifies its SHA-256, preserves its license notices, and ships `resources/runtime-tools/ripgrep/rg.exe` in both Setup and Portable builds. Desktop and `lnwjud-mcp-stdio.cmd` prepend that private directory to the child runtime PATH, so users do not need to install ripgrep themselves.
+Core text/file search is also self-contained. Packaging downloads the pinned official Windows x64 ripgrep archive, verifies its SHA-256, preserves its license notices, and ships `resources/runtime-tools/ripgrep/rg.exe` in both Setup and Portable builds. Desktop and `lnwjing-mcp-stdio.cmd` prepend that private directory to the child runtime PATH, so users do not need to install ripgrep themselves.
 
-OpenAI Secure MCP Tunnel is self-contained as well. Packaging pins official `tunnel-client v0.0.16` for Windows amd64 and verifies the archive SHA-256 before extraction. The target-native payload is preserved under `resources/tunnel-client/` with the executable, license/notice inventory, SPDX metadata, and Sigstore provenance; lnwjud also records the archive/runtime hashes used for provenance. The bundled client is selected only when the override is empty, and a missing or invalid custom override fails closed instead of silently falling back.
+OpenAI Secure MCP Tunnel is self-contained as well. Packaging pins official `tunnel-client v0.0.16` for Windows amd64 and verifies the archive SHA-256 before extraction. The target-native payload is preserved under `resources/tunnel-client/` with the executable, license/notice inventory, SPDX metadata, and Sigstore provenance; lnwjing also records the archive/runtime hashes used for provenance. The bundled client is selected only when the override is empty, and a missing or invalid custom override fails closed instead of silently falling back.
 
-On the first launch of each lnwjud version, Desktop runs the core Doctor checks automatically before tunnel onboarding. Only core failures (supported Windows x64, database, bundled ripgrep, workspace initialization, and local MCP readiness) interrupt startup and keep navigation on Doctor. Git and optional capabilities such as Codex, WSL, Python, FFmpeg, and Windows OCR may report warnings or feature-specific unavailable states but do not block first-run.
+On the first launch of each lnwjing version, Desktop runs the core Doctor checks automatically before tunnel onboarding. Only core failures (supported Windows x64, database, bundled ripgrep, workspace initialization, and local MCP readiness) interrupt startup and keep navigation on Doctor. Git and optional capabilities such as Codex, WSL, Python, FFmpeg, and Windows OCR may report warnings or feature-specific unavailable states but do not block first-run.
 
 The current release target is x64 only. Windows 7/8/8.1 and 32-bit Windows are not supported release targets.
 
@@ -37,22 +37,22 @@ The package script rebuilds the workspace, generates the current MCP stdio bundl
 - User-selectable installer directory (`allowToChangeInstallationDirectory: true`).
 - Branded `build/icon.ico` for the application, installer, and uninstaller.
 - `signAndEditExecutable: true` for executable metadata/icon editing.
-- `deleteAppDataOnUninstall: false`; uninstalling the application does **not** automatically remove lnwjud user data.
+- `deleteAppDataOnUninstall: false`; uninstalling the application does **not** automatically remove lnwjing user data.
 - NSIS renames electron-builder's generated uninstaller to the stable user-facing `uninstall.exe` and rewrites `UninstallString` / `QuietUninstallString` for the active per-user or per-machine install mode so Windows Settings and upgrades keep using the correct path.
-- Portable mode launches without installation but intentionally uses the same per-user lnwjud data/settings location as the installed build. It is portable as an executable, not a "keep every setting beside the EXE" mode.
-- Installer auto-update remains on electron-builder's normal `latest.yml` channel and installs `lnwjud-Setup-<version>.exe`.
-- Portable auto-update uses a separate generated `portable.yml` channel and downloads only `lnwjud-Portable-<version>.exe`.
+- Portable mode launches without installation but intentionally uses the same per-user lnwjing data/settings location as the installed build. It is portable as an executable, not a "keep every setting beside the EXE" mode.
+- Installer auto-update remains on electron-builder's normal `latest.yml` channel and installs `lnwjing-Setup-<version>.exe`.
+- Portable auto-update uses a separate generated `portable.yml` channel and downloads only `lnwjing-Portable-<version>.exe`.
 - Portable downloads are verified by electron-updater against the SHA-512/size in `portable.yml`, then replaced in place only after the running process exits. The helper keeps a rollback backup, restores it on replacement failure, restarts the exact outer Portable path, and cleans itself up.
 - The updater never crosses distribution types: an installed user remains on Setup/NSIS updates and a Portable user remains on Portable EXE updates.
-- Installer and Portable intentionally continue to share the same per-user lnwjud settings/data location.
+- Installer and Portable intentionally continue to share the same per-user lnwjing settings/data location.
 - The Windows capability bridge is copied as an extra resource.
-- The generated `lnwjud-mcp-stdio.cmd` has one canonical packaged copy beside `lnwjud.exe` for local stdio use. POSIX packages use the matching executable shell launcher. The package also includes the hash-bound native Windows secret migrator for one-time legacy data migration; no PowerShell secret runtime is shipped.
+- The generated `lnwjing-mcp-stdio.cmd` has one canonical packaged copy beside `lnwjing.exe` for local stdio use. POSIX packages use the matching executable shell launcher. The package also includes the hash-bound native Windows secret migrator for one-time legacy data migration; no PowerShell secret runtime is shipped.
 - Pinned ripgrep is shipped under `resources/runtime-tools/ripgrep`; both Desktop and the stdio launcher resolve this private `rg.exe` before any system PATH copy.
-- The repository's `lnwjud-scheduled-continuation` skill plus the six pinned Ponytail skills (`ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`) are shipped as sibling directories under `resources/agent-skills` in both Setup/NSIS and Portable. Their source-qualified bundled identities remain distinct from same-name machine-global or active-workspace Cursor, Claude, Agents, Codex, Codex-plugin, GitHub workspace, or configured skill roots; Native Ponytail activation accepts only the exact bundled primary/review identities.
+- The repository's `lnwjing-scheduled-continuation` skill plus the six pinned Ponytail skills (`ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`) are shipped as sibling directories under `resources/agent-skills` in both Setup/NSIS and Portable. Their source-qualified bundled identities remain distinct from same-name machine-global or active-workspace Cursor, Claude, Agents, Codex, Codex-plugin, GitHub workspace, or configured skill roots; Native Ponytail activation accepts only the exact bundled primary/review identities.
 - The launcher never falls back to a system Node runtime; a missing packaged Electron executable fails closed.
 - Generated stdio runtime files are ignored by Git and must be regenerated from source for each build/release.
 
-`signAndEditExecutable: true` does not by itself mean the release is Authenticode-signed with a publisher certificate. lnwjud does not require a paid signing credential to publish a community release: when production signing secrets are absent, Windows artifacts may remain `NotSigned` after the same SHA-256/provenance checks; when signing is configured, Setup and Portable must verify as Authenticode `Valid`. Production publisher trust is therefore optional release metadata, not something the package config can manufacture.
+`signAndEditExecutable: true` does not by itself mean the release is Authenticode-signed with a publisher certificate. lnwjing does not require a paid signing credential to publish a community release: when production signing secrets are absent, Windows artifacts may remain `NotSigned` after the same SHA-256/provenance checks; when signing is configured, Setup and Portable must verify as Authenticode `Valid`. Production publisher trust is therefore optional release metadata, not something the package config can manufacture.
 
 ## Hidden console-process contract
 
@@ -64,9 +64,9 @@ The packaging/release tests include a source-level guard against changing the pr
 
 The WinRT OCR helper (`native/windows-ocr`) needs a signed sparse package for package identity. On the release machine:
 
-1. `powershell -File scripts\build-windows-ocr.ps1` — publishes `lnwjud-windows-ocr.exe` to `native/windows-ocr/bin` (.NET SDK 8+ required; check with `scripts\check-wave-prereqs.ps1`).
+1. `powershell -File scripts\build-windows-ocr.ps1` — publishes `lnwjing-windows-ocr.exe` to `native/windows-ocr/bin` (.NET SDK 8+ required; check with `scripts\check-wave-prereqs.ps1`).
 2. `powershell -File scripts\register-windows-ocr.ps1` — signs and registers the sparse package with an external location. Dev mode creates and reuses a self-signed certificate (elevate once so it can be trusted in `LocalMachine\TrustedPeople`); release mode passes `-ReleaseCertPfx`/`-ReleaseCertPassword`.
-3. `electron-builder.yml` ships `native/windows-ocr/bin` as the `windows-ocr` extra resource, so the helper is discovered at `%RESOURCES%\windows-ocr\lnwjud-windows-ocr.exe` on packaged machines. The host probes the helper (`{"op":"probe"}`) once and caches the identity result; without registration the `vision` OCR action reports a truthful unavailable state rather than failing.
+3. `electron-builder.yml` ships `native/windows-ocr/bin` as the `windows-ocr` extra resource, so the helper is discovered at `%RESOURCES%\windows-ocr\lnwjing-windows-ocr.exe` on packaged machines. The host probes the helper (`{"op":"probe"}`) once and caches the identity result; without registration the `vision` OCR action reports a truthful unavailable state rather than failing.
 
 The `makeappx.exe`/`signtool.exe` steps need the Windows SDK. No certificate or private key belongs in this repository.
 
@@ -75,9 +75,9 @@ The `makeappx.exe`/`signtool.exe` steps need the Windows SDK. No certificate or 
 For v5.8.7:
 
 ```text
-apps/desktop/dist/installers/lnwjud-Setup-5.8.7.exe
-apps/desktop/dist/installers/lnwjud-Setup-5.8.7.exe.blockmap
-apps/desktop/dist/installers/lnwjud-Portable-5.8.7.exe
+apps/desktop/dist/installers/lnwjing-Setup-5.8.7.exe
+apps/desktop/dist/installers/lnwjing-Setup-5.8.7.exe.blockmap
+apps/desktop/dist/installers/lnwjing-Portable-5.8.7.exe
 apps/desktop/dist/installers/latest.yml
 apps/desktop/dist/installers/portable.yml
 apps/desktop/dist/installers/SHA256SUMS.txt
@@ -87,8 +87,8 @@ apps/desktop/dist/installers/PROVENANCE.json
 Generic patterns:
 
 ```text
-lnwjud-Setup-<version>.exe
-lnwjud-Portable-<version>.exe
+lnwjing-Setup-<version>.exe
+lnwjing-Portable-<version>.exe
 ```
 
 The NSIS installer produces its blockmap plus `latest.yml`. Portable has its own `portable.yml` and is an auto-updater target through the dedicated Portable channel; it is never installed through NSIS during a Portable update.
@@ -97,16 +97,16 @@ The NSIS installer produces its blockmap plus `latest.yml`. Portable has its own
 
 Use a clean Windows 10/11 x64 account or VM with no repository checkout:
 
-1. Install the generated `lnwjud-Setup-*.exe`.
-2. Launch lnwjud and confirm the dashboard opens with Electron security settings intact.
+1. Install the generated `lnwjing-Setup-*.exe`.
+2. Launch lnwjing and confirm the dashboard opens with Electron security settings intact.
 3. Confirm the branded executable/tray/installer icon is present.
 4. Add a disposable workspace and confirm its canonical path persists after restart.
 5. Confirm the loopback MCP endpoint auto-starts and the displayed endpoint is usable by a local MCP client.
 6. Run Doctor and confirm SQLite/platform dependency checks are reported truthfully.
-7. If stdio/Secure Tunnel is part of the smoke test, verify `lnwjud-mcp-stdio.cmd` works on the clean machine **without** installing system Node.js.
-8. Call `skills_list` and confirm it includes bundled `lnwjud-scheduled-continuation` plus all six sibling Ponytail skills, a test machine-global skill, and a test active-workspace skill; call `skills_read` with each source-qualified ID. With Ponytail FULL enabled, also verify code mutation is blocked before exact bundled primary load, succeeds after `bundled:agent-skills/ponytail` loads even when matching returns no result, and rejects a same-name workspace skill as activation evidence. Verify the same contract through Desktop HTTP MCP and the packaged stdio launcher.
+7. If stdio/Secure Tunnel is part of the smoke test, verify `lnwjing-mcp-stdio.cmd` works on the clean machine **without** installing system Node.js.
+8. Call `skills_list` and confirm it includes bundled `lnwjing-scheduled-continuation` plus all six sibling Ponytail skills, a test machine-global skill, and a test active-workspace skill; call `skills_read` with each source-qualified ID. With Ponytail FULL enabled, also verify code mutation is blocked before exact bundled primary load, succeeds after `bundled:agent-skills/ponytail` loads even when matching returns no result, and rejects a same-name workspace skill as activation evidence. Verify the same contract through Desktop HTTP MCP and the packaged stdio launcher.
 9. Close the app, uninstall it from Windows Settings, and confirm the application binaries are removed while user data remains according to `deleteAppDataOnUninstall: false`.
-10. Launch `lnwjud-Portable-*.exe` without installing it and repeat dashboard/workspace/Doctor/tunnel/skill smoke checks.
+10. Launch `lnwjing-Portable-*.exe` without installing it and repeat dashboard/workspace/Doctor/tunnel/skill smoke checks.
 11. Confirm no visible CMD/PowerShell window flashes during normal internal operations. Short-lived hidden `conhost.exe` processes are acceptable; sustained high CPU is not.
 12. From an installed build, verify an available update resolves through `latest.yml` to the next Setup executable; from a Portable build, verify it resolves through `portable.yml` to the next Portable executable and never switches distribution type.
 13. For Portable replacement, verify the same outer EXE path restarts after update and that a forced replacement failure restores the backup instead of leaving the app missing.

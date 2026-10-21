@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 import { sanitizedChildEnvironment } from './sanitized-child-environment.js';
 
@@ -48,15 +48,15 @@ const QUERY_SCRIPT = [
   '$ErrorActionPreference = \'Stop\'',
   '$events = @()',
   'try {',
-  '  if ($env:LNWJUD_EVENT_MODE -eq \'crashes\') {',
-  '    $since = (Get-Date).AddHours(-[double]$env:LNWJUD_EVENT_HOURS)',
-  '    $events = @(Get-WinEvent -FilterHashtable @{ LogName = \'Application\'; Id = @(1000, 1001); StartTime = $since } -MaxEvents ([int]$env:LNWJUD_EVENT_MAX) -ErrorAction Stop)',
+  '  if ($env:LNWJING_EVENT_MODE -eq \'crashes\') {',
+  '    $since = (Get-Date).AddHours(-[double]$env:LNWJING_EVENT_HOURS)',
+  '    $events = @(Get-WinEvent -FilterHashtable @{ LogName = \'Application\'; Id = @(1000, 1001); StartTime = $since } -MaxEvents ([int]$env:LNWJING_EVENT_MAX) -ErrorAction Stop)',
   '  } else {',
   '    $filter = @{}',
-  '    if ($env:LNWJUD_EVENT_LOG) { $filter.LogName = $env:LNWJUD_EVENT_LOG }',
-  '    if ($env:LNWJUD_EVENT_PROVIDER) { $filter.ProviderName = $env:LNWJUD_EVENT_PROVIDER }',
-  '    if ($env:LNWJUD_EVENT_SINCE) { $filter.StartTime = [datetime]::Parse($env:LNWJUD_EVENT_SINCE) }',
-  '    $events = @(Get-WinEvent -FilterHashtable $filter -MaxEvents ([int]$env:LNWJUD_EVENT_MAX) -ErrorAction Stop)',
+  '    if ($env:LNWJING_EVENT_LOG) { $filter.LogName = $env:LNWJING_EVENT_LOG }',
+  '    if ($env:LNWJING_EVENT_PROVIDER) { $filter.ProviderName = $env:LNWJING_EVENT_PROVIDER }',
+  '    if ($env:LNWJING_EVENT_SINCE) { $filter.StartTime = [datetime]::Parse($env:LNWJING_EVENT_SINCE) }',
+  '    $events = @(Get-WinEvent -FilterHashtable $filter -MaxEvents ([int]$env:LNWJING_EVENT_MAX) -ErrorAction Stop)',
   '  }',
   '} catch {',
   '  if ($_.FullyQualifiedErrorId -ne \'NoMatchingEventsFound,Microsoft.PowerShell.Commands.GetWinEventCommand\') { throw }',
@@ -97,11 +97,11 @@ export class EventLogCapabilityBackend implements CapabilityBackend {
     if (this.platform !== 'win32') return this.executePortable(mode, request, signal);
 
     const environment: Record<string, string> = {
-      LNWJUD_EVENT_MODE: mode,
-      LNWJUD_EVENT_MAX: String(clampInteger(request.max_events ?? request.maxEvents, 100, 1, MAX_EVENTS_HARD_LIMIT)),
+      LNWJING_EVENT_MODE: mode,
+      LNWJING_EVENT_MAX: String(clampInteger(request.max_events ?? request.maxEvents, 100, 1, MAX_EVENTS_HARD_LIMIT)),
     };
     if (mode === 'crashes') {
-      environment.LNWJUD_EVENT_HOURS = String(clampNumber(request.hours, 24, 1, 720));
+      environment.LNWJING_EVENT_HOURS = String(clampNumber(request.hours, 24, 1, 720));
     } else {
       const logName = readTrimmedString(request.log_name ?? request.logName);
       const provider = readTrimmedString(request.provider);
@@ -114,13 +114,13 @@ export class EventLogCapabilityBackend implements CapabilityBackend {
       if (provider !== undefined && !ALLOWED_PROVIDERS.has(provider.toLowerCase())) {
         return err(appError('PERMISSION_DENIED', `Event provider is not allowlisted: ${provider}. Allowed: ${[...ALLOWED_PROVIDERS].join(', ')}`));
       }
-      if (logName !== undefined) environment.LNWJUD_EVENT_LOG = logName;
-      if (provider !== undefined) environment.LNWJUD_EVENT_PROVIDER = provider;
+      if (logName !== undefined) environment.LNWJING_EVENT_LOG = logName;
+      if (provider !== undefined) environment.LNWJING_EVENT_PROVIDER = provider;
       const since = readTrimmedString(request.since);
       if (since !== undefined) {
         const parsed = Date.parse(since);
         if (!Number.isFinite(parsed)) return err(appError('INVALID_INPUT', 'since must be an ISO-8601 timestamp'));
-        environment.LNWJUD_EVENT_SINCE = new Date(parsed).toISOString();
+        environment.LNWJING_EVENT_SINCE = new Date(parsed).toISOString();
       }
     }
 

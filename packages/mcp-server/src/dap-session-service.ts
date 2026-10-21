@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Socket } from 'node:net';
-import { appError, err, ok, type AppError, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type AppError, type Result } from '@lnwjing/domain';
 import { BoundedEventBuffer, type EventPage } from './bounded-event-buffer.js';
 import { DapFrameDecoder, encodeDapMessage } from './dap-framing.js';
 
@@ -209,7 +209,7 @@ export class DapSessionService {
         return value;
       };
       await session.connect(remaining(), signal);
-      const initialized = await session.request('initialize', { clientID: 'lnwjud', clientName: 'lnwjud', adapterID: request.adapterId ?? 'configured', pathFormat: 'path', linesStartAt1: true, columnsStartAt1: true, supportsRunInTerminalRequest: false, supportsStartDebuggingRequest: false }, remaining(), signal);
+      const initialized = await session.request('initialize', { clientID: 'lnwjing', clientName: 'lnwjing', adapterID: request.adapterId ?? 'configured', pathFormat: 'path', linesStartAt1: true, columnsStartAt1: true, supportsRunInTerminalRequest: false, supportsStartDebuggingRequest: false }, remaining(), signal);
       const attaching = session.request('attach', request.configuration ?? {}, remaining(), signal);
       void attaching.catch(() => undefined);
       if (isRecord(initialized.body) && initialized.body.supportsConfigurationDoneRequest === true) {

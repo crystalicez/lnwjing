@@ -1,4 +1,4 @@
-import { err, ok, type Result } from '@lnwjud/domain';
+import { err, ok, type Result } from '@lnwjing/domain';
 
 const PRIVATE_KEY_PREFIXES = ['id_rsa', 'id_ed25519'];
 

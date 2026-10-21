@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus } from '@lnwjing/ipc-contracts';
 import {
   guidedTunnelLaunchDecision,
   guidedTunnelPrerequisiteSignature,
@@ -36,7 +36,7 @@ describe('guided tunnel setup state', () => {
           persistent: {
             enabled: true,
             tunnelIdMasked: 'tunnel_0123********cdef',
-            runtimeAlias: 'lnwjud',
+            runtimeAlias: 'lnwjing',
             mode: 'external',
             state: 'running',
             healthy: null,
@@ -84,7 +84,7 @@ describe('guided tunnel setup state', () => {
     expect(isFreshTunnelSetup(pristineTunnel({ persistent: {
       enabled: true,
       tunnelIdMasked: 'tunnel_0123********cdef',
-      runtimeAlias: 'lnwjud',
+      runtimeAlias: 'lnwjing',
       mode: 'external',
       state: 'running',
       healthy: null,
@@ -137,7 +137,7 @@ describe('guided tunnel setup state', () => {
     expect(readGuidedTunnelSetupState(storage)).toBe('in_progress');
     expect([...values.values()]).toEqual(['in_progress']);
 
-    values.set('lnwjud.guided-tunnel-setup.v1', 'corrupt');
+    values.set('lnwjing.guided-tunnel-setup.v1', 'corrupt');
     expect(readGuidedTunnelSetupState(storage)).toBe('not_started');
   });
 });

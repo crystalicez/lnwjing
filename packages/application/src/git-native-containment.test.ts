@@ -3,16 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GitService } from './git-service.js';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import type { ManagedWriterAdmissionPort } from './writer-admission.js';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 
 const temporaryRoots: string[] = [];
 afterEach(async () => { await Promise.all(temporaryRoots.splice(0).map((x) => rm(x, { force:true, recursive:true, maxRetries:8, retryDelay:100 }))); });
 
 describe.skipIf(process.platform !== 'win32')('Windows native GitService writer admission', () => {
   it('runs a real Git init in a native contained Job and releases only after native zero-active proof', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-native-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-native-')));
     temporaryRoots.push(root);
     const workspaceRoot = path.join(root, 'project');
     const { mkdir } = await import('node:fs/promises');

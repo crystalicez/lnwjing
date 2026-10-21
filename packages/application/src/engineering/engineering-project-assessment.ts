@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { open, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { ProjectDetector, type ProjectProfile } from '@lnwjud/project';
-import { normalizeProjectProfile } from '@lnwjud/shared';
+import { ProjectDetector, type ProjectProfile } from '@lnwjing/project';
+import { normalizeProjectProfile } from '@lnwjing/shared';
 
 const AGENTS_MAX_BYTES = 64 * 1024;
 const PROFILE_MAX_BYTES = 128 * 1024;
@@ -55,7 +55,7 @@ export class EngineeringProjectAssessmentService {
       } satisfies EngineeringInstructionFile;
     }));
 
-    const projectProfilePath = path.join(rootPath, '.lnwjud', 'project-profile.json');
+    const projectProfilePath = path.join(rootPath, '.lnwjing', 'project-profile.json');
     const rawProfile = await readBoundedText(projectProfilePath, PROFILE_MAX_BYTES, rootPath);
     let projectProfile: Readonly<Record<string, unknown>> = {};
     let projectProfileStatus: EngineeringProjectProfileStatus = rawProfile.status;
@@ -69,9 +69,9 @@ export class EngineeringProjectAssessmentService {
         warnings.push(error instanceof Error ? error.message : 'Project profile is invalid.');
       }
     } else if (rawProfile.status === 'truncated') {
-      warnings.push(`.lnwjud/project-profile.json exceeds ${PROFILE_MAX_BYTES} bytes and is ignored.`);
+      warnings.push(`.lnwjing/project-profile.json exceeds ${PROFILE_MAX_BYTES} bytes and is ignored.`);
     } else if (rawProfile.status === 'unreadable') {
-      warnings.push('.lnwjud/project-profile.json could not be read.');
+      warnings.push('.lnwjing/project-profile.json could not be read.');
     }
 
     const fingerprint = createHash('sha256').update(JSON.stringify({

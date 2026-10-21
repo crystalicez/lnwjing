@@ -88,7 +88,7 @@ async function updatePdfProvider(dependency) {
 async function latestRelease(repository) {
   const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
     signal: AbortSignal.timeout(30_000),
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'lnwjud-runtime-dependency-updater' },
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'lnwjing-runtime-dependency-updater' },
   });
   if (!response.ok) throw new Error(`Could not query latest release for ${repository} (${response.status})`);
   const release = await response.json();
@@ -121,7 +121,7 @@ function sha256Digest(asset) {
 }
 
 async function fetchText(url, label) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000), headers: { 'User-Agent': 'lnwjud-runtime-dependency-updater' } });
+  const response = await fetch(url, { signal: AbortSignal.timeout(30_000), headers: { 'User-Agent': 'lnwjing-runtime-dependency-updater' } });
   if (!response.ok) throw new Error(`Could not download ${label} (${response.status})`);
   return response.text();
 }

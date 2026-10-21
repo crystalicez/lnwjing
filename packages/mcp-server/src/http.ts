@@ -24,10 +24,10 @@ import { ContextEconomyRuntime } from './context-economy.js';
 import { RunBudgetGuard } from './run-budget.js';
 import { PonytailActivationLedger } from './ponytail-runtime.js';
 import { createOriginPolicy, type OriginPolicy } from './origin-policy.js';
-import { APP_NAME, APP_VERSION } from '@lnwjud/shared';
+import { APP_NAME, APP_VERSION } from '@lnwjing/shared';
 
 export const MAX_MCP_HTTP_BODY_BYTES = 1_048_576;
-export const LNWJUD_MCP_IDENTITY_PATH = '/_lnwjud/identity';
+export const LNWJING_MCP_IDENTITY_PATH = '/_lnwjing/identity';
 const OAUTH_PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
 const OAUTH_PROTECTED_RESOURCE_MCP_PATH = `${OAUTH_PROTECTED_RESOURCE_PATH}/mcp`;
 
@@ -61,7 +61,7 @@ interface LegacySession {
 }
 
 function writeDiagnostic(error: Error): void {
-  process.stderr.write(`lnwjud MCP HTTP error: ${error.message}\n`);
+  process.stderr.write(`lnwjing MCP HTTP error: ${error.message}\n`);
 }
 
 function isValidPort(port: number): boolean {
@@ -440,7 +440,7 @@ async function handleRequest(
   const requestedPath = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
   if (
     requestedPath !== '/mcp'
-    && requestedPath !== LNWJUD_MCP_IDENTITY_PATH
+    && requestedPath !== LNWJING_MCP_IDENTITY_PATH
     && requestedPath !== OAUTH_PROTECTED_RESOURCE_PATH
     && requestedPath !== OAUTH_PROTECTED_RESOURCE_MCP_PATH
   ) {
@@ -473,7 +473,7 @@ async function handleRequest(
     return;
   }
 
-  if (requestedPath === LNWJUD_MCP_IDENTITY_PATH) {
+  if (requestedPath === LNWJING_MCP_IDENTITY_PATH) {
     if (fetchRequest.method !== 'GET') {
       sendStatus(response, 405, 'Method not allowed');
       return;
@@ -486,7 +486,7 @@ async function handleRequest(
     }, {
       headers: {
         'cache-control': 'no-store',
-        'x-lnwjud-service': 'desktop-mcp',
+        'x-lnwjing-service': 'desktop-mcp',
       },
     }));
     return;

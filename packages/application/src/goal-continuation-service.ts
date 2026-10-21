@@ -36,8 +36,8 @@ import {
   type ScheduledContinuationRepository,
   type ScheduledContinuationWorkerLivenessPort,
   type ScheduledTaskCancellationInstruction,
-} from '@lnwjud/domain';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+} from '@lnwjing/domain';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 import {
   failedGoalTaskCancellation,

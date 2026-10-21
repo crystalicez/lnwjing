@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { AUTOMATION_TOOL_NAMES } from './tools/automation-tools.js';
 import { ToolRegistry, type McpApplicationServices } from './tool-registry.js';
 

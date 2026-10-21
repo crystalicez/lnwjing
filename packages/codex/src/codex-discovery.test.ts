@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { err, ok, type Result } from '@lnwjud/domain';
+import { err, ok, type Result } from '@lnwjing/domain';
 import { CodexDiscovery, DirectCodexCommandRunner, formatCodexDiscoveryError, PathCodexExecutableResolver, type CodexCommandResult, type CodexCommandRunner, type CodexExecutableResolver } from './codex-discovery.js';
 
 describe('CodexDiscovery', () => {
@@ -123,7 +123,7 @@ describe('CodexDiscovery', () => {
   });
 
   it('preserves ENOENT from a direct spawn failure', async () => {
-    const missingExecutable = path.join(os.tmpdir(), `lnwjud-missing-codex-${process.pid}-${Date.now()}.exe`);
+    const missingExecutable = path.join(os.tmpdir(), `lnwjing-missing-codex-${process.pid}-${Date.now()}.exe`);
 
     const result = await new DirectCodexCommandRunner().run(missingExecutable, ['--version']);
 
@@ -132,7 +132,7 @@ describe('CodexDiscovery', () => {
 
   it('executes a Windows .cmd Codex shim through ComSpec instead of spawning the batch file directly', async () => {
     if (process.platform !== 'win32') return;
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-codex-cmd-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-codex-cmd-'));
     try {
       const shim = path.join(root, 'codex.cmd');
       await writeFile(shim, '@echo off\r\nif "%~1"=="--version" echo codex 9.9.9\r\n', 'utf8');
@@ -148,7 +148,7 @@ describe('CodexDiscovery', () => {
 
   it('prefers Windows executable extensions over an extensionless shim', async () => {
     if (process.platform !== 'win32') return;
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-codex-resolver-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-codex-resolver-'));
     try {
       await writeFile(path.join(root, 'codex'), '#!/usr/bin/env bash\n', 'utf8');
       await writeFile(path.join(root, 'codex.cmd'), '@echo off\r\n', 'utf8');
@@ -162,7 +162,7 @@ describe('CodexDiscovery', () => {
 
   it('finds the official Windows Codex install when the desktop process PATH is stale', async () => {
     if (process.platform !== 'win32') return;
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-codex-localappdata-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-codex-localappdata-'));
     try {
       const bin = path.join(root, 'Programs', 'OpenAI', 'Codex', 'bin');
       await mkdir(bin, { recursive: true });

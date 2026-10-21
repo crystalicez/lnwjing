@@ -1,7 +1,7 @@
 import { ProtocolError, ProtocolErrorCode, RELATED_TASK_META_KEY, type McpServer } from '@modelcontextprotocol/server';
-import type { AppError, Result } from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
-import { DEFAULT_MCP_POLL_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS } from '@lnwjud/shared';
+import type { AppError, Result } from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
+import { DEFAULT_MCP_POLL_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS } from '@lnwjing/shared';
 import { z } from 'zod';
 import type { McpApplicationServices } from './tool-registry.js';
 import { withCapabilityOwnerMetadata } from './request-scope.js';
@@ -11,7 +11,7 @@ import { withCapabilityOwnerMetadata } from './request-scope.js';
  * utility (spec 2025-11-25, experimental). Tasks are still created through
  * the `shell` tool with execution=background; this surface only serves
  * tasks/get, tasks/result, tasks/list, and tasks/cancel so spec-aware
- * clients can poll and retrieve results without knowing lnwjud's tool names.
+ * clients can poll and retrieve results without knowing lnwjing's tool names.
  */
 
 export interface ProtocolTask {

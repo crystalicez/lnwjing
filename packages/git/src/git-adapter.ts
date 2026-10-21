@@ -1,4 +1,4 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { DirectGitRunner, type GitRunOptions, type GitRunResult, type GitRunner } from './git-runner.js';
 import { parsePorcelainStatus, type GitStatusEntry } from './parsers/status-parser.js';
 

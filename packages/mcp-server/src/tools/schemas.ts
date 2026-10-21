@@ -6,7 +6,7 @@ import {
   MAX_TREE_DEPTH,
   MAX_TREE_ENTRIES,
   MAX_MULTI_FILE_BYTES,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 
 const MAX_PATH_LENGTH = 4096;
 const MAX_WORKSPACE_ID_LENGTH = 128;

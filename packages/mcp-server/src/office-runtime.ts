@@ -7,8 +7,8 @@ import {
   isApplicationAuthorized,
   type InvocationAuthorization,
   type Result,
-} from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
+} from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
 import { withReplacementRecoveryDetails } from './replacement-recovery.js';
 import {
   OFFICE_DANGEROUS_ACTIONS,

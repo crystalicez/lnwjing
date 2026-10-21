@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { ToolCatalogItem } from '@lnwjud/ipc-contracts';
+import type { ToolCatalogItem } from '@lnwjing/ipc-contracts';
 import { catalogStatusCounts, filterAndSortTools, toolControlCanEnable, toolControlEnabled } from '../src/renderer/features/tools/tool-catalog-view.js';
 
-function item(name: string, readiness: ToolCatalogItem['readiness'], origin: ToolCatalogItem['origin'] = 'lnwjud'): ToolCatalogItem {
+function item(name: string, readiness: ToolCatalogItem['readiness'], origin: ToolCatalogItem['origin'] = 'lnwjing'): ToolCatalogItem {
   return {
     name, origin, category: 'files', title: name, shortDescription: `${name} short`, longDescription: `${name} long`,
     declaredPermission: origin === 'external_mcp' ? 'UNKNOWN' : 'READ', profileDecision: origin === 'external_mcp' ? 'UNKNOWN' : 'ALLOW',
@@ -13,7 +13,7 @@ function item(name: string, readiness: ToolCatalogItem['readiness'], origin: Too
   };
 }
 
-const baseFilters = { origin: 'lnwjud' as const, query: '', readiness: 'all' as const, availability: 'all' as const, category: 'all' as const, permission: 'all' as const, profileDecision: 'all' as const };
+const baseFilters = { origin: 'lnwjing' as const, query: '', readiness: 'all' as const, availability: 'all' as const, category: 'all' as const, permission: 'all' as const, profileDecision: 'all' as const };
 
 describe('tool catalog renderer model', () => {
   it('sorts issues before ready tools and filters without hard-coded inventory counts', () => {
@@ -26,7 +26,7 @@ describe('tool catalog renderer model', () => {
     const external = filterAndSortTools(items, { ...baseFilters, origin: 'external_mcp', query: 'remote' });
     expect(external.map((entry) => entry.name)).toEqual(['remote_search']);
     expect(catalogStatusCounts(external)).toMatchObject({ ready: 1, unknown: 0 });
-    expect(filterAndSortTools(items, { ...baseFilters, origin: 'lnwjud' }).map((entry) => entry.name)).toEqual(['read_file']);
+    expect(filterAndSortTools(items, { ...baseFilters, origin: 'lnwjing' }).map((entry) => entry.name)).toEqual(['read_file']);
   });
   it('filters user availability independently from runtime readiness', () => {
     const enabledNeedsSetup = { ...item('enabled-setup', 'needs_setup'), userPreference: 'enabled' as const, effectiveExposed: true };

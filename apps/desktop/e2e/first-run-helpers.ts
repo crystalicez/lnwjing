@@ -5,8 +5,8 @@ const HOME_HEADING = /^(ศูนย์ควบคุม Agent|Agent Control Ce
 const HOME_NAV = /^(หน้าหลัก|Home)$/;
 const SET_UP_LATER = /^(ไว้ทีหลัง|Set up later)$/;
 const RUN_DOCTOR = /^(รัน Doctor|Run doctor)$/;
-const STARTUP_DOCTOR_STORAGE_KEY = 'lnwjud.startup-doctor.passed-version.v1';
-const GUIDED_TUNNEL_STORAGE_KEY = 'lnwjud.guided-tunnel-setup.v1';
+const STARTUP_DOCTOR_STORAGE_KEY = 'lnwjing.startup-doctor.passed-version.v1';
+const GUIDED_TUNNEL_STORAGE_KEY = 'lnwjing.guided-tunnel-setup.v1';
 
 /**
  * Settles the real first-run state machine instead of assuming a render order.
@@ -15,7 +15,7 @@ const GUIDED_TUNNEL_STORAGE_KEY = 'lnwjud.guided-tunnel-setup.v1';
  * only then dismisses whichever onboarding surface the renderer actually chose.
  */
 export async function settleFirstRunAndOpenHome(page: Page): Promise<void> {
-  const tipDialog = page.getByRole('dialog', { name: /ตั้งค่า ChatGPT ให้ใช้ lnwjud|Set up ChatGPT to use lnwjud/ });
+  const tipDialog = page.getByRole('dialog', { name: /ตั้งค่า ChatGPT ให้ใช้ lnwjing|Set up ChatGPT to use lnwjing/ });
   const guidedSetup = page.getByTestId('guided-tunnel-setup');
   const homeHeading = page.getByRole('heading', { name: HOME_HEADING });
   const doctorHeading = page.getByRole('heading', { name: 'Doctor', exact: true });
@@ -45,7 +45,7 @@ export async function settleFirstRunAndOpenHome(page: Page): Promise<void> {
   }
 
   await expect.poll(async () => page.evaluate(async (key) => {
-    const dashboard = await window.lnwjud.getDashboard();
+    const dashboard = await window.lnwjing.getDashboard();
     return window.localStorage.getItem(key) === dashboard.appVersion;
   }, STARTUP_DOCTOR_STORAGE_KEY), {
     timeout: 30_000,
@@ -58,7 +58,7 @@ export async function settleFirstRunAndOpenHome(page: Page): Promise<void> {
   await expect.poll(async () => {
     if (await tipDialog.isVisible() || await guidedSetup.isVisible()) return true;
     return page.evaluate(async (guidedKey) => {
-      const dashboard = await window.lnwjud.getDashboard();
+      const dashboard = await window.lnwjing.getDashboard();
       const state = window.localStorage.getItem(guidedKey);
       const configured = dashboard.tunnel.profileExists
         || dashboard.tunnel.hasApiKey
@@ -94,7 +94,7 @@ async function startupCoreFailures(page: Page): Promise<readonly {
 }[]> {
   return page.evaluate(async (requiredIds) => {
     const coreIds = new Set(requiredIds);
-    const { doctor: report } = await window.lnwjud.recheckToolCatalog({ locale: 'en', requirementIds: requiredIds });
+    const { doctor: report } = await window.lnwjing.recheckToolCatalog({ locale: 'en', requirementIds: requiredIds });
     return report.checks
       .filter((check) => coreIds.has(check.id) && (check.status === 'fail' || check.status === 'unknown'))
       .map(({ id, status, message, detail, durationMs }) => ({

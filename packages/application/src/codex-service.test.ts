@@ -2,11 +2,11 @@ import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ok, type Result } from '@lnwjud/domain';
-import { permissionProfiles } from '@lnwjud/permissions';
-import type { ManagedProcess, ProcessLogResult } from '@lnwjud/process';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
-import type { CodexStatus } from '@lnwjud/codex';
+import { ok, type Result } from '@lnwjing/domain';
+import { permissionProfiles } from '@lnwjing/permissions';
+import type { ManagedProcess, ProcessLogResult } from '@lnwjing/process';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
+import type { CodexStatus } from '@lnwjing/codex';
 import { CodexService, type CodexAdapterPort } from './codex-service.js';
 
 const roots: string[] = [];
@@ -206,7 +206,7 @@ describe('CodexService', () => {
 });
 
 async function createWorkspace(): Promise<Workspace> {
-  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-codex-service-'));
+  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-codex-service-'));
   roots.push(rawRoot);
   const root = await realpath(rawRoot);
   await mkdir(path.join(root, 'src'));

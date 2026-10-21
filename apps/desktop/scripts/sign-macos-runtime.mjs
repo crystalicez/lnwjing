@@ -26,8 +26,8 @@ export default async function signMacosRuntime(configuration, packager) {
   await signPackagedMacosRuntime(configuration, {
     run: (args) => execFileAsync('/usr/bin/codesign', args, { encoding: 'utf8', timeout: 120_000, maxBuffer: 1024 * 1024 }),
     signApp: sign,
-    requireCertificate: packager?.forceCodeSigning === true || process.env.LNWJUD_REQUIRE_CODESIGN === '1'
-      || process.env.LNWJUD_REQUIRE_NOTARIZATION === '1'
+    requireCertificate: packager?.forceCodeSigning === true || process.env.LNWJING_REQUIRE_CODESIGN === '1'
+      || process.env.LNWJING_REQUIRE_NOTARIZATION === '1'
       || ['CSC_LINK', 'CSC_NAME', 'APPLE_ID', 'APPLE_API_KEY', 'APPLE_API_KEY_ID'].some((key) => Boolean(process.env[key]?.trim()))
       || Boolean(packager?.platformSpecificBuildOptions?.identity && packager.platformSpecificBuildOptions.identity !== '-'),
   });
@@ -53,7 +53,7 @@ export async function signPackagedMacosRuntime(configuration, {
   // explicitly requested certificate signing must never silently downgrade.
   if (adHoc && requireCertificate) throw new Error('Certificate signing was requested but no certificate identity was resolved');
   if (!adHoc && (typeof identity !== 'string' || !/^[0-9a-f]{40}$/i.test(identity))) throw new Error('macOS signing requires a resolved certificate fingerprint');
-  if (configuration.platform !== 'darwin' || path.basename(app) !== 'lnwjud.app') throw new Error('Unsupported macOS signing bundle');
+  if (configuration.platform !== 'darwin' || path.basename(app) !== 'lnwjing.app') throw new Error('Unsupported macOS signing bundle');
   const resources = path.join(app, 'Contents', 'Resources');
   const ripgrepManifest = JSON.parse(await readFile(path.join(resources, 'runtime-tools', 'ripgrep', 'BUNDLED_RIPGREP.json'), 'utf8'));
   const arch = ripgrepManifest.arch;

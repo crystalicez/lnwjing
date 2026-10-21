@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { McpConnectionStatus, TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { McpConnectionStatus, TunnelStatus } from '@lnwjing/ipc-contracts';
 import { buildPersistentTunnelDoctorChecks } from '../src/main/desktop-services.js';
 
 function tunnel(overrides: Partial<TunnelStatus> = {}): TunnelStatus {
@@ -14,7 +14,7 @@ function tunnel(overrides: Partial<TunnelStatus> = {}): TunnelStatus {
     persistent: {
       enabled: true,
       tunnelIdMasked: 'tunnel_0123**************cdef',
-      runtimeAlias: 'lnwjud',
+      runtimeAlias: 'lnwjing',
       mode: 'native-managed',
       state: 'running',
       healthy: true,

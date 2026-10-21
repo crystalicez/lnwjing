@@ -15,8 +15,8 @@ const desktopRoot = path.resolve(import.meta.dirname, '..');
 const sourceRoot = await realpath(path.join(desktopRoot, 'node_modules', EXPECTED_PACKAGE));
 const scannerRoot = await realpath(path.join(desktopRoot, 'node_modules', EXPECTED_SCANNER_PACKAGE));
 const targetRoot = path.join(desktopRoot, 'build', 'ecc-runtime');
-const scannerBundlePath = path.join(targetRoot, '.lnwjud-agentshield.cjs');
-const scannerRuntimeBundlePath = path.join(targetRoot, '.lnwjud-agentshield-runtime.cjs');
+const scannerBundlePath = path.join(targetRoot, '.lnwjing-agentshield.cjs');
+const scannerRuntimeBundlePath = path.join(targetRoot, '.lnwjing-agentshield-runtime.cjs');
 
 const metadata = JSON.parse(await readFile(path.join(sourceRoot, 'package.json'), 'utf8'));
 if (metadata?.name !== EXPECTED_PACKAGE || metadata?.version !== EXPECTED_VERSION) {
@@ -63,7 +63,7 @@ const scannerWrapper = [
   "if (args.length === 1 && (args[0] === '--version' || args[0] === '-V')) {",
   "  process.stdout.write(PINNED_AGENTSHIELD_VERSION + '\\n');",
   '} else {',
-  "  require('./.lnwjud-agentshield-runtime.cjs');",
+  "  require('./.lnwjing-agentshield-runtime.cjs');",
   '}',
   '',
 ].join('\n');
@@ -112,7 +112,7 @@ const provenance = {
   scannerRuntimeBundleSha256: createHash('sha256').update(scannerRuntimeBundle).digest('hex'),
   scannerLicenseSha256: createHash('sha256').update(scannerLicense).digest('hex'),
 };
-await writeFile(path.join(targetRoot, '.lnwjud-provenance.json'), `${JSON.stringify(provenance, null, 2)}\n`, 'utf8');
+await writeFile(path.join(targetRoot, '.lnwjing-provenance.json'), `${JSON.stringify(provenance, null, 2)}\n`, 'utf8');
 
 const upstreamVersionNote = scannerUpstreamCliVersion === EXPECTED_SCANNER_VERSION
   ? ''

@@ -4,13 +4,13 @@ import { defaultTunnelProfileDirectory, legacyTunnelSecretPath, oauthTunnelSessi
 import { buildTunnelInitArgs, resolveTunnelProfileDirectory, tunnelClientEnv } from '../src/main/tunnel-controller.js';
 
 describe('Secure Tunnel Desktop HTTP wiring', () => {
-  it('passes only tunnel-client runtime state and does not leak headless lnwjud scope switches', () => {
+  it('passes only tunnel-client runtime state and does not leak headless lnwjing scope switches', () => {
     const env = tunnelClientEnv('key', 'C:/Users/me/AppData/Roaming/tunnel-client');
     expect(env.CONTROL_PLANE_API_KEY).toBe('key');
-    expect(env.TUNNEL_CLIENT_PROFILE).toBe('lnwjud');
+    expect(env.TUNNEL_CLIENT_PROFILE).toBe('lnwjing');
     expect(env.TUNNEL_CLIENT_PROFILE_DIR).toBe('C:/Users/me/AppData/Roaming/tunnel-client');
-    expect(env.LNWJUD_DATA_PATH).toBeUndefined();
-    expect(env.LNWJUD_UNRESTRICTED).toBeUndefined();
+    expect(env.LNWJING_DATA_PATH).toBeUndefined();
+    expect(env.LNWJING_UNRESTRICTED).toBeUndefined();
     expect(env.MCP_CONNECTION_MAX_TTL).toBe('168h0m0s');
     expect(env.MCP_MAX_CONCURRENT_REQUESTS).toBe('32');
   });
@@ -33,12 +33,12 @@ describe('Secure Tunnel Desktop HTTP wiring', () => {
       'http://127.0.0.1:18765/mcp',
     ]));
     expect(args).not.toContain('--mcp-command');
-    expect(args.join(' ')).not.toContain('lnwjud-mcp-stdio');
+    expect(args.join(' ')).not.toContain('lnwjing-mcp-stdio');
   });
 
   it('uses XDG data on Linux and preserves POSIX environment boundaries', () => {
     const profile = resolveTunnelProfileDirectory({ XDG_DATA_HOME: '/tmp/xdg-data' }, '/home/alice', 'linux');
-    expect(profile).toBe('/tmp/xdg-data/lnwjud/tunnel-client');
+    expect(profile).toBe('/tmp/xdg-data/lnwjing/tunnel-client');
     const env = tunnelClientEnv('key', profile, 'linux');
     expect(env.HOME).toBe(process.env.HOME ?? os.homedir());
     expect(env.USERPROFILE).toBeUndefined();
@@ -48,11 +48,11 @@ describe('Secure Tunnel Desktop HTTP wiring', () => {
 
   it('ignores a relative XDG data directory instead of placing secrets under cwd', () => {
     const profile = resolveTunnelProfileDirectory({ XDG_DATA_HOME: 'relative-data' }, '/home/alice', 'linux');
-    expect(profile).toBe('/home/alice/.local/share/lnwjud/tunnel-client');
+    expect(profile).toBe('/home/alice/.local/share/lnwjing/tunnel-client');
   });
 
   it('uses the macOS Application Support profile root', () => {
-    expect(resolveTunnelProfileDirectory({}, '/Users/alice', 'darwin')).toBe('/Users/alice/Library/Application Support/lnwjud/tunnel-client');
+    expect(resolveTunnelProfileDirectory({}, '/Users/alice', 'darwin')).toBe('/Users/alice/Library/Application Support/lnwjing/tunnel-client');
   });
 
   it('ignores a relative Windows APPDATA override', () => {
@@ -69,14 +69,14 @@ describe('Secure Tunnel Desktop HTTP wiring', () => {
 
   it('keeps Windows secret paths in Windows syntax even when tested from another host', () => {
     const env = { APPDATA: 'D:\\Roaming' };
-    expect(legacyTunnelSecretPath(env, 'C:\\Users\\alice', 'win32')).toBe('D:\\Roaming\\tunnel-client\\lnwjud.runtime.secret');
-    expect(oauthTunnelSessionPath(env, 'C:\\Users\\alice', 'win32')).toBe('D:\\Roaming\\tunnel-client\\lnwjud.oauth.session.secret');
+    expect(legacyTunnelSecretPath(env, 'C:\\Users\\alice', 'win32')).toBe('D:\\Roaming\\tunnel-client\\lnwjing.runtime.secret');
+    expect(oauthTunnelSessionPath(env, 'C:\\Users\\alice', 'win32')).toBe('D:\\Roaming\\tunnel-client\\lnwjing.oauth.session.secret');
   });
 
   it('keeps POSIX secret paths in POSIX syntax and rejects relative XDG placement', () => {
     expect(legacyTunnelSecretPath({ XDG_DATA_HOME: 'relative-data' }, '/home/alice', 'linux'))
-      .toBe('/home/alice/.local/share/lnwjud/tunnel-client/lnwjud.runtime.secret');
+      .toBe('/home/alice/.local/share/lnwjing/tunnel-client/lnwjing.runtime.secret');
     expect(oauthTunnelSessionPath({}, '/Users/alice', 'darwin'))
-      .toBe('/Users/alice/Library/Application Support/lnwjud/tunnel-client/lnwjud.oauth.session.secret');
+      .toBe('/Users/alice/Library/Application Support/lnwjing/tunnel-client/lnwjing.oauth.session.secret');
   });
 });

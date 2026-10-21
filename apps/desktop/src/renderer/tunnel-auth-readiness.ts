@@ -1,4 +1,4 @@
-import type { TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus } from '@lnwjing/ipc-contracts';
 
 /**
  * Backward-compatible renderer helpers. New Desktop builds emit auth-neutral

@@ -2,9 +2,9 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appError, err, ok, type GoalContextCapsuleRecord } from '@lnwjud/domain';
-import { FileService, SearchService, type GoalSnapshot } from '@lnwjud/application';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type GoalContextCapsuleRecord } from '@lnwjing/domain';
+import { FileService, SearchService, type GoalSnapshot } from '@lnwjing/application';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import { ToolRegistry, type McpApplicationServices } from './tool-registry.js';
 
 const actor = { clientId: 'handoff-client', clientName: 'Handoff fixture', sessionId: 'handoff-session' };
@@ -39,7 +39,7 @@ function recoveryServices(): McpApplicationServices {
     },
     capabilities: { async execute(name, input): Promise<ReturnType<typeof ok>> {
       expect(name).toBe('shell');
-      expect(input.metadata).toMatchObject({ 'lnwjud.taskOwner.v1': { clientId: actor.clientId, sessionId: actor.sessionId, workspaceId } });
+      expect(input.metadata).toMatchObject({ 'lnwjing.taskOwner.v1': { clientId: actor.clientId, sessionId: actor.sessionId, workspaceId } });
       if (input.operation === 'list') return ok({ tasks: [{ task_id: 'saved-task', durable: true, state: 'running' }] });
       expect(input.operation).toBe('status');
       expect(input.task_id).toBe('saved-task');
@@ -49,7 +49,7 @@ function recoveryServices(): McpApplicationServices {
 }
 
 async function localProviders(): Promise<{ file: FileService; search: SearchService }> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-handoff-context-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-handoff-context-'));
   directories.push(directory);
   const root = await realpath(directory);
   const workspace = { id: workspaceId, displayName: 'Handoff fixture', rootPath: root, realRootPath: root, createdAt: now };
@@ -63,7 +63,7 @@ async function localProviders(): Promise<{ file: FileService; search: SearchServ
 
 afterEach(async () => {
   for (const directory of directories.splice(0)) {
-    if (path.dirname(directory) !== os.tmpdir() || !path.basename(directory).startsWith('lnwjud-handoff-context-')) throw new Error('Refusing unexpected fixture cleanup');
+    if (path.dirname(directory) !== os.tmpdir() || !path.basename(directory).startsWith('lnwjing-handoff-context-')) throw new Error('Refusing unexpected fixture cleanup');
     await rm(directory, { recursive: true, force: true });
   }
 });

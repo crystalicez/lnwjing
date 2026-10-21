@@ -4,14 +4,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { JsonWorkspaceIndexStore, WorkspaceIndexService, type WorkspaceIndexStore } from './workspace-index.js';
 
 vi.mock('node:fs', { spy: true });
 vi.mock('node:fs/promises', { spy: true });
 
 async function fixture(): Promise<{ directory: string; root: string; workspace: Workspace; repository: WorkspaceRepository; store: JsonWorkspaceIndexStore }> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-race-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-race-'));
   const root = path.join(directory, 'workspace');
   await mkdir(root);
   const workspace: Workspace = { id: 'shared', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };

@@ -1,4 +1,4 @@
-# lnwjud integrations
+# lnwjing integrations
 
 Audit date: 2026-09-19
 

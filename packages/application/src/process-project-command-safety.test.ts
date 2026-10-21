@@ -2,9 +2,9 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ok, type CommandSpec, type Result } from '@lnwjud/domain';
-import type { ManagedProcess, ManagedProcessStart, ProcessLogResult } from '@lnwjud/process';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import { ok, type CommandSpec, type Result } from '@lnwjing/domain';
+import type { ManagedProcess, ManagedProcessStart, ProcessLogResult } from '@lnwjing/process';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { ProcessService, type ProcessManagerPort, type ProjectCommandSource } from './process-service.js';
 
 const roots: string[] = [];
@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 async function fixture(): Promise<{ workspace: Workspace; repository: WorkspaceRepository }> {
-  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-project-command-safety-'));
+  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-project-command-safety-'));
   roots.push(rawRoot);
   const root = await realpath(rawRoot);
   const workspace: Workspace = {

@@ -1,4 +1,4 @@
-# lnwjud confirmed concerns and technical debt
+# lnwjing confirmed concerns and technical debt
 
 Audit date: 2026-09-19  
 This document records evidence, not an instruction to implement every item immediately.
@@ -55,7 +55,7 @@ Fixed in this audit at source level:
 - historical `termination_unverified` remains visible only without an active replacement,
 - stale external tool names now give catalog-refresh recovery guidance.
 
-The currently running installed lnwjud process may continue to show the old health semantics until rebuilt/reinstalled; source-level tests cover the corrected behavior.
+The currently running installed lnwjing process may continue to show the old health semantics until rebuilt/reinstalled; source-level tests cover the corrected behavior.
 
 ## P1 — skill matching/autoload
 

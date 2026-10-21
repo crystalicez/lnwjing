@@ -2,7 +2,7 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-const DESKTOP_FILE_NAME = 'lnwjud.desktop';
+const DESKTOP_FILE_NAME = 'lnwjing.desktop';
 
 export interface LinuxAutostartOptions {
   readonly homeDirectory?: string;
@@ -11,7 +11,7 @@ export interface LinuxAutostartOptions {
   readonly enabled: boolean;
 }
 
-/** Manage only lnwjud's own XDG autostart entry. */
+/** Manage only lnwjing's own XDG autostart entry. */
 export async function configureLinuxAutostart(options: LinuxAutostartOptions): Promise<string> {
   const configDirectory = path.resolve(options.configDirectory ?? path.join(options.homeDirectory ?? os.homedir(), '.config', 'autostart'));
   const desktopPath = path.join(configDirectory, DESKTOP_FILE_NAME);
@@ -27,7 +27,7 @@ export async function configureLinuxAutostart(options: LinuxAutostartOptions): P
   const content = [
     '[Desktop Entry]',
     'Type=Application',
-    'Name=lnwjud',
+    'Name=lnwjing',
     `Exec=${escapeDesktopExecArg(executablePath)}`,
     `TryExec=${escapeDesktopExecArg(executablePath)}`,
     'Terminal=false',

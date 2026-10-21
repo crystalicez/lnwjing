@@ -22,6 +22,6 @@ powershell -File scripts\register-windows-ocr.ps1
 The scripts require the Windows SDK `makeappx.exe`/`signtool.exe` and verify
 the result by probing the helper (`{"op":"probe"}`) for `package_identity`.
 
-The runtime discovers the helper through `LNWJUD_WINDOWS_OCR_HELPER` or the packaged `windows-ocr\lnwjud-windows-ocr.exe` location. The host performs a one-shot cached identity probe through the helper before delegating, and until a signed sparse package is registered, the public `vision` OCR action remains truthfully unavailable.
+The runtime discovers the helper through `LNWJING_WINDOWS_OCR_HELPER` or the packaged `windows-ocr\lnwjing-windows-ocr.exe` location. The host performs a one-shot cached identity probe through the helper before delegating, and until a signed sparse package is registered, the public `vision` OCR action remains truthfully unavailable.
 
 The manifest is a release template only. A release pipeline must replace the placeholder publisher, sign the sparse package, register its external location, and include the published helper next to the NSIS application resources (`electron-builder.yml` ships `native/windows-ocr/bin` as the `windows-ocr` extra resource). No certificate or private key belongs in this repository.

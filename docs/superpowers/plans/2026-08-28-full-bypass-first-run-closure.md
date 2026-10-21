@@ -91,8 +91,8 @@ Make Full Bypass an honest end-to-end application authorization mode for Desktop
 2. Let Doctor open Projects/Add Project while readiness is blocked, and refresh Doctor after a successful add.
 3. Change Add Project rejection handling so UI callers receive a handled failure and no unhandled promise rejection escapes.
 4. Show partial bootstrap failures even when dashboard data loads, with retry/log actions.
-5. Make the Doctor verify that the configured endpoint is lnwjud, not merely that a port responds.
-6. Test a healthy lnwjud endpoint, an occupied non-lnwjud endpoint, a failed add, and recovery without app restart.
+5. Make the Doctor verify that the configured endpoint is lnwjing, not merely that a port responds.
+6. Test a healthy lnwjing endpoint, an occupied non-lnwjing endpoint, a failed add, and recovery without app restart.
 
 ## Task 5: Separate and truthfully render Full Access UI
 
@@ -122,7 +122,7 @@ Make Full Bypass an honest end-to-end application authorization mode for Desktop
 - Modify: `README.md`, `README_PLAN.md`, `native/windows-ocr/README.md`, `apps/desktop/build/README.md`
 - Modify: `.github/RELEASE_CHECKLIST.md`
 - Modify: `docs/USAGE_TH.md`
-- Modify: `docs/LNWJUD_CAPABILITIES.md`
+- Modify: `docs/LNWJING_CAPABILITIES.md`
 - Modify: `docs/architecture/TOOL_CONTRACT.md`
 - Modify: `docs/architecture/UPGRADE_ARCHITECTURE.md`
 - Modify: `docs/architecture/MUTATION_SAFETY_MATRIX.md`

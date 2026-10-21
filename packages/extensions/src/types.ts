@@ -1,4 +1,4 @@
-import type { Result } from '@lnwjud/domain';
+import type { Result } from '@lnwjing/domain';
 
 export type ExtensionsMode = 'enable_all' | 'allowlist';
 

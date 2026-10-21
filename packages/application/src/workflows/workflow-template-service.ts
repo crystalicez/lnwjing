@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { appError, err, ok, type Result, type WorkflowDraft, type WorkflowPrepareRequest, type WorkflowReadiness, type WorkflowTemplate } from '@lnwjud/domain';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type Result, type WorkflowDraft, type WorkflowPrepareRequest, type WorkflowReadiness, type WorkflowTemplate } from '@lnwjing/domain';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from '../file-service.js';
 import { WORKFLOW_TEMPLATES } from './workflow-templates.js';
 

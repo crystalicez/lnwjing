@@ -259,10 +259,10 @@ class PortalProtocolTests(unittest.TestCase):
             portal.close()
         self.assertTrue(portal.closed)
 
-    @unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
+    @unittest.skipUnless(os.environ.get("LNWJING_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
     def test_actual_native_ipc_fences_foreign_owners_and_eof_stops_owned_helpers(self):
         environment = dict(os.environ, XDG_SESSION_TYPE="wayland", WAYLAND_DISPLAY="fixture-only")
-        process = subprocess.Popen([os.environ["LNWJUD_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
+        process = subprocess.Popen([os.environ["LNWJING_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
         request_id = 0
         def call(action, client="client", session="session", workspace="workspace", parameters=None):
             nonlocal request_id
@@ -270,7 +270,7 @@ class PortalProtocolTests(unittest.TestCase):
             owner = {"clientId": client, "sessionId": session}
             if workspace is not None:
                 owner["workspaceId"] = workspace
-            request = {"id": str(request_id), "operation": "input_event", "input": {"action": action, "metadata": {"lnwjud.taskOwner.v1": owner}, "parameters": parameters or {}}}
+            request = {"id": str(request_id), "operation": "input_event", "input": {"action": action, "metadata": {"lnwjing.taskOwner.v1": owner}, "parameters": parameters or {}}}
             process.stdin.write(json.dumps(request) + "\n")
             process.stdin.flush()
             import select
@@ -326,12 +326,12 @@ class PortalProtocolTests(unittest.TestCase):
             process.stdout.close()
             process.stderr.close()
 
-    @unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
+    @unittest.skipUnless(os.environ.get("LNWJING_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
     def test_unverified_portal_cleanup_terminates_only_the_affected_owner_helper(self):
         environment = dict(os.environ, XDG_SESSION_TYPE="wayland", WAYLAND_DISPLAY="fixture-only")
-        process = subprocess.Popen([os.environ["LNWJUD_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
+        process = subprocess.Popen([os.environ["LNWJING_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
         def call(action, owner, parameters):
-            process.stdin.write(json.dumps({"id": owner + action, "operation": "input_event", "input": {"action": action, "metadata": {"lnwjud.taskOwner.v1": {"clientId": "client", "sessionId": owner, "workspaceId": "workspace"}}, "parameters": parameters}}) + "\n")
+            process.stdin.write(json.dumps({"id": owner + action, "operation": "input_event", "input": {"action": action, "metadata": {"lnwjing.taskOwner.v1": {"clientId": "client", "sessionId": owner, "workspaceId": "workspace"}}, "parameters": parameters}}) + "\n")
             process.stdin.flush()
             import select
             ready, _, _ = select.select([process.stdout], [], [], 6)
@@ -365,12 +365,12 @@ class PortalProtocolTests(unittest.TestCase):
             process.stdout.close()
             process.stderr.close()
 
-    @unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
+    @unittest.skipUnless(os.environ.get("LNWJING_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
     def test_abrupt_native_host_exit_closes_the_owned_portal_helper(self):
         environment = dict(os.environ, XDG_SESSION_TYPE="wayland", WAYLAND_DISPLAY="fixture-only")
-        process = subprocess.Popen([os.environ["LNWJUD_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
+        process = subprocess.Popen([os.environ["LNWJING_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
         try:
-            process.stdin.write(json.dumps({"id": "start", "operation": "input_event", "input": {"action": "type_text", "parameters": {"text": "a"}, "metadata": {"lnwjud.taskOwner.v1": {"clientId": "client", "sessionId": "death", "workspaceId": "workspace"}}}}) + "\n")
+            process.stdin.write(json.dumps({"id": "start", "operation": "input_event", "input": {"action": "type_text", "parameters": {"text": "a"}, "metadata": {"lnwjing.taskOwner.v1": {"clientId": "client", "sessionId": "death", "workspaceId": "workspace"}}}}) + "\n")
             process.stdin.flush()
             import select
             ready, _, _ = select.select([process.stdout], [], [], 5)
@@ -404,11 +404,11 @@ class PortalProtocolTests(unittest.TestCase):
             process.stdout.close()
             process.stderr.close()
 
-    @unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
+    @unittest.skipUnless(os.environ.get("LNWJING_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
     def test_actual_atspi_finds_clicks_and_focuses_the_application_owned_object(self):
         environment = dict(os.environ)
         environment.pop("AT_SPI_BUS_ADDRESS", None)
-        process = subprocess.Popen([os.environ["LNWJUD_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
+        process = subprocess.Popen([os.environ["LNWJING_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment)
         try:
             for action in ("find_element", "click", "focus"):
                 process.stdin.write(json.dumps({"id": action, "operation": "accessibility", "input": {"action": action, "parameters": {"name": "Save ไทย", "automation_id": "save-id", "max_items": 10, "max_depth": 4}}}) + "\n")
@@ -432,7 +432,7 @@ class PortalProtocolTests(unittest.TestCase):
             process.stdout.close()
             process.stderr.close()
 
-    @unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
+    @unittest.skipUnless(os.environ.get("LNWJING_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
     def test_actual_atspi_accepts_stable_name_only_and_id_only_identity(self):
         for empty in ("AccessibleId", "Name"):
             self.fixture.empty_identity_field = empty
@@ -440,7 +440,7 @@ class PortalProtocolTests(unittest.TestCase):
             for action in ("find_element", "click", "focus"):
                 self.fixture.identity_reads = 0
                 before = sum(method in ("DoAction", "GrabFocus") for method, _ in self.fixture.events)
-                process = subprocess.Popen([os.environ["LNWJUD_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=dict(os.environ))
+                process = subprocess.Popen([os.environ["LNWJING_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=dict(os.environ))
                 try:
                     process.stdin.write(json.dumps({"id": "stable", "operation": "accessibility", "input": {"action": action, "parameters": {**selectors, "role": "push button", "max_items": 10, "max_depth": 4}}}) + "\n")
                     process.stdin.flush()
@@ -462,14 +462,14 @@ class PortalProtocolTests(unittest.TestCase):
                     process.stderr.close()
             self.fixture.empty_identity_field = None
 
-    @unittest.skipUnless(os.environ.get("LNWJUD_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
+    @unittest.skipUnless(os.environ.get("LNWJING_NATIVE_TEST_BIN"), "Run against the compiled Linux native binary")
     def test_actual_atspi_refuses_changed_or_unavailable_identity_before_mutation(self):
         for mode in ("Name", "AccessibleId", "role", "unavailable"):
             for action in ("click", "focus"):
                 self.fixture.identity_mode = mode
                 self.fixture.identity_reads = 0
                 before = sum(method in ("DoAction", "GrabFocus") for method, _ in self.fixture.events)
-                process = subprocess.Popen([os.environ["LNWJUD_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=dict(os.environ))
+                process = subprocess.Popen([os.environ["LNWJING_NATIVE_TEST_BIN"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=dict(os.environ))
                 try:
                     process.stdin.write(json.dumps({"id": "changed", "operation": "accessibility", "input": {"action": action, "parameters": {"name": "Save ไทย", "automation_id": "save-id", "max_items": 10, "max_depth": 4}}}) + "\n")
                     process.stdin.flush()

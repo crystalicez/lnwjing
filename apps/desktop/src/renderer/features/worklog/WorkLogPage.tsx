@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react';
-import { workspaceScopeMatches, type DashboardSnapshot, type LogSessionSummary, type UiLocale, type WorkLogEntry, type WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import { workspaceScopeMatches, type DashboardSnapshot, type LogSessionSummary, type UiLocale, type WorkLogEntry, type WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { WorkLogPanel, type LogScopeSelection, type WorkLogFilter } from '../worklog/WorkLogPanel.js';
 
@@ -27,7 +27,7 @@ export function WorkLogPage(props: WorkLogPageProps): ReactElement {
     setOlderSessionsBusy(true);
     setOlderSessionsError(null);
     try {
-      const page = await window.lnwjud.listLogSessions({ offset: olderOffset.current, limit: 100 });
+      const page = await window.lnwjing.listLogSessions({ offset: olderOffset.current, limit: 100 });
       olderOffset.current += 100;
       setOlderSessions((current) => [...current, ...page.sessions]);
       setHasOlderSessions(page.hasMore);
@@ -37,11 +37,11 @@ export function WorkLogPage(props: WorkLogPageProps): ReactElement {
       setOlderSessionsBusy(false);
     }
   };
-  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjud.resolveActivityTargetDetail({ detailRef })).detail, []);
+  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjing.resolveActivityTargetDetail({ detailRef })).detail, []);
   const searchTargetDetails = useCallback(async (
     query: string,
     candidates: readonly { readonly id: string; readonly detailRef: string | null }[],
-  ) => (await window.lnwjud.searchActivityTargetDetails({ query, candidates })).matchingIds, []);
+  ) => (await window.lnwjing.searchActivityTargetDetails({ query, candidates })).matchingIds, []);
   const entries = [...new Map([...props.dashboard.workLog, ...historicalEntries].map((entry) => [entry.id, entry])).values()];
   const loadSession = async (scope: LogScopeSelection): Promise<void> => {
     const generation = ++sessionLoadGeneration.current;

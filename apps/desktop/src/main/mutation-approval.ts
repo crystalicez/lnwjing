@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
-import type { HostMutationApprovalRequest } from '@lnwjud/mcp-server';
-import type { UiLocale } from '@lnwjud/ipc-contracts';
+import type { HostMutationApprovalRequest } from '@lnwjing/mcp-server';
+import type { UiLocale } from '@lnwjing/ipc-contracts';
 
 export interface MutationApprovalDialogOptions {
   readonly type: 'warning';
@@ -62,8 +62,8 @@ export function mutationApprovalDialogOptions(
     type: 'warning',
     title: thai ? 'ยืนยันคำสั่งที่มีความเสี่ยง' : 'Confirm high-risk action',
     message: thai
-      ? 'lnwjud กำลังจะรันคำสั่งที่อาจลบหรือแทนที่ข้อมูล'
-      : 'lnwjud is about to run an action that may delete or replace data',
+      ? 'lnwjing กำลังจะรันคำสั่งที่อาจลบหรือแทนที่ข้อมูล'
+      : 'lnwjing is about to run an action that may delete or replace data',
     detail,
     buttons: thai ? ['ยกเลิก', 'อนุญาตครั้งนี้'] : ['Cancel', 'Approve once'],
     defaultId: 0,

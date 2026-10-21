@@ -8,21 +8,21 @@ import { promisify } from 'node:util';
 import { electronExecutablePath, terminateProcessTree } from './electron-runtime.js';
 import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
 import { chromium, expect, test, type Page } from '@playwright/test';
-import { AuditService, redactActivityTargetDetail } from '@lnwjud/audit';
-import { SqliteAuditRepository, SqliteDatabase } from '@lnwjud/storage';
+import { AuditService, redactActivityTargetDetail } from '@lnwjing/audit';
+import { SqliteAuditRepository, SqliteDatabase } from '@lnwjing/storage';
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mainEntry = path.join(desktopRoot, 'dist', 'main', 'main.js');
 const electronExecutable = electronExecutablePath(desktopRoot);
 const execFileAsync = promisify(execFile);
-const packagedExecutable = process.env.LNWJUD_PACKAGED_EXECUTABLE;
+const packagedExecutable = process.env.LNWJING_PACKAGED_EXECUTABLE;
 
 test('control center auto-starts MCP and supports project + doctor journey', async ({ browserName }, testInfo) => {
   void browserName;
   test.setTimeout(90_000);
-  const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-dashboard-'));
+  const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-dashboard-'));
   const fixtureRealRoot = await realpath(fixtureRoot);
-  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-dashboard-data-'));
+  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-dashboard-data-'));
   const gitCeilingDirectories = [path.dirname(fixtureRoot), path.dirname(fixtureRealRoot)].filter((value, index, values) => values.indexOf(value) === index).join(path.delimiter);
   await writeFile(path.join(fixtureRoot, '.env'), 'SECRET_NOT_FOR_UI=do-not-display\n', 'utf8');
   const devToolsPort = await findEphemeralPort();
@@ -38,11 +38,11 @@ test('control center auto-starts MCP and supports project + doctor journey', asy
     env: {
       ...process.env,
       APPDATA: dataRoot,
-      LNWJUD_DATA_PATH: dataRoot,
-      LNWJUD_WORKSPACE: fixtureRoot,
-      LNWJUD_UNRESTRICTED: '1',
-      LNWJUD_E2E_FIXTURE: '1',
-      LNWJUD_E2E_NODE_PATH: process.execPath,
+      LNWJING_DATA_PATH: dataRoot,
+      LNWJING_WORKSPACE: fixtureRoot,
+      LNWJING_UNRESTRICTED: '1',
+      LNWJING_E2E_FIXTURE: '1',
+      LNWJING_E2E_NODE_PATH: process.execPath,
       GIT_CEILING_DIRECTORIES: gitCeilingDirectories,
     },
   });
@@ -218,9 +218,9 @@ test('control center auto-starts MCP and supports project + doctor journey', asy
 test('Git page supports real vertical page scrolling plus X/Y diff scrolling', async ({ browserName }, testInfo) => {
   void browserName;
   test.setTimeout(90_000);
-  const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-scroll-'));
+  const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-scroll-'));
   const fixtureRealRoot = await realpath(fixtureRoot);
-  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-scroll-data-'));
+  const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-scroll-data-'));
   const gitCeilingDirectories = [path.dirname(fixtureRoot), path.dirname(fixtureRealRoot)]
     .filter((value, index, values) => values.indexOf(value) === index)
     .join(path.delimiter);
@@ -229,8 +229,8 @@ test('Git page supports real vertical page scrolling plus X/Y diff scrolling', a
   const changedLines = Array.from({ length: 140 }, (_, index) => `${index.toString().padStart(3, '0')}:${'B'.repeat(420)}`);
   await writeFile(path.join(fixtureRoot, 'long-file.txt'), baselineLines.join('\n') + '\n', 'utf8');
   await execFileAsync('git', ['init', '--quiet'], { cwd: fixtureRoot, windowsHide: true });
-  await execFileAsync('git', ['config', 'user.email', 'lnwjud-scroll@example.invalid'], { cwd: fixtureRoot, windowsHide: true });
-  await execFileAsync('git', ['config', 'user.name', 'lnwjud scroll acceptance'], { cwd: fixtureRoot, windowsHide: true });
+  await execFileAsync('git', ['config', 'user.email', 'lnwjing-scroll@example.invalid'], { cwd: fixtureRoot, windowsHide: true });
+  await execFileAsync('git', ['config', 'user.name', 'lnwjing scroll acceptance'], { cwd: fixtureRoot, windowsHide: true });
   await execFileAsync('git', ['add', '--', 'long-file.txt'], { cwd: fixtureRoot, windowsHide: true });
   await execFileAsync('git', ['commit', '--quiet', '-m', 'baseline'], { cwd: fixtureRoot, windowsHide: true });
   await writeFile(path.join(fixtureRoot, 'long-file.txt'), changedLines.join('\n') + '\n', 'utf8');
@@ -253,11 +253,11 @@ test('Git page supports real vertical page scrolling plus X/Y diff scrolling', a
     env: {
       ...process.env,
       APPDATA: dataRoot,
-      LNWJUD_DATA_PATH: dataRoot,
-      LNWJUD_WORKSPACE: fixtureRoot,
-      LNWJUD_UNRESTRICTED: '1',
-      LNWJUD_E2E_FIXTURE: '1',
-      LNWJUD_E2E_NODE_PATH: process.execPath,
+      LNWJING_DATA_PATH: dataRoot,
+      LNWJING_WORKSPACE: fixtureRoot,
+      LNWJING_UNRESTRICTED: '1',
+      LNWJING_E2E_FIXTURE: '1',
+      LNWJING_E2E_NODE_PATH: process.execPath,
       GIT_CEILING_DIRECTORIES: gitCeilingDirectories,
     },
   });
@@ -350,7 +350,7 @@ test('Git page supports real vertical page scrolling plus X/Y diff scrolling', a
 });
 
 async function seedExpandableWorkLog(dataRoot: string, workspaceId: string): Promise<void> {
-  const database = new SqliteDatabase(path.join(dataRoot, 'lnwjud.sqlite'));
+  const database = new SqliteDatabase(path.join(dataRoot, 'lnwjing.sqlite'));
   try {
     const repository = new SqliteAuditRepository(database);
     const audit = new AuditService(repository);

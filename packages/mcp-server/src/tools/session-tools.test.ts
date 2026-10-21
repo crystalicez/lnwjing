@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { ContextEconomyRuntime } from '../context-economy.js';
 import { IncrementalVerifier } from '../incremental-verifier.js';
 import { sessionTools } from './session-tools.js';
@@ -112,7 +112,7 @@ describe('session tools', () => {
       expect(name).toBe('shell');
       expect(receivedSignal).toBe(signal);
       requests.push(request);
-      expect(request.metadata).toMatchObject({ 'lnwjud.taskOwner.v1': { clientId: actor.clientId, sessionId: actor.sessionId, workspaceId: 'workspace-1' } });
+      expect(request.metadata).toMatchObject({ 'lnwjing.taskOwner.v1': { clientId: actor.clientId, sessionId: actor.sessionId, workspaceId: 'workspace-1' } });
       if (request.operation === 'list') return ok({ tasks: [
         { task_id: 'task-good', durable: true, state: 'running' },
         { task_id: 'task-failed-observation', durable: true, state: 'running', started_at: '2026-10-12T01:00:00Z' },
@@ -276,7 +276,7 @@ describe('session tools', () => {
             expect(tool).toBe('shell');
             expect(request.workspaceId).toBe('workspace-1');
             expect(request.metadata).toMatchObject({
-              'lnwjud.taskOwner.v1': { clientId: 'test-client', sessionId: 'test-session', workspaceId: 'workspace-1' },
+              'lnwjing.taskOwner.v1': { clientId: 'test-client', sessionId: 'test-session', workspaceId: 'workspace-1' },
             });
             if (request.operation === 'list') {
               expect(request.limit).toBe(8);
@@ -310,7 +310,7 @@ describe('session tools', () => {
     expect(value.changed_files).toContain('packages/mcp-server/src/run-budget.ts');
     expect(value.background_tasks).toEqual([expect.objectContaining({ task_id: 'durable-123', state: 'completed', exit_code: 0, stdout_tail: expect.stringContaining('RESULT-42') })]);
     expect(value.background_tasks).toEqual([expect.objectContaining({ stdout_tail: expect.stringContaining('task output truncated') })]);
-    expect(value.prompt).toEqual(expect.stringContaining('Recovery state from lnwjud durable task state'));
+    expect(value.prompt).toEqual(expect.stringContaining('Recovery state from lnwjing durable task state'));
     expect(value.recovery_state).toBe(value.prompt);
     expect(value.recovery_format).toBe('task_state');
     expect(value.persistent_instructions).toBe(false);
@@ -344,7 +344,7 @@ describe('session tools', () => {
                   commands: [{ command: 'pnpm test:unit', status: 'passed', exitCode: 0, result: '42 passed' }],
                   decisions: ['Do not rerun implementation.'], failedAttempts: ['Old flaky probe discarded.'],
                   pendingValidation: ['Run release gate.'], resumePrerequisites: ['Keep current dev branch.'],
-                  stateFacts: [{ kind: 'note', value: 'branch=dev HEAD=abc123' }], artifacts: [{ kind: 'path', value: 'dist/lnwjud-Setup-5.4.3.exe' }],
+                  stateFacts: [{ kind: 'note', value: 'branch=dev HEAD=abc123' }], artifacts: [{ kind: 'path', value: 'dist/lnwjing-Setup-5.4.3.exe' }],
                 },
               },
             }] });
@@ -398,7 +398,7 @@ describe('session tools', () => {
     expect(value.prompt).toEqual(expect.stringContaining('shell-verify-7 [shell/blocking_job] cancelWithGoal=true'));
     expect(value.prompt).toEqual(expect.stringContaining('Checkpoint evidence: hash: abc123'));
     expect(value.prompt).toEqual(expect.stringContaining('Checkpoint state facts: note: branch=dev HEAD=abc123'));
-    expect(value.prompt).toEqual(expect.stringContaining('Checkpoint artifacts: path: dist/lnwjud-Setup-5.4.3.exe'));
+    expect(value.prompt).toEqual(expect.stringContaining('Checkpoint artifacts: path: dist/lnwjing-Setup-5.4.3.exe'));
     expect(value.prompt).toEqual(expect.stringContaining('Capsule validation: task: focused tests passed'));
     expect(value.prompt).toEqual(expect.stringContaining('Capsule artifacts: path: capsule-artifact.txt'));
     expect(value.prompt).toEqual(expect.stringContaining('Never use browser/DOM automation'));

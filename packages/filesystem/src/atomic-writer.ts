@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { unlink, rename, link, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { ensureParentDirectory } from './ensure-parent.js';
 import { mapNodeFsError, nodeErrorCode } from './fs-error.js';
 

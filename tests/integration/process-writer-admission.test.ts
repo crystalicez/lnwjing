@@ -4,12 +4,12 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SharedManagedWriterAdmission } from '../../packages/capabilities/src/shared-managed-writer-admission.js';
 import { DurableShellTaskStore } from '../../packages/capabilities/src/durable-shell-task-store.js';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
-import { ProcessService } from '@lnwjud/application';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
+import { ProcessService } from '@lnwjing/application';
 
 describe.skipIf(process.platform !== 'win32')('cross-workspace native ProcessService writer lifetime', () => {
   it('blocks repository import while a detached process descendant still holds the native Job', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-writer-lifetime-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-writer-lifetime-')));
     const workspaceRoot = path.join(root, 'project');
     const jobRoot = path.join(root, 'native-jobs');
     const indexRoot = path.join(root, 'background-tasks');

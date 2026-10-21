@@ -11,24 +11,24 @@ afterEach(async () => {
 });
 
 async function createInstall(): Promise<{ root: string; exe: string }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-packaged-tunnel-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-packaged-tunnel-'));
   temporaryRoots.push(root);
-  const exe = path.join(root, 'lnwjud.exe');
+  const exe = path.join(root, 'lnwjing.exe');
   await writeFile(exe, 'stub', 'utf8');
   return { root, exe };
 }
 
 describe('packaged tunnel stdio launcher boundary', () => {
-  it('never falls back from an installed lnwjud.exe to a developer-repository launcher', () => {
-    const installedExe = 'C:\\Users\\end-user\\AppData\\Local\\Programs\\lnwjud\\lnwjud.exe';
-    const developerLauncher = 'D:\\lnwjud\\lnwjud-mcp-stdio.cmd';
+  it('never falls back from an installed lnwjing.exe to a developer-repository launcher', () => {
+    const installedExe = 'C:\\Users\\end-user\\AppData\\Local\\Programs\\lnwjing\\lnwjing.exe';
+    const developerLauncher = 'D:\\lnwjing\\lnwjing-mcp-stdio.cmd';
 
     expect(preferredTunnelMcpCommand(installedExe, developerLauncher)).toBeNull();
   });
 
-  it('accepts the real launcher installed beside lnwjud.exe', async () => {
+  it('accepts the real launcher installed beside lnwjing.exe', async () => {
     const { root, exe } = await createInstall();
-    const launcher = path.join(root, 'lnwjud-mcp-stdio.cmd');
+    const launcher = path.join(root, 'lnwjing-mcp-stdio.cmd');
     await writeFile(launcher, '@echo off\n', 'utf8');
 
     expect(preferredTunnelMcpCommand(exe, launcher)).toBe(await realpath(launcher));
@@ -38,7 +38,7 @@ describe('packaged tunnel stdio launcher boundary', () => {
     const { root, exe } = await createInstall();
     const resources = path.join(root, 'resources');
     await mkdir(resources);
-    const launcher = path.join(resources, 'lnwjud-mcp-stdio.cmd');
+    const launcher = path.join(resources, 'lnwjing-mcp-stdio.cmd');
     await writeFile(launcher, '@echo off\n', 'utf8');
 
     expect(preferredTunnelMcpCommand(exe, launcher)).toBe(await realpath(launcher));
@@ -46,13 +46,13 @@ describe('packaged tunnel stdio launcher boundary', () => {
 
   it('rejects a packaged-looking launcher that escapes through a resources junction', async () => {
     const { root, exe } = await createInstall();
-    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-packaged-tunnel-outside-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-packaged-tunnel-outside-'));
     temporaryRoots.push(outside);
-    const outsideLauncher = path.join(outside, 'lnwjud-mcp-stdio.cmd');
+    const outsideLauncher = path.join(outside, 'lnwjing-mcp-stdio.cmd');
     await writeFile(outsideLauncher, '@echo off\n', 'utf8');
     const resources = path.join(root, 'resources');
     await symlink(outside, resources, 'junction');
 
-    expect(preferredTunnelMcpCommand(exe, path.join(resources, 'lnwjud-mcp-stdio.cmd'))).toBeNull();
+    expect(preferredTunnelMcpCommand(exe, path.join(resources, 'lnwjing-mcp-stdio.cmd'))).toBeNull();
   });
 });

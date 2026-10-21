@@ -1,10 +1,10 @@
-import type { UiLocale } from '@lnwjud/ipc-contracts';
+import type { UiLocale } from '@lnwjing/ipc-contracts';
 
 /** v5.8.0 bilingual message catalog. */
 export const v580Copy = {
   th: {
     workflows: { title: 'เวิร์กโฟลว์', copied:'คัดลอกคำสั่งสำหรับ AI แล้ว ยังไม่ได้เริ่ม Goal',
-      intro:'เลือกงาน ตรวจรายละเอียด แล้วคัดลอกคำสั่งไปยัง AI ที่เชื่อม lnwjud ไม่มีการเริ่มงานอัตโนมัติ',
+      intro:'เลือกงาน ตรวจรายละเอียด แล้วคัดลอกคำสั่งไปยัง AI ที่เชื่อม lnwjing ไม่มีการเริ่มงานอัตโนมัติ',
       noWorkspace:'เลือกโปรเจกต์ก่อน', readOnly:'อ่านอย่างเดียว', output:'สร้างผลลัพธ์ใหม่',
       inputLabel:'ตั้งค่าเวิร์กโฟลว์', working:'กำลังตรวจสอบ', loadingTemplates:'กำลังโหลดเวิร์กโฟลว์', noTemplates:'ยังไม่มีเวิร์กโฟลว์สำหรับโปรเจกต์นี้', prepare:'ตรวจและดูแผน',
       preview:'ตัวอย่างแผน', ready:'พร้อมส่งต่อให้ AI', notReady:'ยังไม่พร้อมใช้งาน',
@@ -42,7 +42,7 @@ export const v580Copy = {
       noMeasuredGoals:'ไม่มี Goal ที่มี Task ที่ติดตามได้ในโปรเจกต์นี้',
       noMeasuredTasks:'ไม่มี Task ที่มีค่าทรัพยากรวัดได้ในตัวกรองนี้',
       measuredTasks:'Task ที่วัดได้', cpuAverage:'CPU เฉลี่ย',
-      desktopMain:'โปรเซสหลักของ lnwjud (ไม่รวมโปรเซสย่อย)', desktopMainNote:'ค่าของโปรเซสหลักในเครื่องนี้เท่านั้น ไม่ใช่ยอดรวมของโปรแกรมหรือของ Goal',
+      desktopMain:'โปรเซสหลักของ lnwjing (ไม่รวมโปรเซสย่อย)', desktopMainNote:'ค่าของโปรเซสหลักในเครื่องนี้เท่านั้น ไม่ใช่ยอดรวมของโปรแกรมหรือของ Goal',
       cpuAverageNote:'CPU เป็นค่าเฉลี่ยตามเวลาที่โปรเซสทำงานและจำนวน Logical CPU ไม่ใช่ค่า CPU แบบทันที',
       contextTransport:'ตัวนับ Context/Ledger เป็นข้อมูลรวม MCP HTTP Runtime ไม่สามารถระบุเป็นของ Goal หรือโปรเจกต์ใดโดยเฉพาะ',
       contextWorkspace:'ตัวนับ Context/Ledger ของโปรเจกต์นี้',
@@ -136,7 +136,7 @@ export const v580Copy = {
       noMeasuredGoals:'No Goals currently have tracked tasks in this workspace.',
       noMeasuredTasks:'No tasks have actual CPU or memory measurements for this filter.',
       measuredTasks:'Measured tasks', cpuAverage:'Average CPU',
-      desktopMain:'lnwjud Desktop main process (excludes child processes)', desktopMainNote:'These measurements cover only this local main process, not the full app or any Goal.',
+      desktopMain:'lnwjing Desktop main process (excludes child processes)', desktopMainNote:'These measurements cover only this local main process, not the full app or any Goal.',
       cpuAverageNote:'CPU is a lifetime average across logical processors, not instantaneous CPU utilization.',
       contextTransport:'Context/Ledger counters are shared MCP HTTP transport totals, not attributable to this Goal or workspace.',
       contextWorkspace:'Context/Ledger counters for this workspace.',

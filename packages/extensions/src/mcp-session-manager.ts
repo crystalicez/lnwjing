@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import {
   createProcessTreeTerminator,
   type ProcessTreeTerminator,
-} from '@lnwjud/process';
+} from '@lnwjing/process';
 import type { ExternalMcpContractDrift, McpResourceSummary, McpServerLaunchConfig, McpSessionLifecycle, McpToolSummary } from './types.js';
 
 export interface McpClientSession {
@@ -431,7 +431,7 @@ export function createDefaultMcpClientFactory(
     });
     const disposeStderrDrain = attachChildStderrDrain(transport.stderr);
     const client = new Client(
-      { name: 'lnwjud-mcp-bridge', version: '1.0.0' },
+      { name: 'lnwjing-mcp-bridge', version: '1.0.0' },
       { versionNegotiation: { mode: 'auto' } },
     );
     try {

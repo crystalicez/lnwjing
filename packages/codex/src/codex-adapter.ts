@@ -1,5 +1,5 @@
-import { err, ok, type Result } from '@lnwjud/domain';
-import { ProcessManager, type LogQuery, type ManagedProcess, type ManagedProcessStart, type ProcessLogResult } from '@lnwjud/process';
+import { err, ok, type Result } from '@lnwjing/domain';
+import { ProcessManager, type LogQuery, type ManagedProcess, type ManagedProcessStart, type ProcessLogResult } from '@lnwjing/process';
 import { CodexDiscovery } from './codex-discovery.js';
 import { CodexInvocationBuilder, type CodexDiscoveryResult, type CodexInvocation, type CodexSandboxMode, type CodexStatus } from './codex-capabilities.js';
 

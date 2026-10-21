@@ -1,4 +1,4 @@
-import type { Result } from '@lnwjud/domain';
+import type { Result } from '@lnwjing/domain';
 
 export interface ManagedWriterAdmissionLease {
   readonly id: string;

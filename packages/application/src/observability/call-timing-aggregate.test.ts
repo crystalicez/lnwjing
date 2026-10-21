@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CallTimingObservation } from '@lnwjud/domain';
+import type { CallTimingObservation } from '@lnwjing/domain';
 import { aggregateCallTimings } from './call-timing-aggregate.js';
 
 const event = (correlationKey: string, other: Partial<CallTimingObservation> = {}): CallTimingObservation => ({

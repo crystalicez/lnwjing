@@ -1,12 +1,12 @@
-# lnwjud — สรุปความสามารถทั้งหมด
+# lnwjing — สรุปความสามารถทั้งหมด
 
-สถานะเอกสาร: สรุปจาก source candidate และ runtime contract ปัจจุบันของ lnwjud v5.8.7 (มีทั้งหมด 294 definitions; advertise 282 tools โดยปริยายก่อนใช้ per-tool override และครบ 294 tools เมื่อเปิด Codex delegation กับ Agent Swarm)
+สถานะเอกสาร: สรุปจาก source candidate และ runtime contract ปัจจุบันของ lnwjing v5.8.7 (มีทั้งหมด 294 definitions; advertise 282 tools โดยปริยายก่อนใช้ per-tool override และครบ 294 tools เมื่อเปิด Codex delegation กับ Agent Swarm)
 ขอบเขต: ความสามารถของ gateway, MCP tools, การเชื่อมต่อ AI, สิทธิ์, Live Logs และข้อจำกัดในการใช้งาน
 เอกสารนี้ถูกติดตามใน repository และต้องสอดคล้องกับ source, runtime contract และ release ปัจจุบัน
 
 ## สรุปสั้น
 
-lnwjud ไม่ใช่ AI model และไม่ใช่ provider API aggregator แต่เป็น cross-platform local development gateway ที่เปิดความสามารถของเครื่องและ workspace บน Windows, macOS และ Linux ให้ AI host ที่พูดภาษา Model Context Protocol (MCP) ได้ โดย capability ที่เป็น OS-specific จะเปิดเฉพาะเมื่อ host รองรับจริง
+lnwjing ไม่ใช่ AI model และไม่ใช่ provider API aggregator แต่เป็น cross-platform local development gateway ที่เปิดความสามารถของเครื่องและ workspace บน Windows, macOS และ Linux ให้ AI host ที่พูดภาษา Model Context Protocol (MCP) ได้ โดย capability ที่เป็น OS-specific จะเปิดเฉพาะเมื่อ host รองรับจริง
 
 ความสามารถหลักใน v5.8.7 source/runtime ปัจจุบัน คือ:
 
@@ -25,27 +25,27 @@ lnwjud ไม่ใช่ AI model และไม่ใช่ provider API aggr
 - มี task/delegation/session/checkpoint/handoff สำหรับงานต่อเนื่องและหลาย agent
 - มี Permission v2, lifecycle hooks, audit, Live Logs v2, telemetry, Context Ledger/diff/dedupe, recovery และ capability discovery รวมถึง incident diagnostics แบบ bounded ที่เก็บ session heartbeat, local Crashpad metadata, current per-process memory และ runtime trend ย้อนหลังสูงสุดประมาณ 6 ชั่วโมง (1 นาทีต่อ sample) สำหรับ RSS/V8 heap/external/ArrayBuffer, Browser/Tab/GPU/Utility working/private bytes, system RAM, CPU/event-loop, active Node resources, retained LogHub line/byte/dedupe counters, MCP activity/error/in-flight และจำนวน `toolAvailabilityService` listeners โดยไม่แนบ raw heap dump อัตโนมัติ
 - รองรับ visual adapter สำหรับ screenshot, DOM/layout, Excel และ PDF
-- มี **LNWJUD Watcher API v1** แบบ read-only แยกจาก MCP command surface: authenticated snapshot + WebSocket activity, dedicated protected token, loopback-only pairing, Desktop auto-start และ sanitized state ของทุก Active Project/ทุก active Durable Goal พร้อม Agent/activity/Git แยก workspace สำหรับ Watcher Web/PWA/Android/iOS โดยยังคง top-level goal/git ของ Primary Project เพื่อ backward compatibility
+- มี **LNWJING Watcher API v1** แบบ read-only แยกจาก MCP command surface: authenticated snapshot + WebSocket activity, dedicated protected token, loopback-only pairing, Desktop auto-start และ sanitized state ของทุก Active Project/ทุก active Durable Goal พร้อม Agent/activity/Git แยก workspace สำหรับ Watcher Web/PWA/Android/iOS โดยยังคง top-level goal/git ของ Primary Project เพื่อ backward compatibility
 - หน้า Git Desktop รองรับ native X/Y scrolling ในรายการไฟล์และ Split/Unified Diff เพื่ออ่าน source line ยาว ๆ โดยไม่บีบ layout
 - ปิด Native ChatGPT recurring watchdog ก่อน terminal completion เป็นเส้นทางหลัก และกู้ exact pending cleanup locator จาก durable state ได้หาก host surface/turn หลุดระหว่างปิดงาน; terminal cleanup-only wake ไม่มีสิทธิ์กลับไปแก้ workspace
 - รัน Native Goal automation แบบ milestone ที่ตรวจหลักฐานได้ โดยใช้ durable shell เดิม, current Goal lease และ recurring watchdog เดิมหนึ่งรายการ โดยไม่สร้าง scheduler ใหม่หรือ replay งานที่ผลลัพธ์ยังไม่ทราบ
 - เปิด/ปิด first-party tool รายตัวได้แบบ persisted โดยแยก `userPreference`, `systemEligible`, `effectiveExposed` ออกจาก readiness/permission; state เดียวกันบังคับทั้ง `tools/list`, `tools/call`, batch และ discovery/ranking โดย per-tool override ไม่สามารถข้าม Settings/runtime prerequisite ได้ เช่น `codex_*` และ `agent_swarm_run` จะยังไม่ถูก expose จนกว่า Codex Delegation จะเปิดและ runtime ที่จำเป็นพร้อม
 - MCP connection ที่ค้างอยู่รับการเปลี่ยน tool list ผ่าน SDK `notifications/tools/list_changed`; stdio process เห็น state จาก SQLite ร่วมด้วย bounded watcher โดยไม่ต้อง restart
 
-ทุกการทำงานหลักวิ่งบน host เครื่องเดียวกับ lnwjud ตาม platform support ของ Windows, macOS หรือ Linux ยกเว้นชั้นเชื่อมต่อที่ส่ง MCP ผ่าน tunnel หรือ transport ที่ client ใช้
+ทุกการทำงานหลักวิ่งบน host เครื่องเดียวกับ lnwjing ตาม platform support ของ Windows, macOS หรือ Linux ยกเว้นชั้นเชื่อมต่อที่ส่ง MCP ผ่าน tunnel หรือ transport ที่ client ใช้
 
 ## สถาปัตยกรรมและทางเชื่อมต่อ
 
-lnwjud ใช้ MCP เป็นสัญญากลาง ดังนั้น AI แต่ละตัวไม่ได้ต้องมี adapter เฉพาะในตัว lnwjud ถ้า host/client ของ AI รองรับ MCP อยู่แล้ว ให้เลือก transport ที่ host รองรับ แล้วชี้มาที่ MCP server เดียวกัน
+lnwjing ใช้ MCP เป็นสัญญากลาง ดังนั้น AI แต่ละตัวไม่ได้ต้องมี adapter เฉพาะในตัว lnwjing ถ้า host/client ของ AI รองรับ MCP อยู่แล้ว ให้เลือก transport ที่ host รองรับ แล้วชี้มาที่ MCP server เดียวกัน
 
 ~~~mermaid
 flowchart LR
   A["ChatGPT web / remote MCP host"] --> B["OpenAI Secure MCP Tunnel"]
   B --> C["tunnel-client"]
   C --> G["Desktop 127.0.0.1:<port>/mcp"]
-  E["Codex CLI / local IDE / local MCP client"] --> D["lnwjud-mcp-stdio.cmd"]
+  E["Codex CLI / local IDE / local MCP client"] --> D["lnwjing-mcp-stdio.cmd"]
   F["Local HTTP MCP client"] --> G
-  G --> H["lnwjud MCP server"]
+  G --> H["lnwjing MCP server"]
   D --> H
   H --> I["ToolRegistry"]
   I --> J["workspace, files, Git, process, Codex, Windows, browser, logs"]
@@ -58,75 +58,75 @@ flowchart LR
 
 1. ChatGPT Developer App เลือก OpenAI tunnel
 2. tunnel-client เปิด outbound HTTPS ไปยัง control plane
-3. Desktop lnwjud เปิด loopback Streamable HTTP MCP ตาม port ที่ตั้งไว้
+3. Desktop lnwjing เปิด loopback Streamable HTTP MCP ตาม port ที่ตั้งไว้
 4. tunnel profile ชี้ `mcp.server_urls` ไปยัง Desktop `/mcp` endpoint นั้น
 5. ChatGPT เห็น tools/list และเรียก tool ผ่าน tunnel โดยใช้ Active Project, permission profile และ native approval ของ Desktop runtime ชุดเดียวกัน
 
 เครื่องไม่ต้องเปิด inbound firewall หรือ public port ต้องมี Tunnel ID, runtime key ที่มีสิทธิ์ Tunnels Read + Use และการผูก tunnel เข้ากับ ChatGPT workspace ตามข้อกำหนดของ OpenAI
 
-เมื่อผู้ใช้เปลี่ยน per-tool availability ฝั่ง MCP จะเปลี่ยน live และส่ง `notifications/tools/list_changed` ตาม protocol แต่ ChatGPT app/action catalog ที่ผ่านการ approve แล้วอาจเป็น host-managed frozen snapshot. ถ้า ChatGPT ยังเห็นรายการเก่า ให้ใช้ Action Refresh / Scan Tools หรือ app update flow ที่ workspace นั้นเปิดให้จริง; **ห้ามถือว่า browser F5 อย่างเดียวรับประกันการ sync** และ lnwjud จะไม่รายงานว่า host refresh สำเร็จหากไม่มีหลักฐานจาก host.
+เมื่อผู้ใช้เปลี่ยน per-tool availability ฝั่ง MCP จะเปลี่ยน live และส่ง `notifications/tools/list_changed` ตาม protocol แต่ ChatGPT app/action catalog ที่ผ่านการ approve แล้วอาจเป็น host-managed frozen snapshot. ถ้า ChatGPT ยังเห็นรายการเก่า ให้ใช้ Action Refresh / Scan Tools หรือ app update flow ที่ workspace นั้นเปิดให้จริง; **ห้ามถือว่า browser F5 อย่างเดียวรับประกันการ sync** และ lnwjing จะไม่รายงานว่า host refresh สำเร็จหากไม่มีหลักฐานจาก host.
 
-`lnwjud-mcp-stdio.cmd` ใช้สำหรับ **direct local STDIO client** เช่น Codex CLI/IDE เท่านั้น ไม่ใช่ transport ของ Secure Tunnel ปัจจุบัน ส่วน `lnwjud.exe --mcp-stdio` เป็น compatibility path และไม่ใช่คำสั่งที่ UI แนะนำให้ copy
+`lnwjing-mcp-stdio.cmd` ใช้สำหรับ **direct local STDIO client** เช่น Codex CLI/IDE เท่านั้น ไม่ใช่ transport ของ Secure Tunnel ปัจจุบัน ส่วน `lnwjing.exe --mcp-stdio` เป็น compatibility path และไม่ใช่คำสั่งที่ UI แนะนำให้ copy
 
 ### Codex
 
 Codex ที่ทำงานบนเครื่องเดียวกันเชื่อมแบบ local stdio ได้โดยตรง จึงไม่จำเป็นต้องใช้ tunnel:
 
 ~~~powershell
-$launcher = Join-Path $env:LOCALAPPDATA 'Programs\lnwjud\lnwjud-mcp-stdio.cmd'
-codex mcp add lnwjud -- $launcher --workspace E:\lnwjud
+$launcher = Join-Path $env:LOCALAPPDATA 'Programs\lnwjing\lnwjing-mcp-stdio.cmd'
+codex mcp add lnwjing -- $launcher --workspace E:\lnwjing
 codex mcp list
 ~~~
 
 ถ้า Codex หรือ AI host อยู่ในบริบท remote ที่เข้าถึงเครื่องไม่ได้ ให้ใช้เส้นทาง Secure MCP Tunnel แทน:
 
 ~~~text
-Codex/remote host -> Secure Tunnel -> tunnel-client -> Desktop loopback HTTP MCP -> lnwjud
+Codex/remote host -> Secure Tunnel -> tunnel-client -> Desktop loopback HTTP MCP -> lnwjing
 ~~~
 
 ดังนั้น “Codex ใช้ tunnel” และ “Codex ใช้ stdio” ไม่ขัดกัน แต่เป็นคนละ deployment mode: local Codex ใช้ stdio, remote Codex/host ใช้ tunnel
 
 ### Claude, IDE และ MCP client อื่น
 
-ถ้า client รองรับ MCP stdio ให้ตั้ง command เป็น packaged launcher และส่ง workspace argument แบบเดียวกับ Codex ถ้า client รองรับ Streamable HTTP ให้ใช้ endpoint loopbackของ lnwjud:
+ถ้า client รองรับ MCP stdio ให้ตั้ง command เป็น packaged launcher และส่ง workspace argument แบบเดียวกับ Codex ถ้า client รองรับ Streamable HTTP ให้ใช้ endpoint loopbackของ lnwjing:
 
 ~~~text
 http://127.0.0.1:<port>/mcp
 ~~~
 
-Claude Desktop, IDE extension หรือ agent host อื่นจะใช้ได้ก็ต่อเมื่อ client รุ่นนั้นเปิดใช้ MCP transport ที่ตรงกัน การมีชื่อ “Claude”, “Gemini” หรือ provider อื่นไม่ได้ทำให้ provider API ต่อกับ lnwjud โดยอัตโนมัติ
+Claude Desktop, IDE extension หรือ agent host อื่นจะใช้ได้ก็ต่อเมื่อ client รุ่นนั้นเปิดใช้ MCP transport ที่ตรงกัน การมีชื่อ “Claude”, “Gemini” หรือ provider อื่นไม่ได้ทำให้ provider API ต่อกับ lnwjing โดยอัตโนมัติ
 
 ### Gemini, Ollama, model API หรือ AI ที่ไม่มี MCP
 
-โมเดลหรือ provider ที่มีเพียง chat/completions API ยังต่อ lnwjud โดยตรงไม่ได้ เพราะ lnwjud ไม่ได้แปลง provider API ให้เป็น MCP และไม่ได้รับ API key ของ provider มาเป็นทางเชื่อมต่อ
+โมเดลหรือ provider ที่มีเพียง chat/completions API ยังต่อ lnwjing โดยตรงไม่ได้ เพราะ lnwjing ไม่ได้แปลง provider API ให้เป็น MCP และไม่ได้รับ API key ของ provider มาเป็นทางเชื่อมต่อ
 
 วิธีรองรับคือใช้ agent host หรือ adapter ที่:
 
 - เรียก model/provider ที่ต้องการ
 - ทำหน้าที่เป็น MCP client
-- ต่อ lnwjud ผ่าน stdio, loopback HTTP หรือ remote tunnel
+- ต่อ lnwjing ผ่าน stdio, loopback HTTP หรือ remote tunnel
 - แปลงผล MCP tools ให้เป็น tool/function ของ host นั้น
 
-ถ้า host ไม่มี MCP client ต้องเพิ่ม bridge ภายนอกก่อน ไม่ใช่เพิ่ม tool ใน lnwjud แต่ละตัวสำหรับทุก provider
+ถ้า host ไม่มี MCP client ต้องเพิ่ม bridge ภายนอกก่อน ไม่ใช่เพิ่ม tool ใน lnwjing แต่ละตัวสำหรับทุก provider
 
 ### OpenAI Responses API และโปรแกรมเรียกใช้งานอื่น
 
-OpenAI surface หรือโปรแกรมที่รองรับ remote MCP ใช้ Secure MCP Tunnel หรือ private HTTP MCP ได้ โดยต้องรักษา authentication และ network boundary ของ host นั้นเอง lnwjud ไม่ได้เปิด public HTTP server เป็นค่าเริ่มต้น
+OpenAI surface หรือโปรแกรมที่รองรับ remote MCP ใช้ Secure MCP Tunnel หรือ private HTTP MCP ได้ โดยต้องรักษา authentication และ network boundary ของ host นั้นเอง lnwjing ไม่ได้เปิด public HTTP server เป็นค่าเริ่มต้น
 
-### lnwjud เรียก MCP server อื่น
+### lnwjing เรียก MCP server อื่น
 
-เป็นคนละทิศทางกับการให้ AI มาเรียก lnwjud:
+เป็นคนละทิศทางกับการให้ AI มาเรียก lnwjing:
 
 - mcp_list ค้นหา child MCP servers จาก configuration ที่รองรับ
 - mcp_describe อ่านชื่อและ schema ของ child server
 - mcp_call ส่งต่อคำขอไปยัง child server
 - mcp_discover, mcp_health และ mcp_resources ตรวจ discovery, health และ resources
 
-Bridge นี้ทำให้ lnwjud เป็น MCP gateway ได้ แต่ child tools ยังคงอยู่ภายใต้นโยบายและสิทธิ์ของ child server ไม่ได้ถูกทำให้ปลอดภัยขึ้นโดยอัตโนมัติ
+Bridge นี้ทำให้ lnwjing เป็น MCP gateway ได้ แต่ child tools ยังคงอยู่ภายใต้นโยบายและสิทธิ์ของ child server ไม่ได้ถูกทำให้ปลอดภัยขึ้นโดยอัตโนมัติ
 
 ## การตรวจว่าเชื่อมจริง
 
-การเห็นชื่อ lnwjud ใน config หรือเห็น tools ในเอกสารยังไม่ใช่หลักฐานว่า client เชื่อมสำเร็จ การตรวจที่เชื่อถือได้ควรทำตามลำดับนี้:
+การเห็นชื่อ lnwjing ใน config หรือเห็น tools ในเอกสารยังไม่ใช่หลักฐานว่า client เชื่อมสำเร็จ การตรวจที่เชื่อถือได้ควรทำตามลำดับนี้:
 
 1. ส่ง MCP initialize
 2. ส่ง initialized notification
@@ -138,10 +138,10 @@ Bridge นี้ทำให้ lnwjud เป็น MCP gateway ได้ แต
 
 ถ้า Start Tunnel เชื่อมแล้วหลุดวน:
 
-- ตรวจว่า Desktop MCP ทำงานและ endpoint `http://127.0.0.1:<configured-port>/mcp` ตอบจาก lnwjud
+- ตรวจว่า Desktop MCP ทำงานและ endpoint `http://127.0.0.1:<configured-port>/mcp` ตอบจาก lnwjing
 - ตรวจว่า tunnel profile ใช้ `mcp.server_urls` ชี้ endpoint Desktop เดียวกัน ไม่ใช่ direct STDIO launcher
 - รัน tunnel-client doctor
-- ตรวจ log ที่ %APPDATA%\tunnel-client\lnwjud-tunnel.log
+- ตรวจ log ที่ %APPDATA%\tunnel-client\lnwjing-tunnel.log
 - ใช้ connection_max_ttl: 168h0m0s
 - Persistent Tunnel Runtime จะ retry ด้วย capped backoff ต่อเนื่องจนกว่าผู้ใช้กด Stop/ปิด persistent runtime; failure ล่าสุดต้องแสดงใน Dashboard/Doctor แทนการเงียบหาย
 
@@ -191,7 +191,7 @@ durable shell ใช้ active index และ launch journal เพื่อไ
 
 ### ขอบเขตการมองเห็น
 
-สัญญา full visibility ของ lnwjud อนุญาตให้ read/search/index/watch ไฟล์ที่อยู่ใน workspace/path ownership รวมถึง:
+สัญญา full visibility ของ lnwjing อนุญาตให้ read/search/index/watch ไฟล์ที่อยู่ใน workspace/path ownership รวมถึง:
 
 - .env และไฟล์ environment
 - .git และ metadata ของ Git
@@ -238,7 +238,7 @@ Project tools ใช้ detected project profile และไม่รับ arb
 - project_typecheck
 - project_build
 
-Process manager สร้าง process handle ที่เป็นเจ้าของ, เก็บ stdout/stderr เป็น bounded buffer, เปิด process_status/process_logs และหยุดเฉพาะ process tree ที่ lnwjud เป็นเจ้าของ
+Process manager สร้าง process handle ที่เป็นเจ้าของ, เก็บ stdout/stderr เป็น bounded buffer, เปิด process_status/process_logs และหยุดเฉพาะ process tree ที่ lnwjing เป็นเจ้าของ
 
 ## Codex และ agent orchestration
 
@@ -266,7 +266,7 @@ hook_list, hook_register และ hook_remove รองรับ lifecycle befo
 
 ### Windows capability facade
 
-lnwjud มี facade สำหรับ environment, service, process, port, registry, event log, installed runtime, path และ startup context รวมถึง shell capability ที่รับ executable กับ argument array
+lnwjing มี facade สำหรับ environment, service, process, port, registry, event log, installed runtime, path และ startup context รวมถึง shell capability ที่รับ executable กับ argument array
 
 ### Browser และ desktop UI
 
@@ -325,7 +325,7 @@ Audit ถูกเก็บแบบ NDJSON ที่ redacted และไม�
 | Workspace/path guard | ตรวจ canonical path, workspace ownership และ same-workspace boundary |
 | Permission class | แยก filesystem.read/write/delete, shell, Git, process, browser, network และ system operation |
 | Profile | safe, balanced, full หรือ custom กำหนดค่าเริ่มต้นของ READ/WRITE/EXECUTE/DANGEROUS |
-| Standard-mode hard block | เมื่อ Full Bypass ปิด ปฏิเสธ action ที่ policy ของ lnwjud ห้ามแม้ full profile จะอนุญาต เช่น disk format หรือ shutdown/reboot |
+| Standard-mode hard block | เมื่อ Full Bypass ปิด ปฏิเสธ action ที่ policy ของ lnwjing ห้ามแม้ full profile จะอนุญาต เช่น disk format หรือ shutdown/reboot |
 | Full Bypass | toggle แยก Desktop/STDIO ที่ใช้ได้เฉพาะ profile full; ข้าม approval, host prompt, profile/command policy และ Active Project/roots/protected path แต่ไม่ข้าม live rolling Goal ownership fence |
 | Audit | บันทึก operation metadata ที่ผ่าน redaction และเชื่อมกับ Live Logs |
 
@@ -340,7 +340,7 @@ Audit ถูกเก็บแบบ NDJSON ที่ redacted และไม�
 
 Desktop HTTP MCP และ Secure Tunnel ใช้ Desktop profile/Full Bypass เดียวกัน ส่วน packaged direct STDIO ใช้ STDIO profile/Full Bypass แยกต่างหาก โดย default profile ยังคงเป็น `full` เพื่อ backward compatibility และสามารถเลือก `safe`, `balanced`, `full`, `custom` พร้อม Strict Roots ได้. Full Bypass ทั้งสองตัวเริ่ม OFF และไม่เปิดเองจากการเลือก Full.
 
-เมื่อ Full Bypass ปิด การลบไฟล์และคำสั่ง destructive ต้องผ่าน confirmation/operation policy. เมื่อเปิด lnwjud จะข้าม application approval, always-confirm families, host approval และ command/scope/protected-path checks พร้อมยอมรับ explicit absolute outside path โดยไม่ปลอม `userConfirmed`. แต่ถ้ามี rolling scheduled Goal ที่ live งาน workspace mutation และ Native Goal automation ยังต้องส่ง exact current `goalLease` goal/token/generation เพื่อกัน worker เก่าทำงานหลัง handoff. Schema/input, relative traversal, process/task/worktree ownership, Windows ACL/UAC, provider/runtime, remote service และ child MCP policy ยังมีผล; งานนอก workspace อาจไม่มี Recovery Trash.
+เมื่อ Full Bypass ปิด การลบไฟล์และคำสั่ง destructive ต้องผ่าน confirmation/operation policy. เมื่อเปิด lnwjing จะข้าม application approval, always-confirm families, host approval และ command/scope/protected-path checks พร้อมยอมรับ explicit absolute outside path โดยไม่ปลอม `userConfirmed`. แต่ถ้ามี rolling scheduled Goal ที่ live งาน workspace mutation และ Native Goal automation ยังต้องส่ง exact current `goalLease` goal/token/generation เพื่อกัน worker เก่าทำงานหลัง handoff. Schema/input, relative traversal, process/task/worktree ownership, Windows ACL/UAC, provider/runtime, remote service และ child MCP policy ยังมีผล; งานนอก workspace อาจไม่มี Recovery Trash.
 
 ## Capability discovery และ extensibility
 
@@ -348,7 +348,7 @@ tool_schema_list และ tool_schema_register เก็บ schema version, inp
 
 capabilities, tool_categories, tool_search, tool_describe, tool_function_find และ tool_aliases ช่วยให้ AI หาเครื่องมือที่ต้องใช้แบบ on-demand ได้ แต่ไม่ได้ซ่อนหรือลบ primitive tools จาก MCP contract
 
-plugin_install, plugin_list, plugin_enable, plugin_disable และ plugin_remove ใช้กับ LnwjudPlugin SDK และ extension lifecycle
+plugin_install, plugin_list, plugin_enable, plugin_disable และ plugin_remove ใช้กับ LnwjingPlugin SDK และ extension lifecycle
 
 skill_match และ skill_load โหลด local skill ตาม intent ผ่าน skill bridge
 
@@ -659,12 +659,12 @@ automation_finalize
 
 | ค่า | หน้าที่ |
 | --- | --- |
-| LNWJUD_UNRESTRICTED | เปิด full local capability mode เมื่อเป็น 1 |
-| LNWJUD_DATA_PATH | ตำแหน่ง SQLite และ activity data ที่ desktop/stdio ใช้ร่วมกันได้ |
-| LNWJUD_TUNNEL_CLIENT_PATH | path ของ tunnel-client.exe |
-| LNWJUD_PATH | path ของ lnwjud desktop executable สำหรับ viewer/dashboard |
-| LNWJUD_MCP_PORT | port ที่ใช้ใน local MCP HTTP mode (default 18765) |
-| LNWJUD_LOG_LEVEL | ระดับ log |
+| LNWJING_UNRESTRICTED | เปิด full local capability mode เมื่อเป็น 1 |
+| LNWJING_DATA_PATH | ตำแหน่ง SQLite และ activity data ที่ desktop/stdio ใช้ร่วมกันได้ |
+| LNWJING_TUNNEL_CLIENT_PATH | path ของ tunnel-client.exe |
+| LNWJING_PATH | path ของ lnwjing desktop executable สำหรับ viewer/dashboard |
+| LNWJING_MCP_PORT | port ที่ใช้ใน local MCP HTTP mode (default 18765) |
+| LNWJING_LOG_LEVEL | ระดับ log |
 
 อย่าอ่านค่าจริงจาก .env มาใส่ในเอกสาร, audit หรือ commit ค่าในตารางเป็นเพียงชื่อ configuration ไม่ใช่ credential
 
@@ -688,7 +688,7 @@ codex_status -> codex_run -> codex_task_status/codex_task_logs -> git_diff -> te
 
 ## ข้อจำกัดที่ต้องเข้าใจ
 
-- lnwjud ไม่สร้างคำตอบของ AI เองและไม่ใช่ model provider
+- lnwjing ไม่สร้างคำตอบของ AI เองและไม่ใช่ model provider
 - AI host ต้องรองรับ MCP หรือมี bridge ที่ทำหน้าที่เป็น MCP client
 - local stdio ต้องใช้ direct launcher ที่คุย JSON-RPC บน stdin/stdout
 - local HTTP เป็น loopback-only ที่ 127.0.0.1 และตรวจ Host/Origin ไม่ควร port-forward ออกสาธารณะ
@@ -715,4 +715,4 @@ codex_status -> codex_run -> codex_task_status/codex_task_logs -> git_diff -> te
 - [http.ts](../packages/mcp-server/src/http.ts) — loopback Streamable HTTP boundary
 - [stdio.ts](../packages/mcp-server/src/stdio.ts) — stdio MCP boundary
 - [permission-v2.ts](../packages/permissions/src/permission-v2.ts) — read visibility และ Permission v2 decision
-- [start-lnwjud-tunnel.ps1](../scripts/start-lnwjud-tunnel.ps1) — tunnel runner, TTL, retry และ log alignment
+- [start-lnwjing-tunnel.ps1](../scripts/start-lnwjing-tunnel.ps1) — tunnel runner, TTL, retry และ log alignment

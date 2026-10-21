@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GoalRecord } from '@lnwjud/domain';
+import type { GoalRecord } from '@lnwjing/domain';
 import { hasInspectableGoalResults } from '../src/main/doctor-goal-evidence.js';
 
 describe('Doctor Goal results selection', () => {

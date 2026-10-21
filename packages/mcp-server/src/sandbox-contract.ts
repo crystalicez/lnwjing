@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 export interface SandboxExecutionPlanInput {
   readonly workspaceId: string;
@@ -38,8 +38,8 @@ export function buildSandboxExecutionPlan(input: SandboxExecutionPlanInput): Res
   const jobId = input.jobId?.trim() || randomUUID();
   if (!/^[A-Za-z0-9._-]{1,128}$/.test(jobId)) return err(appError('INVALID_INPUT', 'Sandbox job ID is invalid'));
 
-  const sandboxInput = 'C:\\lnwjud\\input';
-  const sandboxOutput = 'C:\\lnwjud\\output';
+  const sandboxInput = 'C:\\lnwjing\\input';
+  const sandboxOutput = 'C:\\lnwjing\\output';
   const stdout = `${sandboxOutput}\\stdout.log`;
   const stderr = `${sandboxOutput}\\stderr.log`;
   const exitCode = `${sandboxOutput}\\exit-code.txt`;

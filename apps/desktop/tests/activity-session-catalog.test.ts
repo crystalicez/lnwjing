@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ActivitySessionSummary } from '@lnwjud/audit';
+import type { ActivitySessionSummary } from '@lnwjing/audit';
 import { ActivitySessionCatalog } from '../src/main/activity-session-catalog.js';
 
 describe('ActivitySessionCatalog', () => {

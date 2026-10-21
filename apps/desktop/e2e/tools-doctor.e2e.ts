@@ -8,13 +8,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { electronExecutablePath, terminateProcessTree } from './electron-runtime.js';
 import { buildWindowsSecretMigratorFixture, windowsSecretMigratorE2eTimeoutMs } from './windows-secret-migrator-fixture.mjs';
-import { ToolRegistry } from '@lnwjud/mcp-server';
+import { ToolRegistry } from '@lnwjing/mcp-server';
 import { chromium, expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mainEntry = path.join(desktopRoot, 'dist', 'main', 'main.js');
 const electronExecutable = electronExecutablePath(desktopRoot);
-const packagedExecutable = process.env.LNWJUD_PACKAGED_EXECUTABLE?.trim() || undefined;
+const packagedExecutable = process.env.LNWJING_PACKAGED_EXECUTABLE?.trim() || undefined;
 const FIRST_PARTY_TOOL_COUNT = new ToolRegistry({}, { clientId: 'desktop-e2e', clientName: 'desktop-e2e' }).listAll().length;
 
 type LaunchedDesktop = {
@@ -46,7 +46,7 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
     const app = await launchDesktop();
     try {
       await openTools(app.page);
-      await expect(app.page.getByRole('tab', { name: new RegExp(`lnwjud \\(${FIRST_PARTY_TOOL_COUNT}\\)`) })).toBeVisible();
+      await expect(app.page.getByRole('tab', { name: new RegExp(`lnwjing \\(${FIRST_PARTY_TOOL_COUNT}\\)`) })).toBeVisible();
       await expect(app.page.locator('.tool-card')).toHaveCount(FIRST_PARTY_TOOL_COUNT);
       await expect(app.page.locator('.tool-status-strip')).toContainText(/พร้อม|ต้องดำเนินการ|ready|needs_setup/i);
     } finally { await closeDesktop(app); }
@@ -172,11 +172,11 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
         await expect(app.page.locator('#workflow-sheet')).toContainText('CSV', { timeout: 10_000 });
       } catch (cause) {
         const diagnostics = await app.page.evaluate(async (filePath) => {
-          const dashboard = await window.lnwjud.getDashboard();
+          const dashboard = await window.lnwjing.getDashboard();
           const workspace = dashboard.selectedWorkspace;
           const uiError = document.querySelector('.workflow-field-error')?.textContent ?? null;
           const inspection = workspace
-            ? await window.lnwjud.inspectWorkflowChoices({ workspaceId: workspace.id, filePath })
+            ? await window.lnwjing.inspectWorkflowChoices({ workspaceId: workspace.id, filePath })
               .then(result => ({ sheets: result.file?.sheets ?? [] }))
               .catch(error => ({ error: String(error) }))
             : null;
@@ -231,8 +231,8 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
       await expect(toolCard(app.page, 'lsp_diagnostics')).toHaveClass(/tool-needs_setup/);
       const nodePath = process.execPath;
       await app.page.evaluate(async (configuredNodePath) => {
-        const dashboard = await window.lnwjud.getDashboard();
-        await window.lnwjud.setUserSettings({
+        const dashboard = await window.lnwjing.getDashboard();
+        await window.lnwjing.setUserSettings({
           settings: { ...dashboard.settings, lspCommands: { typescript: JSON.stringify([configuredNodePath, '--version']) } },
         });
       }, nodePath);
@@ -250,15 +250,15 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
   test('permission deny blocks dangerous tools without invoking their runtime', async () => {
     const app = await launchDesktop();
     try {
-      await app.page.evaluate(async () => { await window.lnwjud.setPermissionProfile({ profile: 'safe' }); });
-      const before = await app.page.evaluate(async () => (await window.lnwjud.getDashboard()).auditEventCount);
+      await app.page.evaluate(async () => { await window.lnwjing.setPermissionProfile({ profile: 'safe' }); });
+      const before = await app.page.evaluate(async () => (await window.lnwjing.getDashboard()).auditEventCount);
       await openTools(app.page);
       const card = toolCard(app.page, 'delete_file');
       await expect(card).toHaveClass(/tool-blocked/);
       await card.locator('button.tool-card-open').click();
       await expect(app.page.getByRole('dialog')).toContainText('DENY', { timeout: process.env.CI ? 20_000 : 5_000 });
       await app.page.getByRole('button', { name: /ปิดรายละเอียดเครื่องมือ|Close tool details/ }).click();
-      const after = await app.page.evaluate(async () => (await window.lnwjud.getDashboard()).auditEventCount);
+      const after = await app.page.evaluate(async () => (await window.lnwjing.getDashboard()).auditEventCount);
       expect(after).toBe(before);
     } finally { await closeDesktop(app); }
   });
@@ -268,8 +268,8 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
     const { dataRoot, fixtureRoot } = first;
     try {
       await first.page.evaluate(async (missingCommand) => {
-        const dashboard = await window.lnwjud.getDashboard();
-        await window.lnwjud.setUserSettings({
+        const dashboard = await window.lnwjing.getDashboard();
+        await window.lnwjing.setUserSettings({
           settings: {
             ...dashboard.settings,
             extensions: {
@@ -289,7 +289,7 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
       await openTools(second.page, true);
       await second.page.getByRole('tab', { name: /External MCP \(\d+\)/ }).click();
       const external = await second.page.evaluate(async () => {
-        const snapshot = await window.lnwjud.getToolCatalog({ locale: 'th' });
+        const snapshot = await window.lnwjing.getToolCatalog({ locale: 'th' });
         const item = snapshot.items.find((candidate) => candidate.origin === 'external_mcp' && candidate.name === '@offline-fixture');
         return item === undefined ? null : {
           readiness: item.readiness,
@@ -306,7 +306,7 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
       await expect(card).toHaveClass(/tool-needs_setup/);
       await expect(card).toContainText('สถานะ External ยังไม่ยืนยัน');
       await expect(card).toContainText('Server ไม่ได้ระบุสิทธิ์');
-      await expect(card).toContainText('lnwjud ไม่ได้จัดประเภท');
+      await expect(card).toContainText('lnwjing ไม่ได้จัดประเภท');
     } finally { await closeDesktop(second); }
   });
 
@@ -315,14 +315,14 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
     try {
       await openTools(app.page);
       const before = await app.page.evaluate(async () => {
-        const snapshot = await window.lnwjud.getToolCatalog({ locale: 'th' });
+        const snapshot = await window.lnwjing.getToolCatalog({ locale: 'th' });
         const tool = snapshot.items.find((item) => item.name === 'lsp_diagnostics');
         return { checkedAt: tool?.checkedAt, shortDescription: tool?.shortDescription };
       });
       await app.page.getByRole('button', { name: 'English' }).click();
       await expect(app.page.getByRole('heading', { name: 'Tools' })).toBeVisible();
       const after = await app.page.evaluate(async () => {
-        const snapshot = await window.lnwjud.getToolCatalog({ locale: 'en' });
+        const snapshot = await window.lnwjing.getToolCatalog({ locale: 'en' });
         const tool = snapshot.items.find((item) => item.name === 'lsp_diagnostics');
         return { checkedAt: tool?.checkedAt, shortDescription: tool?.shortDescription };
       });
@@ -333,8 +333,8 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
 
   test('startup blocks on required failure but optional dependency failure does not block', async () => {
     test.skip(packagedExecutable !== undefined, 'Packaged builds carry bundled required executables; PATH-only startup dependency failure is a source-build scenario.');
-    const requiredFailBin = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-path-required-fail-'));
-    const optionalFailBin = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-path-optional-fail-'));
+    const requiredFailBin = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-path-required-fail-'));
+    const optionalFailBin = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-path-optional-fail-'));
     await copyFile(process.execPath, path.join(optionalFailBin, process.platform === 'win32' ? 'rg.exe' : 'rg'));
 
     const requiredFail = await launchDesktop({ pathOverride: requiredFailBin });
@@ -357,11 +357,11 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
 });
 
 async function launchDesktop(options: { readonly dataRoot?: string; readonly fixtureRoot?: string; readonly pathOverride?: string; readonly legacyCheckpoint?: boolean } = {}): Promise<LaunchedDesktop> {
-  const dataRoot = options.dataRoot ?? await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tools-doctor-data-'));
+  const dataRoot = options.dataRoot ?? await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tools-doctor-data-'));
   if (options.legacyCheckpoint) {
     const powershell = path.join(globalThis.process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
     const env = Object.fromEntries(Object.entries(globalThis.process.env).filter(([key]) => key.toLowerCase() !== 'psmodulepath'));
-    const sourceHelper = path.join(desktopRoot, '../../native/windows-secret-migrator/bin/win-x64/lnwjud-windows-secret-migrator.exe');
+    const sourceHelper = path.join(desktopRoot, '../../native/windows-secret-migrator/bin/win-x64/lnwjing-windows-secret-migrator.exe');
     if (packagedExecutable === undefined && !existsSync(sourceHelper)) {
       await buildWindowsSecretMigratorFixture({
         execFile: promisify(execFile),
@@ -395,18 +395,18 @@ async function launchDesktop(options: { readonly dataRoot?: string; readonly fix
     shell: false,
     windowsHide: true,
     env: {
-      ...Object.fromEntries(Object.entries(globalThis.process.env).filter(([key]) => packagedExecutable === undefined || key.toLowerCase() !== 'lnwjud_windows_secret_migrator')),
+      ...Object.fromEntries(Object.entries(globalThis.process.env).filter(([key]) => packagedExecutable === undefined || key.toLowerCase() !== 'lnwjing_windows_secret_migrator')),
       PATH: effectivePath,
       Path: effectivePath,
       APPDATA: dataRoot,
-      LNWJUD_DATA_PATH: dataRoot,
-      LNWJUD_WORKSPACE: fixtureRoot,
-      LNWJUD_MCP_PORT: String(mcpPort),
-      LNWJUD_UNRESTRICTED: '1',
-      LNWJUD_E2E_FIXTURE: '1',
-      LNWJUD_E2E_NODE_PATH: globalThis.process.execPath,
+      LNWJING_DATA_PATH: dataRoot,
+      LNWJING_WORKSPACE: fixtureRoot,
+      LNWJING_MCP_PORT: String(mcpPort),
+      LNWJING_UNRESTRICTED: '1',
+      LNWJING_E2E_FIXTURE: '1',
+      LNWJING_E2E_NODE_PATH: globalThis.process.execPath,
       ...(options.legacyCheckpoint && packagedExecutable === undefined ? {
-        LNWJUD_WINDOWS_SECRET_MIGRATOR: path.join(desktopRoot, '../../native/windows-secret-migrator/bin/win-x64/lnwjud-windows-secret-migrator.exe'),
+        LNWJING_WINDOWS_SECRET_MIGRATOR: path.join(desktopRoot, '../../native/windows-secret-migrator/bin/win-x64/lnwjing-windows-secret-migrator.exe'),
       } : {}),
     },
   });
@@ -425,7 +425,7 @@ async function launchDesktop(options: { readonly dataRoot?: string; readonly fix
     if (page === undefined) throw new Error('Electron did not create a renderer page');
     await expect.poll(async () => {
       try {
-        return await page.evaluate(() => typeof window.lnwjud?.getDashboard === 'function');
+        return await page.evaluate(() => typeof window.lnwjing?.getDashboard === 'function');
       } catch {
         return false;
       }
@@ -447,31 +447,31 @@ async function openTools(page: Page, bypassStartupDoctor = false): Promise<void>
 }
 
 async function dismissFirstRunTip(page: Page, bypassStartupDoctor = false): Promise<void> {
-  const mcpRunning = await page.evaluate(async () => (await window.lnwjud.getDashboard()).mcp.running);
-  if (!mcpRunning) await page.evaluate(async () => { await window.lnwjud.restartMcp(); });
+  const mcpRunning = await page.evaluate(async () => (await window.lnwjing.getDashboard()).mcp.running);
+  if (!mcpRunning) await page.evaluate(async () => { await window.lnwjing.restartMcp(); });
 
   if (bypassStartupDoctor) {
     await page.evaluate(async () => {
-      const dashboard = await window.lnwjud.getDashboard();
-      window.localStorage.setItem('lnwjud.startup-doctor.passed-version.v1', dashboard.appVersion);
+      const dashboard = await window.lnwjing.getDashboard();
+      window.localStorage.setItem('lnwjing.startup-doctor.passed-version.v1', dashboard.appVersion);
     });
     await page.reload();
   } else {
     try {
       await expect.poll(async () => page.evaluate(async () => {
-        const dashboard = await window.lnwjud.getDashboard();
-        return window.localStorage.getItem('lnwjud.startup-doctor.passed-version.v1') === dashboard.appVersion;
+        const dashboard = await window.lnwjing.getDashboard();
+        return window.localStorage.getItem('lnwjing.startup-doctor.passed-version.v1') === dashboard.appVersion;
       }), { timeout: 30_000, intervals: [100, 250, 500] }).toBe(true);
     } catch (cause: unknown) {
       const diagnostics = await page.evaluate(async () => {
-        const report = await window.lnwjud.runDoctor();
+        const report = await window.lnwjing.runDoctor();
         const coreIds = new Set(['os', 'database', 'executable_ripgrep', 'mcp-port']);
         const coreChecks = report.checks
           .filter((check) => coreIds.has(check.id))
           .map((check) => ({ id: check.id, required: check.required, status: check.status, message: check.message }));
         let catalog: { ok: true; itemCount: number } | { ok: false; error: string };
         try {
-          const snapshot = await window.lnwjud.getToolCatalog({ locale: (await window.lnwjud.getDashboard()).locale });
+          const snapshot = await window.lnwjing.getToolCatalog({ locale: (await window.lnwjing.getDashboard()).locale });
           catalog = { ok: true, itemCount: snapshot.items.length };
         } catch (error: unknown) {
           catalog = { ok: false, error: error instanceof Error ? error.message : String(error) };
@@ -496,7 +496,7 @@ function escapeRegExp(value: string): string {
 }
 
 async function createFixture(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tools-doctor-workspace-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tools-doctor-workspace-'));
   await mkdir(path.join(root, 'src'));
   await writeFile(path.join(root, 'src', 'app.ts'), 'export const ready = true;\n', 'utf8');
   await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'tools-doctor-e2e-fixture', scripts: { test: 'node --version' } }), 'utf8');

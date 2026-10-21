@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { link, readFile, unlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { digest, loadOfficeTable, OfficeFileError, preflightXlsxZip, reject, safeOfficePath, OFFICE_DATA_LIMITS } from './office-file-provider.js';
 
 export interface OfficeFinding {
@@ -213,7 +213,7 @@ export class OfficeDataWorkflowService {
         }
       }
       if(request.signal?.aborted) reject('CONFLICT','Report cancelled');
-      temp=path.join(path.dirname(output),`.${path.basename(output)}.${randomUUID()}.lnwjud-tmp`);
+      temp=path.join(path.dirname(output),`.${path.basename(output)}.${randomUUID()}.lnwjing-tmp`);
       await wb.xlsx.writeFile(temp);
       const bytes=await readFile(temp);
       if(bytes.length>OFFICE_DATA_LIMITS.inputBytes) reject('FILE_TOO_LARGE','Generated report exceeds file provider limit');

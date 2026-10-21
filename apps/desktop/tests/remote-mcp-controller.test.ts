@@ -4,8 +4,8 @@ import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EMPTY_REMOTE_MCP_STATUS, type RemoteMcpStatus } from '@lnwjud/ipc-contracts';
-import { createExplicitKeySecretProtector } from '@lnwjud/shared';
+import { EMPTY_REMOTE_MCP_STATUS, type RemoteMcpStatus } from '@lnwjing/ipc-contracts';
+import { createExplicitKeySecretProtector } from '@lnwjing/shared';
 import { buildNgrokHttpArgs, enforceStablePublicOrigin, extractNgrokDiagnostic, formatNgrokExitMessage, normalizeConfiguredPublicOrigin, posixExecutableCandidates, RemoteMcpController, resolveManagedNgrokExecutable, resolveNgrokExecutable, selectRecoverableStaleNgrokProcess, verifyExternalPublicOrigin, type RemoteMcpPersistedState } from '../src/main/remote-mcp-controller.js';
 
 interface RemoteMcpTestAccess {
@@ -26,7 +26,7 @@ interface RemoteMcpTestAccess {
   startGateway(): Promise<void>;
 }
 
-const UNUSED_DATA_PATH = path.join(os.tmpdir(), 'lnwjud-remote-mcp-test-unused', String(process.pid));
+const UNUSED_DATA_PATH = path.join(os.tmpdir(), 'lnwjing-remote-mcp-test-unused', String(process.pid));
 const servers: Server[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
@@ -75,14 +75,14 @@ async function completeChatGptLocalApproval(response: Response, publicOrigin: st
 describe('Remote MCP ngrok runtime', () => {
   it('starts without --url before a stable public origin has been learned', () => {
     const gateway = 'http://127.0.0.1:32123';
-    expect(buildNgrokHttpArgs(gateway)).toEqual(['http', gateway, '--metadata=lnwjud-remote-mcp', '--log=stdout', '--log-format=json']);
+    expect(buildNgrokHttpArgs(gateway)).toEqual(['http', gateway, '--metadata=lnwjing-remote-mcp', '--log=stdout', '--log-format=json']);
     expect(buildNgrokHttpArgs(gateway).some((value) => value.startsWith('--web-addr') || value === '--url')).toBe(false);
   });
 
   it('reuses a remembered ngrok public origin with the v3 --url flag', () => {
     const gateway = 'http://127.0.0.1:32123';
     expect(buildNgrokHttpArgs(gateway, 'https://steady.ngrok-free.app')).toEqual([
-      'http', gateway, '--url', 'https://steady.ngrok-free.app', '--metadata=lnwjud-remote-mcp', '--log=stdout', '--log-format=json',
+      'http', gateway, '--url', 'https://steady.ngrok-free.app', '--metadata=lnwjing-remote-mcp', '--log=stdout', '--log-format=json',
     ]);
   });
 
@@ -119,7 +119,7 @@ describe('Remote MCP ngrok runtime', () => {
 
   it.each(['darwin', 'linux'] as const)('resolves a validated ngrok executable from the %s PATH without Windows tools on a POSIX host', async (platform) => {
     if (process.platform === 'win32') return;
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ngrok-path-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ngrok-path-'));
     try {
       const executable = path.join(root, 'ngrok');
       await writeFile(executable, 'fixture', 'utf8');
@@ -138,7 +138,7 @@ describe('Remote MCP ngrok runtime', () => {
   });
 
   it('prefers a validated user-owned managed ngrok copy on Windows', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-managed-ngrok-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-managed-ngrok-'));
     try {
       const managed = path.join(root, 'runtime-tools', 'ngrok', 'ngrok.exe');
       await mkdir(path.dirname(managed), { recursive: true });
@@ -179,18 +179,18 @@ describe('Remote MCP ngrok runtime', () => {
     expect(diagnostic).not.toContain('/docs/errors/');
   });
 
-  it('recovers only one orphaned lnwjud-style ngrok process for the exact dead gateway target', () => {
+  it('recovers only one orphaned lnwjing-style ngrok process for the exact dead gateway target', () => {
     const target = 'http://127.0.0.1:54894';
-    const orphan = { processId: 13164, parentProcessId: 14372, parentAlive: false, commandLine: `C:\\WindowsApps\\ngrok.exe http ${target} --metadata=lnwjud-remote-mcp --log=stdout --log-format=json` };
+    const orphan = { processId: 13164, parentProcessId: 14372, parentAlive: false, commandLine: `C:\\WindowsApps\\ngrok.exe http ${target} --metadata=lnwjing-remote-mcp --log=stdout --log-format=json` };
     expect(selectRecoverableStaleNgrokProcess([orphan], target)).toEqual(orphan);
     expect(selectRecoverableStaleNgrokProcess([{ ...orphan, parentAlive: true }], target)).toBeNull();
     expect(selectRecoverableStaleNgrokProcess([{ ...orphan, commandLine: `ngrok.exe http ${target} --log=stdout --log-format=json` }], target)).toBeNull();
     expect(selectRecoverableStaleNgrokProcess([{ ...orphan, commandLine: `ngrok.exe http ${target}` }], target)).toBeNull();
     expect(selectRecoverableStaleNgrokProcess([orphan], 'http://127.0.0.1:60000')).toBeNull();
     expect(selectRecoverableStaleNgrokProcess([orphan, { ...orphan, processId: 13165 }], target)).toBeNull();
-    const pinnedOrphan = { ...orphan, processId: 20100, commandLine: `ngrok.exe http ${target} --url https://steady.ngrok-free.app --metadata=lnwjud-remote-mcp --log=stdout --log-format=json` };
+    const pinnedOrphan = { ...orphan, processId: 20100, commandLine: `ngrok.exe http ${target} --url https://steady.ngrok-free.app --metadata=lnwjing-remote-mcp --log=stdout --log-format=json` };
     expect(selectRecoverableStaleNgrokProcess([pinnedOrphan], target)).toEqual(pinnedOrphan);
-    const posixOrphan = { ...orphan, processId: 20101, commandLine: `/opt/homebrew/bin/ngrok http ${target} --url https://steady.ngrok-free.app --metadata=lnwjud-remote-mcp --log=stdout --log-format=json` };
+    const posixOrphan = { ...orphan, processId: 20101, commandLine: `/opt/homebrew/bin/ngrok http ${target} --url https://steady.ngrok-free.app --metadata=lnwjing-remote-mcp --log=stdout --log-format=json` };
     expect(selectRecoverableStaleNgrokProcess([posixOrphan], target)).toEqual(posixOrphan);
   });
 });
@@ -252,7 +252,7 @@ describe('Remote MCP OAuth gateway', () => {
   });
 
   it('ignores an invalid legacy observed public origin from encrypted schema-1 state', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-remote-mcp-invalid-origin-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-remote-mcp-invalid-origin-'));
     try {
       const secretProtector = createExplicitKeySecretProtector(Buffer.alloc(32, 0x52));
       const directory = path.join(root, 'remote-mcp');
@@ -285,7 +285,7 @@ describe('Remote MCP OAuth gateway', () => {
   });
 
   it('does not replace the ngrok authtoken when encrypted Remote MCP state cannot be loaded', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-remote-mcp-token-load-failure-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-remote-mcp-token-load-failure-'));
     try {
       const save = vi.fn(async () => undefined);
       const controller = new RemoteMcpController({
@@ -302,7 +302,7 @@ describe('Remote MCP OAuth gateway', () => {
   });
 
   it('keeps an explicitly configured static domain when the ngrok authtoken is saved again', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-remote-mcp-origin-token-update-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-remote-mcp-origin-token-update-'));
     try {
       const state: RemoteMcpPersistedState = { schemaVersion: 2, desiredRunning: false, configuredPublicOrigin: 'https://steady.ngrok-free.app', trustedClients: [], refreshGrants: [] };
       const load = vi.fn(async () => state);
@@ -574,7 +574,7 @@ describe('Remote MCP OAuth gateway', () => {
     let statusReads = 0;
     let ensureStarts = 0;
     const controller = new RemoteMcpController({
-      dataPath: 'C:\\tmp\\lnwjud-remote-mcp-status-test',
+      dataPath: 'C:\\tmp\\lnwjing-remote-mcp-status-test',
       getLocalMcpUrl: async (): Promise<null> => {
         statusReads += 1;
         return null;
@@ -608,7 +608,7 @@ describe('Remote MCP OAuth gateway', () => {
     const recoveredLocalMcpUrl = `${secondUpstreamOrigin}/mcp`;
     const ensureLocalMcpUrl = vi.fn(async (): Promise<string> => localMcpUrl ?? recoveredLocalMcpUrl);
     const controller = new RemoteMcpController({
-      dataPath: 'C:\\tmp\\lnwjud-remote-mcp-test',
+      dataPath: 'C:\\tmp\\lnwjing-remote-mcp-test',
       getLocalMcpUrl: async (): Promise<string | null> => localMcpUrl,
       ensureLocalMcpUrl,
     });
@@ -692,7 +692,7 @@ describe('Remote MCP OAuth gateway', () => {
     'https://chatgpt.com/connector/oauth/plugin/extra',
   ])('fails closed for clients that do not match the exact ChatGPT callback contract: %s', async (redirectUri) => {
     const upstreamOrigin = await listen(createServer((_request, response) => response.end('{}')));
-    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjud-remote-mcp-unsupported-client-test', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
+    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjing-remote-mcp-unsupported-client-test', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
     const internal = controller as unknown as RemoteMcpTestAccess;
     await internal.startGateway();
     internal.publicOrigin = internal.gatewayUrl;
@@ -719,14 +719,14 @@ describe('Remote MCP OAuth gateway', () => {
     expect(rejected.status).toBe(403);
     await expect(rejected.json()).resolves.toEqual({
       error: 'access_denied',
-      error_description: 'This OAuth client is not supported by lnwjud Desktop. Connect from ChatGPT so authorization can complete through the local Desktop handoff.',
+      error_description: 'This OAuth client is not supported by lnwjing Desktop. Connect from ChatGPT so authorization can complete through the local Desktop handoff.',
     });
     await controller.close();
   });
 
   it('accepts ChatGPT-style DCR metadata with client_secret_post and validates the client secret at the token endpoint', async () => {
     const upstreamOrigin = await listen(createServer((_request, response) => response.end('{}')));
-    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjud-remote-mcp-chatgpt-dcr-test', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
+    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjing-remote-mcp-chatgpt-dcr-test', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
     const internal = controller as unknown as RemoteMcpTestAccess;
     await internal.startGateway();
     internal.publicOrigin = internal.gatewayUrl;
@@ -802,7 +802,7 @@ describe('Remote MCP OAuth gateway', () => {
     const upstreamOrigin = await listen(createServer((_request, response) => response.end('{}')));
     let now = 1_800_000_000_000;
     const controller = new RemoteMcpController({
-      dataPath: 'C:\\tmp\\lnwjud-remote-mcp-dcr-bound-test',
+      dataPath: 'C:\\tmp\\lnwjing-remote-mcp-dcr-bound-test',
       getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp`,
       now: (): number => now,
     });
@@ -844,7 +844,7 @@ describe('Remote MCP OAuth gateway', () => {
 
   it('returns an OAuth client-metadata error instead of HTTP 500 for malformed DCR JSON', async () => {
     const upstreamOrigin = await listen(createServer((_request, response) => response.end('{}')));
-    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjud-remote-mcp-malformed-dcr-test', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
+    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjing-remote-mcp-malformed-dcr-test', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
     const internal = controller as unknown as RemoteMcpTestAccess;
     await internal.startGateway();
     internal.publicOrigin = internal.gatewayUrl;
@@ -860,7 +860,7 @@ describe('Remote MCP OAuth gateway', () => {
 
   it('rejects insecure non-loopback OAuth redirect URIs', async () => {
     const upstreamOrigin = await listen(createServer((_request, response) => response.end('{}')));
-    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjud-remote-mcp-test-2', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
+    const controller = new RemoteMcpController({ dataPath: 'C:\\tmp\\lnwjing-remote-mcp-test-2', getLocalMcpUrl: async (): Promise<string> => `${upstreamOrigin}/mcp` });
     const internal = controller as unknown as RemoteMcpTestAccess;
     await internal.startGateway();
     internal.publicOrigin = internal.gatewayUrl;

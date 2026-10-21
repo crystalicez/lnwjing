@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
+import { appError, err, ok } from '@lnwjing/domain';
 import { ContextEconomyRuntime } from './context-economy.js';
 import { DocumentRuntimeService } from './document-runtime.js';
 import { UpgradeRuntimeService } from './upgrade-runtime.js';
@@ -97,7 +97,7 @@ describe('external replacement recovery evidence', () => {
   });
 
   it('returns the Recovery Trash id when DOCX merge provider fails after backup', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'lnwjud-docx-recovery-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-docx-recovery-'));
     const primary = path.join(root, 'primary.docx');
     const secondary = path.join(root, 'secondary.docx');
     const target = path.join(root, 'merged.docx');

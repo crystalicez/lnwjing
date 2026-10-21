@@ -14,7 +14,7 @@ afterEach(async () => {
 describe('LogHub', () => {
   it('starts only one live filesystem tail timer on repeated start and stops it on shutdown', () => {
     vi.useFakeTimers();
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     const before = vi.getTimerCount();
     hub.start();
     const first = vi.getTimerCount();
@@ -26,7 +26,7 @@ describe('LogHub', () => {
   });
 
   it('includes filesystem error messages in work-log lines', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog([{
       id: '1',
       kind: 'error',
@@ -42,7 +42,7 @@ describe('LogHub', () => {
 
   it('treats recoverable control flow and generic diagnostic probes as notices, not errors', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-control-flow-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-control-flow-'));
     temporaryRoots.push(root);
     const activityPath = path.join(root, 'mcp-activity.log');
     await writeFile(activityPath, [
@@ -75,7 +75,7 @@ describe('LogHub', () => {
   });
 
   it('feeds and snapshots lines per source with dedupe', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.feedIfNew('mcp', 'a', 'info', 'first');
     hub.feedIfNew('mcp', 'a', 'info', 'duplicate');
     hub.feedIfNew('mcp', 'b', 'error', 'second');
@@ -93,7 +93,7 @@ describe('LogHub', () => {
   });
 
   it('removes terminal control sequences before logs reach the UI or exports', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.feed('process', 'info', '\u001b[33mwarning\u001b[22m\u001b[39m \u001b]8;;https://example.test\u0007link\u001b]8;;\u0007');
     hub.feed('process', 'info', '🙂'.repeat(3_000));
 
@@ -103,7 +103,7 @@ describe('LogHub', () => {
   });
 
   it('bounds retained log payload bytes per source', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     for (let index = 0; index < 1_100; index += 1) hub.feed('process', 'info', `${index}:${'x'.repeat(8_192)}`);
 
     const lines = hub.snapshot().lines;
@@ -113,7 +113,7 @@ describe('LogHub', () => {
   });
 
   it('clears a single source', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.feed('tunnel', 'info', 't1');
     hub.feed('mcp', 'info', 'm1');
 
@@ -124,7 +124,7 @@ describe('LogHub', () => {
   });
 
   it('clears only the requested MCP workspace/session scope', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     const timestamp = '2026-08-20T00:00:01.000Z';
     hub.syncWorkLog([
       { id: 'a', timestamp, kind: 'result', toolName: 'read_file', resultCode: 'SUCCESS', targetSummary: null, workspaceId: 'ws-a', sessionId: 'session-a' },
@@ -146,9 +146,9 @@ describe('LogHub', () => {
 
   it('tails an appended tunnel log file', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     await writeFile(logPath, '{"level":"info","msg":"boot"}\n', 'utf8');
     const hub = new LogHub({ tunnelLogPath: logPath });
     hub.start();
@@ -166,9 +166,9 @@ describe('LogHub', () => {
 
   it('reopens a rotated log instead of holding the old file descriptor', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-rotation-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-rotation-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     await writeFile(logPath, 'old entry\n', 'utf8');
     const hub = new LogHub({ tunnelLogPath: logPath });
     try {
@@ -186,9 +186,9 @@ describe('LogHub', () => {
   });
 
   it('keeps tunnel-client event times when replaying prior sessions', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-tunnel-time-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-tunnel-time-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     const eventTime = '2026-09-24T23:37:10.5453473+07:00';
     await writeFile(logPath, `${JSON.stringify({
       time: eventTime,
@@ -205,9 +205,9 @@ describe('LogHub', () => {
   });
 
   it('replays the bounded startup tail in one sync instead of waiting through 64 KiB polling chunks', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-startup-tail-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-startup-tail-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     const rows = Array.from({ length: 128 }, (_, index) => JSON.stringify({
       level: 'info',
       msg: `${index}:${'x'.repeat(900)}`,
@@ -225,9 +225,9 @@ describe('LogHub', () => {
 
   it('can start a fresh visible session without replaying existing tunnel history', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-fresh-session-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-fresh-session-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     await writeFile(logPath, '{"level":"info","msg":"old session"}\n', 'utf8');
 
     const hub = new LogHub({ tunnelLogPath: logPath });
@@ -243,9 +243,9 @@ describe('LogHub', () => {
 
   it('normalizes structured tunnel lifecycle fields into bounded categories', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-lifecycle-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-lifecycle-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     await writeFile(logPath, [
       { level: 'warn', event: 'ttl_limit_exceeded', msg: 'retrying later' },
       { status: 'STDIO.MCP-CLOSED', message: 'display text is neutral' },
@@ -272,9 +272,9 @@ describe('LogHub', () => {
 
   it('keeps a tunnel log line intact when it crosses a read chunk boundary', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-boundary-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-boundary-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     const message = 'x'.repeat(70_000);
     await writeFile(logPath, `${JSON.stringify({ level: 'info', msg: message })}\n`, 'utf8');
 
@@ -290,9 +290,9 @@ describe('LogHub', () => {
 
   it('bounds an unterminated tailed record while waiting for a newline', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-pending-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-pending-'));
     temporaryRoots.push(root);
-    const logPath = path.join(root, 'lnwjud-tunnel.log');
+    const logPath = path.join(root, 'lnwjing-tunnel.log');
     await writeFile(logPath, 'x'.repeat(200_000), 'utf8');
 
     const hub = new LogHub({ tunnelLogPath: logPath });
@@ -306,7 +306,7 @@ describe('LogHub', () => {
 
   it('tails MCP activity NDJSON into the mcp source without waiting for getDashboard', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-mcp-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-mcp-'));
     temporaryRoots.push(root);
     const activityPath = path.join(root, 'mcp-activity.log');
     await writeFile(activityPath, `${JSON.stringify({
@@ -351,7 +351,7 @@ describe('LogHub', () => {
   });
 
   it('keeps distinct authoritative work-log entries sharing callId, phase, and timestamp', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     const sameTimestamp = '2026-08-20T00:00:01.000Z';
     hub.syncWorkLog([
       { id: 'audit-1', timestamp: sameTimestamp, callId: 'reused', kind: 'task', toolName: 'read_file', resultCode: 'STARTED', targetSummary: null },
@@ -365,7 +365,7 @@ describe('LogHub', () => {
   });
 
   it('dedupes an exact replay by stable authoritative entry ID', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog([{
       id: 'audit-1',
       timestamp: '2026-08-20T00:00:01.000Z',
@@ -390,7 +390,7 @@ describe('LogHub', () => {
   });
 
   it('merges one start observed through both work-log and in-flight views', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     const startedAt = '2026-08-20T00:00:01.000Z';
     hub.syncWorkLog(
       [{ id: 'audit-start', timestamp: startedAt, callId: 'same', kind: 'task', toolName: 'read_file', resultCode: 'STARTED', targetSummary: null }],
@@ -402,7 +402,7 @@ describe('LogHub', () => {
   });
 
   it('keeps different in-flight call IDs that start in the same millisecond', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     const startedAt = '2026-08-20T00:00:01.000Z';
     hub.syncWorkLog([], [
       { callId: 'first', toolName: 'read_file', targetSummary: null, startedAt },
@@ -417,7 +417,7 @@ describe('LogHub', () => {
 
 
   it('keeps identical MCP occurrences from different sessions distinct', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     const timestamp = '2026-08-20T00:00:01.000Z';
     hub.syncWorkLog([
       { id: 'audit-a', timestamp, callId: 'same-call', kind: 'task', toolName: 'read_file', resultCode: 'STARTED', targetSummary: null, workspaceId: 'ws-1', sessionId: 'session-a' },
@@ -434,7 +434,7 @@ describe('LogHub', () => {
 
   it('parses workspace/session scope from MCP activity NDJSON', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-mcp-scope-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-mcp-scope-'));
     temporaryRoots.push(root);
     const activityPath = path.join(root, 'mcp-activity.log');
     await writeFile(activityPath, `${JSON.stringify({
@@ -460,7 +460,7 @@ describe('LogHub', () => {
     expect(isProcessActivityTool('verify_incremental')).toBe(true);
     expect(isProcessActivityTool('read_file')).toBe(false);
 
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog([
       {
         id: 'shell-start', timestamp: '2026-09-02T00:00:01.000Z', callId: 'shell-call', kind: 'task', toolName: 'shell', resultCode: 'STARTED', targetSummary: 'pnpm test', workspaceId: 'workspace-a', sessionId: 'session-a',
@@ -485,7 +485,7 @@ describe('LogHub', () => {
 
   it('tails process-related MCP activity directly into Processes without waiting for dashboard sync', async () => {
     vi.useFakeTimers();
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-loghub-process-live-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-process-live-'));
     temporaryRoots.push(root);
     const activityPath = path.join(root, 'mcp-activity.log');
     await writeFile(activityPath, `${JSON.stringify({
@@ -504,7 +504,7 @@ describe('LogHub', () => {
   });
 
   it('keeps tunnel logs global and process logs workspace scoped', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.feed('tunnel', 'info', 'connected');
     hub.syncProcesses([{
       id: 'process-1', workspaceId: 'workspace-a', sessionId: null,
@@ -517,7 +517,7 @@ describe('LogHub', () => {
   });
 
   it('retains the newest 10,000 lines per source instead of dropping recent activity too early', () => {
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log' });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     for (let index = 0; index < 10_005; index += 1) {
       hub.feed('mcp', 'info', `line-${index}`);
     }
@@ -529,7 +529,7 @@ describe('LogHub', () => {
 
   it('notifies subscribers of new lines', () => {
     const onLine = vi.fn();
-    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjud-tunnel.log', onLine });
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log', onLine });
     hub.feed('tunnel', 'warn', 'watch out');
     expect(onLine).toHaveBeenCalledWith(expect.objectContaining({ source: 'tunnel', level: 'warn', text: 'watch out' }));
   });

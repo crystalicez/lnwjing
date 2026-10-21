@@ -71,11 +71,11 @@ pub(crate) fn request_input(
             flatten_scalar(&mut fields, name, value);
         }
     }
-    fields.retain(|name, _| !name.starts_with("metadata.lnwjud.taskOwner.v1."));
+    fields.retain(|name, _| !name.starts_with("metadata.lnwjing.taskOwner.v1."));
     if let Some(owner) = input
         .get("metadata")
         .and_then(Value::as_object)
-        .and_then(|metadata| metadata.get("lnwjud.taskOwner.v1"))
+        .and_then(|metadata| metadata.get("lnwjing.taskOwner.v1"))
     {
         let owner = owner
             .as_object()
@@ -86,7 +86,7 @@ pub(crate) fn request_input(
                     if !value.trim().is_empty() && value.len() <= 256 && !value.contains('\0') =>
                 {
                     fields.insert(
-                        format!("metadata.lnwjud.taskOwner.v1.{name}"),
+                        format!("metadata.lnwjing.taskOwner.v1.{name}"),
                         value.clone(),
                     );
                 }
@@ -1768,17 +1768,17 @@ mod tests {
 
     #[test]
     fn parameters_cannot_override_trusted_media_ownership() {
-        let line = r#"{"input":{"metadata":{"lnwjud.taskOwner.v1":{"clientId":"client","sessionId":"session","workspaceId":"workspace"}},"parameters":{"metadata.lnwjud.taskOwner.v1.sessionId":"foreign"}}}"#;
+        let line = r#"{"input":{"metadata":{"lnwjing.taskOwner.v1":{"clientId":"client","sessionId":"session","workspaceId":"workspace"}},"parameters":{"metadata.lnwjing.taskOwner.v1.sessionId":"foreign"}}}"#;
         let (_, input) = request_input(line).unwrap();
         assert_eq!(
-            input.get("metadata.lnwjud.taskOwner.v1.sessionId").unwrap(),
+            input.get("metadata.lnwjing.taskOwner.v1.sessionId").unwrap(),
             "session"
         );
         assert!(request_input(
-            r#"{"input":{"metadata":{"lnwjud.taskOwner.v1":{"clientId":"client"}}}}"#
+            r#"{"input":{"metadata":{"lnwjing.taskOwner.v1":{"clientId":"client"}}}}"#
         )
         .is_err());
-        assert!(request_input(r#"{"input":{"metadata":{"lnwjud.taskOwner.v1":false}}}"#).is_err());
+        assert!(request_input(r#"{"input":{"metadata":{"lnwjing.taskOwner.v1":false}}}"#).is_err());
     }
 
     #[test]

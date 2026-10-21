@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { measurableGoalIds, trackedGoalIds } from '../src/renderer/features/resources/ResourcePanel.js';
-import type { ResourceSnapshot } from '@lnwjud/ipc-contracts';
+import type { ResourceSnapshot } from '@lnwjing/ipc-contracts';
 
 describe('Resources Goal filter', () => {
   it('lists only Goals with actual sampled CPU or memory (including measured zero)', () => {

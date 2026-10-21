@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ok, type Result } from '@lnwjud/domain';
-import type { ManagedProcess, ManagedProcessStart, ProcessLogResult } from '@lnwjud/process';
+import { ok, type Result } from '@lnwjing/domain';
+import type { ManagedProcess, ManagedProcessStart, ProcessLogResult } from '@lnwjing/process';
 import { CodexAdapter, type CodexDiscoveryPort, type CodexProcessManagerPort } from './codex-adapter.js';
 import type { CodexDiscoveryResult } from './codex-capabilities.js';
 

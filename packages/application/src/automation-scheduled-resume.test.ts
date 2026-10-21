@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ok, type StoredAutomationRun } from '@lnwjud/domain';
+import { ok, type StoredAutomationRun } from '@lnwjing/domain';
 import { SqliteDatabase } from '../../storage/src/database.js';
 import { SqliteGoalRepository } from '../../storage/src/goal-repository.js';
 import { SqliteWorkspaceRepository } from '../../storage/src/workspace-repository.js';
@@ -131,7 +131,7 @@ describe('scheduled automation resume hint', () => {
 });
 
 async function fixture(findActiveForGoal: AutomationResumeLookupPort['findActiveForGoal']): Promise<ScheduledAutomationFixture> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-automation-resume-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-automation-resume-'));
   roots.push(root);
   const database = new SqliteDatabase(path.join(root, 'state.sqlite'));
   const workspaces = new SqliteWorkspaceRepository(database);

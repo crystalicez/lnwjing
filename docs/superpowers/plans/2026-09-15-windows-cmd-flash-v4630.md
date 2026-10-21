@@ -1,23 +1,23 @@
 # Windows CMD Flash Investigation & Fix Plan
 
 Date: 2026-09-15
-Affected report: lnwjud v4.63.0 on Windows 10/11
+Affected report: lnwjing v4.63.0 on Windows 10/11
 Working branch: `fix/windows-console-flash`
-Clean worktree: `E:\\lnwjud\\.local-artifacts\\console-flash-fix`
+Clean worktree: `E:\\lnwjing\\.local-artifacts\\console-flash-fix`
 Base commit: `dbbf84f6f0a22baf9021a7edd888619318e9e459`
 Durable goal: `fix-windows-console-flash`
 
 ## 1. User-visible symptom
 
-Some Windows users report a Command Prompt / console window briefly flashing on screen and disappearing again while lnwjud is idle. The observed cadence is approximately every 30–60 seconds.
+Some Windows users report a Command Prompt / console window briefly flashing on screen and disappearing again while lnwjing is idle. The observed cadence is approximately every 30–60 seconds.
 
 Captured child processes include:
 
-- `tunnel-client.exe runtimes status lnwjud --json`
+- `tunnel-client.exe runtimes status lnwjing --json`
 - `cmd.exe ...\\hermes\\node\\codex.cmd --version`
 - `schtasks.exe /Query /FO LIST`
 
-The process tree reported by the affected user shows these processes under `lnwjud.exe --updated`, and the console commands create `conhost.exe`, which explains the visible flash.
+The process tree reported by the affected user shows these processes under `lnwjing.exe --updated`, and the console commands create `conhost.exe`, which explains the visible flash.
 
 ## 2. Important finding: this is not simply a missing windowsHide flag
 
@@ -50,7 +50,7 @@ The persistent tunnel supervisor treats a healthy runtime as something to reconc
 The reconciliation path calls:
 
 ```text
-tunnel-client.exe runtimes status lnwjud --json
+tunnel-client.exe runtimes status lnwjing --json
 ```
 
 This is intentionally frequent for tunnel health, but using a console executable for every healthy cycle is unnecessary because tunnel-client exposes a local admin/health HTTP surface.
@@ -167,7 +167,7 @@ Files:
 Behavior:
 
 1. First reconcile / recovery still performs:
-   `tunnel-client runtimes status lnwjud --json`.
+   `tunnel-client runtimes status lnwjing --json`.
 
 2. Parse and retain:
    - PID
@@ -331,8 +331,8 @@ The first isolated Capabilities typecheck in the new worktree reported TS6305 be
 
 ### Type checks
 
-- `@lnwjud/capabilities typecheck`
-- `@lnwjud/desktop typecheck`
+- `@lnwjing/capabilities typecheck`
+- `@lnwjing/desktop typecheck`
 
 ### Broader relevant tests
 
@@ -355,7 +355,7 @@ Run the complete affected suites if focused tests remain green:
 
 Prefer a real packaged executable test:
 
-1. Start lnwjud.
+1. Start lnwjing.
 2. Enable persistent tunnel and leave it healthy.
 3. Keep Codex disabled.
 4. Observe for several healthy cycles.
@@ -391,7 +391,7 @@ The fix is complete only when all of the following are true:
 
 Suggested release note:
 
-> Fixed a Windows issue where background runtime/readiness checks could briefly flash Command Prompt windows. lnwjud now avoids unnecessary console-process launches for disabled Codex tools and scheduler readiness, and uses the tunnel client's loopback health interface for routine healthy tunnel monitoring while retaining CLI fallback for recovery.
+> Fixed a Windows issue where background runtime/readiness checks could briefly flash Command Prompt windows. lnwjing now avoids unnecessary console-process launches for disabled Codex tools and scheduler readiness, and uses the tunnel client's loopback health interface for routine healthy tunnel monitoring while retaining CLI fallback for recovery.
 
 ## 13. Risk assessment
 

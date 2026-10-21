@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { PathExecutableResolver, type ExecutableResolver } from './executable-resolver.js';
 import { LogRingBuffer } from './ring-buffer.js';
 import { createProcessTreeTerminator, type ProcessTreeTerminator } from './process-tree.js';

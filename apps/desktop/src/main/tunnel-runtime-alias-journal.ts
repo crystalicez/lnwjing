@@ -23,7 +23,7 @@ interface JournalManifest {
 
 const JOURNAL_NAME = 'tunnel-alias-retirement-v1';
 
-/** A durable, lnwjud-specific sibling of app data; factory reset must not erase pending recovery. */
+/** A durable, lnwjing-specific sibling of app data; factory reset must not erase pending recovery. */
 export function tunnelAliasRecoveryDirectory(dataPath: string): string {
   const absolute = path.resolve(dataPath);
   return path.join(path.dirname(absolute), `.${path.basename(absolute)}.tunnel-alias-recovery`);
@@ -55,7 +55,7 @@ function ownedArtifact(profileDirectory: string, file: string): boolean {
   if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return false;
   const normalized = rel.split(path.sep).join('/');
   return [
-    'lnwjud.yaml', 'lnwjud-tunnel.log', 'lnwjud.runtime.secret', 'lnwjud.oauth.session.secret',
+    'lnwjing.yaml', 'lnwjing-tunnel.log', 'lnwjing.runtime.secret', 'lnwjing.oauth.session.secret',
   ].includes(normalized) || /^health\/[a-zA-Z0-9_.-]{1,128}$/.test(normalized);
 }
 

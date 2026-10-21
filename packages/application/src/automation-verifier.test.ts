@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
-import { ok, type AutomationVerificationRequirement, type StoredAutomationRun } from '@lnwjud/domain';
-import type { Workspace } from '@lnwjud/workspace';
+import { ok, type AutomationVerificationRequirement, type StoredAutomationRun } from '@lnwjing/domain';
+import type { Workspace } from '@lnwjing/workspace';
 import { AutomationVerifier, type AutomationTaskEvidenceSnapshot, type AutomationVerificationRuntimePort } from './automation-verifier.js';
 import type { FileActor } from './file-service.js';
 
@@ -220,7 +220,7 @@ function storedRun(requirements: readonly AutomationVerificationRequirement[], r
 }
 
 async function tempRoot(label: string): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), `lnwjud-automation-verifier-${label}-`));
+  const root = await mkdtemp(path.join(os.tmpdir(), `lnwjing-automation-verifier-${label}-`));
   roots.push(root);
   await mkdir(root, { recursive: true });
   return root;

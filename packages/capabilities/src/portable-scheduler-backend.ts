@@ -3,7 +3,7 @@ import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 import { sanitizedChildEnvironment } from './sanitized-child-environment.js';
 
@@ -82,13 +82,13 @@ export class MacosSchedulerCapabilityBackend extends PortableSchedulerCapability
   protected async list(signal?: AbortSignal): Promise<readonly Record<string, unknown>[]> {
     await this.command('launchctl', ['list'], signal);
     try {
-      const names = (await readdir(this.agentsDirectory)).filter((name) => /^com\.lnwjud\.[\w.-]+\.plist$/u.test(name));
+      const names = (await readdir(this.agentsDirectory)).filter((name) => /^com\.lnwjing\.[\w.-]+\.plist$/u.test(name));
       const tasks: Record<string, unknown>[] = [];
       for (const name of names) {
         const plistPath = path.join(this.agentsDirectory, name);
         const contents = await readSchedulerFile(plistPath).catch(() => null);
         if (contents !== null && hasMacOwnershipMarker(contents)) {
-          tasks.push({ name: name.slice('com.lnwjud.'.length, -'.plist'.length), path: plistPath, backend: 'launchd' });
+          tasks.push({ name: name.slice('com.lnwjing.'.length, -'.plist'.length), path: plistPath, backend: 'launchd' });
         }
       }
       return tasks;
@@ -132,7 +132,7 @@ export class LinuxSchedulerCapabilityBackend extends PortableSchedulerCapability
   protected async list(signal?: AbortSignal): Promise<readonly Record<string, unknown>[]> {
     await this.command('systemctl', ['--user', 'list-units', '--type=timer', '--all', '--no-pager', '--plain'], signal);
     try {
-      const names = (await readdir(this.unitsDirectory)).filter((name) => /^lnwjud-[\w.-]+\.(service|timer)$/u.test(name));
+      const names = (await readdir(this.unitsDirectory)).filter((name) => /^lnwjing-[\w.-]+\.(service|timer)$/u.test(name));
       const tasks: Record<string, unknown>[] = [];
       for (const name of names) {
         const unitPath = path.join(this.unitsDirectory, name);
@@ -148,8 +148,8 @@ export class LinuxSchedulerCapabilityBackend extends PortableSchedulerCapability
   protected async create(request: SchedulerRequest, signal?: AbortSignal): Promise<Record<string, unknown>> {
     await mkdir(this.unitsDirectory, { recursive: true });
     const slug = linuxSlug(request.taskName);
-    const serviceName = `lnwjud-${slug}.service`;
-    const timerName = `lnwjud-${slug}.timer`;
+    const serviceName = `lnwjing-${slug}.service`;
+    const timerName = `lnwjing-${slug}.timer`;
     await assertLinuxTaskOwnership(path.join(this.unitsDirectory, serviceName), path.join(this.unitsDirectory, timerName), request.taskName);
     await atomicWrite(path.join(this.unitsDirectory, serviceName), systemdService(request));
     await atomicWrite(path.join(this.unitsDirectory, timerName), systemdTimer(timerName, request));
@@ -162,8 +162,8 @@ export class LinuxSchedulerCapabilityBackend extends PortableSchedulerCapability
 
   protected async delete(taskName: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const slug = linuxSlug(taskName);
-    const serviceName = `lnwjud-${slug}.service`;
-    const timerName = `lnwjud-${slug}.timer`;
+    const serviceName = `lnwjing-${slug}.service`;
+    const timerName = `lnwjing-${slug}.timer`;
     await assertLinuxTaskOwnership(path.join(this.unitsDirectory, serviceName), path.join(this.unitsDirectory, timerName), taskName);
     await this.command('systemctl', ['--user', 'disable', '--now', timerName], signal);
     await rm(path.join(this.unitsDirectory, serviceName), { force: true });
@@ -173,7 +173,7 @@ export class LinuxSchedulerCapabilityBackend extends PortableSchedulerCapability
   }
 
   protected async run(taskName: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
-    const serviceName = `lnwjud-${linuxSlug(taskName)}.service`;
+    const serviceName = `lnwjing-${linuxSlug(taskName)}.service`;
     const timerName = serviceName.replace(/\.service$/u, '.timer');
     await assertLinuxTaskOwnership(path.join(this.unitsDirectory, serviceName), path.join(this.unitsDirectory, timerName), taskName);
     // Starting a timer only arms future calendar events. The public `run`
@@ -214,11 +214,11 @@ function launchdPlist(label: string, request: SchedulerRequest): string {
     : request.schedule === 'ONCE'
       ? `      <key>Year</key>\n      <integer>${Number(request.startDate.slice(0, 4))}</integer>\n      <key>Month</key>\n      <integer>${Number(request.startDate.slice(5, 7))}</integer>\n      <key>Day</key>\n      <integer>${Number(request.startDate.slice(8, 10))}</integer>\n      <key>Hour</key>\n      <integer>${Number(request.startTime.slice(0, 2))}</integer>\n      <key>Minute</key>\n      <integer>${Number(request.startTime.slice(3))}</integer>`
       : `${request.schedule === 'WEEKLY' ? `      <key>Weekday</key>\n      <integer>${request.weekday ?? 0}</integer>\n` : ''}      <key>Hour</key>\n      <integer>${Number(request.startTime.slice(0, 2))}</integer>\n      <key>Minute</key>\n      <integer>${Number(request.startTime.slice(3))}</integer>`;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n  <key>Label</key><string>${xml(label)}</string>\n  <key>lnwjudTaskName</key><string>${xml(request.taskName)}</string>\n  <key>ProgramArguments</key><array>\n${argumentsXml}\n  </array>\n  <key>RunAtLoad</key><false/>\n  <key>StartCalendarInterval</key><dict>\n${calendar}\n  </dict>\n</dict></plist>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n  <key>Label</key><string>${xml(label)}</string>\n  <key>lnwjingTaskName</key><string>${xml(request.taskName)}</string>\n  <key>ProgramArguments</key><array>\n${argumentsXml}\n  </array>\n  <key>RunAtLoad</key><false/>\n  <key>StartCalendarInterval</key><dict>\n${calendar}\n  </dict>\n</dict></plist>\n`;
 }
 
 function systemdService(request: SchedulerRequest): string {
-  return `[Unit]\nDescription=lnwjud ${request.taskName}\n\n[Service]\nType=oneshot\nExecStart=${systemdArg(request.command)}${request.arguments.map((value) => ` ${systemdArg(value)}`).join('')}\n`;
+  return `[Unit]\nDescription=lnwjing ${request.taskName}\n\n[Service]\nType=oneshot\nExecStart=${systemdArg(request.command)}${request.arguments.map((value) => ` ${systemdArg(value)}`).join('')}\n`;
 }
 
 function systemdTimer(timerName: string, request: SchedulerRequest): string {
@@ -229,7 +229,7 @@ function systemdTimer(timerName: string, request: SchedulerRequest): string {
       : request.schedule === 'WEEKLY'
         ? `${weekdayName(request.weekday ?? 0)} *-*-* ${request.startTime}:00`
         : `*-*-* ${request.startTime}:00`;
-  return `[Unit]\nDescription=lnwjud timer ${request.taskName}\n\n[Timer]\nOnCalendar=${onCalendar}\nPersistent=true\nUnit=${timerName.replace(/\.timer$/u, '.service')}\n\n[Install]\nWantedBy=timers.target\n`;
+  return `[Unit]\nDescription=lnwjing timer ${request.taskName}\n\n[Timer]\nOnCalendar=${onCalendar}\nPersistent=true\nUnit=${timerName.replace(/\.timer$/u, '.service')}\n\n[Install]\nWantedBy=timers.target\n`;
 }
 
 async function atomicWrite(filePath: string, contents: string): Promise<void> {
@@ -244,7 +244,7 @@ async function atomicWrite(filePath: string, contents: string): Promise<void> {
   }
 }
 
-function macLabel(taskName: string): string { return `com.lnwjud.${linuxSlug(taskName)}`; }
+function macLabel(taskName: string): string { return `com.lnwjing.${linuxSlug(taskName)}`; }
 function linuxSlug(taskName: string): string { return taskName.trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120) || 'task'; }
 function weekdayName(value: number): string { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][value] ?? 'Sun'; }
 function xml(value: string): string { return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;'); }
@@ -271,7 +271,7 @@ class SchedulerConflictError extends Error {}
 async function assertMacTaskOwnership(plistPath: string, taskName: string): Promise<void> {
   const existing = await readSchedulerFile(plistPath);
   if (existing === null) return;
-  const marker = `<key>lnwjudTaskName</key><string>${xml(taskName)}</string>`;
+  const marker = `<key>lnwjingTaskName</key><string>${xml(taskName)}</string>`;
   if (!existing.includes(marker)) throw new SchedulerConflictError(`launchd label already belongs to a different or unmanaged task: ${path.basename(plistPath)}`);
 }
 
@@ -280,8 +280,8 @@ async function assertLinuxTaskOwnership(servicePath: string, timerPath: string, 
     readSchedulerFile(servicePath),
     readSchedulerFile(timerPath),
   ]);
-  const expectedServiceDescription = `Description=lnwjud ${taskName}`;
-  const expectedTimerDescription = `Description=lnwjud timer ${taskName}`;
+  const expectedServiceDescription = `Description=lnwjing ${taskName}`;
+  const expectedTimerDescription = `Description=lnwjing timer ${taskName}`;
   if (service !== null && !service.split(/\r?\n/u).includes(expectedServiceDescription)) {
     throw new SchedulerConflictError(`systemd unit already belongs to a different or unmanaged task: ${path.basename(servicePath)}`);
   }
@@ -299,17 +299,17 @@ async function readSchedulerFile(filePath: string): Promise<string | null> {
     throw error;
   }
   if (metadata.isSymbolicLink() || !metadata.isFile()) {
-    throw new SchedulerConflictError(`scheduler path is not a regular file owned by lnwjud: ${path.basename(filePath)}`);
+    throw new SchedulerConflictError(`scheduler path is not a regular file owned by lnwjing: ${path.basename(filePath)}`);
   }
   return readFile(filePath, 'utf8');
 }
 
 function hasMacOwnershipMarker(contents: string): boolean {
-  return /<key>lnwjudTaskName<\/key><string>[^<]{1,200}<\/string>/u.test(contents);
+  return /<key>lnwjingTaskName<\/key><string>[^<]{1,200}<\/string>/u.test(contents);
 }
 
 function hasLinuxOwnershipMarker(name: string, contents: string): boolean {
-  const marker = name.endsWith('.timer') ? /^Description=lnwjud timer .+$/mu : /^Description=lnwjud .+$/mu;
+  const marker = name.endsWith('.timer') ? /^Description=lnwjing timer .+$/mu : /^Description=lnwjing .+$/mu;
   return marker.test(contents);
 }
 

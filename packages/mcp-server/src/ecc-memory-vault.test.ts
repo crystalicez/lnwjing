@@ -11,7 +11,7 @@ afterEach(async () => {
 });
 
 async function workspaceFixture(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ecc-memory-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ecc-memory-'));
   roots.push(root);
   return root;
 }
@@ -27,7 +27,7 @@ describe('ECC Memory Vault compatibility', () => {
       title: 'Authentication migration handoff',
       body: 'Token rotation tests pass. Continue the authentication migration.',
       kind: 'handoff',
-      sourceHarness: 'lnwjud',
+      sourceHarness: 'lnwjing',
       targetHarnesses: ['codex'],
       tags: ['auth', 'migration'],
     });

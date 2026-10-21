@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
+import { appError, err, ok } from '@lnwjing/domain';
 import { ContextEconomyRuntime } from '../context-economy.js';
 import { ToolRegistry } from '../tool-registry.js';
 import { scheduledContinuationTools } from './scheduled-continuation-tools.js';
@@ -38,8 +38,8 @@ describe('scheduled continuation MCP tools', () => {
     if (parsedDefaultPrepare?.ok) expect(parsedDefaultPrepare.value).not.toHaveProperty('successorDelayMinutes');
     const advertisedPrepare = new ToolRegistry({}, actor).describeInputJsonSchema('prepare_scheduled_continuation');
     expect(advertisedPrepare).not.toHaveProperty('properties.connectorMention.pattern');
-    expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: '@custom-lnwjud_42' }))
-      .toMatchObject({ ok: true, value: { connectorMention: '@custom-lnwjud_42' } });
+    expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: '@custom-lnwjing_42' }))
+      .toMatchObject({ ok: true, value: { connectorMention: '@custom-lnwjing_42' } });
     expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: '@ปลั๊กอิน_ทีม' }))
       .toMatchObject({ ok: true, value: { connectorMention: '@ปลั๊กอิน_ทีม' } });
     const appMention = `[$custom-tools](app://asdk_app_${'a'.repeat(32)})`;
@@ -47,7 +47,7 @@ describe('scheduled continuation MCP tools', () => {
       .toMatchObject({ ok: true, value: { connectorMention: appMention } });
     expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: `[$custom-tools](app://asdk_app_${'x'.repeat(32)})` })).toMatchObject({ ok: false });
     expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: '[$custom-tools](https://example.com/)' })).toMatchObject({ ok: false });
-    expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: 'custom-lnwjud_42' })).toMatchObject({ ok: false });
+    expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: 'custom-lnwjing_42' })).toMatchObject({ ok: false });
     expect(byName.get('prepare_scheduled_continuation')?.parse({ ...validPrepare, connectorMention: '@connector name' })).toMatchObject({ ok: false });
     expect(byName.get('prepare_scheduled_continuation')?.parse({
       ...validPrepare,

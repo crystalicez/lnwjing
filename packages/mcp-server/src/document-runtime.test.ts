@@ -2,7 +2,7 @@ import { mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { DocumentRuntimeService } from './document-runtime.js';
 import type { McpApplicationServices } from './tools/tool-types.js';
 
@@ -36,7 +36,7 @@ function servicesWithOffice(root: string, officeResults: Record<string, unknown>
 async function withWorkspace(run: (root: string, file: string, provider: string) => Promise<void>): Promise<void> {
   // Hosted Windows runners may report TEMP as an 8.3 path (RUNNER~1) while
   // realpath() returns the long form. Keep fixtures canonical like real workspaces.
-  const root = path.normalize(await realpath(await mkdtemp(path.join(tmpdir(), 'lnwjud-doc-test-'))));
+  const root = path.normalize(await realpath(await mkdtemp(path.join(tmpdir(), 'lnwjing-doc-test-'))));
   const file = path.join(root, 'sample.pdf');
   await writeFile(file, '%PDF-1.4\n%fake-but-present\n%%EOF\n', 'utf8');
   const provider = path.join(root, 'pdftotext.exe');

@@ -1,12 +1,12 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { APP_VERSION, EMPTY_TUNNEL_STATUS, type DashboardSnapshot } from '@lnwjud/ipc-contracts';
+import { APP_VERSION, EMPTY_TUNNEL_STATUS, type DashboardSnapshot } from '@lnwjing/ipc-contracts';
 import { AppShell } from '../src/renderer/features/shell/AppShell.js';
 import { SettingsPage } from '../src/renderer/features/settings/SettingsPage.js';
 
 const noop = async (): Promise<void> => undefined;
-const recoveryTrashPath = 'C:\\Users\\Tester\\AppData\\Roaming\\lnwjud\\recovery-trash';
+const recoveryTrashPath = 'C:\\Users\\Tester\\AppData\\Roaming\\lnwjing\\recovery-trash';
 const dashboard: DashboardSnapshot = {
   selectedWorkspace: { id: 'workspace-a', displayName: 'Project A', rootPath: 'E:\\project-a', realRootPath: 'E:\\project-a', createdAt: new Date(0).toISOString() },
   activeWorkspaces: [{ id: 'workspace-a', displayName: 'Project A', rootPath: 'E:\\project-a', realRootPath: 'E:\\project-a', createdAt: new Date(0).toISOString() }],
@@ -33,7 +33,7 @@ const dashboard: DashboardSnapshot = {
   stdioAllowedRoots: [],
   backups: [],
   recovery: { trashRoot: recoveryTrashPath, trashItems: [], checkpoints: [] },
-  connectionModes: { httpUrl: null, stdioCommand: 'lnwjud --mcp-stdio' },
+  connectionModes: { httpUrl: null, stdioCommand: 'lnwjing --mcp-stdio' },
   workLog: [],
   inFlight: [],
   tunnel: EMPTY_TUNNEL_STATUS,
@@ -120,7 +120,7 @@ describe('mutation safety UI contract', () => {
         runtimeCredentialAvailable: true,
         profileExists: true,
         persistent: {
-          enabled: true, tunnelIdMasked: 'tunnel_****', runtimeAlias: 'lnwjud', mode: 'native-managed', state: 'starting',
+          enabled: true, tunnelIdMasked: 'tunnel_****', runtimeAlias: 'lnwjing', mode: 'native-managed', state: 'starting',
           healthy: null, ready: null, pollHealthy: null, reconnectCount: 0, lastConnectedAt: null, lastReconnectAt: null,
           nextReconnectAt: null, lastErrorCode: null, clientVersion: null, localMcpUrl: null, uiUrl: null,
           readyBeforeRetire: false, strictZeroDowntime: false, capabilityEvidence: null,
@@ -176,7 +176,7 @@ describe('mutation safety UI contract', () => {
     const customCard = markup.slice(customStart);
     expect(fullCard).toContain('Desktop Full Bypass');
     expect(fullCard).toContain('STDIO Full Bypass');
-    expect(fullCard).toContain('skip lnwjud prompts');
+    expect(fullCard).toContain('skip lnwjing prompts');
     expect(fullCard).toContain('risky actions or paths outside projects');
     expect(fullCard).toContain('Windows/macOS/Linux and external services can still deny an action');
     expect(customCard).not.toContain('Desktop Full Bypass');
@@ -220,7 +220,7 @@ describe('mutation safety UI contract', () => {
     expect(markup).toContain('With Full Bypass off');
     expect(markup).toContain('safeguards to deletes, data-loss actions, and out-of-scope work');
     expect(markup).toContain('With Full Bypass on');
-    expect(markup).toContain('lnwjud approval, command policy, Active Project, and allowed-root checks are skipped');
+    expect(markup).toContain('lnwjing approval, command policy, Active Project, and allowed-root checks are skipped');
     expect(markup).toContain('current goalLease ownership proof is still required for an active rolling scheduled/durable goal');
     expect(markup).toContain('Windows/macOS/Linux and external services can still deny an action');
   });
@@ -233,7 +233,7 @@ describe('mutation safety UI contract', () => {
     expect(markup).toContain('ถ้า Full Bypass ปิด');
     expect(markup).toContain('ป้องกันงานลบ งานที่อาจทำข้อมูลหาย และงานนอกขอบเขต');
     expect(markup).toContain('ถ้า Full Bypass เปิด');
-    expect(markup).toContain('ข้าม approval, command policy, Active Project และ allowed-root checks ของ lnwjud');
+    expect(markup).toContain('ข้าม approval, command policy, Active Project และ allowed-root checks ของ lnwjing');
     expect(markup).toContain('ไม่ข้าม current goalLease ownership proof ของ active rolling scheduled/durable goal');
     expect(markup).toContain('Windows/macOS/Linux และบริการภายนอกยังสามารถปฏิเสธคำสั่งได้');
   });

@@ -1,4 +1,4 @@
-import type { TunnelAuthStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelAuthStatus } from '@lnwjing/ipc-contracts';
 import type { TunnelAuthDiagnostics, TunnelAuthProvider, TunnelNetworkErrorDiagnostic, TunnelNetworkErrorCategory, TunnelRuntimeCredential } from './tunnel-auth.js';
 import type { TunnelOAuthProviderDescriptor } from './tunnel-oauth-core.js';
 import { TunnelOAuthSessionStore, type TunnelOAuthStoredSession } from './tunnel-oauth-store.js';

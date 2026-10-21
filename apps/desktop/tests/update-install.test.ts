@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus } from '@lnwjing/ipc-contracts';
 import { confirmTunnelStopForUpdate, UpdateDownloadedDialogController, UpdateInstallCoordinator, updateInstallNeedsTunnelStopConfirmation, updateReadyDialogOptions, type UpdateSharedActivitySnapshot } from '../src/main/update-install.js';
 
 afterEach(() => {
@@ -335,7 +335,7 @@ function tunnelStatus(state: TunnelStatus['state']): TunnelStatus {
     state,
     source: 'desktop',
     hasApiKey: true,
-    clientPath: 'C:\\Program Files\\lnwjud\\resources\\tunnel-client\\tunnel-client.exe',
+    clientPath: 'C:\\Program Files\\lnwjing\\resources\\tunnel-client\\tunnel-client.exe',
     profileExists: true,
     message: null,
     logPath: null,
@@ -350,7 +350,7 @@ function persistentStatus(
   return {
     enabled: true,
     tunnelIdMasked: 'tunnel_0123********cdef',
-    runtimeAlias: 'lnwjud',
+    runtimeAlias: 'lnwjing',
     runtimeAliasActive,
     mode: 'native-managed',
     state,

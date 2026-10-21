@@ -115,7 +115,7 @@ $word.Documents.Document.Text = [char]::ConvertFromUtf32(0x1F600) + 'x'; $word.D
 $leading = Invoke-WordExtendedAction $word 'get_runs' ([pscustomobject]@{ file_path = 'fixture.docx'; parameters = [pscustomobject]@{ max_characters = 1 } })
 if ($leading.next_start -ne 2 -or ($leading.runs.text -join '') -ne [char]::ConvertFromUtf32(0x1F600) -or $leading.boundary_adjustment_utf16_units -ne 1) { throw 'A leading supplementary character failed to make bounded progress' }
 
-$temporary = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'lnwjud-office-' + [Guid]::NewGuid().ToString('N') + '.csv')
+$temporary = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'lnwjing-office-' + [Guid]::NewGuid().ToString('N') + '.csv')
 try {
   $csvName = [string][char]0x0E44 + [char]0x0E17 + [char]0x0E22 + ' ' + [char]::ConvertFromUtf32(0x1F600)
   [IO.File]::WriteAllText($temporary, ('Name,Note' + "`r`n" + '"  ' + $csvName + '  ","quoted ""value"",' + "`r`n" + 'next line"' + "`r`n"), [Text.UTF8Encoding]::new($true))

@@ -14,23 +14,23 @@ if (!versionArg || args.some((argument) => argument !== '--apply' && argument !=
 }
 const version = versionArg.replace(/^v/, '');
 const tag = `v${version}`;
-const repoUrl = 'https://github.com/engasnm111/lnwjud';
+const repoUrl = 'https://github.com/crystalicez/lnwjing';
 const packages = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 if (packages.version !== version) {
   throw new Error(`Package version ${packages.version} differs from published release ${tag}`);
 }
 
-const filenamePattern = /lnwjud-(Setup-|Portable-)?\d+\.\d+\.\d+((?:-arm64|-x64)?\.(?:exe|dmg|deb|AppImage))/g;
+const filenamePattern = /lnwjing-(Setup-|Portable-)?\d+\.\d+\.\d+((?:-arm64|-x64)?\.(?:exe|dmg|deb|AppImage))/g;
 const assetFiles = [
-  `lnwjud-Setup-${version}.exe`,
-  `lnwjud-Portable-${version}.exe`,
-  `lnwjud-${version}-arm64.dmg`,
-  `lnwjud-${version}-x64.dmg`,
-  `lnwjud-${version}-x64.deb`,
-  `lnwjud-${version}-x64.AppImage`,
+  `lnwjing-Setup-${version}.exe`,
+  `lnwjing-Portable-${version}.exe`,
+  `lnwjing-${version}-arm64.dmg`,
+  `lnwjing-${version}-x64.dmg`,
+  `lnwjing-${version}-x64.deb`,
+  `lnwjing-${version}-x64.AppImage`,
 ];
 function updateFileNames(contents) {
-  return contents.replace(filenamePattern, (_full, prefix = '', suffix) => `lnwjud-${prefix}${version}${suffix}`);
+  return contents.replace(filenamePattern, (_full, prefix = '', suffix) => `lnwjing-${prefix}${version}${suffix}`);
 }
 function replaceRequired(contents, pattern, replacement, label) {
   if (!pattern.test(contents)) throw new Error(`Missing required published-release marker: ${label}`);
@@ -74,7 +74,7 @@ const tasks = [
     file: 'docs/USAGE_TH.md',
     transform(original) {
       let result = replaceRequired(original,
-        /public release `v\d+\.\d+\.\d+` คือรุ่นที่เผยแพร่แล้วบน \[GitHub Releases\]\(https:\/\/github\.com\/engasnm111\/lnwjud\/releases\/tag\/v\d+\.\d+\.\d+\)/,
+        /public release `v\d+\.\d+\.\d+` คือรุ่นที่เผยแพร่แล้วบน \[GitHub Releases\]\(https:\/\/github\.com\/engasnm111\/lnwjing\/releases\/tag\/v\d+\.\d+\.\d+\)/,
         `public release \`${tag}\` คือรุ่นที่เผยแพร่แล้วบน [GitHub Releases](${repoUrl}/releases/tag/${tag})`,
         'Thai guide published release');
       result = updateFileNames(result);

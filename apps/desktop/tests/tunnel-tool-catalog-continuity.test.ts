@@ -9,8 +9,8 @@ import { createDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-s
 const temporaryRoots: string[] = [];
 
 beforeEach(() => {
-  vi.stubEnv('LNWJUD_UNRESTRICTED', '1');
-  vi.stubEnv('LNWJUD_MCP_PORT', '0');
+  vi.stubEnv('LNWJING_UNRESTRICTED', '1');
+  vi.stubEnv('LNWJING_MCP_PORT', '0');
 });
 
 afterEach(async () => {
@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe('v4.11 tool catalog continuity', () => {
   it('keeps the 2026-07-28 tool catalog byte-stable across a Desktop MCP listener restart without connector schema changes', async () => {
-    const raw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-v411-catalog-'));
+    const raw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-v411-catalog-'));
     temporaryRoots.push(raw);
     const root = await realpath(raw);
     const dataRoot = path.join(root, 'data');
@@ -71,7 +71,7 @@ async function captureCatalog(url: string, name: string): Promise<{
   readonly workspaceListSucceeded: boolean;
 }> {
   const client = new Client(
-    { name: `lnwjud-${name}`, version: '1.0.0' },
+    { name: `lnwjing-${name}`, version: '1.0.0' },
     { versionNegotiation: { mode: { pin: '2026-07-28' } } },
   );
   const transport = new StreamableHTTPClientTransport(new URL(url));

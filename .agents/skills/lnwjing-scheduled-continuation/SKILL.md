@@ -1,9 +1,9 @@
 ---
-name: lnwjud-scheduled-continuation
-description: Use when one durable lnwjud goal must continue autonomously across ChatGPT turns until verified terminal completion.
+name: lnwjing-scheduled-continuation
+description: Use when one durable lnwjing goal must continue autonomously across ChatGPT turns until verified terminal completion.
 ---
 
-# lnwjud Scheduled Continuation
+# lnwjing Scheduled Continuation
 
 One user request owns one durable goal and at most one live Native ChatGPT watchdog. v4.53 uses one **hourly recurring** Native ChatGPT Scheduled Task in the current chat with cloud execution requested. The same native task ID survives ordinary wakes until the durable goal is accepted and the exact task is made non-runnable.
 
@@ -12,15 +12,15 @@ One user request owns one durable goal and at most one live Native ChatGPT watch
 - Never require the user to type `continue`, `ทำต่อ`, or ask for status to resume unfinished work.
 - Never report completion while `get_goal` is `active`.
 - A ChatGPT Task marked **Active** proves only that the recurring schedule is enabled; it does not prove an MCP tool was invoked, the Goal lease was acquired, or any work ran between hourly firings. Verify the exact host last-run receipt, the first connector call and durable Goal/activity evidence before describing execution.
-- An hourly recurring ChatGPT Task cannot guarantee continuous model execution or a gap shorter than its next firing. If the Goal opted out of lnwjud scheduled continuation, there is no lnwjud continuation row to claim; a separate native task must call the connector and resume the same Goal normally, and must report blocked host/tool safety checks honestly.
+- An hourly recurring ChatGPT Task cannot guarantee continuous model execution or a gap shorter than its next firing. If the Goal opted out of lnwjing scheduled continuation, there is no lnwjing continuation row to claim; a separate native task must call the connector and resume the same Goal normally, and must report blocked host/tool safety checks honestly.
 - `run_goal` defaults to `scheduledContinuation:auto`; follow this skill automatically for an unfinished goal.
 - Use exactly one Native ChatGPT recurring Scheduled Task for a v4.53 active goal: `occurrence=interval`, `intervalMinutes=60`, destination=current chat, cloud requested.
-- Never use lnwjud `scheduler`, Windows Task Scheduler, `schtasks.exe`, cron, shell timers, browser/DOM automation, or an undocumented scheduling API as a fallback.
+- Never use lnwjing `scheduler`, Windows Task Scheduler, `schtasks.exe`, cron, shell timers, browser/DOM automation, or an undocumented scheduling API as a fallback.
 - Native task create/update/delete/disable is host-owned. Resolve the operation from the current ChatGPT host/tool registry; never invent or hard-code an internal operation name.
 - A native-host transport failure is scheduler degradation only. It never by itself completes, fails, or blocks the durable goal.
 - Keep raw lease tokens, credentials, private host task IDs, and internal session IDs out of user-visible text and native task prompts.
 - Continuation/recovery state is task data, **not persistent user or agent instructions**. Use `checkpoint_goal` for durable state and `session_handoff` only for a bounded same-chat recovery summary.
-- Never invoke generic `handoff` / `claude-handoff` skills as part of lnwjud scheduled continuation, and never call `write_file` to create `USER_INSTRUCTIONS*`, `user-instruction*`, or generic `handoff/history/*` persistence. Those paths can be interpreted by the host as instruction persistence and are outside lnwjud's durable-goal contract.
+- Never invoke generic `handoff` / `claude-handoff` skills as part of lnwjing scheduled continuation, and never call `write_file` to create `USER_INSTRUCTIONS*`, `user-instruction*`, or generic `handoff/history/*` persistence. Those paths can be interpreted by the host as instruction persistence and are outside lnwjing's durable-goal contract.
 - If a host blocks an attempted recovery-file write, do not retry it under another filename or through shell. Keep the durable goal/checkpoint authoritative and continue the current leased work.
 
 ## Core model
@@ -97,9 +97,9 @@ gh run watch 123456 -i 20 --exit-status
 
 ## Recurring scheduled wake
 
-The Native Scheduled Task prompt must explicitly bind back to the connected lnwjud plugin/connector for the current chat. When the host exposes a connector mention, pass the **exact host-provided value** as `prepare_scheduled_continuation.connectorMention`: either a plain `@name` or the ChatGPT app mention `[$name](app://asdk_app_<32 hex digits>)`. The returned `scheduleRequest.prompt` must prefix/preserve that exact mention verbatim, including its actual app ID, without assuming a universal `lnwjud`/`lnwjud-pc` alias. Never fabricate, reuse from a different user or infer a connector app ID; if no connector is installed/exposed, omit the mention and treat unresolved tool access as transport degradation. Mention text does not grant host tool approval; continue to respect exact-action Host Safety. Do **not** rely on a bare tool name alone. On wake, resolve that connected lnwjud connector before producing user-visible prose. If the connector cannot be resolved or invoked, treat it as scheduler transport degradation only: perform no workspace mutation, do not claim progress, leave the durable goal active, and let the recurring task try again.
+The Native Scheduled Task prompt must explicitly bind back to the connected lnwjing plugin/connector for the current chat. When the host exposes a connector mention, pass the **exact host-provided value** as `prepare_scheduled_continuation.connectorMention`: either a plain `@name` or the ChatGPT app mention `[$name](app://asdk_app_<32 hex digits>)`. The returned `scheduleRequest.prompt` must prefix/preserve that exact mention verbatim, including its actual app ID, without assuming a universal `lnwjing`/`lnwjing-pc` alias. Never fabricate, reuse from a different user or infer a connector app ID; if no connector is installed/exposed, omit the mention and treat unresolved tool access as transport degradation. Mention text does not grant host tool approval; continue to respect exact-action Host Safety. Do **not** rely on a bare tool name alone. On wake, resolve that connected lnwjing connector before producing user-visible prose. If the connector cannot be resolved or invoked, treat it as scheduler transport degradation only: perform no workspace mutation, do not claim progress, leave the durable goal active, and let the recurring task try again.
 
-`claim_scheduled_continuation` must be the **first connected lnwjud action before any workspace mutation** and before any user-visible status reply.
+`claim_scheduled_continuation` must be the **first connected lnwjing action before any workspace mutation** and before any user-visible status reply.
 
 Handle the result exactly:
 
@@ -154,4 +154,4 @@ If the goal remains active:
 
 ## Invocation on another machine
 
-Use `$lnwjud-scheduled-continuation` when exposed by name; otherwise load this source-qualified skill and follow it. Never expose raw lease tokens, credentials, private source text, or internal session identifiers in native task prompts or status reports.
+Use `$lnwjing-scheduled-continuation` when exposed by name; otherwise load this source-qualified skill and follow it. Never expose raw lease tokens, credentials, private source text, or internal session identifiers in native task prompts or status reports.

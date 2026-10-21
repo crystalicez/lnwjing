@@ -5,16 +5,16 @@ interface FactoryResetMarker {
   readonly version: 1;
 }
 
-export const FACTORY_RESET_APPLY_ARG = '--lnwjud-apply-factory-reset';
+export const FACTORY_RESET_APPLY_ARG = '--lnwjing-apply-factory-reset';
 const FACTORY_RESET_MARKER: FactoryResetMarker = { version: 1 };
 
 export function factoryResetMarkerPath(dataPath: string): string {
-  const safeDataPath = safeAbsoluteDirectory(dataPath, 'lnwjud data path');
+  const safeDataPath = safeAbsoluteDirectory(dataPath, 'lnwjing data path');
   return path.join(path.dirname(safeDataPath), `.${path.basename(safeDataPath)}.factory-reset.pending`);
 }
 
 export function factoryResetBootstrapUserDataPath(dataPath: string): string {
-  const safeDataPath = safeAbsoluteDirectory(dataPath, 'lnwjud data path');
+  const safeDataPath = safeAbsoluteDirectory(dataPath, 'lnwjing data path');
   return path.join(path.dirname(safeDataPath), `.${path.basename(safeDataPath)}.factory-reset-bootstrap`);
 }
 
@@ -55,29 +55,29 @@ export function applyPendingFactoryResetSync(dataPath: string, tunnelProfileDire
   const marker = parseFactoryResetMarker(raw);
   if (marker.version !== FACTORY_RESET_MARKER.version) throw new Error('Unsupported factory reset marker version');
 
-  const safeDataPath = safeAbsoluteDirectory(dataPath, 'lnwjud data path');
+  const safeDataPath = safeAbsoluteDirectory(dataPath, 'lnwjing data path');
   const safeTunnelProfileDirectory = safeAbsoluteDirectory(tunnelProfileDirectory, 'Tunnel profile directory');
 
   rmSync(safeDataPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   if (!isSamePath(safeTunnelProfileDirectory, safeDataPath)) {
-    clearLnwjudTunnelArtifactsSync(safeTunnelProfileDirectory);
+    clearLnwjingTunnelArtifactsSync(safeTunnelProfileDirectory);
   }
   mkdirSync(safeDataPath, { recursive: true });
   rmSync(markerPath, { force: true });
   return true;
 }
 
-const LNWJUD_TUNNEL_ROOT_ARTIFACTS = new Set([
-  'lnwjud.yaml',
-  'lnwjud.runtime.secret',
-  'lnwjud.oauth.session.secret',
-  'lnwjud-tunnel.log',
-  'lnwjud.tunnel.lock',
-  'lnwjud.tunnel.mutex',
-  'lnwjud.tunnel.stop',
+const LNWJING_TUNNEL_ROOT_ARTIFACTS = new Set([
+  'lnwjing.yaml',
+  'lnwjing.runtime.secret',
+  'lnwjing.oauth.session.secret',
+  'lnwjing-tunnel.log',
+  'lnwjing.tunnel.lock',
+  'lnwjing.tunnel.mutex',
+  'lnwjing.tunnel.stop',
 ]);
 
-function clearLnwjudTunnelArtifactsSync(profileDirectory: string): void {
+function clearLnwjingTunnelArtifactsSync(profileDirectory: string): void {
   const healthUrlPath = resolveProfileHealthUrlPath(profileDirectory);
   let entries: string[];
   try {
@@ -87,19 +87,19 @@ function clearLnwjudTunnelArtifactsSync(profileDirectory: string): void {
     throw error;
   }
   for (const entry of entries) {
-    if (!isLnwjudTunnelRootArtifactName(entry)) continue;
+    if (!isLnwjingTunnelRootArtifactName(entry)) continue;
     rmSync(path.join(profileDirectory, entry), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
   if (healthUrlPath !== null) rmSync(healthUrlPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
-function isLnwjudTunnelRootArtifactName(name: string): boolean {
+function isLnwjingTunnelRootArtifactName(name: string): boolean {
   const normalized = process.platform === 'win32' ? name.toLowerCase() : name;
-  return LNWJUD_TUNNEL_ROOT_ARTIFACTS.has(normalized) || normalized.startsWith('lnwjud.tunnel.lock.');
+  return LNWJING_TUNNEL_ROOT_ARTIFACTS.has(normalized) || normalized.startsWith('lnwjing.tunnel.lock.');
 }
 
 function resolveProfileHealthUrlPath(profileDirectory: string): string | null {
-  const profilePath = path.join(profileDirectory, 'lnwjud.yaml');
+  const profilePath = path.join(profileDirectory, 'lnwjing.yaml');
   let raw: string;
   try {
     raw = readFileSync(profilePath, 'utf8');

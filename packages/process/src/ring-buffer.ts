@@ -1,4 +1,4 @@
-import { MAX_PROCESS_LOG_BYTES } from '@lnwjud/domain';
+import { MAX_PROCESS_LOG_BYTES } from '@lnwjing/domain';
 import type { LogQuery, ProcessLogEntry, ProcessLogResult, ProcessLogStream } from './process-types.js';
 
 const DEFAULT_MAX_BYTES = MAX_PROCESS_LOG_BYTES;

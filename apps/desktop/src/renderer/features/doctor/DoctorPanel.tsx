@@ -1,6 +1,6 @@
 import { ActionButton } from '../ui/UiPrimitives.js';
 import type { ReactElement } from 'react';
-import type { DoctorCheck, DoctorReport, RemediationAction, ResolvedRemediation, UiLocale } from '@lnwjud/ipc-contracts';
+import type { DoctorCheck, DoctorReport, RemediationAction, ResolvedRemediation, UiLocale } from '@lnwjing/ipc-contracts';
 import { formatDateTime } from '../../date-time.js';
 import { createTranslator, type Translator } from '../../i18n/index.js';
 

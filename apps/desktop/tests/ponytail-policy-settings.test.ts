@@ -7,7 +7,7 @@ import { createDesktopRuntime } from '../src/main/desktop-services.js';
 const temporaryRoots: string[] = [];
 
 beforeEach(() => {
-  vi.stubEnv('LNWJUD_UNRESTRICTED', '1');
+  vi.stubEnv('LNWJING_UNRESTRICTED', '1');
 });
 
 afterEach(async () => {
@@ -19,8 +19,8 @@ afterEach(async () => {
 
 describe('Desktop Ponytail scoped policy settings', () => {
   it('reports Default OFF separately from an explicit Global setting and persists workspace overrides safely', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ponytail-policy-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ponytail-policy-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ponytail-policy-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ponytail-policy-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     const workspaceRoot = await realpath(rawWorkspaceRoot);
@@ -49,7 +49,7 @@ describe('Desktop Ponytail scoped policy settings', () => {
         effectiveWorkspaceMode: 'full',
         effectiveWorkspaceSource: 'workspace',
       });
-      const profile = JSON.parse(await readFile(path.join(workspaceRoot, '.lnwjud', 'project-profile.json'), 'utf8')) as Record<string, unknown>;
+      const profile = JSON.parse(await readFile(path.join(workspaceRoot, '.lnwjing', 'project-profile.json'), 'utf8')) as Record<string, unknown>;
       expect(profile).toMatchObject({ ponytail: { mode: 'full' } });
 
       await expect(runtime.services.setWorkspacePonytailMode({ workspaceId: workspace.id, mode: 'inherit' })).resolves.toMatchObject({
@@ -57,7 +57,7 @@ describe('Desktop Ponytail scoped policy settings', () => {
         effectiveWorkspaceMode: 'lite',
         effectiveWorkspaceSource: 'global',
       });
-      const inheritedProfile = JSON.parse(await readFile(path.join(workspaceRoot, '.lnwjud', 'project-profile.json'), 'utf8')) as Record<string, unknown>;
+      const inheritedProfile = JSON.parse(await readFile(path.join(workspaceRoot, '.lnwjing', 'project-profile.json'), 'utf8')) as Record<string, unknown>;
       expect(inheritedProfile).not.toHaveProperty('ponytail');
     } finally {
       await runtime.close();
@@ -65,8 +65,8 @@ describe('Desktop Ponytail scoped policy settings', () => {
   });
 
   it('blocks Current Goal edits while a worker lease is live, then applies an idle revision-CAS override', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ponytail-goal-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ponytail-goal-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ponytail-goal-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ponytail-goal-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot));
     try {

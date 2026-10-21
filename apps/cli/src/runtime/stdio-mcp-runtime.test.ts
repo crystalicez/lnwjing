@@ -3,12 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository } from '@lnwjud/storage';
-import { permissionProfiles } from '@lnwjud/permissions';
-import { CAPABILITY_TASK_OWNER_METADATA_KEY } from '@lnwjud/capabilities';
-import { STDIO_ALLOWED_ROOTS_SETTING_KEY, STDIO_PERMISSION_PROFILE_SETTING_KEY, STDIO_STRICT_ROOTS_SETTING_KEY, UNRESTRICTED_SETTING_KEY, USER_SETTING_KEYS, serializeToolAvailabilitySnapshot } from '@lnwjud/shared';
+import { SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository } from '@lnwjing/storage';
+import { permissionProfiles } from '@lnwjing/permissions';
+import { CAPABILITY_TASK_OWNER_METADATA_KEY } from '@lnwjing/capabilities';
+import { STDIO_ALLOWED_ROOTS_SETTING_KEY, STDIO_PERMISSION_PROFILE_SETTING_KEY, STDIO_STRICT_ROOTS_SETTING_KEY, UNRESTRICTED_SETTING_KEY, USER_SETTING_KEYS, serializeToolAvailabilitySnapshot } from '@lnwjing/shared';
 import { createStdioMcpRuntime } from './stdio-mcp-runtime.js';
-import { createMcpServer, sharedActivityLeaseDirectoryPath, ToolRegistry, type WorkspaceScope } from '@lnwjud/mcp-server';
+import { createMcpServer, sharedActivityLeaseDirectoryPath, ToolRegistry, type WorkspaceScope } from '@lnwjing/mcp-server';
 
 const temporaryRoots: string[] = [];
 const TEST_CHECKPOINT_KEY = Buffer.alloc(32, 0x46).toString('base64');
@@ -32,12 +32,12 @@ async function waitUntil(predicate: () => boolean, timeoutMs: number = 2_000): P
 }
 
 beforeEach(() => {
-  process.env.LNWJUD_CHECKPOINT_KEY_BASE64 = TEST_CHECKPOINT_KEY;
+  process.env.LNWJING_CHECKPOINT_KEY_BASE64 = TEST_CHECKPOINT_KEY;
 });
 
 afterEach(async () => {
   delete process.env.TUNNEL_CLIENT_PROFILE_DIR;
-  delete process.env.LNWJUD_CHECKPOINT_KEY_BASE64;
+  delete process.env.LNWJING_CHECKPOINT_KEY_BASE64;
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, {
     recursive: true,
     force: true,
@@ -48,8 +48,8 @@ afterEach(async () => {
 
 describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => {
   it('defaults Ponytail to OFF and loads a persisted mode for direct STDIO', async () => {
-    const defaultDataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-ponytail-default-'));
-    const persistedDataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-ponytail-persisted-'));
+    const defaultDataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-ponytail-default-'));
+    const persistedDataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-ponytail-persisted-'));
     temporaryRoots.push(defaultDataPath, persistedDataPath);
 
     const defaultRuntime = createStdioMcpRuntime(defaultDataPath, workspace);
@@ -59,7 +59,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
       await defaultRuntime.close();
     }
 
-    const database = new SqliteDatabase(path.join(persistedDataPath, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(persistedDataPath, 'lnwjing.sqlite'));
     new SqliteSettingsRepository(database).set(USER_SETTING_KEYS.ponytailMode, 'ultra');
     database.close();
 
@@ -72,7 +72,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('reads the default-off Engineering Harness setting from the same SQLite key as Desktop', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-engineering-harness-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-engineering-harness-'));
     temporaryRoots.push(dataPath);
     const runtime = createStdioMcpRuntime(dataPath, workspace);
     try {
@@ -80,7 +80,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
         settings: { schemaVersion: 1, enabled: false, profile: 'senior', applyTo: 'coding_projects', autoProjectAssessment: true },
         diagnostic: null,
       });
-      const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+      const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
       new SqliteSettingsRepository(externalDatabase).set(USER_SETTING_KEYS.engineeringHarnessSettings, JSON.stringify({
         schemaVersion: 1,
         enabled: true,
@@ -99,7 +99,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('wires durable goals and scheduled continuation orchestration from the same SQLite repository', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-continuation-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-continuation-'));
     temporaryRoots.push(dataPath);
     const runtime = createStdioMcpRuntime(dataPath, workspace);
     try {
@@ -112,8 +112,8 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('persists direct checkpoint_goal Engineering fields and leaves storage unchanged after a rejected gate update', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-engineering-checkpoint-'));
-    const workspaceRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-engineering-workspace-')));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-engineering-checkpoint-'));
+    const workspaceRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-engineering-workspace-')));
     temporaryRoots.push(dataPath, workspaceRoot);
     const durableWorkspace = {
       id: 'engineering-checkpoint-workspace',
@@ -122,7 +122,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
       realRootPath: workspaceRoot,
       createdAt: '2026-10-13T00:00:00.000Z',
     };
-    const seed = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const seed = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     await new SqliteWorkspaceRepository(seed).insert(durableWorkspace);
     seed.close();
 
@@ -243,8 +243,8 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
 
   it('persists and completes a verified automation run across a STDIO runtime replacement without creating a schedule', async () => {
     const testDeadline = Date.now() + STDIO_RUNTIME_TEST_TIMEOUT_MS;
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-automation-data-'));
-    const workspaceRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-automation-workspace-')));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-automation-data-'));
+    const workspaceRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-automation-workspace-')));
     temporaryRoots.push(dataPath, workspaceRoot);
     const durableWorkspace = {
       id: 'automation-workspace',
@@ -253,7 +253,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
       realRootPath: workspaceRoot,
       createdAt: '2026-09-20T00:00:00.000Z',
     };
-    const seeded = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const seeded = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     await new SqliteWorkspaceRepository(seeded).insert(durableWorkspace);
     seeded.close();
 
@@ -392,16 +392,16 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
       await replacement.close();
     }
 
-    const inspected = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const inspected = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     expect(inspected.connection.prepare('SELECT COUNT(*) AS count FROM goal_scheduled_continuations').get()).toEqual({ count: 0 });
     inspected.close();
   });
 
   it('observes persisted tool availability writes from another SQLite connection without restart or duplicate unrelated notifications', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-tool-availability-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-tool-availability-'));
     temporaryRoots.push(dataPath);
     const runtime = createStdioMcpRuntime(dataPath, workspace);
-    const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     const externalSettings = new SqliteSettingsRepository(externalDatabase);
     let notifications = 0;
     const unsubscribe = runtime.toolAvailabilityService.subscribe(() => { notifications += 1; });
@@ -425,10 +425,10 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('reads current persisted Direct STDIO security settings without restarting the runtime', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-security-policy-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-security-policy-'));
     temporaryRoots.push(dataPath);
     const runtime = createStdioMcpRuntime(dataPath, workspace);
-    const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     const externalSettings = new SqliteSettingsRepository(externalDatabase);
     try {
       externalSettings.set(STDIO_PERMISSION_PROFILE_SETTING_KEY, 'safe');
@@ -452,24 +452,24 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('does not overwrite the Desktop permission profile when using full tunnel access', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-profile-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-profile-'));
     temporaryRoots.push(dataPath);
-    const database = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     new SqliteSettingsRepository(database).set('permission_profile', 'balanced');
     database.close();
 
     const runtime = createStdioMcpRuntime(dataPath, workspace);
     await runtime.close();
 
-    const verificationDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const verificationDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     const profile = new SqliteSettingsRepository(verificationDatabase).get('permission_profile');
     verificationDatabase.close();
     expect(profile).toBe('balanced');
   });
 
   it('owns and cleans the tunnel-profile activity snapshot for the direct STDIO runtime', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-activity-'));
-    const profileDirectory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-profile-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-activity-'));
+    const profileDirectory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-profile-'));
     temporaryRoots.push(dataPath, profileDirectory);
     process.env.TUNNEL_CLIENT_PROFILE_DIR = profileDirectory;
 
@@ -492,16 +492,16 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('uses the selected stdio profile and hides broad workspaces when strict roots are enabled', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-strict-data-'));
-    const allowedRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-strict-allowed-'));
-    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-strict-outside-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-strict-data-'));
+    const allowedRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-strict-allowed-'));
+    const outsideRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-strict-outside-'));
     temporaryRoots.push(dataPath, allowedRaw, outsideRaw);
     const allowed = await realpath(allowedRaw);
     const outside = await realpath(outsideRaw);
     await writeFile(path.join(outside, 'outside.txt'), 'outside', 'utf8');
     const allowedWorkspace = { id: 'allowed-workspace', displayName: 'allowed', rootPath: allowed, realRootPath: allowed, createdAt: '2026-08-22T00:00:00.000Z' };
     const outsideWorkspace = { id: 'outside-workspace', displayName: 'outside', rootPath: outside, realRootPath: outside, createdAt: '2026-08-22T00:00:01.000Z' };
-    const database = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     const repo = new SqliteWorkspaceRepository(database);
     await repo.insert(allowedWorkspace);
     await repo.insert(outsideWorkspace);
@@ -524,7 +524,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('keeps a shell background task alive across STDIO runtime replacement', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-durable-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-durable-'));
     temporaryRoots.push(dataPath);
     const firstRuntime = createStdioMcpRuntime(dataPath, workspace, true);
     const capabilities = firstRuntime.services.capabilities;
@@ -564,8 +564,8 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   });
 
   it('reads durable shell task liveness after STDIO runtime replacement without treating another session as absence', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-goal-liveness-data-'));
-    const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stdio-goal-liveness-workspace-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-goal-liveness-data-'));
+    const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-goal-liveness-workspace-'));
     temporaryRoots.push(dataPath, workspaceRoot);
     const durableWorkspace = {
       id: 'goal-liveness-workspace',
@@ -574,7 +574,7 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
       realRootPath: workspaceRoot,
       createdAt: '2026-08-27T00:00:00.000Z',
     };
-    const database = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
     await new SqliteWorkspaceRepository(database).insert(durableWorkspace);
     database.close();
 

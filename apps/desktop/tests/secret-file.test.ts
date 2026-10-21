@@ -8,7 +8,7 @@ const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
 it('atomically replaces a secret and leaves no temporary files', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-secret-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-secret-'));
   roots.push(root);
   const file = path.join(root, 'secret');
   await writeSecretAtomically(file, 'old encrypted value');
@@ -19,7 +19,7 @@ it('atomically replaces a secret and leaves no temporary files', async () => {
 });
 
 it('refuses symlink reads and replaces the link without modifying its target', async (context) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-secret-link-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-secret-link-'));
   roots.push(root);
   const file = path.join(root, 'secret');
   const target = path.join(root, 'outside');

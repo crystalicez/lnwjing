@@ -1,15 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="340" height="96" viewBox="0 0 340 96" role="img" aria-labelledby="title desc">
-  <title id="title">Download lnwjud for Windows</title>
-  <desc id="desc">Windows x64 Setup download card</desc>
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#111827"/><stop offset="1" stop-color="#0b1220"/></linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
-  </defs>
-  <rect x="1" y="1" width="338" height="94" rx="18" fill="url(#bg)" stroke="#334155" stroke-width="2"/>
-  <rect x="18" y="18" width="60" height="60" rx="16" fill="url(#accent)"/>
-  <path d="M34 35h12v12H34zm16 0h12v12H50zM34 51h12v12H34zm16 0h12v12H50z" fill="#fff" opacity=".96"/>
-  <text x="96" y="42" fill="#f8fafc" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700">Windows</text>
-  <text x="96" y="64" fill="#94a3b8" font-family="Segoe UI,Arial,sans-serif" font-size="13">x64 · Setup installer</text>
-  <circle cx="306" cy="48" r="18" fill="#172033" stroke="#475569"/>
-  <path d="M306 37v17m-7-6 7 7 7-7M298 62h16" fill="none" stroke="#e2e8f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzNDAiIGhlaWdodD0iOTYiIHZpZXdCb3g9IjAgMCAzNDAgOTYiIHJvbGU9ImltZyIgYXJpYS1sYWJlbGxlZGJ5PSJ0aXRsZSBkZXNjIj4NCiAgPHRpdGxlIGlkPSJ0aXRsZSI+RG93bmxvYWQgbG53anVkIGZvciBXaW5kb3dzPC90aXRsZT4NCiAgPGRlc2MgaWQ9ImRlc2MiPldpbmRvd3MgeDY0IFNldHVwIGRvd25sb2FkIGNhcmQ8L2Rlc2M+DQogIDxkZWZzPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMxMTE4MjciLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwYjEyMjAiLz48L2xpbmVhckdyYWRpZW50Pg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYWNjZW50IiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMzhiZGY4Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMjU2M2ViIi8+PC9saW5lYXJHcmFkaWVudD4NCiAgPC9kZWZzPg0KICA8cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMzM4IiBoZWlnaHQ9Ijk0IiByeD0iMTgiIGZpbGw9InVybCgjYmcpIiBzdHJva2U9IiMzMzQxNTUiIHN0cm9rZS13aWR0aD0iMiIvPg0KICA8cmVjdCB4PSIxOCIgeT0iMTgiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjE2IiBmaWxsPSJ1cmwoI2FjY2VudCkiLz4NCiAgPHBhdGggZD0iTTM0IDM1aDEydjEySDM0em0xNiAwaDEydjEySDUwek0zNCA1MWgxMnYxMkgzNHptMTYgMGgxMnYxMkg1MHoiIGZpbGw9IiNmZmYiIG9wYWNpdHk9Ii45NiIvPg0KICA8dGV4dCB4PSI5NiIgeT0iNDIiIGZpbGw9IiNmOGZhZmMiIGZvbnQtZmFtaWx5PSJTZWdvZSBVSSxBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjIwIiBmb250LXdlaWdodD0iNzAwIj5XaW5kb3dzPC90ZXh0Pg0KICA8dGV4dCB4PSI5NiIgeT0iNjQiIGZpbGw9IiM5NGEzYjgiIGZvbnQtZmFtaWx5PSJTZWdvZSBVSSxBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj54NjQgwrcgU2V0dXAgaW5zdGFsbGVyPC90ZXh0Pg0KICA8Y2lyY2xlIGN4PSIzMDYiIGN5PSI0OCIgcj0iMTgiIGZpbGw9IiMxNzIwMzMiIHN0cm9rZT0iIzQ3NTU2OSIvPg0KICA8cGF0aCBkPSJNMzA2IDM3djE3bS03LTYgNyA3IDctN00yOTggNjJoMTYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2UyZThmMCIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPg0KPC9zdmc+DQo=

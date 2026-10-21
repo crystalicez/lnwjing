@@ -1,5 +1,5 @@
 import { isIP } from 'node:net';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 /**
  * The public contract deliberately contains no Git arguments, environment,

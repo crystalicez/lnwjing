@@ -1,4 +1,4 @@
-import type { TunnelAuthMode, TunnelAuthStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelAuthMode, TunnelAuthStatus } from '@lnwjing/ipc-contracts';
 import type { MessageKey } from './i18n/messages.js';
 
 export interface TunnelAuthPresentation {

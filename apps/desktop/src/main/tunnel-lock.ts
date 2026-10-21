@@ -2,10 +2,10 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { link, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { probeProcessStart, type ProcessProbeResult } from '@lnwjud/mcp-server';
+import { probeProcessStart, type ProcessProbeResult } from '@lnwjing/mcp-server';
 
-const LOCK_FILE = 'lnwjud.tunnel.lock';
-const POSIX_MUTEX_FILE = 'lnwjud.tunnel.mutex';
+const LOCK_FILE = 'lnwjing.tunnel.lock';
+const POSIX_MUTEX_FILE = 'lnwjing.tunnel.mutex';
 const LOCK_VERSION = 1;
 const MUTEX_WAIT_MS = 5_000;
 const MUTEX_HELPER_STARTUP_GRACE_MS = 10_000;
@@ -255,7 +255,7 @@ async function withTunnelLockCriticalSection<T>(
     '$held=$false',
     'try {',
     `  try { $held=$mutex.WaitOne(${MUTEX_WAIT_MS}) } catch [Threading.AbandonedMutexException] { $held=$true }`,
-    "  if(-not $held){ throw 'Timed out waiting for the lnwjud tunnel lock critical section' }",
+    "  if(-not $held){ throw 'Timed out waiting for the lnwjing tunnel lock critical section' }",
     "  [Console]::Out.WriteLine('READY')",
     '  [Console]::Out.Flush()',
     '  [void][Console]::In.ReadToEnd()',
@@ -329,14 +329,14 @@ async function withPosixCriticalSection<T>(
       if (!isAlreadyExists(error)) throw error;
       const stale = await readPosixMutex(mutexPath);
       if (stale === null) {
-        if (Date.now() >= deadline) throw new Error('Timed out waiting for the lnwjud tunnel lock critical section');
+        if (Date.now() >= deadline) throw new Error('Timed out waiting for the lnwjing tunnel lock critical section');
         await delay(25);
         continue;
       }
       const probe = await inspectProcess(stale.pid);
       if (probe.state === 'unverifiable') throw new Error(`Tunnel lock critical section owner is unverifiable: ${probe.reason}`);
       if (probe.state === 'live' && probe.processStartedAt === stale.processStartedAt) {
-        if (Date.now() >= deadline) throw new Error('Timed out waiting for the lnwjud tunnel lock critical section');
+        if (Date.now() >= deadline) throw new Error('Timed out waiting for the lnwjing tunnel lock critical section');
         await delay(25);
         continue;
       }
@@ -376,7 +376,7 @@ function delay(milliseconds: number): Promise<void> {
 function tunnelLockMutexName(profileDirectory: string): string {
   const normalized = path.resolve(profileDirectory).replace(/[\\/]+$/, '').toLowerCase();
   const identity = createHash('sha256').update(normalized, 'utf8').digest('hex').slice(0, 24);
-  return `Local\\lnwjud-tunnel-lock-${identity}`;
+  return `Local\\lnwjing-tunnel-lock-${identity}`;
 }
 
 function waitForMutexReady(holder: ReturnType<typeof spawn>, stderr: () => string): Promise<void> {
@@ -387,7 +387,7 @@ function waitForMutexReady(holder: ReturnType<typeof spawn>, stderr: () => strin
     // The helper's own mutex contention remains bounded by MUTEX_WAIT_MS.
     // Give PowerShell startup separate headroom because a saturated Windows
     // runner can take several seconds before the helper executes WaitOne().
-    const timer = setTimeout(() => finish(new Error('Timed out waiting for the lnwjud tunnel lock critical section')), MUTEX_WAIT_MS + MUTEX_HELPER_STARTUP_GRACE_MS);
+    const timer = setTimeout(() => finish(new Error('Timed out waiting for the lnwjing tunnel lock critical section')), MUTEX_WAIT_MS + MUTEX_HELPER_STARTUP_GRACE_MS);
     const onData = (chunk: string): void => {
       stdout += chunk;
       if (/(?:^|\r?\n)READY(?:\r?\n|$)/.test(stdout)) finish();

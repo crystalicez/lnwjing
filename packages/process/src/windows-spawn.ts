@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 export interface SpawnInvocation {
   readonly executable: string;

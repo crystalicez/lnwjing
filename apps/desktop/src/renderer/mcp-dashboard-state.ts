@@ -1,4 +1,4 @@
-import type { DashboardSnapshot, McpConnectionStatus } from '@lnwjud/ipc-contracts';
+import type { DashboardSnapshot, McpConnectionStatus } from '@lnwjing/ipc-contracts';
 
 /** Prevent an older dashboard request from undoing an explicit MCP action. */
 export class McpDashboardState {

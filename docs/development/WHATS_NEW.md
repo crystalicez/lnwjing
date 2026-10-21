@@ -75,7 +75,7 @@ The bundled `5.7.2` entry covers the behavior shipped in the current published r
 
 The bundled `5.6.4` entry covers behavior verified in the Windows installer:
 
-- an existing Secure Tunnel ID follows the current local MCP port after restart, and Windows retires only a duplicate client verified to belong to the same lnwjud Tunnel;
+- an existing Secure Tunnel ID follows the current local MCP port after restart, and Windows retires only a duplicate client verified to belong to the same lnwjing Tunnel;
 - ChatGPT accepts the no-auth MCP tool schema, and the guide separates the Tunnel Runtime API key from ChatGPT OAuth fields;
 - Tunnel Start/Stop controls remain disabled during startup;
 - Live Logs retain each event's original timestamp;

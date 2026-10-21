@@ -25,7 +25,7 @@ process.disconnect();
 
 describe('workspace index mutex', () => {
   it('serializes another process while allowing another workspace and preserving both updates', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-mutex-process-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-mutex-process-'));
     const payload = path.join(directory, 'payload.json');
     const worker = path.join(directory, 'worker.mjs');
     await writeFile(payload, '{"facts":[]}');
@@ -62,7 +62,7 @@ describe('workspace index mutex', () => {
   }, 15_000);
 
   it('does not steal a live lock on timeout and acquires after its holder dies', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-mutex-crash-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-mutex-crash-'));
     const payload = path.join(directory, 'payload.json');
     const worker = path.join(directory, 'worker.mjs');
     await writeFile(payload, '{"facts":[]}');
@@ -93,7 +93,7 @@ describe('workspace index mutex', () => {
   }, 15_000);
 
   it('preserves a mutation error, releases ownership, and aborts a waiting caller', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-mutex-error-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-mutex-error-'));
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let holding: Promise<void> | undefined;

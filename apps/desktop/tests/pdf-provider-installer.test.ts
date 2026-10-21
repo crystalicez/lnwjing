@@ -13,7 +13,7 @@ afterEach(async () => {
 
 describe('PDF provider installer', () => {
   it('downloads a pinned archive, verifies SHA-256, installs Poppler, and reuses the verified path', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-pdf-provider-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-pdf-provider-'));
     roots.push(dataPath);
     const archive = emptyZipArchive();
     const packageInfo = testPackage(archive);
@@ -49,7 +49,7 @@ describe('PDF provider installer', () => {
   });
 
   it('coalesces concurrent install requests for the same pinned provider', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-pdf-provider-concurrent-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-pdf-provider-concurrent-'));
     roots.push(dataPath);
     const archive = emptyZipArchive();
     const packageInfo = testPackage(archive);
@@ -78,7 +78,7 @@ describe('PDF provider installer', () => {
   });
 
   it('refuses an archive whose SHA-256 does not match the pinned manifest', async () => {
-    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-pdf-provider-'));
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-pdf-provider-'));
     roots.push(dataPath);
     const packageInfo = { ...testPackage(Buffer.from('expected')), archiveSha256: '0'.repeat(64) };
 

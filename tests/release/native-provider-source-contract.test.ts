@@ -12,7 +12,7 @@ describe('native provider source contract', () => {
       'AudioProvider.swift', 'ScreenRecordingProvider.swift',
     ];
     const source = (await Promise.all(macSources.map((file) => readFile(
-      path.join(root, 'native', 'macos-host', 'Sources', 'LnwjudMacHost', file), 'utf8',
+      path.join(root, 'native', 'macos-host', 'Sources', 'LnwjingMacHost', file), 'utf8',
     )))).join('\n');
     expect(source).toContain('AXIsProcessTrusted');
     expect(source).toContain('AXUIElementCreateSystemWide');

@@ -1,7 +1,7 @@
 ﻿import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { UpdateStatus } from '@lnwjud/ipc-contracts';
+import type { UpdateStatus } from '@lnwjing/ipc-contracts';
 import { localizedUpdateStatusMessage, nativeMessages } from '../src/main/native-i18n.js';
 
 const mainRoot = path.resolve(import.meta.dirname, '..', 'src', 'main');
@@ -18,7 +18,7 @@ describe('native main-process i18n', () => {
       ...ready, phase: 'unavailable', canInstall: false, message: nativeMessages('th').updaterUnavailableMacosUnsigned,
     }, 'en')).toContain('ad-hoc');
     expect(nativeMessages('th').shutdownBlockedTitle).toContain('ยังทำงานอยู่');
-    expect(nativeMessages('en').shutdownBlockedTitle).toBe('lnwjud is still running');
+    expect(nativeMessages('en').shutdownBlockedTitle).toBe('lnwjing is still running');
     expect(nativeMessages('th').updaterTunnelStopConfirm).toContain('ติดตั้งต่อ');
     expect(nativeMessages('en').updaterTunnelStopConfirm).toBe('Stop Tunnel and Install');
     expect(nativeMessages('th').updaterTunnelStopDetail).toContain('Tunnel ID และ Key เดิม');

@@ -8,9 +8,9 @@ import { catalogDefinitions } from '../src/main/tool-catalog/catalog-definitions
 const temporaryRoots: string[] = [];
 
 beforeEach(() => {
-  vi.stubEnv('LNWJUD_UNRESTRICTED', '1');
-  vi.stubEnv('LNWJUD_E2E_FIXTURE', '1');
-  vi.stubEnv('LNWJUD_MCP_PORT', '0');
+  vi.stubEnv('LNWJING_UNRESTRICTED', '1');
+  vi.stubEnv('LNWJING_E2E_FIXTURE', '1');
+  vi.stubEnv('LNWJING_MCP_PORT', '0');
 });
 
 afterEach(async () => {
@@ -20,7 +20,7 @@ afterEach(async () => {
 
 describe('Desktop Tool Catalog runtime', () => {
   it('returns the real first-party catalog promptly after Desktop MCP startup', async () => {
-    const raw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tool-catalog-runtime-'));
+    const raw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tool-catalog-runtime-'));
     temporaryRoots.push(raw);
     const root = await realpath(raw);
     const dataRoot = path.join(root, 'data');
@@ -28,8 +28,8 @@ describe('Desktop Tool Catalog runtime', () => {
     const fakeChrome = path.join(root, process.platform === 'win32' ? 'chrome.exe' : 'chrome');
     await Promise.all([mkdir(dataRoot, { recursive: true }), mkdir(workspaceRoot, { recursive: true }), writeFile(fakeChrome, '')]);
     vi.stubEnv('APPDATA', dataRoot);
-    vi.stubEnv('LNWJUD_BROWSER_EXECUTABLE', fakeChrome);
-    vi.stubEnv('LNWJUD_BROWSER_CDP_PORT', '65534');
+    vi.stubEnv('LNWJING_BROWSER_EXECUTABLE', fakeChrome);
+    vi.stubEnv('LNWJING_BROWSER_CDP_PORT', '65534');
 
     const runtime = createDesktopRuntime(dataRoot);
     try {
@@ -40,7 +40,7 @@ describe('Desktop Tool Catalog runtime', () => {
         new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error('Tool Catalog runtime read timed out')), 5_000)),
       ]);
 
-      expect(catalog.items.filter((item) => item.origin === 'lnwjud')).toHaveLength(Object.keys(catalogDefinitions).length);
+      expect(catalog.items.filter((item) => item.origin === 'lnwjing')).toHaveLength(Object.keys(catalogDefinitions).length);
       expect(catalog.remediations.length).toBeGreaterThan(0);
       expect(() => structuredClone(catalog)).not.toThrow();
       expect(catalog.items.find((item) => item.name === 'run_goal')?.inputSchema).toMatchObject({ type: 'object' });

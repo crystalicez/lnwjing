@@ -1,5 +1,5 @@
-import { appError, ok } from '@lnwjud/domain';
-import type { McpServerOptions } from '@lnwjud/mcp-server';
+import { appError, ok } from '@lnwjing/domain';
+import type { McpServerOptions } from '@lnwjing/mcp-server';
 import { describe, expect, it } from 'vitest';
 import { runMcpStdioCommand, type McpStdioServerHandle, type McpStdioServerStarter } from './mcp-stdio.js';
 
@@ -26,7 +26,7 @@ describe('mcp stdio command', () => {
       resolver: { resolve: async () => ok(workspace) },
       createServerOptions: (selectedWorkspace) => ({
         services: {},
-        actor: { clientId: selectedWorkspace.id, clientName: 'lnwjud-cli' },
+        actor: { clientId: selectedWorkspace.id, clientName: 'lnwjing-cli' },
       }),
       starter,
     });

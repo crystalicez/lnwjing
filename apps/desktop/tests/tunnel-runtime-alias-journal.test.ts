@@ -6,13 +6,13 @@ import { TunnelAliasRetirementJournal, tunnelAliasRecoveryDirectory } from '../s
 
 describe('TunnelAliasRetirementJournal', () => {
   it('restores an interrupted local alias retirement on the next launch, without changing unrelated profiles', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-alias-recovery-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-alias-recovery-'));
     try {
       const profile = path.join(root, 'profiles');
       const appData = path.join(root, 'app-data');
       await mkdir(profile);
       await mkdir(appData);
-      const owned = path.join(profile, 'lnwjud.yaml');
+      const owned = path.join(profile, 'lnwjing.yaml');
       const unrelated = path.join(profile, 'other.yaml');
       await writeFile(owned, 'new-tunnel-id');
       await writeFile(unrelated, 'unrelated-tunnel');
@@ -34,11 +34,11 @@ describe('TunnelAliasRetirementJournal', () => {
   });
 
   it('recovers an owned profile after the native CLI removes the entire profile directory', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-alias-removed-profile-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-alias-removed-profile-'));
     try {
       const profile = path.join(root, 'profile');
       await mkdir(profile);
-      const file = path.join(profile, 'lnwjud.yaml');
+      const file = path.join(profile, 'lnwjing.yaml');
       const directory = tunnelAliasRecoveryDirectory(path.join(root, 'appdata'));
       const journal = new TunnelAliasRetirementJournal(directory, profile);
       await journal.prepare([{ file, data: Buffer.from('saved-new-tunnel'), mode: 0o600 }]);
@@ -51,7 +51,7 @@ describe('TunnelAliasRetirementJournal', () => {
   });
 
   it('never recursively deletes a foreign artifact in an interrupted journal directory', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-alias-unowned-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-alias-unowned-'));
     try {
       const profile = path.join(root, 'profile');
       await mkdir(profile);
@@ -68,11 +68,11 @@ describe('TunnelAliasRetirementJournal', () => {
   });
 
   it('refuses to overwrite a newly changed profile and retains recoverable backup', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-alias-conflict-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-alias-conflict-'));
     try {
       const profile = path.join(root, 'profile');
       await mkdir(profile);
-      const owned = path.join(profile, 'lnwjud.yaml');
+      const owned = path.join(profile, 'lnwjing.yaml');
       const directory = tunnelAliasRecoveryDirectory(path.join(root, 'app-data'));
       const journal = new TunnelAliasRetirementJournal(directory, profile);
       await journal.prepare([{ file: owned, data: Buffer.from('preserved-original'), mode: 0o600 }]);

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { err, ok, type Result } from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
+import { err, ok, type Result } from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
 import type { McpApplicationServices } from './tools/tool-types.js';
 import { ContinuationStore, scopedContinuationKey } from './continuation-store.js';
 

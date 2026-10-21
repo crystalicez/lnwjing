@@ -9,18 +9,18 @@ if ((target === 'macos' && process.platform !== 'darwin') || (target === 'linux'
   throw new Error(`The ${target} package must be built on its target operating system`);
 }
 
-const architecture = process.env.LNWJUD_RUNTIME_ARCH ?? process.arch;
+const architecture = process.env.LNWJING_RUNTIME_ARCH ?? process.arch;
 if (architecture !== 'x64' && architecture !== 'arm64') throw new Error(`Unsupported ${target} architecture: ${architecture}`);
 const environment = {
   ...process.env,
-  LNWJUD_RUNTIME_TARGET: target === 'macos' ? 'darwin' : 'linux',
-  LNWJUD_RUNTIME_ARCH: architecture,
-  LNWJUD_TUNNEL_TARGET: target === 'macos' ? 'darwin' : 'linux',
-  LNWJUD_TUNNEL_ARCH: architecture,
+  LNWJING_RUNTIME_TARGET: target === 'macos' ? 'darwin' : 'linux',
+  LNWJING_RUNTIME_ARCH: architecture,
+  LNWJING_TUNNEL_TARGET: target === 'macos' ? 'darwin' : 'linux',
+  LNWJING_TUNNEL_ARCH: architecture,
 };
 const corepack = process.platform === 'win32' ? 'corepack.cmd' : 'corepack';
-const requiresMacCertificate = target === 'macos' && (process.env.LNWJUD_REQUIRE_CODESIGN === '1'
-  || process.env.LNWJUD_REQUIRE_NOTARIZATION === '1'
+const requiresMacCertificate = target === 'macos' && (process.env.LNWJING_REQUIRE_CODESIGN === '1'
+  || process.env.LNWJING_REQUIRE_NOTARIZATION === '1'
   || ['CSC_LINK', 'CSC_NAME', 'CSC_KEYCHAIN', 'APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID', 'APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_KEYCHAIN_PROFILE']
     .some((key) => Boolean(process.env[key]?.trim())));
 const electronBuilderArgs = [target === 'macos' ? '--mac' : '--linux', ...(target === 'macos' ? ['dmg', 'zip'] : ['AppImage', 'deb']), `--${architecture}`,
@@ -30,7 +30,7 @@ await run('node', ['scripts/prepare-tunnel-client.mjs'], environment);
 await run('node', ['scripts/prepare-runtime-tools.mjs'], environment);
 await run('node', ['scripts/prepare-ecc-runtime.mjs'], environment);
 await run('node', [target === 'macos' ? 'scripts/build-macos-host.mjs' : 'scripts/build-linux-host.mjs'], environment);
-await run(corepack, ['pnpm@10.15.0', '--filter', '@lnwjud/desktop...', 'build'], environment);
+await run(corepack, ['pnpm@10.15.0', '--filter', '@lnwjing/desktop...', 'build'], environment);
 await runElectronBuilderWithRetry(
   () => run('electron-builder', electronBuilderArgs, environment, true),
   undefined,

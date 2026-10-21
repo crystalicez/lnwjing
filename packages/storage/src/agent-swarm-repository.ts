@@ -5,7 +5,7 @@ import type {
   AgentSwarmTaskState,
   AgentSwarmTaskUpdate,
   CreateAgentSwarmRecord,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import type { SqliteDatabase } from './database.js';
 
 export type StoredAgentSwarmState = AgentSwarmState;

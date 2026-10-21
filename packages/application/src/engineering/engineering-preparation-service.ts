@@ -1,6 +1,6 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import { DEFAULT_ENGINEERING_HARNESS_SETTINGS, type EngineeringHarnessSettings } from '@lnwjud/shared';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import { DEFAULT_ENGINEERING_HARNESS_SETTINGS, type EngineeringHarnessSettings } from '@lnwjing/shared';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import { EngineeringProjectAssessmentService, type EngineeringProjectAssessment } from './engineering-project-assessment.js';
 import { planEngineeringWorkflow, type EngineeringWorkflowPlan } from './engineering-workflow.js';
 import {

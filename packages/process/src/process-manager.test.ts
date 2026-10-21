@@ -1,7 +1,7 @@
 import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { PathExecutableResolver, ProcessManager, type ExecutableResolver, type ProcessTreeTerminator } from './index.js';
 
 async function waitForState(manager: ProcessManager, processId: string, state: string): Promise<void> {
@@ -94,7 +94,7 @@ describe('ProcessManager', () => {
   it('rejects a missing executable and releases its pre-spawn writer reservation', async () => {
     const onVerifiedTermination = vi.fn();
     const result = await new ProcessManager().start({
-      executable: 'lnwjud-executable-that-does-not-exist',
+      executable: 'lnwjing-executable-that-does-not-exist',
       args: ['&&', 'whoami'],
       cwd: process.cwd(),
     }, undefined, undefined, onVerifiedTermination);
@@ -106,13 +106,13 @@ describe('ProcessManager', () => {
 
   it('runs a Windows command shim without shell true', async () => {
     if (process.platform !== 'win32') return;
-    const root = await mkdtemp(path.join(process.cwd(), 'lnwjud process shim-'));
+    const root = await mkdtemp(path.join(process.cwd(), 'lnwjing process shim-'));
     try {
-      await writeFile(path.join(root, 'lnwjud-shim.cmd'), '@echo off\r\necho process-shim-marker\r\n', 'utf8');
+      await writeFile(path.join(root, 'lnwjing-shim.cmd'), '@echo off\r\necho process-shim-marker\r\n', 'utf8');
       const resolver = new PathExecutableResolver({ Path: root, PATHEXT: '.CMD' });
-      await expect(resolver.resolve('lnwjud-shim')).resolves.toMatchObject({ ok: true, value: expect.stringMatching(/\.cmd$/i) });
+      await expect(resolver.resolve('lnwjing-shim')).resolves.toMatchObject({ ok: true, value: expect.stringMatching(/\.cmd$/i) });
       const manager = new ProcessManager(undefined, resolver);
-      const started = await manager.start({ executable: 'lnwjud-shim', args: [], cwd: root });
+      const started = await manager.start({ executable: 'lnwjing-shim', args: [], cwd: root });
       expect(started.ok).toBe(true);
       if (!started.ok) return;
 
@@ -126,11 +126,11 @@ describe('ProcessManager', () => {
 
   it('rejects shell metacharacters in Windows command shim arguments', async () => {
     if (process.platform !== 'win32') return;
-    const root = await mkdtemp(path.join(process.cwd(), 'lnwjud-process-shim-'));
+    const root = await mkdtemp(path.join(process.cwd(), 'lnwjing-process-shim-'));
     try {
-      await writeFile(path.join(root, 'lnwjud-shim.cmd'), '@echo off\r\necho process-shim-marker\r\n', 'utf8');
+      await writeFile(path.join(root, 'lnwjing-shim.cmd'), '@echo off\r\necho process-shim-marker\r\n', 'utf8');
       const resolver = new PathExecutableResolver({ Path: root, PATHEXT: '.CMD' });
-      const result = await new ProcessManager(undefined, resolver).start({ executable: 'lnwjud-shim', args: ['&', 'whoami'], cwd: root });
+      const result = await new ProcessManager(undefined, resolver).start({ executable: 'lnwjing-shim', args: ['&', 'whoami'], cwd: root });
       expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -222,7 +222,7 @@ describe('ProcessManager', () => {
   });
 
   it('does not spawn after cancellation wins during executable resolution', async () => {
-    const root = await mkdtemp(path.join(process.cwd(), 'lnwjud-cancelled-process-'));
+    const root = await mkdtemp(path.join(process.cwd(), 'lnwjing-cancelled-process-'));
     const marker = path.join(root, 'late-spawn-marker.txt');
     let releaseResolver!: () => void;
     const resolverGate = new Promise<void>((resolve) => { releaseResolver = resolve; });

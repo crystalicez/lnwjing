@@ -1,4 +1,4 @@
-# lnwjud repository structure
+# lnwjing repository structure
 
 Audit date: 2026-09-19
 

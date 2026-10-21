@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Workspace } from '@lnwjud/workspace';
+import type { Workspace } from '@lnwjing/workspace';
 import { SqliteDatabase } from './database.js';
 import { SqliteWorkspaceRepository } from './workspace-repository.js';
 
@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('SqliteWorkspaceRepository', () => {
   it('round-trips workspaces through the initial schema', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-db-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-db-'));
     temporaryRoots.push(root);
     const database = new SqliteDatabase(path.join(root, 'state.db'));
     const repository = new SqliteWorkspaceRepository(database);
@@ -36,7 +36,7 @@ describe('SqliteWorkspaceRepository', () => {
   });
 
   it('archives registrations outside the runtime view and restores them without deleting project data', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-workspace-archive-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-workspace-archive-'));
     temporaryRoots.push(root);
     const database = new SqliteDatabase(path.join(root, 'state.sqlite'));
     try {

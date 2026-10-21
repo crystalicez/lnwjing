@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SearchService, type SearchAdapter } from './search-service.js';
-import type { WorkspaceRepository, Workspace } from '@lnwjud/workspace';
+import type { WorkspaceRepository, Workspace } from '@lnwjing/workspace';
 
 describe('SearchService', () => {
   it('resolves the workspace before delegating a bounded text search', async () => {
@@ -33,7 +33,7 @@ describe('SearchService', () => {
   });
 
   it('uses the parent directory as ripgrep cwd when text search path is a file', async () => {
-    const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'lnwjud-search-file-'));
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'lnwjing-search-file-'));
     try {
       const filePath = path.join(workspaceRoot, 'fixture.ts');
       await writeFile(filePath, 'needle', 'utf8');
@@ -115,8 +115,8 @@ describe('SearchService', () => {
   });
 
   it('uses an explicit external absolute path as the ripgrep root under Full Bypass', async () => {
-    const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'lnwjud-search-workspace-'));
-    const outsideRoot = await mkdtemp(path.join(tmpdir(), 'lnwjud-search-outside-'));
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'lnwjing-search-workspace-'));
+    const outsideRoot = await mkdtemp(path.join(tmpdir(), 'lnwjing-search-outside-'));
     try {
       const workspace: Workspace = { id: 'workspace-1', displayName: 'Fixture', rootPath: workspaceRoot, realRootPath: workspaceRoot, createdAt: new Date(0).toISOString() };
       let receivedRoot = '';

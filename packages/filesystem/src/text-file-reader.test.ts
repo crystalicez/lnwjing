@@ -12,7 +12,7 @@ afterEach(async () => {
 
 describe('TextFileReader', () => {
   it('reads UTF-8 text and a bounded line range', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-reader-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-reader-'));
     temporaryRoots.push(root);
     const filePath = path.join(root, 'notes.txt');
     await writeFile(filePath, 'one\ntwo\nthree\n', 'utf8');
@@ -23,7 +23,7 @@ describe('TextFileReader', () => {
   });
 
   it('rejects binary files and files larger than 2 MiB', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-reader-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-reader-'));
     temporaryRoots.push(root);
     const binaryPath = path.join(root, 'data.bin');
     const largePath = path.join(root, 'large.txt');

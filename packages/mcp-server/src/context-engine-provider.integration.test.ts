@@ -2,13 +2,13 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FileService, SearchService } from '@lnwjud/application';
-import { type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { FileService, SearchService } from '@lnwjing/application';
+import { type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import { ContextEngine } from './context-engine.js';
 
 describe('ContextEngine with actual file and search providers', () => {
   it('reads one Thai and emoji filename exactly once and keeps whitespace through the actual providers', async () => {
-    const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-context-provider-'));
+    const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-context-provider-'));
     const root = await realpath(temporaryRoot);
     const filename = "ไทย 😀 Space's.ts";
     const content = 'export const needle = "ไทย 😀";  \n\t  needle  \n';
@@ -47,7 +47,7 @@ describe('ContextEngine with actual file and search providers', () => {
       expect(JSON.stringify(reads)).not.toContain('private-fixture');
     } finally {
       const resolvedCleanup = await realpath(temporaryRoot);
-      expect(resolvedCleanup === root && path.dirname(root) === await realpath(os.tmpdir()) && path.basename(root).startsWith('lnwjud-context-provider-')).toBe(true);
+      expect(resolvedCleanup === root && path.dirname(root) === await realpath(os.tmpdir()) && path.basename(root).startsWith('lnwjing-context-provider-')).toBe(true);
       await rm(root, { recursive: true, force: true });
     }
   });

@@ -184,7 +184,7 @@ describe('shared cross-process MCP activity snapshot', () => {
 });
 
 async function temporaryDirectory(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-shared-activity-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-shared-activity-'));
   roots.push(root);
   return root;
 }

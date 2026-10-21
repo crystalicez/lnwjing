@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { appError, err, ok } from '@lnwjud/domain';
-import { permissionProfiles } from '@lnwjud/permissions';
+import { appError, err, ok } from '@lnwjing/domain';
+import { permissionProfiles } from '@lnwjing/permissions';
 import { ToolRegistry, type McpApplicationServices } from './tool-registry.js';
 
 const actor = { clientId: 'client-1', clientName: 'test', sessionId: 'session-a' };

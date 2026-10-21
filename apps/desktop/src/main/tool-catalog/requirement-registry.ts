@@ -1,4 +1,4 @@
-import type { RequirementResult } from '@lnwjud/ipc-contracts';
+import type { RequirementResult } from '@lnwjing/ipc-contracts';
 
 export type RequirementProbeStatus = RequirementResult['status'];
 export interface RequirementProbeResult {

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FileService } from './file-service.js';
-import { WorkspacePathGuard, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { WorkspacePathGuard, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 
 const temporaryRoots: string[] = [];
 
@@ -22,7 +22,7 @@ function repository(workspace: Workspace): WorkspaceRepository {
 
 describe('FileService', () => {
   it('reads only through the workspace guard and enforces the 4 MiB aggregate cap', async () => {
-    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-files-'));
+    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-files-'));
     temporaryRoots.push(rawRoot);
     const root = await realpath(rawRoot);
     const workspace: Workspace = { id: 'workspace-1', displayName: 'Fixture', rootPath: root, realRootPath: root, createdAt: new Date(0).toISOString() };
@@ -40,7 +40,7 @@ describe('FileService', () => {
   });
 
   it('denies secret file reads by default', async () => {
-    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-files-'));
+    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-files-'));
     temporaryRoots.push(rawRoot);
     const root = await realpath(rawRoot);
     const workspace: Workspace = { id: 'workspace-1', displayName: 'Fixture', rootPath: root, realRootPath: root, createdAt: new Date(0).toISOString() };
@@ -56,7 +56,7 @@ describe('FileService', () => {
   });
 
   it('allows secret and binary reads for an explicitly trusted registered workspace on any drive', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-files-trusted-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-files-trusted-'));
     temporaryRoots.push(root);
     const workspace: Workspace = { id: 'workspace-trusted', displayName: 'Trusted Fixture', rootPath: root, realRootPath: root, createdAt: new Date(0).toISOString() };
     await writeFile(path.join(root, '.env'), 'TOKEN=secret', 'utf8');

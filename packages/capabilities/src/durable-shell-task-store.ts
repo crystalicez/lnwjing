@@ -2,9 +2,9 @@ import { execFile, spawn } from 'node:child_process';
 import { mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { prepareWindowsContainedLaunch, readWindowsContainmentReceipt } from '@lnwjud/process';
+import { prepareWindowsContainedLaunch, readWindowsContainmentReceipt } from '@lnwjing/process';
 import { promisify } from 'node:util';
-import { appError, err, ok, type GoalTaskCancellationObservation, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type GoalTaskCancellationObservation, type Result } from '@lnwjing/domain';
 import {
   DurableShellTaskIndex,
   type ActiveTaskInspection,

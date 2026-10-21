@@ -5,8 +5,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const temporaryRoots: string[] = [];
-const helperPath = path.resolve('scripts/lib/lnwjud-tunnel-lock.ps1');
-const starterPath = path.resolve('scripts/start-lnwjud-tunnel.ps1');
+const helperPath = path.resolve('scripts/lib/lnwjing-tunnel-lock.ps1');
+const starterPath = path.resolve('scripts/start-lnwjing-tunnel.ps1');
 
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -17,12 +17,12 @@ describe('PowerShell tunnel lock helper', () => {
     const root = await temporaryDirectory();
     const result = await runPowerShell(`
       . '${quote(helperPath)}'
-      $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 7 -OwnerStartedAt '2026-08-20T00:00:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }
+      $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 7 -OwnerStartedAt '2026-08-20T00:00:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }
       $claim | ConvertTo-Json -Compress
     `);
 
     expect(JSON.parse(result.stdout)).toMatchObject({ acquired: true, owner: { pid: 7 } });
-    expect(JSON.parse(await readFile(path.join(root, 'lnwjud.tunnel.lock'), 'utf8'))).toMatchObject({ version: 1, pid: 7 });
+    expect(JSON.parse(await readFile(path.join(root, 'lnwjing.tunnel.lock'), 'utf8'))).toMatchObject({ version: 1, pid: 7 });
     expect((await readdir(root)).filter((name) => name.includes('.publish.'))).toEqual([]);
   });
 
@@ -34,7 +34,7 @@ describe('PowerShell tunnel lock helper', () => {
       const result = await runPowerShell(`
         . '${quote(helperPath)}'
         $started = (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)
-        $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid $PID -OwnerStartedAt $started -ProcessStartProvider { param($id) $p=Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction Stop; if($null -eq $p){[pscustomobject]@{state='gone'}}else{[pscustomobject]@{state='live';processStartedAt=$p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',[Globalization.CultureInfo]::InvariantCulture)}} }
+        $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid $PID -OwnerStartedAt $started -ProcessStartProvider { param($id) $p=Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction Stop; if($null -eq $p){[pscustomobject]@{state='gone'}}else{[pscustomobject]@{state='live';processStartedAt=$p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',[Globalization.CultureInfo]::InvariantCulture)}} }
         $claim | ConvertTo-Json -Compress
       `);
 
@@ -56,7 +56,7 @@ describe('PowerShell tunnel lock helper', () => {
 
     const result = await runPowerShell(`
       . '${quote(helperPath)}'
-      $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 8 -OwnerStartedAt '2026-08-20T00:02:00.000Z' -ProcessStartProvider { param($id) ${provider} }
+      $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 8 -OwnerStartedAt '2026-08-20T00:02:00.000Z' -ProcessStartProvider { param($id) ${provider} }
       $claim | ConvertTo-Json -Compress
     `);
 
@@ -68,12 +68,12 @@ describe('PowerShell tunnel lock helper', () => {
     const root = await temporaryDirectory();
     const result = await runPowerShell(`
       . '${quote(helperPath)}'
-      $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 7 -OwnerStartedAt '2026-08-20T00:00:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }
+      $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 7 -OwnerStartedAt '2026-08-20T00:00:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }
       $wrong = [pscustomobject]@{ pid=7; processStartedAt='2026-08-20T00:00:00.000Z'; acquiredAt='2026-08-20T00:00:00.001Z' }
-      $wrongReleased = Release-LnwjudTunnelLock -ProfileDir '${quote(root)}' -Owner $wrong
-      $stillThere = Test-Path -LiteralPath (Join-Path '${quote(root)}' 'lnwjud.tunnel.lock')
-      $rightReleased = Release-LnwjudTunnelLock -ProfileDir '${quote(root)}' -Owner $claim.owner
-      [pscustomobject]@{ wrongReleased=$wrongReleased; stillThere=$stillThere; rightReleased=$rightReleased; existsAfter=(Test-Path -LiteralPath (Join-Path '${quote(root)}' 'lnwjud.tunnel.lock')) } | ConvertTo-Json -Compress
+      $wrongReleased = Release-LnwjingTunnelLock -ProfileDir '${quote(root)}' -Owner $wrong
+      $stillThere = Test-Path -LiteralPath (Join-Path '${quote(root)}' 'lnwjing.tunnel.lock')
+      $rightReleased = Release-LnwjingTunnelLock -ProfileDir '${quote(root)}' -Owner $claim.owner
+      [pscustomobject]@{ wrongReleased=$wrongReleased; stillThere=$stillThere; rightReleased=$rightReleased; existsAfter=(Test-Path -LiteralPath (Join-Path '${quote(root)}' 'lnwjing.tunnel.lock')) } | ConvertTo-Json -Compress
     `);
 
     expect(JSON.parse(result.stdout)).toEqual({ wrongReleased: false, stillThere: true, rightReleased: true, existsAfter: false });
@@ -96,21 +96,21 @@ describe('PowerShell tunnel lock helper', () => {
 
     const result = await runPowerShell(`
       . '${quote(helperPath)}'
-      $record = Read-LnwjudTunnelLockRecord -LockPath (Join-Path '${quote(root)}' 'lnwjud.tunnel.lock')
+      $record = Read-LnwjingTunnelLockRecord -LockPath (Join-Path '${quote(root)}' 'lnwjing.tunnel.lock')
       if($null -eq $record){'INVALID'}else{'VALID'}
     `);
 
     expect(result.stdout).toBe('INVALID');
-    expect(JSON.parse(await readFile(path.join(root, 'lnwjud.tunnel.lock'), 'utf8'))).toEqual(record);
+    expect(JSON.parse(await readFile(path.join(root, 'lnwjing.tunnel.lock'), 'utf8'))).toEqual(record);
   });
 
   it('cleans its publish file when invalid fixed metadata rejects acquisition', async () => {
     const root = await temporaryDirectory();
-    await writeFile(path.join(root, 'lnwjud.tunnel.lock'), '{broken', 'utf8');
+    await writeFile(path.join(root, 'lnwjing.tunnel.lock'), '{broken', 'utf8');
 
     const result = await runPowerShell(`
       . '${quote(helperPath)}'
-      try { Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 7 -OwnerStartedAt '2026-08-20T00:00:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }; exit 2 } catch { Write-Output $_.Exception.Message }
+      try { Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 7 -OwnerStartedAt '2026-08-20T00:00:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }; exit 2 } catch { Write-Output $_.Exception.Message }
     `);
 
     expect(result.stdout).toContain('invalid owner metadata');
@@ -123,10 +123,10 @@ describe('PowerShell tunnel lock helper', () => {
     await writeLock(root, existing);
     const result = await runPowerShell(`
       . '${quote(helperPath)}'
-      try { Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 88 -OwnerStartedAt '2026-08-20T00:01:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='unverifiable';reason='access_denied'} }; exit 2 } catch { Write-Output $_.Exception.Message }
+      try { Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 88 -OwnerStartedAt '2026-08-20T00:01:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='unverifiable';reason='access_denied'} }; exit 2 } catch { Write-Output $_.Exception.Message }
     `);
     expect(result.stdout).toContain('owner liveness is unverifiable: access_denied');
-    expect(JSON.parse(await readFile(path.join(root, 'lnwjud.tunnel.lock'), 'utf8'))).toEqual(existing);
+    expect(JSON.parse(await readFile(path.join(root, 'lnwjing.tunnel.lock'), 'utf8'))).toEqual(existing);
   });
 
   it('keeps the newly published owner acquired when stale quarantine cleanup is obstructed', async () => {
@@ -134,8 +134,8 @@ describe('PowerShell tunnel lock helper', () => {
     await writeLock(root, { version: 1, pid: 970, processStartedAt: '2026-08-20T00:00:00.000Z', acquiredAt: '2026-08-20T00:00:00.000Z' });
     const result = await runPowerShell(`
       . '${quote(helperPath)}'
-      $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 971 -OwnerStartedAt '2026-08-20T00:01:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} } -AfterStaleQuarantine {
-        $quarantine = Get-ChildItem -LiteralPath '${quote(root)}' -Filter 'lnwjud.tunnel.lock.stale.*' | Select-Object -First 1
+      $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 971 -OwnerStartedAt '2026-08-20T00:01:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} } -AfterStaleQuarantine {
+        $quarantine = Get-ChildItem -LiteralPath '${quote(root)}' -Filter 'lnwjing.tunnel.lock.stale.*' | Select-Object -First 1
         Remove-Item -LiteralPath $quarantine.FullName -Force
         New-Item -ItemType Directory -Path $quarantine.FullName | Out-Null
         Set-Content -LiteralPath (Join-Path $quarantine.FullName 'obstruction') -Value 'fixture'
@@ -144,7 +144,7 @@ describe('PowerShell tunnel lock helper', () => {
     `);
 
     expect(JSON.parse(result.stdout)).toMatchObject({ acquired: true, owner: { pid: 971 } });
-    expect(JSON.parse(await readFile(path.join(root, 'lnwjud.tunnel.lock'), 'utf8'))).toMatchObject({ pid: 971 });
+    expect(JSON.parse(await readFile(path.join(root, 'lnwjing.tunnel.lock'), 'utf8'))).toMatchObject({ pid: 971 });
   });
 
   it('serializes a PowerShell stale reclaimer against a second reclaimer and fresh third publisher', async () => {
@@ -153,7 +153,7 @@ describe('PowerShell tunnel lock helper', () => {
     await writeLock(root, { version: 1, pid: 980, processStartedAt: '2026-08-20T00:00:00.000Z', acquiredAt: '2026-08-20T00:00:00.000Z' });
     const first = spawnPowerShellCapture(`
       . '${quote(helperPath)}'
-      $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 981 -OwnerStartedAt '2026-08-20T00:01:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} } -AfterStaleQuarantine {
+      $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid 981 -OwnerStartedAt '2026-08-20T00:01:00.000Z' -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} } -AfterStaleQuarantine {
         [Console]::Out.WriteLine('QUARANTINED'); [Console]::Out.Flush()
         while(-not (Test-Path -LiteralPath '${quote(releaseSignal)}')) { Start-Sleep -Milliseconds 10 }
       }
@@ -165,7 +165,7 @@ describe('PowerShell tunnel lock helper', () => {
     let thirdSettled = false;
     const contender = (pid: number, startedAt: string): Promise<{ stdout: string; stderr: string }> => runPowerShell(`
       . '${quote(helperPath)}'
-      $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(root)}' -OwnerPid ${pid} -OwnerStartedAt '${startedAt}' -ProcessStartProvider { param($id) if($id -eq 981){[pscustomobject]@{state='live';processStartedAt='2026-08-20T00:01:00.000Z'}}else{[pscustomobject]@{state='gone'}} }
+      $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(root)}' -OwnerPid ${pid} -OwnerStartedAt '${startedAt}' -ProcessStartProvider { param($id) if($id -eq 981){[pscustomobject]@{state='live';processStartedAt='2026-08-20T00:01:00.000Z'}}else{[pscustomobject]@{state='gone'}} }
       $claim | ConvertTo-Json -Compress
     `);
     const second = contender(982, '2026-08-20T00:02:00.000Z').finally(() => { secondSettled = true; });
@@ -181,7 +181,7 @@ describe('PowerShell tunnel lock helper', () => {
       expect.objectContaining({ acquired: false, owner: expect.objectContaining({ pid: 981 }) }),
       expect.objectContaining({ acquired: false, owner: expect.objectContaining({ pid: 981 }) }),
     ]);
-    expect(await readFile(path.join(root, 'lnwjud.tunnel.lock'), 'utf8')).toContain('"pid":981');
+    expect(await readFile(path.join(root, 'lnwjing.tunnel.lock'), 'utf8')).toContain('"pid":981');
   });
 });
 
@@ -193,7 +193,7 @@ describe('production PowerShell tunnel starter integration', () => {
     const sentinel = path.join(root, 'client-invoked');
     const fakeClient = path.join(root, 'fake-tunnel-client.cmd');
     await mkdir(profileDir, { recursive: true });
-    await writeFile(path.join(profileDir, 'lnwjud.runtime.secret'), 'not-read-while-lock-is-owned', 'utf8');
+    await writeFile(path.join(profileDir, 'lnwjing.runtime.secret'), 'not-read-while-lock-is-owned', 'utf8');
     await writeFile(fakeClient, `@echo invoked>"${sentinel}"\r\n@exit /b 99\r\n`, 'utf8');
     const holder = await startHolder(profileDir, releaseSignal);
     try {
@@ -215,10 +215,10 @@ describe('production PowerShell tunnel starter integration', () => {
     const root = await temporaryDirectory();
     const profileDir = path.join(root, 'tunnel-client');
     const releaseSignal = path.join(root, 'release');
-    const marker = path.join(profileDir, 'lnwjud.tunnel.stop');
+    const marker = path.join(profileDir, 'lnwjing.tunnel.stop');
     const fakeClient = path.join(root, 'fake-tunnel-client.cmd');
     await mkdir(profileDir, { recursive: true });
-    await writeFile(path.join(profileDir, 'lnwjud.runtime.secret'), 'not-read', 'utf8');
+    await writeFile(path.join(profileDir, 'lnwjing.runtime.secret'), 'not-read', 'utf8');
     await writeFile(marker, 'active-owner-stop', 'utf8');
     await writeFile(fakeClient, '@exit /b 99\r\n', 'utf8');
     const holder = await startHolder(profileDir, releaseSignal);
@@ -233,14 +233,14 @@ describe('production PowerShell tunnel starter integration', () => {
 });
 
 async function temporaryDirectory(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ps-lock-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ps-lock-'));
   temporaryRoots.push(root);
   return root;
 }
 
 async function writeLock(root: string, record: unknown): Promise<void> {
   await mkdir(root, { recursive: true });
-  await writeFile(path.join(root, 'lnwjud.tunnel.lock'), JSON.stringify(record), 'utf8');
+  await writeFile(path.join(root, 'lnwjing.tunnel.lock'), JSON.stringify(record), 'utf8');
 }
 
 async function runPowerShell(script: string): Promise<{ stdout: string; stderr: string }> {
@@ -273,11 +273,11 @@ async function startHolder(profileDir: string, releaseSignal: string): Promise<{
   const script = `
     . '${quote(helperPath)}'
     $started = (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)
-    $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(profileDir)}' -OwnerPid $PID -OwnerStartedAt $started -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }
+    $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(profileDir)}' -OwnerPid $PID -OwnerStartedAt $started -ProcessStartProvider { param($id) [pscustomobject]@{state='gone'} }
     Write-Output "READY:$PID"
     [Console]::Out.Flush()
     while(-not (Test-Path -LiteralPath '${quote(releaseSignal)}')) { Start-Sleep -Milliseconds 20 }
-    [void](Release-LnwjudTunnelLock -ProfileDir '${quote(profileDir)}' -Owner $claim.owner)
+    [void](Release-LnwjingTunnelLock -ProfileDir '${quote(profileDir)}' -Owner $claim.owner)
   `;
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.setEncoding('utf8');

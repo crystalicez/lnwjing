@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { access, constants, stat } from 'node:fs/promises';
-import { err, ok, type AppError, type Result } from '@lnwjud/domain';
-import { toSpawnInvocation } from '@lnwjud/process';
+import { err, ok, type AppError, type Result } from '@lnwjing/domain';
+import { toSpawnInvocation } from '@lnwjing/process';
 import { capabilitiesFromHelp, type CodexDiscoveryResult } from './codex-capabilities.js';
 
 export interface CodexCommandResult {

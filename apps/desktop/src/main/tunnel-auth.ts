@@ -1,12 +1,12 @@
 import { mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { TunnelAuthStatus } from '@lnwjud/ipc-contracts';
-import type { SecretProtector } from '@lnwjud/shared';
+import type { TunnelAuthStatus } from '@lnwjing/ipc-contracts';
+import type { SecretProtector } from '@lnwjing/shared';
 import { readRegularSecret, writeSecretAtomically } from './secret-file.js';
 
-export const LEGACY_TUNNEL_SECRET_FILE = 'lnwjud.runtime.secret';
-export const OAUTH_TUNNEL_SESSION_FILE = 'lnwjud.oauth.session.secret';
+export const LEGACY_TUNNEL_SECRET_FILE = 'lnwjing.runtime.secret';
+export const OAUTH_TUNNEL_SESSION_FILE = 'lnwjing.oauth.session.secret';
 
 export function defaultTunnelProfileDirectory(
   environment: NodeJS.ProcessEnv = process.env,
@@ -25,7 +25,7 @@ export function defaultTunnelProfileDirectory(
     : (environment.XDG_DATA_HOME?.trim() && path.posix.isAbsolute(environment.XDG_DATA_HOME.trim())
       ? environment.XDG_DATA_HOME.trim()
       : path.posix.join(homeDirectory, '.local', 'share'));
-  return path.posix.join(dataHome, 'lnwjud', 'tunnel-client');
+  return path.posix.join(dataHome, 'lnwjing', 'tunnel-client');
 }
 
 export function legacyTunnelSecretPath(
@@ -88,7 +88,7 @@ export interface LegacyApiKeyCredentialProviderOptions {
 }
 
 /**
- * Backward-compatible adapter for the original lnwjud Secure Tunnel credential
+ * Backward-compatible adapter for the original lnwjing Secure Tunnel credential
  * contract. The on-disk file name and runtime secret injection remain stable;
  * new writes use the injected platform secure-storage provider.
  */

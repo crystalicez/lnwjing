@@ -6,9 +6,9 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { request as httpRequest } from 'node:http';
-import type { TunnelAuthStatus, TunnelPersistentStatus, TunnelRunState, TunnelStatus } from '@lnwjud/ipc-contracts';
-import { probeProcessStart, type ProcessProbeResult } from '@lnwjud/mcp-server';
-import type { SecretProtector } from '@lnwjud/shared';
+import type { TunnelAuthStatus, TunnelPersistentStatus, TunnelRunState, TunnelStatus } from '@lnwjing/ipc-contracts';
+import { probeProcessStart, type ProcessProbeResult } from '@lnwjing/mcp-server';
+import type { SecretProtector } from '@lnwjing/shared';
 import { LegacyApiKeyCredentialProvider, type TunnelAuthDiagnostics, type TunnelAuthProvider, type TunnelNetworkErrorDiagnostic } from './tunnel-auth.js';
 import { formatTunnelExitMessage, tunnelExitHintFromLog } from './tunnel-exit.js';
 import { acquireTunnelLock, readTunnelLock, type TunnelLockAcquisition, type TunnelLockOwner } from './tunnel-lock.js';
@@ -21,8 +21,8 @@ import { maskTunnelId, TUNNEL_RUNTIME_ALIAS, type TunnelRuntimeSnapshot } from '
 
 const execFileAsync = promisify(execFile);
 
-const PROFILE_NAME = 'lnwjud';
-export const TUNNEL_SECRET_FILE_NAME = 'lnwjud.runtime.secret';
+const PROFILE_NAME = 'lnwjing';
+export const TUNNEL_SECRET_FILE_NAME = 'lnwjing.runtime.secret';
 const CLIENT_PATH_SETTING = 'tunnel_client_path';
 const MCP_CONNECTION_MAX_TTL = '168h0m0s';
 const MCP_MAX_CONCURRENT_REQUESTS = '32';
@@ -47,7 +47,7 @@ export function resolveTunnelProfileDirectory(environment: NodeJS.ProcessEnv = p
     : (environment.XDG_DATA_HOME?.trim() && path.posix.isAbsolute(environment.XDG_DATA_HOME.trim())
       ? environment.XDG_DATA_HOME.trim()
       : join(homeDirectory, '.local', 'share'));
-  return join(dataHome, 'lnwjud', 'tunnel-client');
+  return join(dataHome, 'lnwjing', 'tunnel-client');
 }
 
 class StartCancelledError extends Error {}
@@ -199,7 +199,7 @@ export class TunnelController {
   }
 
   public logPath(): string {
-    return path.join(this.profileDirectory(), 'lnwjud-tunnel.log');
+    return path.join(this.profileDirectory(), 'lnwjing-tunnel.log');
   }
 
   public resolveClientPath(): string | null {
@@ -339,7 +339,7 @@ export class TunnelController {
       this.child = null;
       if (this.state === 'running') this.state = 'stopped';
     } else if (this.tunnelLock === null) {
-      // No desktop-owned child: reflect a tunnel started externally (e.g. start-lnwjud-tunnel.ps1).
+      // No desktop-owned child: reflect a tunnel started externally (e.g. start-lnwjing-tunnel.ps1).
       const externalProbe = await this.probeExternalRunning();
       if (externalProbe === 'live') {
         this.state = 'running';
@@ -445,7 +445,7 @@ export class TunnelController {
           return 'gone';
         }
       }
-      const result = await (this.options.isExternalTunnelRunning?.() ?? isLnwjudTunnelProcessRunning(this.options.platform ?? process.platform));
+      const result = await (this.options.isExternalTunnelRunning?.() ?? isLnwjingTunnelProcessRunning(this.options.platform ?? process.platform));
       this.lastExternalProbe = result ? 'live' : 'gone';
     } catch {
       this.lastExternalProbe = await this.configuredHealthIsLive() ? 'live' : 'unverifiable';
@@ -549,7 +549,7 @@ export class TunnelController {
       const auth = await this.authStatus();
       throwIfStartCancelled(signal);
       if (!auth.runtimeCredentialAvailable) throw new Error(auth.message ?? 'Save a Runtime API key first');
-      if (!existsSync(this.profilePath())) throw new Error('Missing tunnel profile lnwjud.yaml');
+      if (!existsSync(this.profilePath())) throw new Error('Missing tunnel profile lnwjing.yaml');
 
       const credential = await this.authProvider.getRuntimeCredential();
       throwIfStartCancelled(signal);
@@ -830,7 +830,7 @@ export class TunnelController {
     if (this.child !== null && this.child.exitCode === null && Number.isInteger(this.child.pid) && (this.child.pid ?? 0) > 0) pids.add(this.child.pid as number);
     if (this.tunnelLock !== null) pids.add(this.tunnelLock.owner.pid);
     try {
-      const external = await (this.options.verifiedExternalTunnelPids?.() ?? findLnwjudTunnelProcessPids(this.options.platform ?? process.platform));
+      const external = await (this.options.verifiedExternalTunnelPids?.() ?? findLnwjingTunnelProcessPids(this.options.platform ?? process.platform));
       for (const pid of external) if (Number.isInteger(pid) && pid > 0 && pid <= 2_147_483_647) pids.add(pid);
     } catch (error: unknown) {
       if (pids.size === 0) return { pids: [], unavailableReason: error instanceof Error ? `external_tunnel_pid_probe_failed:${error.message}` : 'external_tunnel_pid_probe_failed' };
@@ -1178,7 +1178,7 @@ export class TunnelController {
     const adapter = this.createRuntimeAdapter(clientPath, '');
     if (storedTunnelId === null && adapter.runtimeAlias() !== TUNNEL_RUNTIME_ALIAS) {
       if (recordedOwner !== null) {
-        return this.clearRecordedRuntimeOwnerOnlyWhenExternalGone('its dedicated lnwjud alias is unavailable');
+        return this.clearRecordedRuntimeOwnerOnlyWhenExternalGone('its dedicated lnwjing alias is unavailable');
       }
       return false;
     }
@@ -1206,16 +1206,16 @@ export class TunnelController {
     if (!nativeStatus.exists) {
       if (storedTunnelId !== null) await adapter.ensureSingleProcess?.(storedTunnelId, nativeStatus);
       if (recordedOwner !== null) {
-        return this.clearRecordedRuntimeOwnerOnlyWhenExternalGone('the recorded owner reports that the lnwjud alias is absent');
+        return this.clearRecordedRuntimeOwnerOnlyWhenExternalGone('the recorded owner reports that the lnwjing alias is absent');
       }
       return false;
     }
     if (storedTunnelId !== null && nativeStatus.tunnelId !== null && nativeStatus.tunnelId !== storedTunnelId) {
       if (nativeStatus.running || nativeStatus.pid !== null) {
-        throw new Error('Persistent tunnel alias lnwjud belongs to a different Tunnel ID; refusing to stop it automatically');
+        throw new Error('Persistent tunnel alias lnwjing belongs to a different Tunnel ID; refusing to stop it automatically');
       }
       if (await this.probeExternalRunning(true) !== 'gone' || adapter.retireStoppedAlias === undefined) {
-        throw new Error('Stopped lnwjud Tunnel alias has a different Tunnel ID, but safe cleanup could not be verified. No other runtime was stopped; explicitly stop the original runtime and retry.');
+        throw new Error('Stopped lnwjing Tunnel alias has a different Tunnel ID, but safe cleanup could not be verified. No other runtime was stopped; explicitly stop the original runtime and retry.');
       }
       await adapter.retireStoppedAlias(nativeStatus.tunnelId);
       this.options.setRuntimeOwnerPath?.('');
@@ -1236,7 +1236,7 @@ export class TunnelController {
       if (expectedTunnelId !== null) await adapter.ensureSingleProcess?.(expectedTunnelId, nativeStatus);
     }
     if (recordedOwner !== null) {
-      return this.clearRecordedRuntimeOwnerOnlyWhenExternalGone('the recorded owner reports that the lnwjud alias is stopped');
+      return this.clearRecordedRuntimeOwnerOnlyWhenExternalGone('the recorded owner reports that the lnwjing alias is stopped');
     }
     this.options.setRuntimeOwnerPath?.('');
     this.invalidateExternalProbeCache();
@@ -1479,7 +1479,7 @@ export class TunnelController {
   private async requireMcpServerUrl(): Promise<string> {
     const value = await this.options.getMcpServerUrl?.();
     if (value === null || value === undefined || value.trim().length === 0) {
-      throw new Error('Desktop MCP is unavailable; start lnwjud and try again');
+      throw new Error('Desktop MCP is unavailable; start lnwjing and try again');
     }
     return normalizeLoopbackMcpUrl(value);
   }
@@ -1522,9 +1522,9 @@ export function tunnelClientEnv(apiKey: string, profileDirectory: string, platfo
   // session-concurrent. Keep one shared tunnel and give it explicit headroom.
   env.MCP_MAX_CONCURRENT_REQUESTS = MCP_MAX_CONCURRENT_REQUESTS;
   // Secure Tunnel forwards to the already-running Desktop HTTP MCP. Do not pass
-  // headless lnwjud authorization/scope settings to the transport-only child.
-  delete env.LNWJUD_DATA_PATH;
-  delete env.LNWJUD_UNRESTRICTED;
+  // headless lnwjing authorization/scope settings to the transport-only child.
+  delete env.LNWJING_DATA_PATH;
+  delete env.LNWJING_UNRESTRICTED;
   env.TUNNEL_CLIENT_PROFILE = PROFILE_NAME;
   env.TUNNEL_CLIENT_PROFILE_DIR = profileDirectory;
   if (platform === 'win32') {
@@ -1566,11 +1566,11 @@ function extractExecDetail(error: unknown): string {
   return typeof record.message === 'string' ? record.message : '';
 }
 
-async function isLnwjudTunnelProcessRunning(platform: NodeJS.Platform = process.platform): Promise<boolean> {
-  return (await findLnwjudTunnelProcessPids(platform)).length > 0;
+async function isLnwjingTunnelProcessRunning(platform: NodeJS.Platform = process.platform): Promise<boolean> {
+  return (await findLnwjingTunnelProcessPids(platform)).length > 0;
 }
 
-async function findLnwjudTunnelProcessPids(platform: NodeJS.Platform = process.platform): Promise<readonly number[]> {
+async function findLnwjingTunnelProcessPids(platform: NodeJS.Platform = process.platform): Promise<readonly number[]> {
   if (platform !== 'win32') {
     const result = await Promise.race([
       execFileAsync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8', timeout: 3_000, maxBuffer: 256 * 1024 }),
@@ -1584,7 +1584,7 @@ async function findLnwjudTunnelProcessPids(platform: NodeJS.Platform = process.p
       const command = match[2]?.trim() ?? '';
       if (!Number.isInteger(pid) || pid <= 0 || pid > 2_147_483_647) continue;
       if (!/(?:^|[\\/])tunnel-client(?:\s|$)/i.test(command)) continue;
-      if (!/(?:--profile\s+(?:"lnwjud"|'lnwjud'|lnwjud)(?:\s|$)|(?:^|[\\/])lnwjud\.ya?ml(?:\s|$))/i.test(command)) continue;
+      if (!/(?:--profile\s+(?:"lnwjing"|'lnwjing'|lnwjing)(?:\s|$)|(?:^|[\\/])lnwjing\.ya?ml(?:\s|$))/i.test(command)) continue;
       pids.push(pid);
     }
     return [...new Set(pids)];
@@ -1594,7 +1594,7 @@ async function findLnwjudTunnelProcessPids(platform: NodeJS.Platform = process.p
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      "@(Get-CimInstance Win32_Process -Filter \"Name = 'tunnel-client.exe'\" -ErrorAction Stop | Where-Object { $_.CommandLine -match '(?i)(--profile\\s+lnwjud|lnwjud\\.yaml)' } | Select-Object -ExpandProperty ProcessId) -join ','",
+      "@(Get-CimInstance Win32_Process -Filter \"Name = 'tunnel-client.exe'\" -ErrorAction Stop | Where-Object { $_.CommandLine -match '(?i)(--profile\\s+lnwjing|lnwjing\\.yaml)' } | Select-Object -ExpandProperty ProcessId) -join ','",
     ], { windowsHide: true, encoding: 'utf8', timeout: 3_000 }),
     new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('tunnel process probe timed out')), 3_500);

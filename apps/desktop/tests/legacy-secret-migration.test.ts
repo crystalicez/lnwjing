@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { createExplicitKeySecretProtector } from '@lnwjud/shared';
+import { createExplicitKeySecretProtector } from '@lnwjing/shared';
 import { migrateLegacyWindowsSecrets, type LegacySecretHelperRequest } from '../src/main/legacy-secret-migration.js';
 import { RemoteMcpController } from '../src/main/remote-mcp-controller.js';
 import { TunnelOAuthSessionStore } from '../src/main/tunnel-oauth-store.js';
@@ -16,13 +16,13 @@ const LEGACY_TUNNEL_HEX = '01000000d08c9ddf0115d1118c7a00c04fc297eb' + 'ab'.repe
 
 describe('legacy Windows secret migration', () => {
   it.each([false, true])('checks the helper checksum (explicit override: %s) and preserves legacy data on mismatch', async (explicitOverride) => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-helper-integrity-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-helper-integrity-')));
     try {
-      const helperPath = path.join(root, 'lnwjud-windows-secret-migrator.exe');
+      const helperPath = path.join(root, 'lnwjing-windows-secret-migrator.exe');
       const checkpointPath = path.join(root, 'checkpoint-master.key');
       await writeFile(helperPath, 'invalid helper fixture');
-      const helperSha256Path = path.join(root, explicitOverride ? 'custom-checksum.txt' : 'lnwjud-windows-secret-migrator.sha256');
-      await writeFile(helperSha256Path, `${'0'.repeat(64)}  lnwjud-windows-secret-migrator.exe\n`);
+      const helperSha256Path = path.join(root, explicitOverride ? 'custom-checksum.txt' : 'lnwjing-windows-secret-migrator.sha256');
+      await writeFile(helperSha256Path, `${'0'.repeat(64)}  lnwjing-windows-secret-migrator.exe\n`);
       await writeFile(checkpointPath, 'dpapi:v2:legacy-fixture');
       await expect(migrateLegacyWindowsSecrets({
         platform: 'win32', helperPath, checkpointPath, tunnelSecretPath: path.join(root, 'missing.secret'),
@@ -39,22 +39,22 @@ describe('legacy Windows secret migration', () => {
   it.skipIf(process.platform !== 'win32')('migrates real Windows DPAPI and SecureString values with the shipped native helper', async () => {
     const exec = promisify(execFile);
     const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
-    const helperPath = process.env.LNWJUD_TEST_WINDOWS_SECRET_MIGRATOR
-      ?? path.join(repositoryRoot, 'native/windows-secret-migrator/bin/win-x64/lnwjud-windows-secret-migrator.exe');
+    const helperPath = process.env.LNWJING_TEST_WINDOWS_SECRET_MIGRATOR
+      ?? path.join(repositoryRoot, 'native/windows-secret-migrator/bin/win-x64/lnwjing-windows-secret-migrator.exe');
     const powershell = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
     const powershellEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'psmodulepath'));
     if (!existsSync(helperPath)) {
-      if (process.env.LNWJUD_TEST_WINDOWS_SECRET_MIGRATOR !== undefined) throw new Error('Configured test helper does not exist');
+      if (process.env.LNWJING_TEST_WINDOWS_SECRET_MIGRATOR !== undefined) throw new Error('Configured test helper does not exist');
       await exec(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(repositoryRoot, 'scripts/build-windows-secret-migrator.ps1')], { windowsHide: true, timeout: process.env.CI ? 300_000 : 120_000, env: powershellEnv });
     }
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-native-migration-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-native-migration-')));
     try {
       const fixture = await exec(powershell, ['-NoProfile', '-NonInteractive', '-Command',
         `Add-Type -AssemblyName System.Security; $bytes = [Text.Encoding]::UTF8.GetBytes('${CHECKPOINT_KEY}'); $cipher = [Security.Cryptography.ProtectedData]::Protect($bytes, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser); $secure = ConvertTo-SecureString '${TUNNEL_KEY}' -AsPlainText -Force; @{ checkpoint = [Convert]::ToBase64String($cipher); tunnel = (ConvertFrom-SecureString $secure) } | ConvertTo-Json -Compress`,
       ], { windowsHide: true, env: powershellEnv });
       const legacy = JSON.parse(fixture.stdout) as { checkpoint: string; tunnel: string };
       const checkpointPath = path.join(root, 'checkpoint-master.key');
-      const tunnelSecretPath = path.join(root, 'lnwjud.runtime.secret');
+      const tunnelSecretPath = path.join(root, 'lnwjing.runtime.secret');
       await writeFile(checkpointPath, `dpapi:v2:${legacy.checkpoint}`);
       await writeFile(tunnelSecretPath, legacy.tunnel);
       const secretProtector = createExplicitKeySecretProtector(Buffer.alloc(32, 0x42));
@@ -71,7 +71,7 @@ describe('legacy Windows secret migration', () => {
   }, process.env.CI ? 330_000 : 150_000);
 
   it('migrates every persisted OAuth/ngrok secret using the existing startup arguments', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-oauth-migration-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-oauth-migration-'));
     try {
       const tunnelDirectory = path.join(root, 'external-tunnel-profile');
       const remoteDirectory = path.join(root, 'remote-mcp');
@@ -88,7 +88,7 @@ describe('legacy Windows secret migration', () => {
         refreshGrants: [{ refreshToken: 'r'.repeat(40), clientId: 'client', expiresAt: Date.parse('2099-01-01') }],
       };
       const files = [
-        [path.join(tunnelDirectory, 'lnwjud.oauth.session.secret'), JSON.stringify(session)],
+        [path.join(tunnelDirectory, 'lnwjing.oauth.session.secret'), JSON.stringify(session)],
         [path.join(remoteDirectory, 'oauth-state.secret'), JSON.stringify(state)],
         [path.join(remoteDirectory, 'ngrok-authtoken.secret'), 'existing-ngrok-authtoken'],
       ] as const;
@@ -101,7 +101,7 @@ describe('legacy Windows secret migration', () => {
         if (index < 0) throw new Error('Unexpected legacy file');
         return files[index]![1];
       });
-      const options = { platform: 'win32' as const, checkpointPath: path.join(root, 'checkpoint-master.key'), tunnelSecretPath: path.join(tunnelDirectory, 'lnwjud.runtime.secret'), secretProtector: protector, runHelper };
+      const options = { platform: 'win32' as const, checkpointPath: path.join(root, 'checkpoint-master.key'), tunnelSecretPath: path.join(tunnelDirectory, 'lnwjing.runtime.secret'), secretProtector: protector, runHelper };
       await migrateLegacyWindowsSecrets(options);
       await migrateLegacyWindowsSecrets(options);
       expect(runHelper).toHaveBeenCalledTimes(3);
@@ -130,10 +130,10 @@ describe('legacy Windows secret migration', () => {
   });
 
   it('re-encrypts checkpoint and tunnel values atomically and leaves a recovery backup', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-secret-migration-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-secret-migration-'));
     try {
       const checkpointPath = path.join(root, 'checkpoint-master.key');
-      const tunnelPath = path.join(root, 'tunnel', 'lnwjud.runtime.secret');
+      const tunnelPath = path.join(root, 'tunnel', 'lnwjing.runtime.secret');
       await writeFile(checkpointPath, 'dpapi:v2:legacy-checkpoint-ciphertext\n', 'utf8');
       await mkdir(path.dirname(tunnelPath), { recursive: true });
       await writeFile(tunnelPath, LEGACY_TUNNEL_HEX, 'utf8');
@@ -173,9 +173,9 @@ describe('legacy Windows secret migration', () => {
     }
   });
 
-  it.each(['tunnel/lnwjud.oauth.session.secret', 'remote-mcp/oauth-state.secret', 'remote-mcp/ngrok-authtoken.secret'])(
+  it.each(['tunnel/lnwjing.oauth.session.secret', 'remote-mcp/oauth-state.secret', 'remote-mcp/ngrok-authtoken.secret'])(
     'preserves %s when replacement verification fails', async (relativePath) => {
-      const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-oauth-migration-fail-'));
+      const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-oauth-migration-fail-'));
       try {
         const filename = path.join(root, relativePath);
         await mkdir(path.dirname(filename), { recursive: true });
@@ -183,7 +183,7 @@ describe('legacy Windows secret migration', () => {
         const protector = createExplicitKeySecretProtector(Buffer.alloc(32, 0x32));
         const options = {
           platform: 'win32' as const, checkpointPath: path.join(root, 'checkpoint-master.key'),
-          tunnelSecretPath: path.join(root, 'tunnel', 'lnwjud.runtime.secret'),
+          tunnelSecretPath: path.join(root, 'tunnel', 'lnwjing.runtime.secret'),
           secretProtector: { ...protector, decrypt: async (): Promise<never> => { throw new Error('Keyring became unavailable'); } },
           runHelper: async (): Promise<string> => 'existing-secret',
         };
@@ -200,10 +200,10 @@ describe('legacy Windows secret migration', () => {
   );
 
   it('is idempotent and does not invoke the helper after a safe envelope exists', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-secret-migration-idempotent-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-secret-migration-idempotent-'));
     try {
       const checkpointPath = path.join(root, 'checkpoint-master.key');
-      const tunnelPath = path.join(root, 'lnwjud.runtime.secret');
+      const tunnelPath = path.join(root, 'lnwjing.runtime.secret');
       await writeFile(checkpointPath, 'dpapi:v1:legacy-secure-string', 'utf8');
       const protector = createExplicitKeySecretProtector(Buffer.alloc(32, 0x5e));
       const runHelper = vi.fn(async () => CHECKPOINT_KEY);
@@ -218,10 +218,10 @@ describe('legacy Windows secret migration', () => {
   });
 
   it('preserves the legacy value when decryption or verification fails', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-secret-migration-fail-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-secret-migration-fail-'));
     try {
       const checkpointPath = path.join(root, 'checkpoint-master.key');
-      const tunnelPath = path.join(root, 'lnwjud.runtime.secret');
+      const tunnelPath = path.join(root, 'lnwjing.runtime.secret');
       const legacy = 'dpapi:v2:corrupt-value';
       await writeFile(checkpointPath, legacy, 'utf8');
       const protector = createExplicitKeySecretProtector(Buffer.alloc(32, 0x7f));
@@ -240,15 +240,15 @@ describe('legacy Windows secret migration', () => {
   });
 
   it('is a no-op on macOS and Linux, including when legacy-looking files exist', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-secret-migration-posix-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-secret-migration-posix-'));
     try {
       const checkpointPath = path.join(root, 'checkpoint-master.key');
-      const tunnelPath = path.join(root, 'lnwjud.runtime.secret');
+      const tunnelPath = path.join(root, 'lnwjing.runtime.secret');
       const protector = createExplicitKeySecretProtector(Buffer.alloc(32, 0x11));
       const runHelper = vi.fn(async () => CHECKPOINT_KEY);
       await writeFile(checkpointPath, 'dpapi:v2:must-not-read', 'utf8');
       await mkdir(path.join(root, 'remote-mcp'));
-      const extraFiles = ['lnwjud.oauth.session.secret', 'remote-mcp/oauth-state.secret', 'remote-mcp/ngrok-authtoken.secret'];
+      const extraFiles = ['lnwjing.oauth.session.secret', 'remote-mcp/oauth-state.secret', 'remote-mcp/ngrok-authtoken.secret'];
       for (const filename of extraFiles) await writeFile(path.join(root, filename), LEGACY_TUNNEL_HEX, 'utf8');
       const mac = await migrateLegacyWindowsSecrets({ platform: 'darwin', checkpointPath, tunnelSecretPath: tunnelPath, secretProtector: protector, runHelper });
       const linux = await migrateLegacyWindowsSecrets({ platform: 'linux', checkpointPath, tunnelSecretPath: tunnelPath, secretProtector: protector, runHelper });

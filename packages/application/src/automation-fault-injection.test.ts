@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { appError, err, ok, type AutomationPlan, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type AutomationPlan, type Result } from '@lnwjing/domain';
 import { SqliteAutomationRepository } from '../../storage/src/automation-repository.js';
 import { SqliteDatabase } from '../../storage/src/database.js';
 import { SqliteGoalRepository } from '../../storage/src/goal-repository.js';
@@ -346,9 +346,9 @@ describe('AutomationService fault injection', () => {
 });
 
 async function createHarness(label: string): Promise<Harness> {
-  const root = await mkdtemp(path.join(os.tmpdir(), `lnwjud-automation-fault-${label}-`));
+  const root = await mkdtemp(path.join(os.tmpdir(), `lnwjing-automation-fault-${label}-`));
   roots.push(root);
-  const databaseFilename = path.join(root, 'lnwjud.sqlite');
+  const databaseFilename = path.join(root, 'lnwjing.sqlite');
   const taskDirectory = path.join(root, 'tasks');
   const workspaceARoot = path.join(root, 'workspace-a');
   const workspaceBRoot = path.join(root, 'workspace-b');

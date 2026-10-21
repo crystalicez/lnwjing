@@ -97,12 +97,12 @@ async function runBenchmark(options) {
   try {
     const [{ createStdioMcpRuntime }, { startMcpHttp }, { SqliteDatabase, SqliteWorkspaceRepository }, { WorkspaceService }] = await Promise.all([
       import(pathToFileURL(path.join(repositoryRoot, 'apps', 'cli', 'dist', 'runtime', 'stdio-mcp-runtime.js')).href),
-      import('@lnwjud/mcp-server'),
-      import('@lnwjud/storage'),
-      import('@lnwjud/workspace'),
+      import('@lnwjing/mcp-server'),
+      import('@lnwjing/storage'),
+      import('@lnwjing/workspace'),
     ]);
 
-    const database = new SqliteDatabase(path.join(fixture.dataPath, 'lnwjud.sqlite'));
+    const database = new SqliteDatabase(path.join(fixture.dataPath, 'lnwjing.sqlite'));
     const workspaceRepository = new SqliteWorkspaceRepository(database);
     const workspaceService = new WorkspaceService(workspaceRepository);
     const added = await workspaceService.add('baseline-fixture', fixture.workspacePath);
@@ -164,12 +164,12 @@ async function runBenchmark(options) {
 }
 
 async function createFixture() {
-  const rootPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-baseline-'));
+  const rootPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-baseline-'));
   const workspacePath = path.join(rootPath, 'workspace');
   const dataPath = path.join(rootPath, 'data');
   const files = {
     'package.json': JSON.stringify({
-      name: 'lnwjud-baseline-fixture',
+      name: 'lnwjing-baseline-fixture',
       private: true,
       scripts: { test: 'node -e "process.exit(1)"' },
     }, null, 2) + '\n',
@@ -228,8 +228,8 @@ async function createFixture() {
   }
   await mkdir(dataPath, { recursive: true });
   await runGit(workspacePath, ['init', '--initial-branch=main']);
-  await runGit(workspacePath, ['config', 'user.email', 'lnwjud-baseline@localhost']);
-  await runGit(workspacePath, ['config', 'user.name', 'lnwjud baseline']);
+  await runGit(workspacePath, ['config', 'user.email', 'lnwjing-baseline@localhost']);
+  await runGit(workspacePath, ['config', 'user.name', 'lnwjing baseline']);
   await runGit(workspacePath, ['add', '.']);
   await runGit(workspacePath, ['commit', '-m', 'baseline fixture']);
   await writeFile(
@@ -393,7 +393,7 @@ class McpHttpClient {
     const initialize = await this.request('initialize', {
       protocolVersion: '2026-07-28',
       capabilities: {},
-      clientInfo: { name: 'lnwjud-baseline-benchmark', version: '1.0.0' },
+      clientInfo: { name: 'lnwjing-baseline-benchmark', version: '1.0.0' },
     });
     await this.request('notifications/initialized', undefined, false);
     const toolsList = await this.request('tools/list', {});
@@ -551,14 +551,14 @@ function renderMarkdown(report) {
   const toolList = report.discovery.tools.map((tool) => `- \`${tool.name}\` (${tool.inputProperties} input properties)`).join('\n');
   const totals = report.totals;
   return [
-    '# lnwjud Baseline Benchmark',
+    '# lnwjing Baseline Benchmark',
     '',
     `Generated: ${report.generatedAt}`,
     `Repository: \`${report.repository.branch}\` @ \`${report.repository.commit}\``,
     '',
     '## Scope',
     '',
-    'This is the Phase 00 synthetic baseline. It starts the built lnwjud application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract baseline, not a production-machine benchmark.',
+    'This is the Phase 00 synthetic baseline. It starts the built lnwjing application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract baseline, not a production-machine benchmark.',
     '',
     '| Field | Value |',
     '| --- | --- |',

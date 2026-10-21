@@ -2,9 +2,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { activityTargetReference, AuditService, redactActivityTargetDetail } from '@lnwjud/audit';
-import { ActivityTracker, type ActivitySinkEvent } from '@lnwjud/mcp-server';
-import { SqliteAuditRepository, SqliteDatabase } from '@lnwjud/storage';
+import { activityTargetReference, AuditService, redactActivityTargetDetail } from '@lnwjing/audit';
+import { ActivityTracker, type ActivitySinkEvent } from '@lnwjing/mcp-server';
+import { SqliteAuditRepository, SqliteDatabase } from '@lnwjing/storage';
 import { LogHub } from '../src/main/log-hub.js';
 
 const temporaryRoots: string[] = [];
@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe('live log activity target correlation', () => {
   it('projects 500 dashboard rows without deserializing one event with 500 maximum-length paths', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-audit-projection-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-projection-'));
     temporaryRoots.push(root);
     const database = new SqliteDatabase(path.join(root, 'state.db'));
     const repository = new SqliteAuditRepository(database);
@@ -80,7 +80,7 @@ describe('live log activity target correlation', () => {
   }, 15_000);
 
   it('persists full sanitized detail once and resolves it lazily by event or call ID', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-audit-target-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-target-'));
     temporaryRoots.push(root);
     const database = new SqliteDatabase(path.join(root, 'state.db'));
     const repository = new SqliteAuditRepository(database);
@@ -124,7 +124,7 @@ describe('live log activity target correlation', () => {
   });
 
   it('keeps the compact reference from JSONL and decodes legacy lines without detail', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-live-log-target-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-log-target-'));
     temporaryRoots.push(root);
     const activityPath = path.join(root, 'mcp-activity.log');
     const current = {

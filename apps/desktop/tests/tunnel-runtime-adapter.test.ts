@@ -23,40 +23,40 @@ function executor(responses: Readonly<Record<string, { stdout?: string; stderr?:
 
 describe('TunnelRuntimeAdapter', () => {
   it('retires only a stopped stale alias and restores profile, health, log, and unrelated files', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-stopped-alias-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stopped-alias-'));
     try {
       await mkdir(path.join(root, 'health'), { recursive: true });
-      const profile = 'health:\n  url_file: health/lnwjud.url\n';
-      await writeFile(path.join(root, 'lnwjud.yaml'), profile);
-      await writeFile(path.join(root, 'lnwjud-tunnel.log'), 'original-log');
-      await writeFile(path.join(root, 'health', 'lnwjud.url'), 'http://127.0.0.1:7777');
+      const profile = 'health:\n  url_file: health/lnwjing.url\n';
+      await writeFile(path.join(root, 'lnwjing.yaml'), profile);
+      await writeFile(path.join(root, 'lnwjing-tunnel.log'), 'original-log');
+      await writeFile(path.join(root, 'health', 'lnwjing.url'), 'http://127.0.0.1:7777');
       await writeFile(path.join(root, 'other.yaml'), 'must-stay');
       let removed = false;
       const commands: string[] = [];
       const execute: TunnelRuntimeExecutor = async (_executable, args): Promise<{ stdout: string; stderr: string }> => {
         const command = args.join(' ');
         commands.push(command);
-        if (command === 'runtimes status lnwjud --json') {
-          if (removed) throw Object.assign(new Error('alias lnwjud is not known'), { stdout: '', stderr: 'alias lnwjud is not known' });
+        if (command === 'runtimes status lnwjing --json') {
+          if (removed) throw Object.assign(new Error('alias lnwjing is not known'), { stdout: '', stderr: 'alias lnwjing is not known' });
           return { stdout: JSON.stringify({ exists: true, tunnel_id: 'tunnel_oldalias12345', process_running: false }), stderr: '' };
         }
-        if (command === 'runtimes rm lnwjud --json') {
+        if (command === 'runtimes rm lnwjing --json') {
           removed = true;
-          await rm(path.join(root, 'lnwjud.yaml'));
-          await rm(path.join(root, 'lnwjud-tunnel.log'));
-          await rm(path.join(root, 'health', 'lnwjud.url'));
+          await rm(path.join(root, 'lnwjing.yaml'));
+          await rm(path.join(root, 'lnwjing-tunnel.log'));
+          await rm(path.join(root, 'health', 'lnwjing.url'));
           return { stdout: '{"removed":true}', stderr: '' };
         }
         throw new Error('Unexpected CLI command');
       };
       const adapter = new TunnelRuntimeAdapter({ clientPath: 'fixture.exe', profileDirectory: root, environment: {}, execute });
       await expect(adapter.retireStoppedAlias('tunnel_oldalias12345')).resolves.toBeUndefined();
-      expect(commands).toContain('runtimes rm lnwjud --json');
-      expect(commands).not.toContain('runtimes stop lnwjud --json');
+      expect(commands).toContain('runtimes rm lnwjing --json');
+      expect(commands).not.toContain('runtimes stop lnwjing --json');
       await expect(adapter.status(true)).resolves.toMatchObject({ exists: false });
-      await expect(readFile(path.join(root, 'lnwjud.yaml'), 'utf8')).resolves.toBe(profile);
-      await expect(readFile(path.join(root, 'lnwjud-tunnel.log'), 'utf8')).resolves.toBe('original-log');
-      await expect(readFile(path.join(root, 'health', 'lnwjud.url'), 'utf8')).resolves.toBe('http://127.0.0.1:7777');
+      await expect(readFile(path.join(root, 'lnwjing.yaml'), 'utf8')).resolves.toBe(profile);
+      await expect(readFile(path.join(root, 'lnwjing-tunnel.log'), 'utf8')).resolves.toBe('original-log');
+      await expect(readFile(path.join(root, 'health', 'lnwjing.url'), 'utf8')).resolves.toBe('http://127.0.0.1:7777');
       await expect(readFile(path.join(root, 'other.yaml'), 'utf8')).resolves.toBe('must-stay');
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -64,21 +64,21 @@ describe('TunnelRuntimeAdapter', () => {
   });
 
   it('recovers the protected profile when native rm fails after deleting a local artifact', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-rm-failure-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-rm-failure-'));
     try {
-      await writeFile(path.join(root, 'lnwjud.yaml'), 'tunnel_id: tunnel_newalias12345\n');
+      await writeFile(path.join(root, 'lnwjing.yaml'), 'tunnel_id: tunnel_newalias12345\n');
       await writeFile(path.join(root, 'unrelated.yaml'), 'keep');
       let rmCalled = false;
       const adapter = new TunnelRuntimeAdapter({
         clientPath: 'fixture.exe', profileDirectory: root, environment: {},
         execute: async (_exe, args): Promise<{ stdout: string; stderr: string }> => {
           const command = args.join(' ');
-          if (command === 'runtimes status lnwjud --json') {
+          if (command === 'runtimes status lnwjing --json') {
             return { stdout: JSON.stringify({ tunnel_id: 'tunnel_oldalias12345', process_running: false }), stderr: '' };
           }
-          if (command === 'runtimes rm lnwjud --json') {
+          if (command === 'runtimes rm lnwjing --json') {
             rmCalled = true;
-            await rm(path.join(root, 'lnwjud.yaml'));
+            await rm(path.join(root, 'lnwjing.yaml'));
             throw Object.assign(new Error('simulated local cleanup failure'), { stderr: 'simulated local cleanup failure', stdout: '' });
           }
           throw new Error('Unexpected command');
@@ -86,7 +86,7 @@ describe('TunnelRuntimeAdapter', () => {
       });
       await expect(adapter.retireStoppedAlias('tunnel_oldalias12345')).rejects.toThrow('simulated local cleanup failure');
       expect(rmCalled).toBe(true);
-      await expect(readFile(path.join(root, 'lnwjud.yaml'), 'utf8')).resolves.toBe('tunnel_id: tunnel_newalias12345\n');
+      await expect(readFile(path.join(root, 'lnwjing.yaml'), 'utf8')).resolves.toBe('tunnel_id: tunnel_newalias12345\n');
       await expect(readFile(path.join(root, 'unrelated.yaml'), 'utf8')).resolves.toBe('keep');
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -94,23 +94,23 @@ describe('TunnelRuntimeAdapter', () => {
   });
 
   it('fails closed on a profile health reference outside the owned directory', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-health-escape-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-health-escape-'));
     try {
-      await writeFile(path.join(root, 'lnwjud.yaml'), 'health:\n  url_file: ../other.url\n');
+      await writeFile(path.join(root, 'lnwjing.yaml'), 'health:\n  url_file: ../other.url\n');
       const calls: string[] = [];
       const adapter = new TunnelRuntimeAdapter({
         clientPath: 'fixture.exe', profileDirectory: root, environment: {},
         execute: async (_exe, args): Promise<{ stdout: string; stderr: string }> => {
           const command = args.join(' ');
           calls.push(command);
-          if (command === 'runtimes status lnwjud --json') {
+          if (command === 'runtimes status lnwjing --json') {
             return { stdout: JSON.stringify({ tunnel_id: 'tunnel_oldalias12345', process_running: false }), stderr: '' };
           }
           throw new Error('Must not run rm for escaped health artifact');
         },
       });
       await expect(adapter.retireStoppedAlias('tunnel_oldalias12345')).rejects.toThrow('escapes');
-      expect(calls).not.toContain('runtimes rm lnwjud --json');
+      expect(calls).not.toContain('runtimes rm lnwjing --json');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -123,14 +123,14 @@ describe('TunnelRuntimeAdapter', () => {
       execute: async (_exe, args): Promise<{ stdout: string; stderr: string }> => {
         const command = args.join(' ');
         calls.push(command);
-        if (command === 'runtimes status lnwjud --json') {
+        if (command === 'runtimes status lnwjing --json') {
           return { stdout: JSON.stringify({ tunnel_id: 'tunnel_oldalias12345', process_running: true, pid: 954321 }), stderr: '' };
         }
         throw new Error('Unsafe command requested');
       },
     });
     await expect(adapter.retireStoppedAlias('tunnel_oldalias12345')).rejects.toThrow('active or its identity changed');
-    expect(calls).toEqual(['runtimes status lnwjud --json']);
+    expect(calls).toEqual(['runtimes status lnwjing --json']);
   });
 
   it('detects official managed runtimes and refuses to infer strict A/B zero downtime', async () => {
@@ -160,7 +160,7 @@ describe('TunnelRuntimeAdapter', () => {
 
   it('maps unknown alias status to a missing runtime instead of throwing', async () => {
     const execute = executor({
-      'runtimes status lnwjud --json': { error: 'alias lnwjud is not known; run create or connect first' },
+      'runtimes status lnwjing --json': { error: 'alias lnwjing is not known; run create or connect first' },
     });
     const adapter = new TunnelRuntimeAdapter({ clientPath: 'client.exe', profileDirectory: 'profile', environment: {}, execute });
     await expect(adapter.status()).resolves.toMatchObject({ exists: false, running: false });
@@ -204,7 +204,7 @@ describe('TunnelRuntimeAdapter', () => {
       if (address === null || typeof address === 'string') throw new Error('expected TCP health server');
       const healthUrl = `http://127.0.0.1:${address.port}`;
       const execute = executor({
-        'runtimes status lnwjud --json': {
+        'runtimes status lnwjing --json': {
           stdout: JSON.stringify({
             tunnel_id: 'tunnel_fixture012345',
             process_running: true,
@@ -263,7 +263,7 @@ describe('TunnelRuntimeAdapter', () => {
       const address = server.address();
       if (address === null || typeof address === 'string') throw new Error('expected TCP health server');
       const execute = executor({
-        'runtimes status lnwjud --json': {
+        'runtimes status lnwjing --json': {
           stdout: JSON.stringify({
             tunnel_id: 'tunnel_fixture012345',
             process_running: true,
@@ -319,7 +319,7 @@ describe('TunnelRuntimeAdapter', () => {
       if (address === null || typeof address === 'string') throw new Error('expected TCP health server');
       const healthUrl = `http://127.0.0.1:${address.port}`;
       const execute = executor({
-        'runtimes status lnwjud --json': {
+        'runtimes status lnwjing --json': {
           stdout: JSON.stringify({ tunnel_id: 'tunnel_fixture012345', process_running: true, healthy: true, ready: true, health_url: healthUrl }),
         },
       });
@@ -370,7 +370,7 @@ describe('TunnelRuntimeAdapter', () => {
       if (address === null || typeof address === 'string') throw new Error('expected TCP health server');
       const healthUrl = `http://127.0.0.1:${address.port}`;
       const execute = executor({
-        'runtimes status lnwjud --json': {
+        'runtimes status lnwjing --json': {
           stdout: JSON.stringify({ tunnel_id: 'tunnel_fixture012345', process_running: true, healthy: true, ready: true, health_url: healthUrl }),
         },
       });
@@ -411,7 +411,7 @@ describe('TunnelRuntimeAdapter', () => {
       if (address === null || typeof address === 'string') throw new Error('expected TCP health server');
       const healthUrl = `http://127.0.0.1:${address.port}`;
       const execute = executor({
-        'runtimes status lnwjud --json': {
+        'runtimes status lnwjing --json': {
           stdout: JSON.stringify({ tunnel_id: 'tunnel_fixture012345', process_running: true, healthy: true, ready: true, health_url: healthUrl }),
         },
       });
@@ -429,8 +429,8 @@ describe('TunnelRuntimeAdapter', () => {
     let statusCalls = 0;
     const execute: TunnelRuntimeExecutor = vi.fn(async (_executable, args) => {
       const key = args.join(' ');
-      if (key === 'runtimes stop lnwjud --json') return { stdout: JSON.stringify({ alias: 'lnwjud' }), stderr: '' };
-      if (key === 'runtimes status lnwjud --json') {
+      if (key === 'runtimes stop lnwjing --json') return { stdout: JSON.stringify({ alias: 'lnwjing' }), stderr: '' };
+      if (key === 'runtimes status lnwjing --json') {
         statusCalls += 1;
         return {
           stdout: JSON.stringify({
@@ -454,8 +454,8 @@ describe('TunnelRuntimeAdapter', () => {
   it('fails loudly when the managed runtime remains live after an explicit stop', async () => {
     const execute: TunnelRuntimeExecutor = vi.fn(async (_executable, args) => {
       const key = args.join(' ');
-      if (key === 'runtimes stop lnwjud --json') return { stdout: JSON.stringify({ alias: 'lnwjud' }), stderr: '' };
-      if (key === 'runtimes status lnwjud --json') return { stdout: JSON.stringify({ tunnel_id: 'tunnel_fixture012345', process: { running: true, pid: 1234 } }), stderr: '' };
+      if (key === 'runtimes stop lnwjing --json') return { stdout: JSON.stringify({ alias: 'lnwjing' }), stderr: '' };
+      if (key === 'runtimes status lnwjing --json') return { stdout: JSON.stringify({ tunnel_id: 'tunnel_fixture012345', process: { running: true, pid: 1234 } }), stderr: '' };
       throw new Error(`unexpected command: ${key}`);
     });
     const adapter = new TunnelRuntimeAdapter({
@@ -470,7 +470,7 @@ describe('TunnelRuntimeAdapter', () => {
     const tunnelId = 'tunnel_0123456789abcdef';
     const mcpServerUrl = 'http://127.0.0.1:18765/mcp';
     const execute = executor({
-      [`runtimes connect --alias lnwjud --tunnel-id ${tunnelId} --runtime-api-key env:CONTROL_PLANE_API_KEY --mcp-server-url ${mcpServerUrl} --profile lnwjud --profile-dir C:\\profile --json`]: {
+      [`runtimes connect --alias lnwjing --tunnel-id ${tunnelId} --runtime-api-key env:CONTROL_PLANE_API_KEY --mcp-server-url ${mcpServerUrl} --profile lnwjing --profile-dir C:\\profile --json`]: {
         stdout: JSON.stringify({ tunnel_id: tunnelId, process: { running: true, pid: 1234 }, health: { healthy: true, ready: true }, control_plane: { poll_healthy: true }, mcp_server_url: mcpServerUrl }),
       },
     });
@@ -495,7 +495,7 @@ describe('TunnelRuntimeAdapter', () => {
     const tunnelId = 'tunnel_0123456789abcdef';
     const mcpServerUrl = 'http://127.0.0.1:18765/mcp';
     const execute = executor({
-      [`runtimes connect --alias lnwjud --tunnel-id ${tunnelId} --runtime-api-key env:CONTROL_PLANE_API_KEY --mcp-server-url ${mcpServerUrl} --profile lnwjud --profile-dir C:\\profile --json`]: {
+      [`runtimes connect --alias lnwjing --tunnel-id ${tunnelId} --runtime-api-key env:CONTROL_PLANE_API_KEY --mcp-server-url ${mcpServerUrl} --profile lnwjing --profile-dir C:\\profile --json`]: {
         stdout: JSON.stringify({ tunnel_id: tunnelId, process: { running: true, pid: 1234 }, mcp_server_url: mcpServerUrl }),
       },
     });
@@ -509,8 +509,8 @@ describe('TunnelRuntimeAdapter', () => {
   it.runIf(process.platform === 'win32')('checks for orphaned Windows processes after the official alias stops', async () => {
     const tunnelId = 'tunnel_0123456789abcdef';
     const execute = executor({
-      'runtimes stop lnwjud --json': { stdout: JSON.stringify({ alias: 'lnwjud' }) },
-      'runtimes status lnwjud --json': { stdout: JSON.stringify({ tunnel_id: tunnelId, process: { running: false } }) },
+      'runtimes stop lnwjing --json': { stdout: JSON.stringify({ alias: 'lnwjing' }) },
+      'runtimes status lnwjing --json': { stdout: JSON.stringify({ tunnel_id: tunnelId, process: { running: false } }) },
     });
     const processGuard = vi.fn(async () => undefined);
     const adapter = new TunnelRuntimeAdapter({ clientPath: 'client.exe', profileDirectory: 'C:\\profile', environment: {}, execute, processGuard });
@@ -523,7 +523,7 @@ describe('TunnelRuntimeAdapter', () => {
 describe('parseNativeRuntimeStatus', () => {
   it('normalizes nested JSON fields from runtime status output', () => {
     expect(parseNativeRuntimeStatus(JSON.stringify({
-      alias: 'lnwjud',
+      alias: 'lnwjing',
       tunnel: { id: 'tunnel_fixture012345' },
       process: { running: true, pid: 7654 },
       health: { healthy: true, ready: true, ui_url: 'http://127.0.0.1:9123/ui' },
@@ -544,7 +544,7 @@ describe('parseNativeRuntimeStatus', () => {
 
   it('understands tunnel-client 0.0.12 target_value and explicit unknown poll-health state', () => {
     expect(parseNativeRuntimeStatus(JSON.stringify({
-      alias: 'lnwjud',
+      alias: 'lnwjing',
       tunnel_id: 'tunnel_fixture012345',
       healthy: true,
       ready: true,
@@ -577,7 +577,7 @@ describe('parseNativeRuntimeStatus', () => {
   it('parses the real tunnel-client 0.0.13 stopped-status shape without treating unknown poll health as failure', () => {
     expect(parseNativeRuntimeStatus(JSON.stringify({
       admin_profile: 'default',
-      alias: 'lnwjud',
+      alias: 'lnwjing',
       control_plane_poll_health: {
         reason: 'no live admin UI system snapshot',
         state: 'unknown',

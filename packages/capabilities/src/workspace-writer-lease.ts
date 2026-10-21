@@ -2,7 +2,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 export interface WorkspaceWriterGlobalExclusion {
   holdExclusiveProbe(workspaceId: string): Promise<Result<{
@@ -15,7 +15,7 @@ export interface WorkspaceWriterGlobalExclusion {
  * IMMEDIATE transaction. Expiry does not preempt a verified-live in-flight
  * invocation; ambiguous process liveness fails closed.
  *
- * This protects lnwjud MCP dispatches, not unrelated filesystem writers.
+ * This protects lnwjing MCP dispatches, not unrelated filesystem writers.
  */
 export interface WorkspaceWriterLeaseProof {
   readonly leaseId: string;

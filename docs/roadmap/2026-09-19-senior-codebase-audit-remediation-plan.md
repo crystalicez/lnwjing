@@ -1,7 +1,7 @@
 # Senior codebase audit remediation plan
 
 Date: 2026-09-19  
-Repository: `E:\lnwjud`  
+Repository: `E:\lnwjing`
 Status: implementation plan. Except for the Serena/skill infrastructure fixes documented below, this plan has not been implemented in this audit pass.
 
 ## Goals

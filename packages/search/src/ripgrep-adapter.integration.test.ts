@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Result } from '@lnwjud/domain';
+import type { Result } from '@lnwjing/domain';
 import type { ExecutableResolver } from './executable-resolver.js';
 import { DirectProcessRunner, RipgrepAdapter, type ProcessRunResult, type ProcessRunner } from './ripgrep-adapter.js';
 

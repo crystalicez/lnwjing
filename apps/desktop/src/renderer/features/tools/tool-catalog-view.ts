@@ -1,4 +1,4 @@
-import type { ToolCatalogItem, ToolCategory, ToolDeclaredPermission, ToolOrigin, ToolProfileDecision, ToolReadinessStatus } from '@lnwjud/ipc-contracts';
+import type { ToolCatalogItem, ToolCategory, ToolDeclaredPermission, ToolOrigin, ToolProfileDecision, ToolReadinessStatus } from '@lnwjing/ipc-contracts';
 
 export interface ToolCatalogFilters {
   readonly origin: ToolOrigin;
@@ -24,7 +24,7 @@ export function filterAndSortTools(items: readonly ToolCatalogItem[], filters: T
   return items
     .filter((item) => item.origin === filters.origin)
     .filter((item) => filters.readiness === 'all' || item.readiness === filters.readiness)
-    .filter((item) => item.origin !== 'lnwjud' || filters.availability === 'all' || toolControlEnabled(item) === (filters.availability === 'enabled'))
+    .filter((item) => item.origin !== 'lnwjing' || filters.availability === 'all' || toolControlEnabled(item) === (filters.availability === 'enabled'))
     .filter((item) => filters.category === 'all' || item.category === filters.category)
     .filter((item) => filters.permission === 'all' || item.declaredPermission === filters.permission)
     .filter((item) => filters.profileDecision === 'all' || item.profileDecision === filters.profileDecision)

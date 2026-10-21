@@ -8,8 +8,8 @@ This document records the evidence inspected before the repair, the root causes,
 
 ## Evidence inspected
 
-- Referenced ChatGPT task `Continue lnwjud goal` (`6a911692-2d80-83ec-ae2f-8cb111f36d99`), including the first request, scheduled follow-ups, later manual “continue” requests, and the final completion response.
-- Durable goal, continuation, activity, and background-task records in `%APPDATA%\lnwjud\lnwjud.sqlite`.
+- Referenced ChatGPT task `Continue lnwjing goal` (`6a911692-2d80-83ec-ae2f-8cb111f36d99`), including the first request, scheduled follow-ups, later manual “continue” requests, and the final completion response.
+- Durable goal, continuation, activity, and background-task records in `%APPDATA%\lnwjing\lnwjing.sqlite`.
 - Current service, repository, MCP tool descriptions/schema, packaged skill, Electron packaging configuration, and skill catalog implementation.
 
 The database was inspected read-only. The historical stale goal was intentionally not rewritten by this code change.
@@ -47,7 +47,7 @@ The database was inspected read-only. The historical stale goal was intentionall
 - If exact ChatGPT host metadata proves that a native one-time task ran/was consumed while durable state still says pending/live because claim did not complete, record an exact `consumed` host-run receipt. This clears the stale live continuation/fence without claiming goal completion; an active goal then creates a fresh successor.
 - A user request to stop scheduling cancels only the successor. The current run must still wait for recorded background tasks, inspect terminal results, complete acceptance, call `finish_goal`, and confirm `get_goal` is terminal.
 - No completion response is valid while `get_goal` reports `active`.
-- Setup and Portable package the same `lnwjud-scheduled-continuation` skill under `resources/agent-skills`.
+- Setup and Portable package the same `lnwjing-scheduled-continuation` skill under `resources/agent-skills`.
 - `skills_list` returns the union of bundled, configured, machine-global, Codex plugin, and active-workspace skills, including nested and symlinked skill collections. `skills_read` continues to require an unambiguous name or source-qualified ID.
 
 ## Invocation on another machine
@@ -55,10 +55,10 @@ The database was inspected read-only. The historical stale goal was intentionall
 When the client exposes installed skills directly:
 
 ```text
-Use $lnwjud-scheduled-continuation in workspace D:\projects\my-app. Create or resume goalKey release-audit, do the requested work autonomously until get_goal is terminal, then cancel the exact remaining successor and report once.
+Use $lnwjing-scheduled-continuation in workspace D:\projects\my-app. Create or resume goalKey release-audit, do the requested work autonomously until get_goal is terminal, then cancel the exact remaining successor and report once.
 ```
 
-When it does not, instruct the agent to call `skills_list`, select the source-qualified `lnwjud-scheduled-continuation`, call `skills_read`, and follow it. This is the same for Setup and Portable.
+When it does not, instruct the agent to call `skills_list`, select the source-qualified `lnwjing-scheduled-continuation`, call `skills_read`, and follow it. This is the same for Setup and Portable.
 
 ## Required verification
 

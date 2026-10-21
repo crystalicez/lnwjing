@@ -1,5 +1,5 @@
-import { appError, ok } from '@lnwjud/domain';
-import type { McpServerOptions } from '@lnwjud/mcp-server';
+import { appError, ok } from '@lnwjing/domain';
+import type { McpServerOptions } from '@lnwjing/mcp-server';
 import { describe, expect, it } from 'vitest';
 import { runMcpHttpCommand, type McpHttpServerHandle, type McpHttpServerStarter } from './mcp-http.js';
 
@@ -27,7 +27,7 @@ describe('mcp http command', () => {
       createServerOptions: (selectedWorkspace) => ({
         port: 0,
         services: {},
-        actor: { clientId: selectedWorkspace.id, clientName: 'lnwjud-cli' },
+        actor: { clientId: selectedWorkspace.id, clientName: 'lnwjing-cli' },
       }),
       starter,
     });

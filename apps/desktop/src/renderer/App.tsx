@@ -1,6 +1,6 @@
 import { ActionButton } from './features/ui/UiPrimitives.js';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { EMPTY_INSTALL_ACTIVITY, workspaceScopeMatches } from '@lnwjud/ipc-contracts';
+import { EMPTY_INSTALL_ACTIVITY, workspaceScopeMatches } from '@lnwjing/ipc-contracts';
 import type {
   DashboardSnapshot,
   DestructiveDeletePolicy,
@@ -25,7 +25,7 @@ import type {
   TunnelOAuthLoginStatus,
   WorkspaceSummary,
   WorkLogEntry,
-} from '@lnwjud/ipc-contracts';
+} from '@lnwjing/ipc-contracts';
 import { AppShell, type Screen } from './features/shell/AppShell.js';
 import { WorkflowsPage } from './features/workflows/WorkflowsPage.js';
 import { GlobalInstallProgressModal } from './features/shell/GlobalInstallProgressModal.js';
@@ -121,13 +121,13 @@ export function App(): ReactElement {
 
   useEffect(() => {
     let disposed = false;
-    void window.lnwjud.getUpdateStatus().then((status) => {
+    void window.lnwjing.getUpdateStatus().then((status) => {
       if (!disposed) {
         updateInstallTransitionRef.current = status.phase === 'installing';
         setUpdateStatus(status);
       }
     }).catch(() => undefined);
-    const unsubscribe = window.lnwjud.onUpdateStatus((status) => {
+    const unsubscribe = window.lnwjing.onUpdateStatus((status) => {
       if (!disposed) {
         updateInstallTransitionRef.current = status.phase === 'installing';
         setUpdateStatus(status);
@@ -142,10 +142,10 @@ export function App(): ReactElement {
   useEffect(() => {
     let disposed = false;
     let eventSeen = false;
-    void window.lnwjud.getInstallActivity().then((snapshot) => {
+    void window.lnwjing.getInstallActivity().then((snapshot) => {
       if (!disposed && !eventSeen) setInstallActivity(snapshot);
     }).catch(() => undefined);
-    const unsubscribe = window.lnwjud.onInstallActivity((snapshot) => {
+    const unsubscribe = window.lnwjing.onInstallActivity((snapshot) => {
       eventSeen = true;
       if (!disposed) setInstallActivity(snapshot);
     });
@@ -157,7 +157,7 @@ export function App(): ReactElement {
 
   useEffect(() => {
     let disposed = false;
-    void window.lnwjud.getLogSnapshot().then((snapshot) => {
+    void window.lnwjing.getLogSnapshot().then((snapshot) => {
       if (disposed) return;
       setLogLines((previous) => {
         const merged = applyLogSnapshot(previous, logIds.current, snapshot.lines, MAX_CLIENT_LOG_LINES);
@@ -168,7 +168,7 @@ export function App(): ReactElement {
       setTunnelLogPath(snapshot.tunnelLogPath);
       setTunnelLogExists(snapshot.tunnelLogExists);
     }).catch(() => undefined);
-    const unsubscribe = window.lnwjud.onLogEvent((line) => {
+    const unsubscribe = window.lnwjing.onLogEvent((line) => {
       appendLogLine(line);
       if (line.source === 'tunnel') setTunnelLogExists(true);
     });
@@ -185,7 +185,7 @@ export function App(): ReactElement {
 
   async function clearLogSource(source: LogSource, scope: LogScopeSelection): Promise<void> {
     try {
-      await window.lnwjud.clearLogBuffer({
+      await window.lnwjing.clearLogBuffer({
         source,
         ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
         ...(scope.sessionId === null ? {} : { sessionId: scope.sessionId }),
@@ -199,7 +199,7 @@ export function App(): ReactElement {
 
   async function clearAllLogs(): Promise<void> {
     try {
-      await Promise.all((['tunnel', 'mcp', 'process'] as const).map((source) => window.lnwjud.clearLogBuffer({ source })));
+      await Promise.all((['tunnel', 'mcp', 'process'] as const).map((source) => window.lnwjing.clearLogBuffer({ source })));
       if (logFlushTimer.current !== null) {
         window.clearTimeout(logFlushTimer.current);
         logFlushTimer.current = null;
@@ -214,7 +214,7 @@ export function App(): ReactElement {
 
   async function exportLogSource(source: LogSource, scope: LogScopeSelection, query: string, lines: readonly LiveLogExportReference[]): Promise<void> {
     try {
-      await window.lnwjud.exportLogs({
+      await window.lnwjing.exportLogs({
         source,
         filePath: '',
         locale,
@@ -230,7 +230,7 @@ export function App(): ReactElement {
 
   async function popOutLogViewer(): Promise<void> {
     try {
-      await window.lnwjud.openLogViewer();
+      await window.lnwjing.openLogViewer();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.logViewerOpen')));
     }
@@ -241,7 +241,7 @@ export function App(): ReactElement {
     incidentBusyRef.current = true;
     setIncidentBusy(true);
     try {
-      const result = await window.lnwjud.captureIncident();
+      const result = await window.lnwjing.captureIncident();
       if (result.exported && !result.cancelled) {
         setIncidentClassification(result.classification);
         setIncidentCapturedAt(result.capturedAt);
@@ -263,8 +263,8 @@ export function App(): ReactElement {
     const mcpStatusRevision = mcpDashboardStateRef.current.captureRevision();
     try {
       const [dashboardResult, workspacesResult] = await Promise.allSettled([
-        window.lnwjud.getDashboard(),
-        window.lnwjud.listWorkspaces(),
+        window.lnwjing.getDashboard(),
+        window.lnwjing.listWorkspaces(),
       ]);
       const failures: string[] = [];
       if (dashboardResult.status === 'fulfilled') {
@@ -320,7 +320,7 @@ export function App(): ReactElement {
     }
     let disposed = false;
     setPonytailPolicyBusy(true);
-    void window.lnwjud.getPonytailPolicyContext({ workspaceId: selectedWorkspaceId }).then((context) => {
+    void window.lnwjing.getPonytailPolicyContext({ workspaceId: selectedWorkspaceId }).then((context) => {
       if (disposed) return;
       setPonytailPolicyContext(context);
       setPonytailPolicyError(null);
@@ -366,14 +366,14 @@ export function App(): ReactElement {
 
     setStartupDoctorReady(false);
     void Promise.all([
-      window.lnwjud.runDoctor(),
-      window.lnwjud.getToolCatalog({ locale }),
+      window.lnwjing.runDoctor(),
+      window.lnwjing.getToolCatalog({ locale }),
     ]).then(async ([initialReport, initialCatalog]) => {
       // A cold host can time out one localhost identity probe while MCP is
       // starting. Recheck the real core requirements before holding onboarding.
       const result = startupDoctorCorePassed(initialReport)
         ? { doctor: initialReport, catalog: initialCatalog }
-        : await window.lnwjud.recheckToolCatalog({ locale, requirementIds: STARTUP_CORE_CHECK_IDS });
+        : await window.lnwjing.recheckToolCatalog({ locale, requirementIds: STARTUP_CORE_CHECK_IDS });
       setDoctor(result.doctor);
       setToolCatalog(result.catalog);
       if (startupDoctorCorePassed(result.doctor)) {
@@ -425,19 +425,19 @@ export function App(): ReactElement {
   }
 
   async function openExternalSetupPage(target: ExternalSetupTarget): Promise<void> {
-    await window.lnwjud.openExternalSetupPage({ target });
+    await window.lnwjing.openExternalSetupPage({ target });
   }
 
   async function handleUpdateAction(): Promise<void> {
     try {
       if (updateStatus?.canInstall === true) {
         updateInstallTransitionRef.current = true;
-        const result = await window.lnwjud.installUpdate();
+        const result = await window.lnwjing.installUpdate();
         updateInstallTransitionRef.current = result.status.phase === 'installing';
         setUpdateStatus(result.status);
         return;
       }
-      setUpdateStatus(await window.lnwjud.checkForUpdates());
+      setUpdateStatus(await window.lnwjing.checkForUpdates());
     } catch (cause: unknown) {
       updateInstallTransitionRef.current = false;
       setError(errorMessage(cause, t('app.updateCheckError')));
@@ -447,7 +447,7 @@ export function App(): ReactElement {
   async function addWorkspace(rootPath: string): Promise<boolean> {
     setError(null);
     try {
-      await window.lnwjud.addWorkspace({ rootPath });
+      await window.lnwjing.addWorkspace({ rootPath });
       await refresh();
       await runDoctor();
       return true;
@@ -460,7 +460,7 @@ export function App(): ReactElement {
   async function selectWorkspace(workspaceId: string): Promise<void> {
     try {
       setMcpBusy(true);
-      await window.lnwjud.selectWorkspace({ workspaceId });
+      await window.lnwjing.selectWorkspace({ workspaceId });
       await refresh();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.workspaceSelect')));
@@ -472,7 +472,7 @@ export function App(): ReactElement {
   async function setWorkspaceActive(workspaceId: string, active: boolean): Promise<void> {
     setError(null);
     try {
-      await window.lnwjud.setWorkspaceActive({ workspaceId, active });
+      await window.lnwjing.setWorkspaceActive({ workspaceId, active });
       await refresh();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('app.workspaceActiveError')));
@@ -483,7 +483,7 @@ export function App(): ReactElement {
   async function setWorkspaceArchived(workspaceId: string, archived: boolean): Promise<void> {
     setError(null);
     try {
-      await window.lnwjud.setWorkspaceArchived({ workspaceId, archived });
+      await window.lnwjing.setWorkspaceArchived({ workspaceId, archived });
       await refresh();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.workspaceArchive')));
@@ -494,7 +494,7 @@ export function App(): ReactElement {
   async function deleteWorkspace(workspaceId: string): Promise<void> {
     setError(null);
     try {
-      await window.lnwjud.deleteWorkspace({ workspaceId, userConfirmed: true });
+      await window.lnwjing.deleteWorkspace({ workspaceId, userConfirmed: true });
       await refresh();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.workspaceDelete')));
@@ -504,7 +504,7 @@ export function App(): ReactElement {
 
   async function setPermissionProfile(profile: PermissionProfileName): Promise<void> {
     try {
-      await window.lnwjud.setPermissionProfile({ profile });
+      await window.lnwjing.setPermissionProfile({ profile });
       await refresh();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.permissionProfileChange')));
@@ -513,7 +513,7 @@ export function App(): ReactElement {
 
   async function setUnrestrictedMode(enabled: boolean): Promise<boolean> {
     try {
-      const result = await window.lnwjud.setUnrestrictedMode({ enabled });
+      const result = await window.lnwjing.setUnrestrictedMode({ enabled });
       await refresh();
       return result.restartRequired;
     } catch (cause: unknown) {
@@ -524,7 +524,7 @@ export function App(): ReactElement {
 
   async function setDestructiveDeletePolicy(policy: DestructiveDeletePolicy): Promise<void> {
     try {
-      await window.lnwjud.setAiDeletePolicy({ policy });
+      await window.lnwjing.setAiDeletePolicy({ policy });
       await refresh();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('app.destructivePolicyError')));
@@ -533,7 +533,7 @@ export function App(): ReactElement {
 
   async function setStdioPolicy(profile: PermissionProfileName, strictRoots: boolean, allowedRoots: readonly string[]): Promise<boolean> {
     try {
-      const result = await window.lnwjud.setStdioPolicy({ profile, strictRoots, allowedRoots });
+      const result = await window.lnwjing.setStdioPolicy({ profile, strictRoots, allowedRoots });
       await refresh();
       return result.restartRequired;
     } catch (cause: unknown) {
@@ -545,7 +545,7 @@ export function App(): ReactElement {
   async function stopMcp(): Promise<void> {
     try {
       setMcpBusy(true);
-      const status = await window.lnwjud.stopMcp();
+      const status = await window.lnwjing.stopMcp();
       mcpDashboardStateRef.current.recordMutation();
       setDashboard((current) => mcpDashboardStateRef.current.applyStatus(current, status));
       await refresh();
@@ -559,7 +559,7 @@ export function App(): ReactElement {
   async function restartMcp(): Promise<void> {
     try {
       setMcpBusy(true);
-      const status = await window.lnwjud.restartMcp();
+      const status = await window.lnwjing.restartMcp();
       mcpDashboardStateRef.current.recordMutation();
       setDashboard((current) => mcpDashboardStateRef.current.applyStatus(current, status));
       await refresh();
@@ -572,7 +572,7 @@ export function App(): ReactElement {
 
   async function clearWorkLog(scope: LogScopeSelection): Promise<void> {
     try {
-      await window.lnwjud.clearWorkLog({
+      await window.lnwjing.clearWorkLog({
         ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
         ...(scope.sessionId === null ? {} : { sessionId: scope.sessionId }),
       });
@@ -586,7 +586,7 @@ export function App(): ReactElement {
   async function loadLogSessionHistory(scope: LogScopeSelection): Promise<readonly WorkLogEntry[]> {
     if (scope.sessionId === null) return [];
     try {
-      const history = await window.lnwjud.loadLogSessionHistory({
+      const history = await window.lnwjing.loadLogSessionHistory({
         sessionId: scope.sessionId,
         ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
         limit: 500,
@@ -606,7 +606,7 @@ export function App(): ReactElement {
 
   async function exportWorkLog(rowIds: readonly string[]): Promise<void> {
     try {
-      await window.lnwjud.exportWorkLog({ rowIds, locale });
+      await window.lnwjing.exportWorkLog({ rowIds, locale });
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.logExport')));
     }
@@ -615,7 +615,7 @@ export function App(): ReactElement {
   async function startTunnelWithStatus(): Promise<TunnelStatus> {
     setTunnelBusy(true);
     try {
-      const status = await window.lnwjud.startTunnel();
+      const status = await window.lnwjing.startTunnel();
       await refresh();
       return status;
     } finally {
@@ -634,7 +634,7 @@ export function App(): ReactElement {
   async function stopTunnel(): Promise<void> {
     try {
       setTunnelBusy(true);
-      await window.lnwjud.stopTunnel();
+      await window.lnwjing.stopTunnel();
       await refresh();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.tunnelStop')));
@@ -644,65 +644,65 @@ export function App(): ReactElement {
   }
 
   async function beginTunnelOAuthLogin(): Promise<TunnelOAuthLoginStatus> {
-    return window.lnwjud.beginTunnelOAuthLogin();
+    return window.lnwjing.beginTunnelOAuthLogin();
   }
 
   async function getTunnelOAuthLoginStatus(): Promise<TunnelOAuthLoginStatus> {
-    return window.lnwjud.getTunnelOAuthLoginStatus();
+    return window.lnwjing.getTunnelOAuthLoginStatus();
   }
 
   async function cancelTunnelOAuthLogin(): Promise<TunnelOAuthLoginStatus> {
-    return window.lnwjud.cancelTunnelOAuthLogin();
+    return window.lnwjing.cancelTunnelOAuthLogin();
   }
 
   async function switchTunnelAuthToLegacy(): Promise<TunnelStatus> {
-    const status = await window.lnwjud.switchTunnelAuthToLegacy();
+    const status = await window.lnwjing.switchTunnelAuthToLegacy();
     await refresh();
     return status;
   }
 
   async function logoutTunnelOAuth(): Promise<TunnelStatus> {
-    const status = await window.lnwjud.logoutTunnelOAuth();
+    const status = await window.lnwjing.logoutTunnelOAuth();
     await refresh();
     return status;
   }
 
   async function createBackup(): Promise<void> {
-    await window.lnwjud.createBackup();
+    await window.lnwjing.createBackup();
     await refresh();
   }
 
   async function scheduleRestoreBackup(backupId: string): Promise<boolean> {
-    const result = await window.lnwjud.scheduleRestoreBackup({ backupId });
+    const result = await window.lnwjing.scheduleRestoreBackup({ backupId });
     await refresh();
     return result.restartRequired;
   }
 
   async function restoreRecoveryItem(workspaceId: string, recoveryId: string): Promise<void> {
-    await window.lnwjud.restoreRecoveryItem({ workspaceId, recoveryId });
+    await window.lnwjing.restoreRecoveryItem({ workspaceId, recoveryId });
     await refresh();
   }
 
   async function restoreCheckpoint(workspaceId: string, checkpointId: string): Promise<void> {
-    await window.lnwjud.restoreCheckpoint({ workspaceId, checkpointId });
+    await window.lnwjing.restoreCheckpoint({ workspaceId, checkpointId });
     await refresh();
   }
 
   async function saveTunnelApiKey(apiKey: string): Promise<void> {
-    await window.lnwjud.saveTunnelApiKey({ apiKey });
+    await window.lnwjing.saveTunnelApiKey({ apiKey });
     await refresh();
   }
 
   async function setTunnelClientPath(clientPath: string): Promise<void> {
-    await window.lnwjud.setTunnelClientPath({ clientPath });
+    await window.lnwjing.setTunnelClientPath({ clientPath });
     await refresh();
   }
 
   async function changeLocale(next: UiLocale): Promise<void> {
-    await window.lnwjud.setLocale({ locale: next });
+    await window.lnwjing.setLocale({ locale: next });
     setLocale(next);
-    const catalogPromise = screen === 'tools' || screen === 'doctor' ? window.lnwjud.getToolCatalog({ locale: next }) : null;
-    const doctorPromise = screen === 'doctor' ? window.lnwjud.runDoctor() : null;
+    const catalogPromise = screen === 'tools' || screen === 'doctor' ? window.lnwjing.getToolCatalog({ locale: next }) : null;
+    const doctorPromise = screen === 'doctor' ? window.lnwjing.runDoctor() : null;
     await refresh();
     if (catalogPromise !== null) setToolCatalog(await catalogPromise);
     if (doctorPromise !== null) setDoctor(await doctorPromise);
@@ -710,7 +710,7 @@ export function App(): ReactElement {
 
   async function factoryReset(): Promise<{ readonly accepted: boolean }> {
     try {
-      return await window.lnwjud.factoryReset();
+      return await window.lnwjing.factoryReset();
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('settingsPage.factoryResetFailed')));
       throw cause;
@@ -719,7 +719,7 @@ export function App(): ReactElement {
 
   async function setUserSettings(settings: UserSettings): Promise<boolean> {
     try {
-      const result = await window.lnwjud.setUserSettings({ settings });
+      const result = await window.lnwjing.setUserSettings({ settings });
       await refresh();
       return result.restartRequired;
     } catch (cause: unknown) {
@@ -733,7 +733,7 @@ export function App(): ReactElement {
     setPonytailPolicyBusy(true);
     setPonytailPolicyError(null);
     try {
-      const context = await window.lnwjud.setWorkspacePonytailMode({ workspaceId: selectedWorkspaceId, mode });
+      const context = await window.lnwjing.setWorkspacePonytailMode({ workspaceId: selectedWorkspaceId, mode });
       setPonytailPolicyContext(context);
     } catch (cause: unknown) {
       const message = errorMessage(cause, t('app.ponytailProjectSaveError'));
@@ -749,7 +749,7 @@ export function App(): ReactElement {
     setPonytailPolicyBusy(true);
     setPonytailPolicyError(null);
     try {
-      const context = await window.lnwjud.setGoalPonytailMode({ workspaceId: selectedWorkspaceId, goalId, expectedRevision, mode });
+      const context = await window.lnwjing.setGoalPonytailMode({ workspaceId: selectedWorkspaceId, goalId, expectedRevision, mode });
       setPonytailPolicyContext(context);
     } catch (cause: unknown) {
       const message = errorMessage(cause, t('app.ponytailGoalSaveError'));
@@ -761,14 +761,14 @@ export function App(): ReactElement {
   }
 
   async function chooseTunnelClientPath(): Promise<string | null> {
-    const result = await window.lnwjud.chooseTunnelClientPath();
+    const result = await window.lnwjing.chooseTunnelClientPath();
     return result.clientPath;
   }
 
   async function installPdfProvider(): Promise<PdfProviderInstallResult> {
     setError(null);
     try {
-      const result = await window.lnwjud.installPdfProvider();
+      const result = await window.lnwjing.installPdfProvider();
       await refresh();
       await loadToolCatalog(['local_pdf_provider']);
       return result;
@@ -780,7 +780,7 @@ export function App(): ReactElement {
   }
 
   async function configureTunnelProfile(tunnelId: string): Promise<string> {
-    const result = await window.lnwjud.configureTunnelProfile({ tunnelId });
+    const result = await window.lnwjing.configureTunnelProfile({ tunnelId });
     await refresh();
     return result.profilePath;
   }
@@ -789,9 +789,9 @@ export function App(): ReactElement {
     setToolCatalogLoading(true);
     try {
       if (forceRequirementIds === undefined) {
-        setToolCatalog(await window.lnwjud.getToolCatalog({ locale }));
+        setToolCatalog(await window.lnwjing.getToolCatalog({ locale }));
       } else {
-        const result = await window.lnwjud.recheckToolCatalog({ locale, requirementIds: forceRequirementIds });
+        const result = await window.lnwjing.recheckToolCatalog({ locale, requirementIds: forceRequirementIds });
         setToolCatalog(result.catalog);
         setDoctor(result.doctor);
       }
@@ -813,7 +813,7 @@ export function App(): ReactElement {
   async function setToolAvailability(name: string, enabled: boolean): Promise<void> {
     setError(null);
     try {
-      const result = await window.lnwjud.setToolAvailability({ locale, name, enabled });
+      const result = await window.lnwjing.setToolAvailability({ locale, name, enabled });
       mergeToolCatalogItem(result.item);
       setToolHostSyncNotice(result.hostSyncMessage);
     } catch (cause: unknown) {
@@ -826,7 +826,7 @@ export function App(): ReactElement {
   async function resetToolAvailability(name: string): Promise<void> {
     setError(null);
     try {
-      const result = await window.lnwjud.resetToolAvailability({ locale, name });
+      const result = await window.lnwjing.resetToolAvailability({ locale, name });
       mergeToolCatalogItem(result.item);
       setToolHostSyncNotice(result.hostSyncMessage);
     } catch (cause: unknown) {
@@ -838,12 +838,12 @@ export function App(): ReactElement {
 
   async function handleToolRemediation(action: ResolvedRemediation['actions'][number]): Promise<void> {
     if (action.kind === 'recheck') { await loadToolCatalog(action.requirementIds); return; }
-    if (action.kind === 'open_official_url' || action.kind === 'open_system_settings') { await window.lnwjud.openToolSetupTarget({ target: action.target }); return; }
-    if (action.kind === 'copy_command') { await window.lnwjud.copyToolCommand({ commandId: action.commandId }); return; }
+    if (action.kind === 'open_official_url' || action.kind === 'open_system_settings') { await window.lnwjing.openToolSetupTarget({ target: action.target }); return; }
+    if (action.kind === 'copy_command') { await window.lnwjing.copyToolCommand({ commandId: action.commandId }); return; }
     if (action.kind === 'launch_managed_browser') {
       setError(null);
       try {
-        const status = await window.lnwjud.launchManagedBrowser();
+        const status = await window.lnwjing.launchManagedBrowser();
         if (!status.ready) throw new Error(t('app.managedBrowserNotReady'));
         await loadToolCatalog(['browser_cdp']);
       } catch (cause: unknown) {
@@ -860,7 +860,7 @@ export function App(): ReactElement {
       if (restartRequired) {
         try {
           setMcpBusy(true);
-          await window.lnwjud.restartMcp();
+          await window.lnwjing.restartMcp();
           await refresh();
         } catch (cause: unknown) {
           setError(errorMessage(cause, t('error.mcpRestart')));
@@ -883,7 +883,7 @@ export function App(): ReactElement {
 
   async function runDoctor(): Promise<void> {
     try {
-      const { doctor: report, catalog } = await window.lnwjud.recheckToolCatalog({
+      const { doctor: report, catalog } = await window.lnwjing.recheckToolCatalog({
         locale,
         requirementIds: STARTUP_CORE_CHECK_IDS,
       });

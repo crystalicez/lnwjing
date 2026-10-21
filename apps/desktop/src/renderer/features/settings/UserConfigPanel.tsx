@@ -8,8 +8,8 @@ import type {
   PdfProviderInstallResult,
   UiLocale,
   UserSettings,
-} from '@lnwjud/ipc-contracts';
-import { parseDelimitedList } from '@lnwjud/shared/text-list';
+} from '@lnwjing/ipc-contracts';
+import { parseDelimitedList } from '@lnwjing/shared/text-list';
 import { createTranslator } from '../../i18n/index.js';
 import { SettingsCardHeading, StatusMessage, EmptyState , ActionButton, FormInput, FormTextarea } from '../ui/UiPrimitives.js';
 import { SettingsSelect as FormSelect } from '../ui/SettingsSelect.js';

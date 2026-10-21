@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DesktopSessionDiagnostics, previousDesktopSessionEndedUncleanly } from '../src/main/desktop-session-diagnostics.js';
 
 const roots: string[] = [];
-const tempRoot = (): string => { const root = mkdtempSync(path.join(tmpdir(), 'lnwjud-session-')); roots.push(root); return root; };
+const tempRoot = (): string => { const root = mkdtempSync(path.join(tmpdir(), 'lnwjing-session-')); roots.push(root); return root; };
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe('DesktopSessionDiagnostics', () => {

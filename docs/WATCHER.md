@@ -1,10 +1,10 @@
-# LNWJUD Watcher API
+# LNWJING Watcher API
 
-LNWJUD v5.6.0 introduced the local read-only runtime surface used by the separate **LNWJUD Watcher** Web/PWA, Android, and iOS client. v5.6.1 added multiple projects and goals. v5.6.6 adds truthful Goal completion readiness and configured MCP plugin names without changing Protocol v1.
+LNWJING v5.6.0 introduced the local read-only runtime surface used by the separate **LNWJING Watcher** Web/PWA, Android, and iOS client. v5.6.1 added multiple projects and goals. v5.6.6 adds truthful Goal completion readiness and configured MCP plugin names without changing Protocol v1.
 
 ## What starts with Desktop
 
-When LNWJUD Desktop starts, it also starts two loopback listeners:
+When LNWJING Desktop starts, it also starts two loopback listeners:
 
 | Purpose | Default | Exposure |
 | --- | --- | --- |
@@ -14,15 +14,15 @@ When LNWJUD Desktop starts, it also starts two loopback listeners:
 Override the ports only when needed:
 
 ```text
-LNWJUD_WATCHER_PORT
-LNWJUD_WATCHER_PAIR_PORT
+LNWJING_WATCHER_PORT
+LNWJING_WATCHER_PAIR_PORT
 ```
 
 The Watcher listeners are independent from the MCP command surface.
 
 ## Pair a Watcher client
 
-On the machine running LNWJUD Desktop, open:
+On the machine running LNWJING Desktop, open:
 
 ```text
 http://127.0.0.1:17891/api/v1/pair
@@ -34,7 +34,7 @@ The local-only response contains:
 - local Watcher `endpoint`
 - the dedicated Watcher access `token`
 
-Keep the token private. In production Desktop it is persisted through LNWJUD's protected secret provider and is separate from MCP, tunnel, and OAuth credentials.
+Keep the token private. In production Desktop it is persisted through LNWJING's protected secret provider and is separate from MCP, tunnel, and OAuth credentials.
 
 For same-machine use, enter the returned endpoint and token directly in Watcher. Watcher v0.2.4+ keeps the token on that device for up to one year, then asks the user to check Settings and pair again. The Android inactivity reminder, when enabled, keeps a separate encrypted copy in Android Keystore protected storage and removes it when monitoring is disabled or the token expires.
 
@@ -114,7 +114,7 @@ The Watcher repository contains user-facing setup guides and helper scripts for:
 - ngrok
 - Custom HTTPS
 
-Remote providers forward to the local Watcher API only. They never need to expose the LNWJUD MCP gateway.
+Remote providers forward to the local Watcher API only. They never need to expose the LNWJING MCP gateway.
 
 ## Troubleshooting
 
@@ -128,7 +128,7 @@ Confirm your tunnel/reverse proxy forwards WebSocket upgrades for `/api/v1/event
 
 **Port 17890 is already in use**
 
-Set `LNWJUD_WATCHER_PORT` before launching Desktop and use the new local origin in your tunnel configuration.
+Set `LNWJING_WATCHER_PORT` before launching Desktop and use the new local origin in your tunnel configuration.
 
 **Do I expose 17891 too?**
 

@@ -13,8 +13,8 @@ describe('WorkspacePathGuard reparse-point security', () => {
   it('rejects a read through a junction that points outside the workspace', async ({ skip }) => {
     if (process.platform !== 'win32') skip('junction security test requires Windows');
 
-    const rootPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-junction-root-'));
-    const outsidePath = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-junction-outside-'));
+    const rootPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-junction-root-'));
+    const outsidePath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-junction-outside-'));
     const junctionPath = path.join(rootPath, 'escape');
     try {
       try {

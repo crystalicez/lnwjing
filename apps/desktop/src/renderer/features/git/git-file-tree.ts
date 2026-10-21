@@ -1,4 +1,4 @@
-import type { GitStatusEntrySummary } from '@lnwjud/ipc-contracts';
+import type { GitStatusEntrySummary } from '@lnwjing/ipc-contracts';
 
 export type GitTreeNode = GitTreeFolder | GitTreeFile;
 export interface GitTreeFolder {

@@ -1,4 +1,4 @@
-# lnwjud testing and release verification
+# lnwjing testing and release verification
 
 Audit date: 2026-09-19
 
@@ -53,8 +53,8 @@ Focused regression checks passed:
 - external MCP close-failure/replacement-session lifecycle regression.
 
 Focused typechecks passed:
-- `@lnwjud/mcp-server`
-- `@lnwjud/extensions`
+- `@lnwjing/mcp-server`
+- `@lnwjing/extensions`
 
 These are the minimum behavioral checks for the infrastructure fix. Root lint/typecheck/tests must still be run before any eventual commit/release of the combined working tree because unrelated pre-existing changes are also present.
 

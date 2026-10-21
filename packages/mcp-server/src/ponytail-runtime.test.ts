@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ResolvedPonytailPolicy } from '@lnwjud/shared';
+import type { ResolvedPonytailPolicy } from '@lnwjing/shared';
 import {
   BUNDLED_PONYTAIL_REVIEW_SKILL_ID,
   BUNDLED_PONYTAIL_SKILL_ID,

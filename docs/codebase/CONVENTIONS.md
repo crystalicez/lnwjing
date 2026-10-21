@@ -1,4 +1,4 @@
-# lnwjud coding conventions
+# lnwjing coding conventions
 
 Audit date: 2026-09-19
 

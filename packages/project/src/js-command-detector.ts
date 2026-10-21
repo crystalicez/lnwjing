@@ -1,4 +1,4 @@
-import { appError, err, ok, type CommandSpec, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type CommandSpec, type Result } from '@lnwjing/domain';
 import type { ProjectCommandKind, ProjectProfile } from './project-profile.js';
 
 export class JsCommandDetector {

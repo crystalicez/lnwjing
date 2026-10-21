@@ -1,8 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
-const PREFIX = 'lnwjud:checkpoint:v1:';
+const PREFIX = 'lnwjing:checkpoint:v1:';
 const ALGORITHM = 'aes-256-gcm';
-const AAD = Buffer.from('lnwjud-checkpoint-v1', 'utf8');
+const AAD = Buffer.from('lnwjing-checkpoint-v1', 'utf8');
 
 export interface CheckpointPayloadCipher {
   encrypt(plainText: string): string;

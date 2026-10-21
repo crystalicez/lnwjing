@@ -1,4 +1,4 @@
-import type { GitStatusEntrySummary } from '@lnwjud/ipc-contracts';
+import type { GitStatusEntrySummary } from '@lnwjing/ipc-contracts';
 
 export type GitFileStatusFilter = 'all' | 'staged' | 'unstaged' | 'untracked';
 export function gitFileFolder(path: string): string {

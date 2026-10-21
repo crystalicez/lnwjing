@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible lnwjud problem
+description: Report a reproducible lnwjing problem
 title: "[Bug]: "
 labels:
   - bug
@@ -11,7 +11,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: lnwjud version
+      label: lnwjing version
       description: "Example: v4.10.0"
       placeholder: v4.x.x
     validations:

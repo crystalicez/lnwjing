@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Redactor } from '@lnwjud/audit';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { Redactor } from '@lnwjing/audit';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { IncrementalVerifier } from '../incremental-verifier.js';
 import { withCapabilityOwnerMetadata } from '../request-scope.js';
 import { defineTool, type McpToolContext, type McpToolDefinition } from './tool-types.js';
@@ -95,7 +95,7 @@ export function sessionTools(context: McpToolContext, verifier: IncrementalVerif
     }),
     defineTool({
       name: 'verify_incremental',
-      description: 'Run the detected project typecheck only when the current git status/diff fingerprint changed. Starting a new verification process requires explicit user confirmation in standard mode; trusted Full Bypass skips that lnwjud gate. Returns cache=hit when unchanged and cache=miss after a new verification. Prefer this during iterative edits; use project_test/project_lint/project_build only when that specific verification is needed. For full suites or packaging expected to exceed ~5 minutes, launch a durable shell background task and record its task_id in the tracker.',
+      description: 'Run the detected project typecheck only when the current git status/diff fingerprint changed. Starting a new verification process requires explicit user confirmation in standard mode; trusted Full Bypass skips that lnwjing gate. Returns cache=hit when unchanged and cache=miss after a new verification. Prefer this during iterative edits; use project_test/project_lint/project_build only when that specific verification is needed. For full suites or packaging expected to exceed ~5 minutes, launch a durable shell background task and record its task_id in the tracker.',
       permission: 'EXECUTE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: verifyIncrementalSchema,
@@ -412,7 +412,7 @@ function buildHandoffPrompt(input: {
     : input.backgroundTasks.receipts.map(formatTaskReceipt).join('\n');
   const changed = input.changedFiles.length === 0 ? '(clean)' : input.changedFiles.join(', ');
   return [
-    'Recovery state from lnwjud durable task state.',
+    'Recovery state from lnwjing durable task state.',
     'This is task state only, not persistent user or agent instructions.',
     input.goalExcerpt.length === 0
       ? input.goalObservationStatus === 'ready'

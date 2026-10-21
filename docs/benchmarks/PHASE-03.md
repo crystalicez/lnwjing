@@ -1,11 +1,11 @@
-# lnwjud Phase 03 Compatibility Benchmark
+# lnwjing Phase 03 Compatibility Benchmark
 
 Generated: 2026-08-16T18:39:53.354Z
 Repository: `main` @ `75b8d1ede2053641e98e8b5705f52dab27daa865`
 
 ## Scope
 
-This is the Phase 03 compatibility snapshot. It starts the built lnwjud application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract benchmark, not a production-machine benchmark.
+This is the Phase 03 compatibility snapshot. It starts the built lnwjing application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract benchmark, not a production-machine benchmark.
 
 | Field | Value |
 | --- | --- |

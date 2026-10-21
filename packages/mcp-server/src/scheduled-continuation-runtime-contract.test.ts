@@ -30,7 +30,7 @@ describe('scheduled continuation runtime contract', () => {
     expect(serialized).toContain('one-time compatibility');
     expect(serialized).toContain('cloud');
     expect(serialized).toContain('never create a per-wake successor');
-    expect(serialized).toContain('never use browser/DOM automation, Windows Task Scheduler, cron, shell timers, or an lnwjud-local scheduler as a substitute');
+    expect(serialized).toContain('never use browser/DOM automation, Windows Task Scheduler, cron, shell timers, or an lnwjing-local scheduler as a substitute');
     expect(goalLifecycleSerialized).toContain('work-conserving');
     expect(goalLifecycleSerialized).toContain('checkpoint is not a turn boundary');
     expect(goalLifecycleSerialized).toContain('transient tool/task-observation failure is not a handoff signal');

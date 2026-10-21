@@ -54,13 +54,13 @@ describe('cross-platform desktop packaging', () => {
     const version = String(rootPackage.version);
     const readme = await readFile(path.join(repositoryRoot, 'README.md'), 'utf8');
     const fullReadme = await readFile(path.join(repositoryRoot, 'FULL_README.md'), 'utf8');
-    expect(fullReadme).toContain(`apps/desktop/dist/installers/lnwjud-Setup-${version}.exe`);
-    expect(fullReadme).toContain(`apps/desktop/dist/installers/lnwjud-Portable-${version}.exe`);
+    expect(fullReadme).toContain(`apps/desktop/dist/installers/lnwjing-Setup-${version}.exe`);
+    expect(fullReadme).toContain(`apps/desktop/dist/installers/lnwjing-Portable-${version}.exe`);
 
     const usageTh = await readFile(path.join(repositoryRoot, 'docs', 'USAGE_TH.md'), 'utf8');
     expect(readme).toContain(`## Current source version: v${version}`);
     expect(fullReadme).toContain(`## Current source version: v${version}`);
-    expect(usageTh).toContain(`lnwjud v${version} (ภาษาไทย)`);
+    expect(usageTh).toContain(`lnwjing v${version} (ภาษาไทย)`);
 
     const publishedVersion = readme.match(/Latest published release: \*\*v([0-9.]+)\*\*/)?.[1];
     expect(publishedVersion).toBeTruthy();
@@ -71,7 +71,7 @@ describe('cross-platform desktop packaging', () => {
       ['docs/INSTALL_MACOS.md', `v${version} native macOS release target`],
       ['.github/RELEASE_CHECKLIST.md', `**Current version:** \`v${version}\``],
       ['docs/development/PACKAGING_WINDOWS.md', `current v${version} packaging contract`],
-      ['docs/LNWJUD_CAPABILITIES.md', `lnwjud v${version}`],
+      ['docs/LNWJING_CAPABILITIES.md', `lnwjing v${version}`],
       ['docs/architecture/MULTI_WORKSPACE_CONCURRENCY.md', `current v${version} runtime contract`],
       ['docs/architecture/TOOL_CONTRACT.md', `snapshot synchronized for \`v${version}\``],
       ['docs/architecture/UPGRADE_ARCHITECTURE.md', `checkpoint synchronized for \`v${version}\``],
@@ -103,28 +103,28 @@ describe('cross-platform desktop packaging', () => {
 
     expect(desktopPackage.description).toBe('Cross-platform local AI-agent runtime and MCP gateway with 294 total tool definitions.');
     expect(desktopPackage.author).toBe('Adisorn');
-    expect(desktopPackage.homepage).toBe('https://github.com/engasnm111/lnwjud#readme');
-    expect(desktopPackage.repository).toEqual({ type: 'git', url: 'https://github.com/engasnm111/lnwjud.git' });
+    expect(desktopPackage.homepage).toBe('https://github.com/crystalicez/lnwjing#readme');
+    expect(desktopPackage.repository).toEqual({ type: 'git', url: 'https://github.com/crystalicez/lnwjing.git' });
   });
 
-  it('declares lnwjud x64 NSIS and portable packaging with built runtime bundles', async () => {
+  it('declares lnwjing x64 NSIS and portable packaging with built runtime bundles', async () => {
     const configPath = path.join(desktopRoot, 'electron-builder.yml');
     const config = await readFile(configPath, 'utf8');
     const desktopPackage = JSON.parse(await readFile(path.join(desktopRoot, 'package.json'), 'utf8')) as { scripts?: Record<string, string>; dependencies?: Record<string, string> };
 
-    expect(config).toContain('productName: lnwjud');
+    expect(config).toContain('productName: lnwjing');
     expect(config).toContain('output: dist/installers');
     expect(config).toContain('target: nsis');
     expect(config).toContain('target: portable');
     expect(config).toContain('- x64');
-    expect(config).toContain('artifactName: lnwjud-Setup-${version}.${ext}');
+    expect(config).toContain('artifactName: lnwjing-Setup-${version}.${ext}');
     expect(config).toContain('portable:');
-    expect(config).toContain('artifactName: lnwjud-Portable-${version}.${ext}');
-    expect(desktopPackage.scripts?.['package:windows']).toContain('--filter @lnwjud/desktop... build');
+    expect(config).toContain('artifactName: lnwjing-Portable-${version}.${ext}');
+    expect(desktopPackage.scripts?.['package:windows']).toContain('--filter @lnwjing/desktop... build');
     expect(desktopPackage.scripts?.['package:windows']).toContain('--win nsis portable --x64');
     expect(desktopPackage.scripts?.['package:windows']).toContain('write-portable-update-manifest.mjs');
-    expect(desktopPackage.scripts?.build).toContain('write-capability-integrity.mjs && corepack pnpm@10.15.0 --filter @lnwjud/capabilities build && tsc');
-    expect(desktopPackage.scripts?.['build:main']).toContain('write-capability-integrity.mjs && corepack pnpm@10.15.0 --filter @lnwjud/capabilities build && tsc');
+    expect(desktopPackage.scripts?.build).toContain('write-capability-integrity.mjs && corepack pnpm@10.15.0 --filter @lnwjing/capabilities build && tsc');
+    expect(desktopPackage.scripts?.['build:main']).toContain('write-capability-integrity.mjs && corepack pnpm@10.15.0 --filter @lnwjing/capabilities build && tsc');
     expect(desktopPackage.scripts?.build).not.toContain('stage-main-native-bindings.mjs');
     expect(desktopPackage.scripts?.['build:main']).not.toContain('stage-main-native-bindings.mjs');
     expect(desktopPackage.scripts?.['test:e2e']).not.toContain('stage-main-native-bindings.mjs');
@@ -153,7 +153,7 @@ describe('cross-platform desktop packaging', () => {
     const tunnelControllerSource = await readFile(path.join(desktopRoot, 'src', 'main', 'tunnel-controller.ts'), 'utf8');
     expect(tunnelControllerSource).not.toContain("'Downloads', 'tunnel', 'tunnel-client.exe'");
     const installerScript = await readFile(path.join(desktopRoot, 'build', 'installer.nsh'), 'utf8');
-    expect(installerScript).toContain('CreateShortCut "$SMPROGRAMS\\lnwjud.lnk" "$INSTDIR\\lnwjud.exe"');
+    expect(installerScript).toContain('CreateShortCut "$SMPROGRAMS\\lnwjing.lnk" "$INSTDIR\\lnwjing.exe"');
     expect(installerScript).toContain('SetOutPath "$INSTDIR"');
     expect(installerScript).not.toMatch(/[A-Z]:\\Users\\[^\r\n]+/i);
     expect(config).toContain('extraResources:');
@@ -161,15 +161,15 @@ describe('cross-platform desktop packaging', () => {
     expect(config).toContain('from: build/capability-bridge/windows-capability-bridge.sha256');
     expect(config).toContain('from: build/capability-bridge/windows-capability-bridge.integrity.json');
     expect(config).not.toContain('from: ../../packages/capabilities/src/windows-capability-bridge.ps1');
-    expect(config).not.toContain('build/lnwjud-node.exe');
-    expect(config).not.toContain('lnwjud-mcp-stdio.cjs');
+    expect(config).not.toContain('build/lnwjing-node.exe');
+    expect(config).not.toContain('lnwjing-mcp-stdio.cjs');
     expect(config).toContain('mac:');
     expect(config).toContain('linux:');
-    // Linux otherwise derives @lnwjuddesktop from the scoped package name,
-    // breaking the lnwjud executable expected by the launcher and evidence.
-    expect(config).toMatch(/linux:\r?\n\s+executableName: lnwjud(?:\r?\n|$)/);
+    // Linux otherwise derives @lnwjingdesktop from the scoped package name,
+    // breaking the lnwjing executable expected by the launcher and evidence.
+    expect(config).toMatch(/linux:\r?\n\s+executableName: lnwjing(?:\r?\n|$)/);
     expect(config).toContain('maintainer: Adisorn <engasnm111@users.noreply.github.com>');
-    expect(config).toContain('artifactName: lnwjud-${version}-${env.LNWJUD_RUNTIME_ARCH}.${ext}');
+    expect(config).toContain('artifactName: lnwjing-${version}-${env.LNWJING_RUNTIME_ARCH}.${ext}');
     expect(config).toContain('target: dmg');
     expect(config).toContain('target: zip');
     expect(config).toContain('hardenedRuntime: true');
@@ -181,13 +181,13 @@ describe('cross-platform desktop packaging', () => {
     expect(config).toMatch(/target: AppImage[\s\S]*?arch:\s*\n\s*- x64\s*\n\s*- arm64/);
     expect(config).toMatch(/target: deb[\s\S]*?arch:\s*\n\s*- x64\s*\n\s*- arm64/);
     expect(config).toContain('category: Development');
-    expect(config).toContain('artifactName: lnwjud-${version}-${arch}.${ext}');
+    expect(config).toContain('artifactName: lnwjing-${version}-${arch}.${ext}');
     expect(config).toContain('build/runtime-tools');
     expect(config).toContain('to: runtime-tools');
     expect(config).toContain('from: build/tunnel-client');
     expect(config).toContain('to: tunnel-client');
-    expect(config).toContain('from: ../../.agents/skills/lnwjud-scheduled-continuation');
-    expect(config).toContain('to: agent-skills/lnwjud-scheduled-continuation');
+    expect(config).toContain('from: ../../.agents/skills/lnwjing-scheduled-continuation');
+    expect(config).toContain('to: agent-skills/lnwjing-scheduled-continuation');
     for (const skillName of ponytailSkillNames) {
       expect(config).toContain(`from: ../../.agents/skills/${skillName}`);
       expect(config).toContain(`to: agent-skills/${skillName}`);
@@ -200,7 +200,7 @@ describe('cross-platform desktop packaging', () => {
     expect(config).toContain('to: native-host/macos');
     expect(config).toContain('from: build/native-host/linux');
     expect(config).toContain('to: native-host/linux');
-    await access(path.join(repositoryRoot, '.agents', 'skills', 'lnwjud-scheduled-continuation', 'SKILL.md'));
+    await access(path.join(repositoryRoot, '.agents', 'skills', 'lnwjing-scheduled-continuation', 'SKILL.md'));
     expect(desktopPackage.scripts?.['package:windows']).toContain('prepare-runtime-tools.mjs');
     expect(desktopPackage.scripts?.['package:windows']).toContain('prepare-tunnel-client.mjs');
     expect(desktopPackage.scripts?.['package:macos']).toContain('package-native.mjs macos');
@@ -210,10 +210,10 @@ describe('cross-platform desktop packaging', () => {
     const linuxHostBuildScript = await readFile(path.join(desktopRoot, 'scripts', 'build-linux-host.mjs'), 'utf8');
     expect(nativePackagingScript).toContain('prepare-runtime-tools.mjs');
     expect(nativePackagingScript).toContain('prepare-tunnel-client.mjs');
-    expect(nativePackagingScript).toContain("['pnpm@10.15.0', '--filter', '@lnwjud/desktop...', 'build']");
+    expect(nativePackagingScript).toContain("['pnpm@10.15.0', '--filter', '@lnwjing/desktop...', 'build']");
     expect(nativePackagingScript).toContain('build-macos-host.mjs');
     expect(nativePackagingScript).toContain('build-linux-host.mjs');
-    expect(nativePackagingScript).toContain('LNWJUD_RUNTIME_ARCH');
+    expect(nativePackagingScript).toContain('LNWJING_RUNTIME_ARCH');
     expect(nativePackagingScript).toContain('must be built on its target operating system');
     expect(nativePackagingScript).toContain('`--${architecture}`');
     expect(nativePackagingScript).toContain("'--config.mac.identity=-'");
@@ -236,11 +236,11 @@ describe('cross-platform desktop packaging', () => {
     const registerOcr = await readFile(path.join(repositoryRoot, 'scripts', 'register-windows-ocr.ps1'), 'utf8');
     expect(registerOcr).toContain("GetEnvironmentVariable('ProgramFiles(x86)')");
     expect(registerOcr).not.toContain('C:\\Program Files (x86)\\Windows Kits');
-    const stdioLauncher = await readFile(path.join(desktopRoot, 'build', 'lnwjud-mcp-stdio.cmd'), 'utf8');
-    expect(stdioLauncher).toContain('set "APP=%BASE%lnwjud.exe"');
+    const stdioLauncher = await readFile(path.join(desktopRoot, 'build', 'lnwjing-mcp-stdio.cmd'), 'utf8');
+    expect(stdioLauncher).toContain('set "APP=%BASE%lnwjing.exe"');
     expect(stdioLauncher).toContain('--mcp-stdio');
-    expect(stdioLauncher).not.toContain('lnwjud-node.exe');
-    const posixLauncher = await readFile(path.join(desktopRoot, 'build', 'lnwjud-mcp-stdio.sh'), 'utf8');
+    expect(stdioLauncher).not.toContain('lnwjing-node.exe');
+    const posixLauncher = await readFile(path.join(desktopRoot, 'build', 'lnwjing-mcp-stdio.sh'), 'utf8');
     expect(posixLauncher).toContain('exec "$APP" --mcp-stdio "$@"');
     expect(stdioLauncher).not.toContain(path.win32.join('%ProgramFiles%', 'nodejs'));
     expect(stdioLauncher).not.toContain(path.win32.join('%LOCALAPPDATA%', 'Programs', 'nodejs'));
@@ -259,14 +259,14 @@ describe('cross-platform desktop packaging', () => {
     const tunnelBundle = await readFile(path.join(desktopRoot, 'dist', 'main', 'tunnel-controller.js'), 'utf8');
     expect(windowBundle).toContain('webSecurity: true');
     expect(windowBundle).not.toContain('webSecurity: false');
-    expect(mainBundle).toMatch(/setName\(["']lnwjud["']|setName\(APP_NAME\)/);
-    expect(tunnelBundle).toContain('delete env.LNWJUD_DATA_PATH');
-    expect(tunnelBundle).toContain('delete env.LNWJUD_UNRESTRICTED');
+    expect(mainBundle).toMatch(/setName\(["']lnwjing["']|setName\(APP_NAME\)/);
+    expect(tunnelBundle).toContain('delete env.LNWJING_DATA_PATH');
+    expect(tunnelBundle).toContain('delete env.LNWJING_UNRESTRICTED');
     expect(mainBundle).toMatch(/setPath\(["']userData["']/);
   });
 
   it('targets Windows 10 OCR through the .NET 8 Windows TFM without the legacy SDK contracts package', async () => {
-    const ocrProject = await readFile(path.join(repositoryRoot, 'native', 'windows-ocr', 'lnwjud-windows-ocr.csproj'), 'utf8');
+    const ocrProject = await readFile(path.join(repositoryRoot, 'native', 'windows-ocr', 'lnwjing-windows-ocr.csproj'), 'utf8');
     expect(ocrProject).toContain('<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>');
     expect(ocrProject).not.toContain('Microsoft.Windows.SDK.Contracts');
     expect(ocrProject).not.toContain('10.0.28000');
@@ -329,8 +329,8 @@ describe('cross-platform desktop packaging', () => {
     expect(captureRuntimeEvidence).toContain('tunnel-client-provenance');
     expect(captureRuntimeEvidence).toContain('Packaged tunnel-client evidence identity mismatch');
     expect(verifyReleaseEvidence).toContain('BUNDLED_TUNNEL_CLIENT_VERSION');
-    expect(await readFile(path.join(repositoryRoot, 'native', 'macos-host', 'Package.swift'), 'utf8')).toContain('LnwjudMacHost');
-    expect(await readFile(path.join(repositoryRoot, 'native', 'linux-host', 'Cargo.toml'), 'utf8')).toContain('lnwjud-linux-host');
+    expect(await readFile(path.join(repositoryRoot, 'native', 'macos-host', 'Package.swift'), 'utf8')).toContain('LnwjingMacHost');
+    expect(await readFile(path.join(repositoryRoot, 'native', 'linux-host', 'Cargo.toml'), 'utf8')).toContain('lnwjing-linux-host');
     expect(config).toContain('from: ../../native/windows-secret-migrator/bin/win-x64');
   });
 
@@ -340,7 +340,7 @@ describe('cross-platform desktop packaging', () => {
     expect(workflow).toContain('version: 10.15.0');
     expect(workflow).not.toContain('corepack prepare pnpm@10.15.0 --activate');
     const generateLauncher = 'node apps/desktop/scripts/write-stdio-launcher.mjs';
-    const desktopBuild = 'pnpm --filter @lnwjud/desktop build';
+    const desktopBuild = 'pnpm --filter @lnwjing/desktop build';
     const packagingGate = 'pnpm test:packaging';
     expect(workflow).toContain(generateLauncher);
     expect(workflow).toContain(desktopBuild);
@@ -351,10 +351,10 @@ describe('cross-platform desktop packaging', () => {
 
   it('defines a dedicated Portable update manifest instead of reusing the Installer feed', async () => {
     const manifestScript = await readFile(path.join(desktopRoot, 'scripts', 'write-portable-update-manifest.mjs'), 'utf8');
-    expect(manifestScript).toContain('lnwjud-Portable-${version}.exe');
+    expect(manifestScript).toContain('lnwjing-Portable-${version}.exe');
     expect(manifestScript).toContain("createHash('sha512')");
     expect(manifestScript).toContain('size: ${metadata.size}');
     expect(manifestScript).toContain("'portable.yml'");
-    expect(manifestScript).not.toContain('lnwjud-Setup-${version}.exe');
+    expect(manifestScript).not.toContain('lnwjing-Setup-${version}.exe');
   });
 });

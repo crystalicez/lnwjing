@@ -14,8 +14,8 @@ describe('titlebar update notification', () => {
     expect(shell).toContain('onClick={props.onUpdateAction}');
     expect(shell).toContain("status.phase === 'ready'");
     expect(shell).toContain("status.phase === 'downloading'");
-    expect(app).toContain('window.lnwjud.onUpdateStatus');
-    expect(app).toContain('window.lnwjud.installUpdate()');
+    expect(app).toContain('window.lnwjing.onUpdateStatus');
+    expect(app).toContain('window.lnwjing.installUpdate()');
     expect(app).toContain("updateStatus?.phase === 'installing'");
     expect(app).toContain('updateInstallTransitionRef.current');
     expect(app).toContain('refreshBusyRef.current || updateInstallTransitionRef.current');
@@ -32,7 +32,7 @@ describe('titlebar update notification', () => {
 
   });
 
-  it('blocks the whole app behind one installation/update progress surface for every lnwjud-owned machine installer', async () => {
+  it('blocks the whole app behind one installation/update progress surface for every lnwjing-owned machine installer', async () => {
     const root = path.resolve(import.meta.dirname, '..');
     const app = await readFile(path.join(root, 'src', 'renderer', 'App.tsx'), 'utf8');
     const preload = await readFile(path.join(root, 'src', 'preload', 'index.ts'), 'utf8');
@@ -41,11 +41,11 @@ describe('titlebar update notification', () => {
 
     const contracts = await readFile(path.resolve(root, '..', '..', 'packages', 'ipc-contracts', 'src', 'index.ts'), 'utf8');
 
-    expect(contracts).toContain("getInstallActivity: 'lnwjud:get-install-activity'");
-    expect(contracts).toContain("installActivity: 'lnwjud:event:install-activity'");
+    expect(contracts).toContain("getInstallActivity: 'lnwjing:get-install-activity'");
+    expect(contracts).toContain("installActivity: 'lnwjing:event:install-activity'");
     expect(contracts).toContain("'app_update' | 'ngrok' | 'pdf_provider'");
     expect(preload).toContain('onInstallActivity');
-    expect(app).toContain('window.lnwjud.onInstallActivity');
+    expect(app).toContain('window.lnwjing.onInstallActivity');
     expect(app).toContain('let eventSeen = false');
     expect(app).toContain('if (!disposed && !eventSeen) setInstallActivity(snapshot)');
     expect(app).toContain('eventSeen = true');

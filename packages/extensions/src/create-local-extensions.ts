@@ -2,7 +2,7 @@ import path from 'node:path';
 import { parseExtensionsSettings } from './allowlist.js';
 import { LocalExtensionsService } from './extensions-service.js';
 import type { McpClientFactory } from './mcp-session-manager.js';
-import type { ProcessTreeTerminator } from '@lnwjud/process';
+import type { ProcessTreeTerminator } from '@lnwjing/process';
 import type { ExtensionsService } from './types.js';
 
 export const EXTENSIONS_SETTINGS_KEY = 'extensions';

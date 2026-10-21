@@ -17,7 +17,7 @@ native = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(native)
 
 
-@unittest.skipUnless(os.environ.get("LNWJUD_GSTREAMER_TEST") == "1", "Requires an isolated or configured GStreamer runtime")
+@unittest.skipUnless(os.environ.get("LNWJING_GSTREAMER_TEST") == "1", "Requires an isolated or configured GStreamer runtime")
 class GStreamerMediaTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -149,7 +149,7 @@ class GStreamerMediaTests(unittest.TestCase):
 
     def test_actual_wav_mp4_and_playback_use_verified_artifacts_and_release_callbacks(self):
         self.original_element = native.element
-        artifact_root = os.environ.get("LNWJUD_GSTREAMER_ARTIFACT_DIR")
+        artifact_root = os.environ.get("LNWJING_GSTREAMER_ARTIFACT_DIR")
         if artifact_root:
             Path(artifact_root).mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=artifact_root, prefix="gst-") as root, patch.object(native, "element", self.source_element):

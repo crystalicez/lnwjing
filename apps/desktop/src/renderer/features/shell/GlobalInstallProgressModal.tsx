@@ -4,7 +4,7 @@ import type {
   InstallOperationKind,
   InstallOperationPhase,
   UiLocale,
-} from '@lnwjud/ipc-contracts';
+} from '@lnwjing/ipc-contracts';
 import { createTranslator, type Translator } from '../../i18n/index.js';
 
 interface GlobalInstallProgressModalProps {

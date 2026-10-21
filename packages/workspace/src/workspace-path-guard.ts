@@ -1,5 +1,5 @@
 import { lstat, realpath, stat } from 'node:fs/promises';
-import { appError, err, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import { hostPathApi, isAbsoluteHostPath, isForeignAbsolutePath, isHostPathWithin, relativeHostPath, resolveHostPath } from './filesystem-root.js';
 import { SecretPolicy } from './secret-policy.js';
 import type { ResolvedWorkspacePath, Workspace } from './workspace-types.js';

@@ -1,5 +1,5 @@
 {
-  "name": "@lnwjud/mcp-server",
+  "name": "@lnwjing/mcp-server",
   "version": "5.8.7",
   "private": true,
   "type": "module",
@@ -13,15 +13,15 @@
     }
   },
   "dependencies": {
-    "@lnwjud/application": "workspace:*",
-    "@lnwjud/audit": "workspace:*",
-    "@lnwjud/capabilities": "workspace:*",
-    "@lnwjud/domain": "workspace:*",
-    "@lnwjud/extensions": "workspace:*",
-    "@lnwjud/permissions": "workspace:*",
-    "@lnwjud/process": "workspace:*",
-    "@lnwjud/search": "workspace:*",
-    "@lnwjud/shared": "workspace:*",
+    "@lnwjing/application": "workspace:*",
+    "@lnwjing/audit": "workspace:*",
+    "@lnwjing/capabilities": "workspace:*",
+    "@lnwjing/domain": "workspace:*",
+    "@lnwjing/extensions": "workspace:*",
+    "@lnwjing/permissions": "workspace:*",
+    "@lnwjing/process": "workspace:*",
+    "@lnwjing/search": "workspace:*",
+    "@lnwjing/shared": "workspace:*",
     "@modelcontextprotocol/server": "2.0.0",
     "csv-parse": "7.0.3",
     "csv-stringify": "6.9.0",
@@ -32,7 +32,7 @@
     "@modelcontextprotocol/client": "2.0.0"
   },
   "scripts": {
-    "test": "corepack pnpm@10.15.0 --filter @lnwjud/domain build && corepack pnpm@10.15.0 --filter @lnwjud/shared build && corepack pnpm@10.15.0 --filter @lnwjud/process build && corepack pnpm@10.15.0 --filter @lnwjud/capabilities build && corepack pnpm@10.15.0 --filter @lnwjud/extensions build && corepack pnpm@10.15.0 build && vitest run --fileParallelism=false",
+    "test": "corepack pnpm@10.15.0 --filter @lnwjing/domain build && corepack pnpm@10.15.0 --filter @lnwjing/shared build && corepack pnpm@10.15.0 --filter @lnwjing/process build && corepack pnpm@10.15.0 --filter @lnwjing/capabilities build && corepack pnpm@10.15.0 --filter @lnwjing/extensions build && corepack pnpm@10.15.0 build && vitest run --fileParallelism=false",
     "typecheck": "tsc --noEmit",
     "build": "tsc --outDir dist"
   },

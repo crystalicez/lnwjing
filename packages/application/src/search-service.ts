@@ -1,7 +1,7 @@
 import { realpath, stat } from 'node:fs/promises';
-import { appError, err, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import { RipgrepAdapter, type ContextDiscoveryMode, type SearchFilesRequest as AdapterFilesRequest, type SearchFilesResult, type SearchTextRequest as AdapterTextRequest, type SearchTextResult } from '@lnwjud/search';
-import { hostPathApi, isAbsoluteHostPath, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import { RipgrepAdapter, type ContextDiscoveryMode, type SearchFilesRequest as AdapterFilesRequest, type SearchFilesResult, type SearchTextRequest as AdapterTextRequest, type SearchTextResult } from '@lnwjing/search';
+import { hostPathApi, isAbsoluteHostPath, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 import { resolveWorkspaceForPath } from './workspace-locator.js';
 

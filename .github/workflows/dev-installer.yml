@@ -41,9 +41,9 @@ jobs:
       - name: Verify scheduled continuation contract
         shell: pwsh
         run: |
-          pnpm --filter @lnwjud/mcp-server exec vitest run src/scheduled-continuation-skill-contract.test.ts src/tools/goal-tools.test.ts src/tools/scheduled-continuation-tools.test.ts
-          pnpm --filter @lnwjud/application exec vitest run src/scheduled-continuation-service.test.ts
-          pnpm --filter @lnwjud/storage exec vitest run src/scheduled-continuation.integration.test.ts
+          pnpm --filter @lnwjing/mcp-server exec vitest run src/scheduled-continuation-skill-contract.test.ts src/tools/goal-tools.test.ts src/tools/scheduled-continuation-tools.test.ts
+          pnpm --filter @lnwjing/application exec vitest run src/scheduled-continuation-service.test.ts
+          pnpm --filter @lnwjing/storage exec vitest run src/scheduled-continuation.integration.test.ts
 
       - name: Build workspace dependencies
         shell: pwsh
@@ -52,16 +52,16 @@ jobs:
       - name: Build Windows Setup and Portable
         shell: pwsh
         env:
-          LNWJUD_COSIGN_PATH: cosign
+          LNWJING_COSIGN_PATH: cosign
         run: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/package-windows.ps1
 
       - name: Run packaged Windows Electron MCP and security smoke
         shell: pwsh
         timeout-minutes: 10
         env:
-          LNWJUD_PACKAGED_EXECUTABLE: ${{ github.workspace }}/apps/desktop/dist/installers/win-unpacked/lnwjud.exe
+          LNWJING_PACKAGED_EXECUTABLE: ${{ github.workspace }}/apps/desktop/dist/installers/win-unpacked/lnwjing.exe
           PLAYWRIGHT_HTML_OPEN: never
-        run: pnpm --filter @lnwjud/desktop exec playwright test --config playwright.config.ts desktop-dashboard.e2e.ts desktop-mcp-client.e2e.ts tools-doctor.e2e.ts electron-security.e2e.ts --trace=retain-on-failure --reporter=list,html
+        run: pnpm --filter @lnwjing/desktop exec playwright test --config playwright.config.ts desktop-dashboard.e2e.ts desktop-mcp-client.e2e.ts tools-doctor.e2e.ts electron-security.e2e.ts --trace=retain-on-failure --reporter=list,html
 
       - name: Upload Windows packaged E2E diagnostics
         if: always()

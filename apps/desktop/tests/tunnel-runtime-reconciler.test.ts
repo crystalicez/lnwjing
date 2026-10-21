@@ -37,7 +37,7 @@ function runtime(overrides: Partial<NativeTunnelRuntimeStatus> = {}): NativeTunn
 
 function adapter(status: NativeTunnelRuntimeStatus, connect = runtime()): TunnelRuntimeReconcilerAdapter {
   return {
-    runtimeAlias: (): string => 'lnwjud',
+    runtimeAlias: (): string => 'lnwjing',
     capabilities: vi.fn(async () => capabilities),
     status: vi.fn(async () => status),
     connect: vi.fn(async () => connect),
@@ -61,7 +61,7 @@ describe('TunnelRuntimeReconciler', () => {
 
   it('does not report a healthy runtime when duplicate-process verification fails', async () => {
     const runtimeAdapter = adapter(runtime());
-    runtimeAdapter.ensureSingleProcess = vi.fn(async () => { throw new Error('lnwjud could not safely check the local Tunnel processes. Restart Windows, reopen lnwjud, then check the Tunnel status. Details: Could not verify tunnel-client PID 200'); });
+    runtimeAdapter.ensureSingleProcess = vi.fn(async () => { throw new Error('lnwjing could not safely check the local Tunnel processes. Restart Windows, reopen lnwjing, then check the Tunnel status. Details: Could not verify tunnel-client PID 200'); });
     const reconciler = new TunnelRuntimeReconciler({ adapter: runtimeAdapter, desiredState: (): TunnelRuntimeDesiredState => desired });
 
     const result = await reconciler.reconcile();
@@ -74,7 +74,7 @@ describe('TunnelRuntimeReconciler', () => {
   it('retries a transient Windows process-inventory failure instead of turning a healthy Tunnel into a permanent Error', async () => {
     const runtimeAdapter = adapter(runtime());
     runtimeAdapter.ensureSingleProcess = vi.fn(async () => {
-      throw new Error('lnwjud could not safely check the local Tunnel processes. Restart Windows, reopen lnwjud, then check the Tunnel status. Details: Command failed: powershell.exe -NoProfile -NonInteractive -Command Get-CimInstance Win32_Process');
+      throw new Error('lnwjing could not safely check the local Tunnel processes. Restart Windows, reopen lnwjing, then check the Tunnel status. Details: Command failed: powershell.exe -NoProfile -NonInteractive -Command Get-CimInstance Win32_Process');
     });
     const reconciler = new TunnelRuntimeReconciler({ adapter: runtimeAdapter, desiredState: (): TunnelRuntimeDesiredState => desired });
 

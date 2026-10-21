@@ -122,7 +122,7 @@ Build the package used by the benchmark, then run the deterministic history
 fixture from the repository root:
 
 ```powershell
-corepack pnpm@10.15.0 --filter @lnwjud/capabilities build
+corepack pnpm@10.15.0 --filter @lnwjing/capabilities build
 node scripts/benchmark-durable-shell-history.mjs
 ```
 

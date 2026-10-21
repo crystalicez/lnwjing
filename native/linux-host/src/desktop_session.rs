@@ -28,7 +28,7 @@ impl Owner {
             && (requester.workspace.is_none() || self.workspace == requester.workspace)
     }
     fn read(input: &BTreeMap<String, String>) -> Result<Self, NativeError> {
-        let field = |name: &str| input.get(&format!("metadata.lnwjud.taskOwner.v1.{name}"));
+        let field = |name: &str| input.get(&format!("metadata.lnwjing.taskOwner.v1.{name}"));
         let client = field("clientId");
         let session = field("sessionId");
         let workspace = field("workspaceId");
@@ -439,17 +439,17 @@ mod tests {
         let make = |session: &str, workspace: Option<&str>| {
             let mut input = BTreeMap::from([
                 (
-                    "metadata.lnwjud.taskOwner.v1.clientId".into(),
+                    "metadata.lnwjing.taskOwner.v1.clientId".into(),
                     "client".into(),
                 ),
                 (
-                    "metadata.lnwjud.taskOwner.v1.sessionId".into(),
+                    "metadata.lnwjing.taskOwner.v1.sessionId".into(),
                     session.into(),
                 ),
             ]);
             if let Some(workspace) = workspace {
                 input.insert(
-                    "metadata.lnwjud.taskOwner.v1.workspaceId".into(),
+                    "metadata.lnwjing.taskOwner.v1.workspaceId".into(),
                     workspace.into(),
                 );
             }
@@ -466,16 +466,16 @@ mod tests {
     #[test]
     fn partial_or_blank_owner_never_downgrades_to_legacy() {
         assert!(Owner::read(&BTreeMap::from([(
-            "metadata.lnwjud.taskOwner.v1.clientId".into(),
+            "metadata.lnwjing.taskOwner.v1.clientId".into(),
             "client".into()
         )]))
         .is_err());
         assert!(Owner::read(&BTreeMap::from([
             (
-                "metadata.lnwjud.taskOwner.v1.clientId".into(),
+                "metadata.lnwjing.taskOwner.v1.clientId".into(),
                 "client".into()
             ),
-            ("metadata.lnwjud.taskOwner.v1.sessionId".into(), " ".into()),
+            ("metadata.lnwjing.taskOwner.v1.sessionId".into(), " ".into()),
         ]))
         .is_err());
         assert!(Owner::read(&BTreeMap::new()).is_ok());
@@ -489,18 +489,18 @@ mod tests {
         let input = |client: &str, session: &str, workspace: Option<&str>| {
             let mut result = BTreeMap::from([
                 (
-                    "metadata.lnwjud.taskOwner.v1.clientId".into(),
+                    "metadata.lnwjing.taskOwner.v1.clientId".into(),
                     client.into(),
                 ),
                 (
-                    "metadata.lnwjud.taskOwner.v1.sessionId".into(),
+                    "metadata.lnwjing.taskOwner.v1.sessionId".into(),
                     session.into(),
                 ),
                 ("handle".into(), "fixture-owned".into()),
             ]);
             if let Some(workspace) = workspace {
                 result.insert(
-                    "metadata.lnwjud.taskOwner.v1.workspaceId".into(),
+                    "metadata.lnwjing.taskOwner.v1.workspaceId".into(),
                     workspace.into(),
                 );
             }

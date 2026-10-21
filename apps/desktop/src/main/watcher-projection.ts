@@ -1,6 +1,6 @@
-import { Redactor } from '@lnwjud/audit';
-import type { GoalRecord } from '@lnwjud/domain';
-import type { McpServerListItem } from '@lnwjud/extensions';
+import { Redactor } from '@lnwjing/audit';
+import type { GoalRecord } from '@lnwjing/domain';
+import type { McpServerListItem } from '@lnwjing/extensions';
 import type { WatcherGoalSnapshot, WatcherSnapshot } from './watcher-server.js';
 
 const redactor = new Redactor();

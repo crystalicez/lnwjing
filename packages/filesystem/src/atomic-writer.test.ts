@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { AtomicFileWriter } from './atomic-writer.js';
 
 const temporaryRoots: string[] = [];
@@ -13,7 +13,7 @@ afterEach(async () => {
 
 describe('AtomicFileWriter', () => {
   it('publishes exactly one winner across concurrent create_new writers', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-create-only-race-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-create-only-race-'));
     temporaryRoots.push(root);
     const target = path.join(root, 'report.md');
     const writer = new AtomicFileWriter();
@@ -29,7 +29,7 @@ describe('AtomicFileWriter', () => {
   });
 
   it('rejects a destination created after preflight without modifying its bytes', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-create-only-preflight-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-create-only-preflight-'));
     temporaryRoots.push(root);
     const target = path.join(root, 'report.md');
     let validations = 0;
@@ -45,7 +45,7 @@ describe('AtomicFileWriter', () => {
     expect(await readdir(root)).toEqual(['report.md']);
   });
   it('writes through a temporary file in the target directory and replaces the target', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-write-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-write-'));
     temporaryRoots.push(root);
     const target = path.join(root, 'file.txt');
     const result = await new AtomicFileWriter().write(target, 'new content\n');
@@ -55,7 +55,7 @@ describe('AtomicFileWriter', () => {
   });
 
   it('creates missing nested parent directories before writing', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-write-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-write-'));
     temporaryRoots.push(root);
     const target = path.join(root, 'docs', 'superpowers', 'plans', 'plan.md');
     const result = await new AtomicFileWriter().write(target, 'nested\n');
@@ -65,7 +65,7 @@ describe('AtomicFileWriter', () => {
   });
 
   it('revalidates immediately before publication and leaves the live target unchanged on conflict', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-write-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-write-'));
     temporaryRoots.push(root);
     const target = path.join(root, 'file.txt');
     await writeFile(target, 'before\n', 'utf8');

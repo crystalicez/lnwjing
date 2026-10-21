@@ -3,11 +3,11 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { GoalContinuationService } from '@lnwjud/application';
-import { ScheduledContinuationService } from '@lnwjud/application';
-import type { FileActor, GoalRequestCancellationPort, GoalTaskCancellationPort } from '@lnwjud/application';
-import type { ScheduledContinuationWorkerLiveness } from '@lnwjud/domain';
-import type { Workspace } from '@lnwjud/workspace';
+import { GoalContinuationService } from '@lnwjing/application';
+import { ScheduledContinuationService } from '@lnwjing/application';
+import type { FileActor, GoalRequestCancellationPort, GoalTaskCancellationPort } from '@lnwjing/application';
+import type { ScheduledContinuationWorkerLiveness } from '@lnwjing/domain';
+import type { Workspace } from '@lnwjing/workspace';
 import { SqliteDatabase } from './database.js';
 import { SqliteGoalRepository } from './goal-repository.js';
 import { SqliteWorkspaceRepository } from './workspace-repository.js';
@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 async function fixture(): Promise<{ root: string; filename: string; workspace: Workspace }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-goal-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-goal-'));
   temporaryRoots.push(root);
   return {
     root,

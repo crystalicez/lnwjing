@@ -5,7 +5,7 @@ Design principle: **OpenAI tunnel identity is persistent; local runtime processe
 
 ## Why this architecture
 
-lnwjud users already have a local MCP runtime and can already use OpenAI Secure MCP Tunnel. The missing feature is not another public relay. It is reliable local supervision so the same OpenAI tunnel remains attached to the current local lnwjud MCP endpoint after process restarts or network interruptions.
+lnwjing users already have a local MCP runtime and can already use OpenAI Secure MCP Tunnel. The missing feature is not another public relay. It is reliable local supervision so the same OpenAI tunnel remains attached to the current local lnwjing MCP endpoint after process restarts or network interruptions.
 
 The architecture must remain local-first:
 
@@ -13,7 +13,7 @@ The architecture must remain local-first:
 - local permission/recovery policy remains authoritative;
 - tunnel-client runs on the user's machine;
 - runtime credentials remain on the user's machine;
-- no mandatory lnwjud cloud, VPS, public domain, Cloudflare, or inbound firewall rule is introduced.
+- no mandatory lnwjing cloud, VPS, public domain, Cloudflare, or inbound firewall rule is introduced.
 
 ## Stable identity
 
@@ -36,7 +36,7 @@ GET  /v1/tunnels/{tunnel_id}/poll
 POST /v1/tunnels/{tunnel_id}/response
 ```
 
-The connector-facing endpoint is owned by OpenAI's tunnel service. lnwjud does not need to publish its own static HTTPS hostname.
+The connector-facing endpoint is owned by OpenAI's tunnel service. lnwjing does not need to publish its own static HTTPS hostname.
 
 ## Target topology
 
@@ -51,7 +51,7 @@ OpenAI Secure MCP Tunnel control plane/service
         v
 +-----------------------------------+
 | tunnel-client on user's machine   |
-| alias: lnwjud                     |
+| alias: lnwjing                     |
 | persistent local supervision      |
 +----------------+------------------+
                  |
@@ -61,7 +61,7 @@ http://127.0.0.1:<port>/mcp
                  |
                  v
 +-----------------------------------+
-| lnwjud Desktop MCP                |
+| lnwjing Desktop MCP                |
 | application-global lifecycle      |
 +----------------+------------------+
                  |
@@ -115,7 +115,7 @@ The v4.11 controller should be desired-state based rather than child-process bas
 Desired state
   enabled = true
   tunnel_id = saved tunnel identity
-  runtime_alias = lnwjud
+  runtime_alias = lnwjing
   local_mcp_url = current Desktop endpoint
 
 Observed state
@@ -159,7 +159,7 @@ interface TunnelRuntimeAdapter {
 
 `TunnelConnectInput` includes references to protected credentials, the immutable `tunnelId`, and the current local MCP URL.
 
-For older tunnel-client versions that lack native runtime lifecycle commands, adapt the existing `run --profile lnwjud` implementation behind the same interface.
+For older tunnel-client versions that lack native runtime lifecycle commands, adapt the existing `run --profile lnwjing` implementation behind the same interface.
 
 ## Identity model
 
@@ -174,7 +174,7 @@ Persistent until the user explicitly changes it.
 ### Local runtime identity
 
 ```text
-runtime alias = lnwjud
+runtime alias = lnwjing
 process PID
 client instance ID
 health URL
@@ -295,7 +295,7 @@ The current profile-rewrite logic can be reused for the compatibility backend.
 
 ## Ownership and duplicate prevention
 
-Only one local runtime should drain a given lnwjud profile unless explicitly supported by future tunnel-client semantics.
+Only one local runtime should drain a given lnwjing profile unless explicitly supported by future tunnel-client semantics.
 
 Reuse the existing tunnel ownership lock to avoid:
 
@@ -311,7 +311,7 @@ The official tunnel protocol already gives each polled command an opaque `reques
 
 v4.11 should rely on official tunnel-client behavior instead of reimplementing the tunnel wire protocol.
 
-If request IDs become observable at the local integration boundary, lnwjud may attach them to Activity/Work Log diagnostics, but they must remain opaque.
+If request IDs become observable at the local integration boundary, lnwjing may attach them to Activity/Work Log diagnostics, but they must remain opaque.
 
 ## Long-running work boundary
 
@@ -339,13 +339,13 @@ The durable task store is the continuity mechanism for execution. Tunnel persist
 
 Transport reconnect and schema refresh are separate concerns.
 
-### Same lnwjud schema
+### Same lnwjing schema
 
 Restarting Desktop/tunnel-client should not require connector reconfiguration. Acceptance testing should verify the same configured tunnel continues serving the unchanged catalog.
 
 ### Changed schema
 
-If a lnwjud upgrade changes tool metadata/schema, supported ChatGPT behavior may require its normal connector refresh. v4.11 must not introduce a fake proxy catalog just to hide legitimate schema changes.
+If a lnwjing upgrade changes tool metadata/schema, supported ChatGPT behavior may require its normal connector refresh. v4.11 must not introduce a fake proxy catalog just to hide legitimate schema changes.
 
 This keeps the implementation local and avoids a second catalog control plane.
 
@@ -425,7 +425,7 @@ ChatGPT is configured once to tunnel_id X
         |
 tunnel-client exits / Desktop restarts / network drops
         |
-lnwjud restores the local runtime using tunnel_id X
+lnwjing restores the local runtime using tunnel_id X
         |
 OpenAI tunnel begins draining to the current local MCP again
         |
@@ -440,8 +440,8 @@ That is the complete v4.11 architecture target.
 
 Do not add in v4.11:
 
-- lnwjud relay server;
-- persistent public domain owned by lnwjud;
+- lnwjing relay server;
+- persistent public domain owned by lnwjing;
 - Cloudflare integration as a requirement;
 - WebSocket worker protocol;
 - profile routing service;

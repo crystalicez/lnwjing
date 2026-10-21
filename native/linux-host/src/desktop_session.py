@@ -110,7 +110,7 @@ def private_output(input, extension):
     parent = os.path.dirname(target)
     if not os.path.isdir(parent):
         raise Failure("FILE_NOT_FOUND")
-    temporary = os.path.join(parent, ".lnwjud-" + uuid.uuid4().hex + "." + extension)
+    temporary = os.path.join(parent, ".lnwjing-" + uuid.uuid4().hex + "." + extension)
     fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
     os.close(fd)
     return target, temporary

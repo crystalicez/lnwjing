@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readdir, rm, truncate, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { JsonWorkspaceIndexStore, WorkspaceIndexService, type WorkspaceIndexSnapshot, type WorkspaceIndexStore, type WorkspaceIndexMutation } from './workspace-index.js';
 
 vi.mock('node:fs', { spy: true });
@@ -34,7 +34,7 @@ function memoryStore(beforeCommit?: () => Promise<void>): WorkspaceIndexStore {
 
 describe('WorkspaceIndexService', () => {
   it('retains metadata without reading oversized files and indexes them once they shrink', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-large-file-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-large-file-'));
     const workspace: Workspace = { id: 'large', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
     const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
     try {
@@ -62,7 +62,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('does not publish an unchanged file event or an already removed path', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-noop-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-noop-'));
     const workspace: Workspace = {
       id: 'no-op', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString(),
     };
@@ -104,7 +104,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('preserves both distinct path updates when snapshot commits overlap', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-concurrent-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-concurrent-'));
     const workspace: Workspace = {
       id: 'concurrent', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString(),
     };
@@ -140,7 +140,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('reports a persistence ENOENT without treating it as a deleted source path', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-write-fault-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-write-fault-'));
     const workspace: Workspace = {
       id: 'write-fault', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString(),
     };
@@ -169,7 +169,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('writes complete snapshots through separate atomic temporary files', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-atomic-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-atomic-'));
     const store = new JsonWorkspaceIndexStore(root);
     const snapshot: WorkspaceIndexSnapshot = {
       version: 1, discoveryPolicyRevision: 1, workspaceId: 'atomic', rootPath: root, indexedAt: new Date().toISOString(), entries: [],
@@ -189,7 +189,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('reports unreadable persisted data and recovers through an explicit rebuild', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-read-fault-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-read-fault-'));
     const workspace: Workspace = {
       id: 'read-fault', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString(),
     };
@@ -210,7 +210,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it.each(['missing root', 'invalid entry'])('reports corrupt current-format %s instead of discarding the index', async (kind) => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-invalid-shape-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-invalid-shape-'));
     const workspace: Workspace = { id: 'invalid', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
     const directory = path.join(root, '.index-store');
     await mkdir(directory);
@@ -225,7 +225,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('refreshes an unwatched snapshot before reporting a newly started watcher clean', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-watch-baseline-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-watch-baseline-'));
     const workspace: Workspace = { id: 'watch-baseline', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
     const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
     try {
@@ -242,7 +242,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('counts a failed watcher commit as degraded rather than completed', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-watch-fault-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-watch-fault-'));
     const workspace: Workspace = {
       id: 'watch-fault', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString(),
     };
@@ -286,7 +286,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('invalidates a persisted snapshot that predates the discovery-policy revision', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-policy-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-policy-'));
     const storeDir = path.join(root, 'index-store');
     await mkdir(storeDir, { recursive: true });
     await writeFile(path.join(storeDir, `${encodeURIComponent('workspace-policy')}.json`), `${JSON.stringify({
@@ -301,7 +301,7 @@ describe('WorkspaceIndexService', () => {
   });
 
   it('indexes source and metadata paths by default while allowing an explicit ignored subtree', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-index-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-'));
     await mkdir(path.join(root, '.git'), { recursive: true });
     await mkdir(path.join(root, 'dist'), { recursive: true });
     await mkdir(path.join(root, 'node_modules', 'fixture'), { recursive: true });

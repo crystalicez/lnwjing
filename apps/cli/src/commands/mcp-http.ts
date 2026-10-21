@@ -1,6 +1,6 @@
-import { appError, err, type Result } from '@lnwjud/domain';
-import { startMcpHttp, type McpHttpServerHandle, type McpHttpServerOptions } from '@lnwjud/mcp-server';
-import type { Workspace } from '@lnwjud/workspace';
+import { appError, err, type Result } from '@lnwjing/domain';
+import { startMcpHttp, type McpHttpServerHandle, type McpHttpServerOptions } from '@lnwjing/mcp-server';
+import type { Workspace } from '@lnwjing/workspace';
 
 export interface ConfiguredWorkspaceResolver {
   resolve(reference: string): Promise<Result<Workspace>>;

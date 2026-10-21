@@ -11,14 +11,14 @@
 param(
   [string]$ReleaseCertPfx,
   [string]$ReleaseCertPassword,
-  [string]$DevCertSubject = 'CN=lnwjud-windows-ocr-dev'
+  [string]$DevCertSubject = 'CN=lnwjing-windows-ocr-dev'
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $ocrDir = Join-Path $projectRoot 'native\windows-ocr'
 $binDir = Join-Path $ocrDir 'bin'
-$helper = Join-Path $binDir 'lnwjud-windows-ocr.exe'
+$helper = Join-Path $binDir 'lnwjing-windows-ocr.exe'
 if (-not (Test-Path $helper)) {
   Write-Error "Helper not built. Run scripts\build-windows-ocr.ps1 first."
 }
@@ -66,7 +66,7 @@ if ($ReleaseCertPfx) {
     Write-Host "Reusing dev certificate $($existing.Thumbprint)"
   } else {
     $created = New-SelfSignedCertificate -Type Custom -Subject $DevCertSubject `
-      -KeyUsage DigitalSignature -FriendlyName 'lnwjud Windows OCR dev signing' `
+      -KeyUsage DigitalSignature -FriendlyName 'lnwjing Windows OCR dev signing' `
       -CertStoreLocation 'Cert:\CurrentUser\My' `
       -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
     Write-Host "Created dev certificate $($created.Thumbprint)"
@@ -99,7 +99,7 @@ $manifest = $manifest.Replace('CN=REPLACE_WITH_SIGNING_CERTIFICATE', $publisher)
 Set-Content (Join-Path $staging 'AppxManifest.xml') -Value $manifest -Encoding UTF8
 Copy-Item (Join-Path $ocrDir 'Assets') -Destination (Join-Path $staging 'Assets') -Recurse
 
-$msix = Join-Path $ocrDir 'obj\lnwjud-windows-ocr.sparse.msix'
+$msix = Join-Path $ocrDir 'obj\lnwjing-windows-ocr.sparse.msix'
 & $makeappx pack /v /h sha256 /d $staging /p $msix /nw
 if ($LASTEXITCODE -ne 0) { Write-Error 'makeappx failed.' }
 

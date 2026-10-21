@@ -43,7 +43,7 @@ describe('Remote MCP ngrok settings UI', () => {
 
   it('explains Secure Tunnel multi-chat and multi-host topology without recommending one profile per chat', () => {
     expect(settingsSource).toContain("t('settingsPage.tunnelIdentityHint')");
-    expect(messagesSource).toContain('Multiple ChatGPT chats on this lnwjud machine can share one Tunnel ID.');
+    expect(messagesSource).toContain('Multiple ChatGPT chats on this lnwjing machine can share one Tunnel ID.');
     expect(messagesSource).toContain('use a distinct Tunnel ID per machine');
   });
 
@@ -63,7 +63,7 @@ describe('Remote MCP ngrok settings UI', () => {
 
   it('uses zero-click ChatGPT OAuth handoff and contains no legacy PIN or pairing UI', () => {
     expect(settingsSource).toContain("t('settingsPage.remoteFirstTimeHint')");
-    expect(messagesSource).toContain('The browser hands off through a one-time 127.0.0.1 lnwjud Desktop approval and returns to ChatGPT automatically.');
+    expect(messagesSource).toContain('The browser hands off through a one-time 127.0.0.1 lnwjing Desktop approval and returns to ChatGPT automatically.');
     expect(settingsSource).toContain("runRemoteMcpAction('resetOauth')");
     expect(settingsSource).not.toMatch(/pairingCode|pairing_code|pairingRequired|remote-mcp-pairing/i);
     expect(homeSource).not.toMatch(/pairingCode|pairing_code|remote-mcp-pairing/i);

@@ -13,11 +13,11 @@ for tool in dpkg-deb file cc mktemp sed cp find; do
 done
 [[ "$(uname -s)" == Linux ]] || { echo 'These tests require Linux.' >&2; exit 2; }
 
-scratch="$(mktemp -d /tmp/lnwjud-linux-layout-test.XXXXXXXX)"
+scratch="$(mktemp -d /tmp/lnwjing-linux-layout-test.XXXXXXXX)"
 cleanup() {
   # Only remove the exact private directory allocated above, including on failure.
   case "$scratch" in
-    /tmp/lnwjud-linux-layout-test.?*) rm -rf -- "$scratch" ;;
+    /tmp/lnwjing-linux-layout-test.?*) rm -rf -- "$scratch" ;;
     *) echo "Refusing unexpected cleanup path: $scratch" >&2 ;;
   esac
 }
@@ -37,7 +37,7 @@ cat > "$scratch/extract-fixture.c" <<'C'
 #include <string.h>
 #include <unistd.h>
 int main(int argc, char **argv) {
-  const char *payload = getenv("LNWJUD_LAYOUT_TEST_PAYLOAD");
+  const char *payload = getenv("LNWJING_LAYOUT_TEST_PAYLOAD");
   if (argc != 2 || strcmp(argv[1], "--appimage-extract") != 0 || !payload) {
     fputs("layout fixture expects --appimage-extract and a payload\n", stderr);
     return 2;
@@ -54,8 +54,8 @@ make_payload() {
   local root="$1" runtime
   mkdir -p "$root/resources/runtime-tools" "$root/resources/tunnel-client" \
     "$root/resources/native-host/linux"
-  for runtime in lnwjud lnwjud-mcp-stdio resources/runtime-tools/rg \
-    resources/tunnel-client/tunnel-client resources/native-host/linux/lnwjud-linux-host; do
+  for runtime in lnwjing lnwjing-mcp-stdio resources/runtime-tools/rg \
+    resources/tunnel-client/tunnel-client resources/native-host/linux/lnwjing-linux-host; do
     # These ELF executables are inert stand-ins, not the packaged application.
     cp -- /bin/true "$root/$runtime"
     chmod 755 "$root/$runtime"
@@ -71,17 +71,17 @@ run_case() {
   make_payload "$root"
   case "$missing" in
     complete) ;;
-    app) rm -- "$root/lnwjud" ;;
-    native-host) rm -- "$root/resources/native-host/linux/lnwjud-linux-host" ;;
+    app) rm -- "$root/lnwjing" ;;
+    native-host) rm -- "$root/resources/native-host/linux/lnwjing-linux-host" ;;
     manifest) rm -- "$root/resources/native-host/linux/NATIVE_HOST.json" ;;
   esac
   artifact="artifacts with spaces/$name fixture.$format"
   if [[ "$format" == deb ]]; then
     mkdir -p "$scratch/deb-$name/DEBIAN" "$scratch/deb-$name/opt"
-    cp -a -- "$root" "$scratch/deb-$name/opt/lnwjud"
-    printf '%s\n' 'Package: lnwjud-layout-fixture' 'Version: 1.0.0' \
+    cp -a -- "$root" "$scratch/deb-$name/opt/lnwjing"
+    printf '%s\n' 'Package: lnwjing-layout-fixture' 'Version: 1.0.0' \
       'Architecture: all' 'Maintainer: Layout Test <test@example.invalid>' \
-      'Description: Layout-only test fixture, not the lnwjud application' \
+      'Description: Layout-only test fixture, not the lnwjing application' \
       > "$scratch/deb-$name/DEBIAN/control"
     chmod 755 "$scratch/deb-$name/DEBIAN"
     dpkg-deb --root-owner-group --build "$scratch/deb-$name" \
@@ -91,7 +91,7 @@ run_case() {
   fi
   # Run from a different directory with a relative artifact path containing
   # spaces. AppImage extraction changes cwd again inside the production script.
-  (cd -- "$scratch/caller" && LNWJUD_LAYOUT_TEST_PAYLOAD="$root" \
+  (cd -- "$scratch/caller" && LNWJING_LAYOUT_TEST_PAYLOAD="$root" \
     bash "$scratch/verify.sh" "$artifact") > "$scratch/result-$name.log" 2>&1 || status=$?
   if [[ "$status" != "$expected" ]]; then
     cat "$scratch/result-$name.log" >&2

@@ -1,5 +1,5 @@
-import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import type { CapabilityService } from '@lnwjud/capabilities';
+import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import type { CapabilityService } from '@lnwjing/capabilities';
 import { SetOfMarksService } from './set-of-marks-service.js';
 
 interface ComputerUseInput extends Record<string, unknown> {

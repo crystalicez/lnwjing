@@ -1,10 +1,10 @@
 > **Expanded reference:** this file preserves the long-form README and historical release detail. For the current concise overview, installation links, and release status, start with [README.md](README.md). Historical version-specific sections below are intentionally retained.
 
 <p align="center">
-  <img src="assets/logo/logo-256x256.png" width="160" alt="lnwjud logo" />
+  <img src="assets/logo/logo-256x256.png" width="160" alt="lnwjing logo" />
 </p>
 
-<h1 align="center">lnwjud</h1>
+<h1 align="center">lnwjing</h1>
 
 <p align="center">
   <strong>Cross-platform local AI-agent runtime and MCP gateway</strong><br />
@@ -15,13 +15,13 @@
 </p>
 
 <p align="center">
-  <strong>💬 lnwjud Community</strong><br />
-  มีกลุ่มพูดคุยสำหรับ lnwjud แล้วนะครับ หากท่านใดติดปัญหา หรืออยากแชร์การใช้งาน ไอเดีย หรือประสบการณ์ต่าง ๆ สามารถเข้ามาพูดคุยและแชร์กันได้ในกลุ่มครับ<br />
-  <a href="https://url.in.th/rEZiG"><strong>เข้าร่วมกลุ่ม lnwjud Community</strong></a>
+  <strong>💬 lnwjing Community</strong><br />
+  มีกลุ่มพูดคุยสำหรับ lnwjing แล้วนะครับ หากท่านใดติดปัญหา หรืออยากแชร์การใช้งาน ไอเดีย หรือประสบการณ์ต่าง ๆ สามารถเข้ามาพูดคุยและแชร์กันได้ในกลุ่มครับ<br />
+  <a href="https://url.in.th/rEZiG"><strong>เข้าร่วมกลุ่ม lnwjing Community</strong></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/engasnm111/lnwjud/releases/latest"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/engasnm111/lnwjud" /></a>
+  <a href="https://github.com/crystalicez/lnwjing/releases/latest"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/crystalicez/lnwjing" /></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4" />
   <img alt="Node" src="https://img.shields.io/badge/Node.js-24.x-339933" />
@@ -30,9 +30,9 @@
 
 ---
 
-## What is lnwjud?
+## What is lnwjing?
 
-lnwjud is a cross-platform local development gateway that exposes trusted local
+lnwjing is a cross-platform local development gateway that exposes trusted local
 capabilities through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 It is designed for AI-assisted software development where the agent needs more
 than a text-only chat: it may need to inspect a repository, search code, edit
@@ -41,14 +41,14 @@ Windows UI state, automate a managed browser, work with WSL, or call an
 additional local MCP server.
 
 The runtime stays on the local host. Local filesystem paths, processes,
-SQLite state, credentials, and capability backends are owned by lnwjud on that
+SQLite state, credentials, and capability backends are owned by lnwjing on that
 machine. Remote AI clients only receive the MCP requests and results that travel
 through the connection mode you choose.
 
-For ChatGPT web and other supported OpenAI surfaces, lnwjud supports the official
+For ChatGPT web and other supported OpenAI surfaces, lnwjing supports the official
 [OpenAI Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
-The tunnel is outbound-only: `tunnel-client` runs beside lnwjud, reaches OpenAI
-over outbound HTTPS, forwards MCP work to lnwjud's Desktop loopback HTTP MCP,
+The tunnel is outbound-only: `tunnel-client` runs beside lnwjing, reaches OpenAI
+over outbound HTTPS, forwards MCP work to lnwjing's Desktop loopback HTTP MCP,
 and returns the response without opening a public inbound port on the host.
 
 ## Current published version: v5.8.7
@@ -58,15 +58,15 @@ and returns the response without opening a public inbound port on the host.
 ### What's new in v5.8.7
 
 - **Published release:** v5.8.7 is officially published with Windows Setup/Portable, macOS (arm64/x64) and Linux (arm64/x64) installers, SHA256 checksums, a release manifest and five platform provenance records. Protected PR #210 merged as `1a0453ed0ef1de4cdf9ce1ba9edee8da0de8426b`; exact-main CI passed all 18 jobs, and Release workflow #38965349765 completed successfully.
-- **Tunnel Reset All Settings / persistent alias:** Factory reset reconciles only the verified stopped local `lnwjud` runtime alias through the official tunnel-client command, preserving unrelated tunnels and rejecting running, foreign or unverifiable ownership. Targeted desktop regressions passed; a separate real-notebook post-install smoke test is still recommended.
+- **Tunnel Reset All Settings / persistent alias:** Factory reset reconciles only the verified stopped local `lnwjing` runtime alias through the official tunnel-client command, preserving unrelated tunnels and rejecting running, foreign or unverifiable ownership. Targeted desktop regressions passed; a separate real-notebook post-install smoke test is still recommended.
 - **External MCP direct invocation:** Content-only child providers no longer require an invented outer structured-result schema. Direct calls to Playwright, Context7 and codebase-memory-mcp were successfully verified on the v5.8.7 development runtime.
 - **Issue #208 — guarded Git import:** Dedicated `git_clone_safe` supports policy-approved, workspace-scoped HTTPS import pinned to an exact commit with native Windows create-only staging, NTFS identity checks, non-replace publication and fail-closed unknown-state recovery. Existing generic Git command restrictions and host authorization remain in force.
 - **Native Git stage integrity:** Verify trusted Git HEAD, reject tracked/untracked modifications and concealed index changes (`assume-unchanged` / `skip-worktree`) before publication. The Windows regression suite passed 5/5 after reproducing the original flaw.
 - **Issue #209 — write safety:** Strict create-only protection is enforced even under the Full permission profile. Workspace writer leases, global managed-writer admission, `workspace_path_preflight`, and process-lifetime fencing passed targeted and exact-main hosted validation. Explicit recovery of an abandoned same-client writer lease is allowed only when idle ownership is proven; unknown or live work remains blocked.
-- **Security boundary:** Safety claims cover untrusted caller input and writers mediated by the lnwjud Gateway. No guarantee is made against arbitrary same-Windows-user/administrator native processes operating outside the gateway; those processes are outside the tested contract.
+- **Security boundary:** Safety claims cover untrusted caller input and writers mediated by the lnwjing Gateway. No guarantee is made against arbitrary same-Windows-user/administrator native processes operating outside the gateway; those processes are outside the tested contract.
 - **Process startup safety:** Failed pre-spawn process admission releases the reservation; a successfully spawned process retains it until verified zero-active native termination. The 35 process regressions and package typecheck passed.
 - **Scheduled Task truthfulness:** Disabled Native ChatGPT continuation was not silently recreated. No recurring native task has been claimed active for this release goal.
-- **ภาษาไทย:** เผยแพร่ v5.8.7 อย่างเป็นทางการแล้ว ตรวจ CI ที่ Merge SHA ตรงครบ 18 Jobs พร้อม Manifest, SHA256 และ Provenance ครบทุกแพลตฟอร์ม แก้ Git Import, Strict Create-Only, Writer Lease, Tunnel Reset และ Direct MCP; รับประกันความปลอดภัยในขอบเขต Writer ที่ผ่าน lnwjud Gateway เท่านั้น ไม่ครอบคลุมโปรเซสภายนอกที่ใช้สิทธิ์ Windows User เดียวกัน
+- **ภาษาไทย:** เผยแพร่ v5.8.7 อย่างเป็นทางการแล้ว ตรวจ CI ที่ Merge SHA ตรงครบ 18 Jobs พร้อม Manifest, SHA256 และ Provenance ครบทุกแพลตฟอร์ม แก้ Git Import, Strict Create-Only, Writer Lease, Tunnel Reset และ Direct MCP; รับประกันความปลอดภัยในขอบเขต Writer ที่ผ่าน lnwjing Gateway เท่านั้น ไม่ครอบคลุมโปรเซสภายนอกที่ใช้สิทธิ์ Windows User เดียวกัน
 
 ### What's new in v5.8.6
 
@@ -168,7 +168,7 @@ Authoritative in-repository references:
 
 ## Security model you should understand before using it
 
-lnwjud is intentionally powerful. It is intended for a machine and workspace you
+lnwjing is intentionally powerful. It is intended for a machine and workspace you
 trust, not as a sandbox for unknown code.
 
 - **Unrestricted mode is enabled by default for read/discovery compatibility, but it never scans or registers filesystem roots automatically.** It permits explicitly requested absolute paths. With Full Bypass OFF, Unrestricted does not widen the host-selected Active Project mutation boundary or bypass command/approval policy. Full Bypass is a separate explicit control.
@@ -190,7 +190,7 @@ trust, not as a sandbox for unknown code.
 - The exact `delete_file` operation is the only mutation eligible for scoped auto-approval, and only after the target is proven recoverable inside the Active Project. Protected critical paths, workspace roots, non-empty directories, unsafe/broad patterns, outside paths, and reparse/junction escapes are never auto-approved.
 - Recovery Center derives and displays the local Recovery Trash path from the configured Desktop data root (`<dataRoot>/recovery-trash`). Replacement backups and supported deletes are recorded there or in encrypted checkpoints before the authoritative mutation where the operation is recoverable.
 - Arbitrary approved commands, package scripts, project-owned scripts, Codex instructions, child MCP calls, and remote mutations are opaque execution. They are not an operating-system sandbox and are not automatically recoverable through Recovery Trash.
-- With Full Bypass OFF, disk formatting and machine shutdown/reboot remain hard-blocked by lnwjud command policy. Full Bypass skips that application policy, but Windows/UAC/tool availability can still reject or fail the operation.
+- With Full Bypass OFF, disk formatting and machine shutdown/reboot remain hard-blocked by lnwjing command policy. Full Bypass skips that application policy, but Windows/UAC/tool availability can still reject or fail the operation.
 - The local Streamable HTTP MCP endpoint binds to loopback. Do not publish that
   loopback endpoint through a generic reverse proxy. For a private remote
   connection, use Secure MCP Tunnel.
@@ -207,43 +207,43 @@ full scans can still inspect paths allowed by the active workspace/policy.
 
 | Client / use case | Connection | What must run on the host | Notes |
 | --- | --- | --- | --- |
-| ChatGPT Business custom app | Remote MCP via ngrok + OAuth | lnwjud Desktop + ngrok | Recommended easy path: an Admin/Owner configures and publishes the public HTTPS `/mcp` once; members press Connect. Recognized ChatGPT callbacks—including `/connector/oauth/<redirect_id>` used by newly created Plugins/Apps—authorize through the local Desktop handoff. Unrecognized OAuth clients are rejected instead of falling back to a legacy manual-consent flow. |
-| ChatGPT web developer-mode app | OpenAI Secure MCP Tunnel | `tunnel-client` + lnwjud Desktop | Private outbound-only path to the Desktop loopback HTTP MCP; no public MCP port |
-| Codex CLI or another local MCP host | Local stdio MCP | `lnwjud-mcp-stdio.cmd` | Lowest-overhead local MCP path |
-| Local MCP client / dashboard diagnostics | Loopback Streamable HTTP | lnwjud Desktop | Uses an automatically assigned free loopback port by default; actual URL is shown in the UI |
+| ChatGPT Business custom app | Remote MCP via ngrok + OAuth | lnwjing Desktop + ngrok | Recommended easy path: an Admin/Owner configures and publishes the public HTTPS `/mcp` once; members press Connect. Recognized ChatGPT callbacks—including `/connector/oauth/<redirect_id>` used by newly created Plugins/Apps—authorize through the local Desktop handoff. Unrecognized OAuth clients are rejected instead of falling back to a legacy manual-consent flow. |
+| ChatGPT web developer-mode app | OpenAI Secure MCP Tunnel | `tunnel-client` + lnwjing Desktop | Private outbound-only path to the Desktop loopback HTTP MCP; no public MCP port |
+| Codex CLI or another local MCP host | Local stdio MCP | `lnwjing-mcp-stdio.cmd` | Lowest-overhead local MCP path |
+| Local MCP client / dashboard diagnostics | Loopback Streamable HTTP | lnwjing Desktop | Uses an automatically assigned free loopback port by default; actual URL is shown in the UI |
 | Supported OpenAI API/Codex surface | Secure MCP Tunnel | `tunnel-client` + local MCP target | Tunnel association and Platform permissions apply |
 
 For most ChatGPT web users, choose **one primary remote connection method**: Remote MCP via ngrok + OAuth is the recommended path, while OpenAI Secure MCP Tunnel is the alternative/advanced path. They are independent transports/authentication surfaces, so enabling one does not remove the other; power users can deliberately keep both online. In Desktop Settings, each method is grouped in its own collapsible section with independent ONLINE/READY/SETUP state, and Secure Tunnel auto-collapses while Remote MCP OAuth is online to keep the normal setup path focused.
 
 The desktop HTTP server starts automatically; adding a project is required before workspace-scoped work, but Doctor and Projects remain available when no project is registered yet.
-By default the server asks the OS for a free loopback port, so normal users do not need to configure a port or resolve collisions. Advanced users can pin a non-zero port in Settings or `LNWJUD_MCP_PORT`; if that explicit port is unavailable, lnwjud can fall back and reports the actual endpoint. Always use the endpoint shown in the dashboard. The **Start
+By default the server asks the OS for a free loopback port, so normal users do not need to configure a port or resolve collisions. Advanced users can pin a non-zero port in Settings or `LNWJING_MCP_PORT`; if that explicit port is unavailable, lnwjing can fall back and reports the actual endpoint. Always use the endpoint shown in the dashboard. The **Start
 Connection** button is useful after a manual stop, while **Stop Connection**
 stops the current local HTTP listener.
 
 ## Quick start: install a supported release
 
-Choose the guide for the host you will run lnwjud on:
+Choose the guide for the host you will run lnwjing on:
 
 - [macOS 13+ (arm64/x64)](docs/INSTALL_MACOS.md)
 - [Linux x64/arm64 on Ubuntu 24.04 LTS](docs/INSTALL_LINUX.md) (arm64 requires the matching native artifact)
 - Windows 10/11 x64: the Windows flow below
 
-### 1. Install lnwjud Desktop
+### 1. Install lnwjing Desktop
 
 1. Download the latest published installer from
-   [GitHub Releases](https://github.com/engasnm111/lnwjud/releases/latest).
-   Current published Windows 10/11 x64 v5.8.7 artifacts are `lnwjud-Setup-5.8.7.exe` (recommended installer) and `lnwjud-Portable-5.8.7.exe` (no installation required).
-2. Run the NSIS installer and launch **lnwjud Agent Control Center**.
-3. Add or select the project/workspace you want lnwjud to operate on.
+   [GitHub Releases](https://github.com/crystalicez/lnwjing/releases/latest).
+   Current published Windows 10/11 x64 v5.8.7 artifacts are `lnwjing-Setup-5.8.7.exe` (recommended installer) and `lnwjing-Portable-5.8.7.exe` (no installation required).
+2. Run the NSIS installer and launch **lnwjing Agent Control Center**.
+3. Add or select the project/workspace you want lnwjing to operate on.
 4. Review **Settings** before attaching an AI client, especially Permission
    Profile and Unrestricted Mode.
 
-If you prefer not to install the app, run the currently published `lnwjud-Portable-5.8.7.exe` directly.
-Portable mode uses the same per-user lnwjud data/settings location as the installer;
+If you prefer not to install the app, run the currently published `lnwjing-Portable-5.8.7.exe` directly.
+Portable mode uses the same per-user lnwjing data/settings location as the installer;
 it is a portable executable, not a keep-all-data-next-to-the-EXE mode.
 Automatic updates preserve the distribution you chose. Installer users read
-`latest.yml` and receive the next `lnwjud-Setup-<version>.exe`. Portable users
-read `portable.yml` and receive the next `lnwjud-Portable-<version>.exe`, which
+`latest.yml` and receive the next `lnwjing-Setup-<version>.exe`. Portable users
+read `portable.yml` and receive the next `lnwjing-Portable-<version>.exe`, which
 is verified by the updater and then replaces the same Portable EXE path with a
 backup/rollback/restart flow after the running process exits. The updater never
 converts a Portable install into an Installer install or the reverse.
@@ -261,18 +261,18 @@ For normal Windows 10/11 x64 desktop use, **no extra Windows Settings toggle or 
 accessibility package is required** for `vision.capture_*`, `accessibility.observe`,
 or `vision_annotated_capture`. The compatibility contract covers Windows 10 x64 from
 build 10240 onward and Windows 11 x64 from build 22000 onward, including normal Home,
-Pro, Enterprise, Education, and LTSC-style installations. lnwjud uses built-in Windows
+Pro, Enterprise, Education, and LTSC-style installations. lnwjing uses built-in Windows
 screen-capture APIs, Microsoft UI Automation, and Windows PowerShell 5.x/.NET APIs
 already present on the machine; PowerShell 7 is not required.
 
 A few operating-system boundaries still apply:
 
-- lnwjud must run in the same interactive Windows session as the UI being observed.
+- lnwjing must run in the same interactive Windows session as the UI being observed.
   The Windows lock screen, sign-in screen, and UAC secure desktop are intentionally
   outside normal desktop capture/automation.
-- If the target application is running **as Administrator** while lnwjud is not,
+- If the target application is running **as Administrator** while lnwjing is not,
   Windows integrity isolation can limit semantic UI Automation access. Prefer
-  running both at the same privilege level; only elevate lnwjud when the target
+  running both at the same privilege level; only elevate lnwjing when the target
   genuinely requires it.
 - Set-of-Marks labels come from controls exposed through Microsoft UI Automation.
   Apps that draw their whole interface on a custom canvas may return few or no
@@ -284,14 +284,14 @@ A few operating-system boundaries still apply:
 
 ### 2. Connect ChatGPT with Remote MCP + OAuth (recommended)
 
-For most ChatGPT web users, **start here**. Remote MCP via **ngrok + OAuth** was established as the default/backward-compatible Remote MCP transport in v5.5.0 and remains the default in the current v5.8.7 source line. It does **not** require an OpenAI Tunnel ID or Runtime API key. lnwjud keeps its real MCP server on loopback, places an OAuth-protected gateway in front of it, and exposes only that protected gateway through ngrok as an HTTPS URL ending in `/mcp`.
+For most ChatGPT web users, **start here**. Remote MCP via **ngrok + OAuth** was established as the default/backward-compatible Remote MCP transport in v5.5.0 and remains the default in the current v5.8.7 source line. It does **not** require an OpenAI Tunnel ID or Runtime API key. lnwjing keeps its real MCP server on loopback, places an OAuth-protected gateway in front of it, and exposes only that protected gateway through ngrok as an HTTPS URL ending in `/mcp`.
 
-1. Open **lnwjud → Settings → Remote MCP & Tunnel**.
-2. Check the ngrok status. If lnwjud shows **READY**, keep the detected installation. If it is not ready, lnwjud shows only the installation path supported by the current host: Windows may use Microsoft Store/WinGet, macOS may use Homebrew when available, and hosts without a verified automatic installer get the official ngrok download link instead. Runtime discovery itself is cross-platform and verifies `ngrok version` before use.
-3. Save your ngrok authtoken once, then click **Start Remote MCP**. lnwjud starts the OAuth gateway and ngrok, detects the public HTTPS MCP URL, and shows a **Copy MCP URL** action.
+1. Open **lnwjing → Settings → Remote MCP & Tunnel**.
+2. Check the ngrok status. If lnwjing shows **READY**, keep the detected installation. If it is not ready, lnwjing shows only the installation path supported by the current host: Windows may use Microsoft Store/WinGet, macOS may use Homebrew when available, and hosts without a verified automatic installer get the official ngrok download link instead. Runtime discovery itself is cross-platform and verifies `ngrok version` before use.
+3. Save your ngrok authtoken once, then click **Start Remote MCP**. lnwjing starts the OAuth gateway and ngrok, detects the public HTTPS MCP URL, and shows a **Copy MCP URL** action.
 4. **Business Admin/Owner setup:** in Workspace Settings → Apps → Create, add the public `https://.../mcp` URL, select **OAuth**, complete Scan Tools, create the app, then **Publish** it. Ordinary workspace members do not need Developer mode and do not paste the Server URL again.
-5. **Member connection:** open the published custom lnwjud app in ChatGPT and press **Connect**. For the exact supported ChatGPT OAuth callback paths, the browser is handed once to a random short-lived `http://127.0.0.1:<ephemeral>/...` approval listener owned by the running lnwjud Desktop, then lnwjud completes DCR + Authorization Code + PKCE and redirects back to ChatGPT — **no manual code entry and no extra approval click**. The public ngrok endpoint cannot redeem that localhost ticket. OAuth clients outside the supported ChatGPT callback contract are rejected with `403 access_denied`.
-6. lnwjud remembers the trusted registered ChatGPT client and valid refresh grant in the host secure-storage provider. Ordinary app restarts or **Start Remote MCP** do not require another authorization. An explicit **Stop** disables auto-start but preserves the trusted OAuth relationship; use **Reconnect ChatGPT** only when you intentionally want to reset that relationship.
+5. **Member connection:** open the published custom lnwjing app in ChatGPT and press **Connect**. For the exact supported ChatGPT OAuth callback paths, the browser is handed once to a random short-lived `http://127.0.0.1:<ephemeral>/...` approval listener owned by the running lnwjing Desktop, then lnwjing completes DCR + Authorization Code + PKCE and redirects back to ChatGPT — **no manual code entry and no extra approval click**. The public ngrok endpoint cannot redeem that localhost ticket. OAuth clients outside the supported ChatGPT callback contract are rejected with `403 access_denied`.
+6. lnwjing remembers the trusted registered ChatGPT client and valid refresh grant in the host secure-storage provider. Ordinary app restarts or **Start Remote MCP** do not require another authorization. An explicit **Stop** disables auto-start but preserves the trusted OAuth relationship; use **Reconnect ChatGPT** only when you intentionally want to reset that relationship.
 7. Confirm the connection discovers **282 tools by default** (or **294** when Codex delegation plus Agent Swarm is explicitly enabled), then run a read-only smoke test before writes.
 
 The public ngrok URL is not the raw loopback MCP endpoint: requests must pass OAuth and bearer-token validation at the separate gateway. Do not publish `http://127.0.0.1:<port>/mcp` directly through a generic reverse proxy.
@@ -300,8 +300,8 @@ The public ngrok URL is not the raw loopback MCP endpoint: requests must pass OA
 
 The transport selector is additive and does not migrate an existing user automatically:
 
-- **ngrok** — default and legacy-compatible. lnwjud can install/resolve its managed ngrok runtime, stores the authtoken through secure storage, starts the protected OAuth gateway, spawns only its owned ngrok child, and preserves the configured/static origin behavior from earlier versions.
-- **Cloudflare** — for a Cloudflare Tunnel or reverse proxy that **you manage**. lnwjud does not create the Cloudflare tunnel. It starts a stable loopback OAuth gateway, shows that local gateway target, requires a configured public HTTPS origin, and verifies that the public origin actually routes back to the gateway before reporting RUNNING. ngrok is not installed or spawned in this mode.
+- **ngrok** — default and legacy-compatible. lnwjing can install/resolve its managed ngrok runtime, stores the authtoken through secure storage, starts the protected OAuth gateway, spawns only its owned ngrok child, and preserves the configured/static origin behavior from earlier versions.
+- **Cloudflare** — for a Cloudflare Tunnel or reverse proxy that **you manage**. lnwjing does not create the Cloudflare tunnel. It starts a stable loopback OAuth gateway, shows that local gateway target, requires a configured public HTTPS origin, and verifies that the public origin actually routes back to the gateway before reporting RUNNING. ngrok is not installed or spawned in this mode.
 - **Custom URL** — the same protected stable-gateway model for another externally managed HTTPS reverse proxy. No ngrok token/install is required. The configured public origin must be HTTPS and must route to the shown loopback gateway.
 - **Local MCP** — starts only the loopback MCP listener. It has no public gateway, no ngrok requirement, no public OAuth requirement, and no ChatGPT remote-plugin setup prompt. Use it for local MCP clients; it is not a replacement for Remote MCP OAuth or OpenAI Secure MCP Tunnel.
 
@@ -314,35 +314,35 @@ Use this path only when you specifically prefer the official outbound-only Secur
 The Secure MCP Tunnel flow requires a Platform tunnel ID and a runtime API key. Published target-native packages include the official OpenAI `tunnel-client v0.0.15` for the packaged OS and architecture, with pinned checksum, license, and provenance evidence. Release users do **not** download or extract a separate tunnel-client package. Creating or editing a tunnel requires **Tunnels Read + Manage**; the runtime key needs **Tunnels Read + Use**.
 
 1. Open [OpenAI Platform tunnel settings](https://platform.openai.com/settings/organization/tunnels).
-2. Create a tunnel named `lnwjud` and associate it with the Platform organization and ChatGPT workspace that should use it.
+2. Create a tunnel named `lnwjing` and associate it with the Platform organization and ChatGPT workspace that should use it.
 3. Create a restricted runtime API key with **Tunnels Read + Use**.
-4. Open **lnwjud → Settings → Remote MCP & Tunnel → OpenAI Secure MCP Tunnel**. Save the runtime API key, leave the bundled-client override empty, paste the tunnel ID, and click **Configure Tunnel**.
-5. The wizard selects the bundled client, starts or reuses lnwjud's Desktop loopback HTTP MCP, creates or repairs the `tunnel-client/lnwjud.yaml` profile under the host's platform-appropriate application-data directory, and runs the required diagnostics.
-6. In ChatGPT, add a **Tunnel** connection and select the associated `lnwjud` tunnel or enter its `tunnel_id`.
+4. Open **lnwjing → Settings → Remote MCP & Tunnel → OpenAI Secure MCP Tunnel**. Save the runtime API key, leave the bundled-client override empty, paste the tunnel ID, and click **Configure Tunnel**.
+5. The wizard selects the bundled client, starts or reuses lnwjing's Desktop loopback HTTP MCP, creates or repairs the `tunnel-client/lnwjing.yaml` profile under the host's platform-appropriate application-data directory, and runs the required diagnostics.
+6. In ChatGPT, add a **Tunnel** connection and select the associated `lnwjing` tunnel or enter its `tunnel_id`.
 
-The tunnel-client path field is an **override/troubleshooting** control only. Clear it and choose **Use bundled** to return to the package-supplied client. Secure Tunnel forwards to the running Desktop MCP and does not spawn a separate headless lnwjud MCP runtime, so Desktop-selected Active Projects and native exact-action approval remain authoritative.
+The tunnel-client path field is an **override/troubleshooting** control only. Clear it and choose **Use bundled** to return to the package-supplied client. Secure Tunnel forwards to the running Desktop MCP and does not spawn a separate headless lnwjing MCP runtime, so Desktop-selected Active Projects and native exact-action approval remain authoritative.
 
-**Multi-chat / multi-host:** one lnwjud Desktop instance and one `lnwjud` Secure Tunnel are designed to serve multiple simultaneous ChatGPT chats and workspaces. Do not create a separate tunnel profile for each chat; Desktop HTTP MCP already separates concurrent protocol sessions, and v4.62.0 explicitly configures bundled tunnel-client with `MCP_MAX_CONCURRENT_REQUESTS=32` (while retaining the 168-hour transport TTL) to provide headroom when several chats fan out tool calls at the same time. This is different from running lnwjud on several physical hosts. tunnel-client's HTTP deployment model allows replicas to share a Tunnel ID, but queued work is delivered to whichever replica polls it first; it does not pin a particular ChatGPT chat to a particular Mac/Windows host. Therefore, when each host must be independently selectable, use a distinct Tunnel ID and ChatGPT Tunnel connection per host (for example `lnwjud-mac` and `lnwjud-windows`). Remote MCP via ngrok + OAuth remains the recommended connection path and removes the extra tunnel polling/dispatch hop, so it can still feel more responsive under bursty workloads.
+**Multi-chat / multi-host:** one lnwjing Desktop instance and one `lnwjing` Secure Tunnel are designed to serve multiple simultaneous ChatGPT chats and workspaces. Do not create a separate tunnel profile for each chat; Desktop HTTP MCP already separates concurrent protocol sessions, and v4.62.0 explicitly configures bundled tunnel-client with `MCP_MAX_CONCURRENT_REQUESTS=32` (while retaining the 168-hour transport TTL) to provide headroom when several chats fan out tool calls at the same time. This is different from running lnwjing on several physical hosts. tunnel-client's HTTP deployment model allows replicas to share a Tunnel ID, but queued work is delivered to whichever replica polls it first; it does not pin a particular ChatGPT chat to a particular Mac/Windows host. Therefore, when each host must be independently selectable, use a distinct Tunnel ID and ChatGPT Tunnel connection per host (for example `lnwjing-mac` and `lnwjing-windows`). Remote MCP via ngrok + OAuth remains the recommended connection path and removes the extra tunnel polling/dispatch hop, so it can still feel more responsive under bursty workloads.
 
-If you intentionally need to initialize the Secure Tunnel profile by hand, keep lnwjud running and copy the **Local MCP endpoint** shown by lnwjud (it is loopback-only and ends in `/mcp`):
+If you intentionally need to initialize the Secure Tunnel profile by hand, keep lnwjing running and copy the **Local MCP endpoint** shown by lnwjing (it is loopback-only and ends in `/mcp`):
 
 ```powershell
 $env:CONTROL_PLANE_API_KEY = '<runtime-key-for-this-session>'
 $tc = 'C:/path/to/tunnel-client.exe'
 $profileDir = Join-Path $env:APPDATA 'tunnel-client'
-$mcpEndpoint = 'http://127.0.0.1:<port>/mcp' # copy the actual endpoint shown by lnwjud
+$mcpEndpoint = 'http://127.0.0.1:<port>/mcp' # copy the actual endpoint shown by lnwjing
 
 & $tc init `
   --force `
   --sample sample_mcp_remote_no_auth `
-  --profile lnwjud `
+  --profile lnwjing `
   --profile-dir $profileDir `
   --tunnel-id 'tunnel_0123456789abcdef0123456789abcdef' `
   --control-plane-api-key-ref 'env:CONTROL_PLANE_API_KEY' `
   --health-listen-addr '127.0.0.1:0' `
   --mcp-server-url $mcpEndpoint
 
-& $tc doctor --profile lnwjud --profile-dir $profileDir --explain
+& $tc doctor --profile lnwjing --profile-dir $profileDir --explain
 Remove-Item Env:CONTROL_PLANE_API_KEY -ErrorAction SilentlyContinue
 ```
 
@@ -351,18 +351,18 @@ For Secure Tunnel troubleshooting, open **Live Logs** or run **Doctor**. The des
 Example smoke test:
 
 ```text
-Use lnwjud to list registered workspaces, report Git status for the selected project, and summarize the top-level project tree. Do not modify anything.
+Use lnwjing to list registered workspaces, report Git status for the selected project, and summarize the top-level project tree. Do not modify anything.
 ```
 
 ## Quick start: install the Windows release (ภาษาไทย)
 
-ส่วนนี้สำหรับผู้ใช้ Windows ที่ต้องการติดตั้ง lnwjud แล้วเชื่อมกับ ChatGPT แบบง่ายที่สุด โดย **วิธีหลักที่แนะนำสำหรับ v5.8.6 คือ Remote MCP ผ่าน ngrok + OAuth** ไม่ต้องมี OpenAI Tunnel ID และไม่ต้องสร้าง Runtime API key สำหรับขั้นตอนหลักนี้ ส่วน **Tunnel ID + Runtime API key** ยังคงรองรับ แต่เป็นทางเลือก/โหมดขั้นสูงสำหรับผู้ที่ต้องการ OpenAI Secure MCP Tunnel โดยเฉพาะ
+ส่วนนี้สำหรับผู้ใช้ Windows ที่ต้องการติดตั้ง lnwjing แล้วเชื่อมกับ ChatGPT แบบง่ายที่สุด โดย **วิธีหลักที่แนะนำสำหรับ v5.8.6 คือ Remote MCP ผ่าน ngrok + OAuth** ไม่ต้องมี OpenAI Tunnel ID และไม่ต้องสร้าง Runtime API key สำหรับขั้นตอนหลักนี้ ส่วน **Tunnel ID + Runtime API key** ยังคงรองรับ แต่เป็นทางเลือก/โหมดขั้นสูงสำหรับผู้ที่ต้องการ OpenAI Secure MCP Tunnel โดยเฉพาะ
 
-### 1. ติดตั้ง lnwjud หรือใช้ Portable
+### 1. ติดตั้ง lnwjing หรือใช้ Portable
 
-1. แบบแนะนำ: ดาวน์โหลด public release ล่าสุด `lnwjud-Setup-5.8.7.exe` แล้วติดตั้งตามปกติ
-2. ถ้าไม่ต้องการติดตั้ง: ดาวน์โหลด `lnwjud-Portable-5.8.7.exe` แล้วเปิดได้ทันที
-3. เปิด **lnwjud Agent Control Center**
+1. แบบแนะนำ: ดาวน์โหลด public release ล่าสุด `lnwjing-Setup-5.8.7.exe` แล้วติดตั้งตามปกติ
+2. ถ้าไม่ต้องการติดตั้ง: ดาวน์โหลด `lnwjing-Portable-5.8.7.exe` แล้วเปิดได้ทันที
+3. เปิด **lnwjing Agent Control Center**
 4. เพิ่มหรือเลือก Project/Workspace ที่ต้องการให้ ChatGPT ทำงานด้วย
 
 Portable ใช้ Settings/ข้อมูลต่อผู้ใช้ Windows ชุดเดียวกับตัวติดตั้ง ไม่ได้เก็บ database/settings ทุกอย่างไว้ข้าง EXE และตัว release มี packaged Electron host/STDIO launcher สำหรับ local MCP มาให้แล้ว จึงไม่ต้องติดตั้ง Node.js แยกเพื่อใช้งานโปรแกรม
@@ -372,13 +372,13 @@ Portable ใช้ Settings/ข้อมูลต่อผู้ใช้ Window
 สำหรับผู้ใช้ ChatGPT เว็บทั่วไป **ให้เริ่มจากวิธีนี้ก่อน**:
 
 1. เปิด **Settings → Remote MCP & Tunnel**
-2. ดูสถานะ ngrok ก่อน ถ้าขึ้น **READY** ให้ใช้ตัวที่ตรวจพบได้เลย; ถ้ายังไม่พร้อมให้กด **ติดตั้ง ngrok อัตโนมัติ** ซึ่ง lnwjud ใช้ช่องทาง Microsoft Store/WinGet ทางการ
+2. ดูสถานะ ngrok ก่อน ถ้าขึ้น **READY** ให้ใช้ตัวที่ตรวจพบได้เลย; ถ้ายังไม่พร้อมให้กด **ติดตั้ง ngrok อัตโนมัติ** ซึ่ง lnwjing ใช้ช่องทาง Microsoft Store/WinGet ทางการ
 3. ใส่ ngrok authtoken หนึ่งครั้ง แล้วกด **Start Remote MCP**
-4. รอให้ lnwjud เปิด OAuth-protected gateway, รัน ngrok และแสดง public HTTPS MCP URL ที่ลงท้าย `/mcp` จากนั้นกด **Copy MCP URL**
-5. **ฝั่ง Admin/Owner ของ Business:** ไป Workspace Settings → Apps → Create, ใส่ URL ที่คัดลอกมา เลือก **OAuth**, Scan Tools ให้ผ่าน แล้ว Create และ **Publish** แอป lnwjud ให้ Workspace. สมาชิกทั่วไปไม่ต้องเปิด Developer mode และไม่ต้องกรอก Server URL ซ้ำ
-6. **ฝั่งสมาชิก:** เปิดแอป lnwjud ที่ถูก Publish แล้วกด **Connect**. ถ้าเป็น callback ของ ChatGPT ที่รองรับ browser จะถูกส่งผ่าน one-time URL ที่ `127.0.0.1` ของเครื่องผู้ใช้ไปหา lnwjud Desktop โดยอัตโนมัติ แล้วจึงทำ DCR + Authorization Code + PKCE และ redirect กลับ ChatGPT — **ไม่ต้องกรอกรหัสและไม่ต้องกดยืนยันเพิ่ม**. public ngrok endpoint ไม่สามารถนำ localhost ticket นี้ไปแลกสิทธิ์แทนได้ และ OAuth client ที่ไม่ตรง callback ที่รองรับจะถูกปฏิเสธด้วย `403 access_denied`
-7. หลังเชื่อม lnwjud จะจำ trusted ChatGPT client และ refresh grant แบบเข้ารหัสด้วย secure storage ของ host การเปิดโปรแกรมใหม่หรือกด Start ตามปกติจึงไม่ต้องอนุมัติซ้ำ. การกด **Stop** จะหยุด auto-start แต่ยังจำความสัมพันธ์ OAuth เดิมไว้; ใช้ **Reconnect ChatGPT** เฉพาะเมื่อต้องการล้างความสัมพันธ์ใหม่จริง ๆ
-8. ตรวจว่า ChatGPT เห็น tools ของ lnwjud — ปกติ **264 tools**, หรือ **276** เมื่อเปิด Codex delegation + Agent Swarm — แล้วค่อยเริ่มจากงาน read-only
+4. รอให้ lnwjing เปิด OAuth-protected gateway, รัน ngrok และแสดง public HTTPS MCP URL ที่ลงท้าย `/mcp` จากนั้นกด **Copy MCP URL**
+5. **ฝั่ง Admin/Owner ของ Business:** ไป Workspace Settings → Apps → Create, ใส่ URL ที่คัดลอกมา เลือก **OAuth**, Scan Tools ให้ผ่าน แล้ว Create และ **Publish** แอป lnwjing ให้ Workspace. สมาชิกทั่วไปไม่ต้องเปิด Developer mode และไม่ต้องกรอก Server URL ซ้ำ
+6. **ฝั่งสมาชิก:** เปิดแอป lnwjing ที่ถูก Publish แล้วกด **Connect**. ถ้าเป็น callback ของ ChatGPT ที่รองรับ browser จะถูกส่งผ่าน one-time URL ที่ `127.0.0.1` ของเครื่องผู้ใช้ไปหา lnwjing Desktop โดยอัตโนมัติ แล้วจึงทำ DCR + Authorization Code + PKCE และ redirect กลับ ChatGPT — **ไม่ต้องกรอกรหัสและไม่ต้องกดยืนยันเพิ่ม**. public ngrok endpoint ไม่สามารถนำ localhost ticket นี้ไปแลกสิทธิ์แทนได้ และ OAuth client ที่ไม่ตรง callback ที่รองรับจะถูกปฏิเสธด้วย `403 access_denied`
+7. หลังเชื่อม lnwjing จะจำ trusted ChatGPT client และ refresh grant แบบเข้ารหัสด้วย secure storage ของ host การเปิดโปรแกรมใหม่หรือกด Start ตามปกติจึงไม่ต้องอนุมัติซ้ำ. การกด **Stop** จะหยุด auto-start แต่ยังจำความสัมพันธ์ OAuth เดิมไว้; ใช้ **Reconnect ChatGPT** เฉพาะเมื่อต้องการล้างความสัมพันธ์ใหม่จริง ๆ
+8. ตรวจว่า ChatGPT เห็น tools ของ lnwjing — ปกติ **264 tools**, หรือ **276** เมื่อเปิด Codex delegation + Agent Swarm — แล้วค่อยเริ่มจากงาน read-only
 
 public ngrok URL นี้ชี้เข้า OAuth gateway แยกต่างหาก ไม่ใช่การเปิด `http://127.0.0.1:<port>/mcp` ตรง ๆ ออกอินเทอร์เน็ต และ request ต้องผ่าน OAuth/bearer-token validation ก่อนถึง Local MCP
 
@@ -394,21 +394,21 @@ public ngrok URL นี้ชี้เข้า OAuth gateway แยกต่า
 6. รอ Configure/Doctor ผ่าน แล้วกด **Start Tunnel**
 7. ใน ChatGPT เพิ่ม Connection แบบ **Tunnel** แล้วเลือก tunnel ที่สร้างไว้หรือใส่ `tunnel_id`
 
-`lnwjud-Setup-5.8.6.exe` และ `lnwjud-Portable-5.8.6.exe` รวม official OpenAI `tunnel-client` ที่ตรวจสอบเวอร์ชันและ provenance ตามไฟล์ Release มาให้แล้ว จึง **ไม่ต้องดาวน์โหลด `tunnel-client.exe` เอง** ช่อง path เป็น override สำหรับ troubleshooting เท่านั้น; หากต้องการกลับไปใช้ตัว bundled ให้ล้าง override แล้วเลือก **Use bundled** อย่างชัดเจน
+`lnwjing-Setup-5.8.6.exe` และ `lnwjing-Portable-5.8.6.exe` รวม official OpenAI `tunnel-client` ที่ตรวจสอบเวอร์ชันและ provenance ตามไฟล์ Release มาให้แล้ว จึง **ไม่ต้องดาวน์โหลด `tunnel-client.exe` เอง** ช่อง path เป็น override สำหรับ troubleshooting เท่านั้น; หากต้องการกลับไปใช้ตัว bundled ให้ล้าง override แล้วเลือก **Use bundled** อย่างชัดเจน
 
-`Persistent Tunnel Identity` จำ Tunnel ID แยกจาก Run/Stop intent. เมื่อผู้ใช้กด **Stop Tunnel** lnwjud จะคงสถานะ stopped ข้ามการ restart และจะไม่ auto-reconnect จนกด Start อีกครั้ง. หากเปลี่ยน custom/bundled client ขณะ runtime ทำงาน ระบบจะหยุดและยืนยัน owner เดิมก่อน commit path ใหม่เพื่อไม่ให้มี runtime ซ้อน
+`Persistent Tunnel Identity` จำ Tunnel ID แยกจาก Run/Stop intent. เมื่อผู้ใช้กด **Stop Tunnel** lnwjing จะคงสถานะ stopped ข้ามการ restart และจะไม่ auto-reconnect จนกด Start อีกครั้ง. หากเปลี่ยน custom/bundled client ขณะ runtime ทำงาน ระบบจะหยุดและยืนยัน owner เดิมก่อน commit path ใหม่เพื่อไม่ให้มี runtime ซ้อน
 
-ตรงนี้ **ไม่ต้องพิมพ์ path ของ `lnwjud-mcp-stdio.cmd` เอง** Secure Tunnel ใช้ Desktop loopback HTTP MCP และ lnwjud จะสร้าง/ซ่อม `%APPDATA%\tunnel-client\lnwjud.yaml` ให้ `mcp.server_urls` ชี้ไป `http://127.0.0.1:<port>/mcp` พร้อมเก็บ `control_plane.api_key` เป็น `env:CONTROL_PLANE_API_KEY` แทน key จริง
+ตรงนี้ **ไม่ต้องพิมพ์ path ของ `lnwjing-mcp-stdio.cmd` เอง** Secure Tunnel ใช้ Desktop loopback HTTP MCP และ lnwjing จะสร้าง/ซ่อม `%APPDATA%\tunnel-client\lnwjing.yaml` ให้ `mcp.server_urls` ชี้ไป `http://127.0.0.1:<port>/mcp` พร้อมเก็บ `control_plane.api_key` เป็น `env:CONTROL_PLANE_API_KEY` แทน key จริง
 
 ### 4. ทดสอบแบบ Read-only ก่อน
 
 ไม่ว่าจะเชื่อมด้วย OAuth หรือ Secure Tunnel ให้ลองงานที่ไม่แก้ไฟล์ก่อน เช่น:
 
 ```text
-Use lnwjud to list registered workspaces, show Git status for the selected project, and summarize the top-level project tree. Do not modify anything.
+Use lnwjing to list registered workspaces, show Git status for the selected project, and summarize the top-level project tree. Do not modify anything.
 ```
 
-ถ้าคำสั่งนี้ทำงานได้ แปลว่า ChatGPT เชื่อมถึง lnwjud Desktop MCP ผ่านวิธีที่เลือกครบแล้ว จากนั้นจึงค่อยลองงานเขียนไฟล์หรือคำสั่งที่ต้องมี native approval ใน Desktop
+ถ้าคำสั่งนี้ทำงานได้ แปลว่า ChatGPT เชื่อมถึง lnwjing Desktop MCP ผ่านวิธีที่เลือกครบแล้ว จากนั้นจึงค่อยลองงานเขียนไฟล์หรือคำสั่งที่ต้องมี native approval ใน Desktop
 
 ## Quick start: build from source
 
@@ -422,8 +422,8 @@ Requirements for source development:
 - `rg` (ripgrep) recommended.
 
 ```powershell
-git clone https://github.com/engasnm111/lnwjud.git
-Set-Location .\lnwjud
+git clone https://github.com/crystalicez/lnwjing.git
+Set-Location .\lnwjing
 corepack enable
 corepack pnpm@10.15.0 install --frozen-lockfile
 Copy-Item .env.example .env
@@ -446,31 +446,31 @@ The generated x64 NSIS installer is written under
 
 ## Run in the Windows system tray
 
-Closing the main lnwjud window hides it instead of shutting down the desktop
+Closing the main lnwjing window hides it instead of shutting down the desktop
 runtime. The MCP listener, Live Logs, tunnel controller, and background services
-continue running and the lnwjud icon remains in the Windows notification area.
+continue running and the lnwjing icon remains in the Windows notification area.
 Use the tray menu to reopen the dashboard, check for updates, or quit the process
 completely.
 
 ## The packaged stdio launcher
 
-`lnwjud.exe` is the graphical desktop entrypoint. **Direct local STDIO clients**
+`lnwjing.exe` is the graphical desktop entrypoint. **Direct local STDIO clients**
 such as Codex CLI should use the generated launcher below. Secure MCP Tunnel does
 not use this launcher; it forwards to the Desktop loopback HTTP MCP:
 
 ```text
-lnwjud-mcp-stdio.cmd --workspace D:\projects\my-app
+lnwjing-mcp-stdio.cmd --workspace D:\projects\my-app
 ```
 
-The build generates a Windows `lnwjud-mcp-stdio.cmd` launcher and a POSIX
-`lnwjud-mcp-stdio` shell launcher. Both invoke the packaged Electron executable
+The build generates a Windows `lnwjing-mcp-stdio.cmd` launcher and a POSIX
+`lnwjing-mcp-stdio` shell launcher. Both invoke the packaged Electron executable
 with `--mcp-stdio`, preserve arguments, and use the same protected checkpoint
 storage as Desktop. No private Node executable or CJS stdio bundle is shipped.
 
 ### Bundled autonomous continuation skill (Setup and Portable)
 
-Both `lnwjud-Setup-*.exe` and `lnwjud-Portable-*.exe` ship the same
-`lnwjud-scheduled-continuation` skill under the packaged resources directory.
+Both `lnwjing-Setup-*.exe` and `lnwjing-Portable-*.exe` ship the same
+`lnwjing-scheduled-continuation` skill under the packaged resources directory.
 No repository checkout is required. `skills_list` returns this bundled skill
 together with every discovered machine-global and active-workspace skill; it
 does not replace the user's Cursor, Claude, Agents, Codex, Codex-plugin, GitHub
@@ -480,11 +480,11 @@ When the client exposes skill names directly, a user on either distribution can
 start the full autonomous chain with a prompt such as:
 
 ```text
-Use $lnwjud-scheduled-continuation in workspace D:\projects\my-app. Create or resume one durable goal with goalKey release-audit and keep it authoritative until the objective and acceptance checks are complete. Maintain exactly one Native ChatGPT recurring watchdog in cloud mode for that goal, reuse the same native task ID across ordinary wakes, checkpoint meaningful progress, and make every scheduled wake call claim_scheduled_continuation before workspace mutation. Never substitute browser/DOM automation, Windows Task Scheduler, cron, shell timers, or another scheduler. Call finish_goal(status: completed) only after every plan step and acceptance criterion is complete, blockers are empty, blocking tasks are terminal, and the exact native watchdog has been made non-runnable with truthful cleanup evidence; then verify get_goal is terminal before reporting completion.
+Use $lnwjing-scheduled-continuation in workspace D:\projects\my-app. Create or resume one durable goal with goalKey release-audit and keep it authoritative until the objective and acceptance checks are complete. Maintain exactly one Native ChatGPT recurring watchdog in cloud mode for that goal, reuse the same native task ID across ordinary wakes, checkpoint meaningful progress, and make every scheduled wake call claim_scheduled_continuation before workspace mutation. Never substitute browser/DOM automation, Windows Task Scheduler, cron, shell timers, or another scheduler. Call finish_goal(status: completed) only after every plan step and acceptance criterion is complete, blockers are empty, blocking tasks are terminal, and the exact native watchdog has been made non-runnable with truthful cleanup evidence; then verify get_goal is terminal before reporting completion.
 ```
 
 For clients that do not expose `$skill-name` syntax, ask the agent to call
-`skills_list`, choose the source-qualified `lnwjud-scheduled-continuation`
+`skills_list`, choose the source-qualified `lnwjing-scheduled-continuation`
 result, call `skills_read`, and follow that skill. The first run creates or
 resumes the durable goal and prepares exactly one hourly recurring Native
 ChatGPT cloud watchdog. The Durable Goal remains the authoritative work state;
@@ -527,7 +527,7 @@ exceed its configured maximum.
 A Native Scheduled Task host failure such as unavailable, unsupported, or
 `Resource not found` is a **scheduler transport degradation**, not a durable
 work outcome. Keep the goal active when useful work remains, record host state
-truthfully, and never substitute Windows Task Scheduler, the lnwjud local
+truthfully, and never substitute Windows Task Scheduler, the lnwjing local
 scheduler, cron, shell timers, another provider, or browser/DOM automation.
 A concrete fixable CI, test, build, packaging, release-validation, or tool
 failure is the next unit of work: inspect the exact failure, diagnose and repair
@@ -553,20 +553,20 @@ after ownership has moved.
 The packaged stdio launcher keeps `full` as its backward-compatible permission profile, but it no longer discovers or registers filesystem roots. Pass `--workspace` on first use; later launches may reuse an already registered project. You can opt into a narrower policy per launch:
 
 ```text
-lnwjud-mcp-stdio.cmd --workspace D:\\projects\\my-app --profile safe --strict-roots --allowed-root D:\\projects\\my-app
+lnwjing-mcp-stdio.cmd --workspace D:\\projects\\my-app --profile safe --strict-roots --allowed-root D:\\projects\\my-app
 ```
 
-Supported direct-stdio profiles are `safe`, `balanced`, `full`, and `custom`. Equivalent environment variables are `LNWJUD_STDIO_PROFILE`, `LNWJUD_STRICT_ROOTS`, and semicolon-separated `LNWJUD_ALLOWED_ROOTS`. OpenAI Secure MCP Tunnel does not use the headless stdio policy; it uses the running Desktop MCP permission profile, Active Project, and native host approval. No mode performs automatic whole-drive registration. With STDIO Full Bypass OFF, strict-root mode rejects absolute paths outside explicitly allowed canonical roots. STDIO Full Bypass ON intentionally overrides that lnwjud application boundary for explicit absolute paths. Strict roots are not an OS sandbox: spawned programs still run under the Windows user token.
+Supported direct-stdio profiles are `safe`, `balanced`, `full`, and `custom`. Equivalent environment variables are `LNWJING_STDIO_PROFILE`, `LNWJING_STRICT_ROOTS`, and semicolon-separated `LNWJING_ALLOWED_ROOTS`. OpenAI Secure MCP Tunnel does not use the headless stdio policy; it uses the running Desktop MCP permission profile, Active Project, and native host approval. No mode performs automatic whole-drive registration. With STDIO Full Bypass OFF, strict-root mode rejects absolute paths outside explicitly allowed canonical roots. STDIO Full Bypass ON intentionally overrides that lnwjing application boundary for explicit absolute paths. Strict roots are not an OS sandbox: spawned programs still run under the Windows user token.
 
 ### Full Access and Full Bypass
 
 Selecting **Full** does not by itself enable unrestricted authorization. The separate **Desktop Full Bypass** and **STDIO Full Bypass** controls live under **Full Access (Unrestricted)**, default to OFF, and require an explicit acknowledgement when enabled. Desktop Full Bypass applies to Desktop HTTP and Secure Tunnel; direct STDIO uses its own independent flag.
 
-While enabled, every call is marked `FULL BYPASS ON` and audited as `authorizationMode: full_bypass`. lnwjud skips the intended application authorization gates: always-confirm prompts for supported tools, chat confirmation, native host approval, profile and command policy, Active Project and allowed/Strict Roots, and protected-path policy. **It does not bypass durable rolling-goal ownership.** When a live scheduled-continuation fence exists for the workspace, mutating calls still require the current `goalLease`; missing, stale, expired, generation-mismatched, or past-handoff proof fails before the mutation handler runs. Explicit absolute paths/cwds outside a registered or active project can dispatch without asking only when no live rolling-goal fence requires ownership proof; relative traversal remains invalid. The trusted authorization travels out-of-band and lnwjud does not forge `userConfirmed: true`.
+While enabled, every call is marked `FULL BYPASS ON` and audited as `authorizationMode: full_bypass`. lnwjing skips the intended application authorization gates: always-confirm prompts for supported tools, chat confirmation, native host approval, profile and command policy, Active Project and allowed/Strict Roots, and protected-path policy. **It does not bypass durable rolling-goal ownership.** When a live scheduled-continuation fence exists for the workspace, mutating calls still require the current `goalLease`; missing, stale, expired, generation-mismatched, or past-handoff proof fails before the mutation handler runs. Explicit absolute paths/cwds outside a registered or active project can dispatch without asking only when no live rolling-goal fence requires ownership proof; relative traversal remains invalid. The trusted authorization travels out-of-band and lnwjing does not forge `userConfirmed: true`.
 
 Full Bypass cannot override input/schema validation, file/process existence, task ownership, Windows ACL/UAC, antivirus/EDR, locks, missing runtimes, API credentials, remote-service or child-MCP policy, network errors, or operating-system limitations. Outside-project changes may be permanent because Recovery Trash/checkpoint pre-images are unavailable there.
 
-With Full Bypass OFF, the **AI Destructive Actions** setting is deliberately narrow. Only the exact `delete_file` operation can be scoped auto-approved, and only when its saved policy is enabled, the target matches the host-selected Active Project, Recovery Trash is available, and the target is not a protected critical path, workspace root, non-empty directory, unsafe/broad pattern, outside path, or reparse escape. Other approval-required actions need explicit chat confirmation plus independent trusted host exact-action approval. Full Bypass ON supersedes these lnwjud approval/scope switches for its transport. Recovery Center derives the local Recovery Trash path from `<dataRoot>/recovery-trash`; arbitrary commands and outside-project changes are not promised Recovery Trash coverage.
+With Full Bypass OFF, the **AI Destructive Actions** setting is deliberately narrow. Only the exact `delete_file` operation can be scoped auto-approved, and only when its saved policy is enabled, the target matches the host-selected Active Project, Recovery Trash is available, and the target is not a protected critical path, workspace root, non-empty directory, unsafe/broad pattern, outside path, or reparse escape. Other approval-required actions need explicit chat confirmation plus independent trusted host exact-action approval. Full Bypass ON supersedes these lnwjing approval/scope switches for its transport. Recovery Center derives the local Recovery Trash path from `<dataRoot>/recovery-trash`; arbitrary commands and outside-project changes are not promised Recovery Trash coverage.
 
 ## Requirements and optional integrations
 
@@ -579,7 +579,7 @@ With Full Bypass OFF, the **AI Destructive Actions** setting is deliberately nar
 ### Optional dependencies
 
 - Codex CLI for `codex_*` delegation tools.
-- `rg` for fast code search; lnwjud has bounded fallbacks where supported.
+- `rg` for fast code search; lnwjing has bounded fallbacks where supported.
 - Chrome/Chromium for managed CDP/browser capabilities.
 - WSL for `wsl_exec` and `wsl_fs`.
 - Microsoft Office applications for Office automation actions that require the
@@ -597,7 +597,7 @@ With Full Bypass OFF, the **AI Destructive Actions** setting is deliberately nar
 - ChatGPT Developer mode access according to the target plan/workspace policy.
 - Outbound HTTPS from the Windows host to `api.openai.com:443` (or the documented
   mTLS control-plane host when configured).
-- No inbound firewall rule or public lnwjud MCP port is required for Secure MCP
+- No inbound firewall rule or public lnwjing MCP port is required for Secure MCP
   Tunnel.
 
 ## Install from source
@@ -605,8 +605,8 @@ With Full Bypass OFF, the **AI Destructive Actions** setting is deliberately nar
 ### Clone and install dependencies
 
 ```powershell
-git clone https://github.com/engasnm111/lnwjud.git
-Set-Location .\lnwjud
+git clone https://github.com/crystalicez/lnwjing.git
+Set-Location .\lnwjing
 corepack pnpm@10.15.0 install --frozen-lockfile
 ```
 
@@ -624,7 +624,7 @@ Copy-Item .env.example .env
 One command from the repository root:
 
 ```powershell
-Set-Location .\lnwjud
+Set-Location .\lnwjing
 corepack pnpm@10.15.0 desktop
 ```
 
@@ -636,33 +636,33 @@ records, loopback MCP lifecycle, and Secure Tunnel controls.
 Optional environment:
 
 ```powershell
-$env:LNWJUD_DATA_PATH = "$env:LOCALAPPDATA\lnwjud"
-$env:LNWJUD_WORKSPACE = "D:\projects\my-app"
+$env:LNWJING_DATA_PATH = "$env:LOCALAPPDATA\lnwjing"
+$env:LNWJING_WORKSPACE = "D:\projects\my-app"
 corepack pnpm@10.15.0 desktop
 ```
 
-Use the same `LNWJUD_DATA_PATH` for desktop UI and the packaged stdio launcher
+Use the same `LNWJING_DATA_PATH` for desktop UI and the packaged stdio launcher
 so ChatGPT tool activity appears in the Work Log. The launcher is the same
 direct MCP entrypoint used by the Codex/tunnel integration.
 
 ### Build Windows installer + portable executable
 
 ```powershell
-Set-Location .\lnwjud
+Set-Location .\lnwjing
 corepack pnpm@10.15.0 package:windows
 ```
 
 The Windows 10/11 x64 artifacts are written to:
 
 ```text
-apps/desktop/dist/installers/lnwjud-Setup-5.8.7.exe
-apps/desktop/dist/installers/lnwjud-Portable-5.8.7.exe
+apps/desktop/dist/installers/lnwjing-Setup-5.8.7.exe
+apps/desktop/dist/installers/lnwjing-Portable-5.8.7.exe
 ```
 
-The installer is per-user by default. The portable executable needs no installation but uses the same per-user lnwjud data/settings location. A common installed executable path is:
+The installer is per-user by default. The portable executable needs no installation but uses the same per-user lnwjing data/settings location. A common installed executable path is:
 
 ```text
-C:/Users/<WindowsUser>/AppData/Local/Programs/lnwjud/lnwjud.exe
+C:/Users/<WindowsUser>/AppData/Local/Programs/lnwjing/lnwjing.exe
 ```
 
 Always use the path shown by the installed shortcut or Get-Command.
@@ -671,7 +671,7 @@ Always use the path shown by the installed shortcut or Get-Command.
 
 ### Add a workspace
 
-1. Start lnwjud (`pnpm desktop` or the installed app).
+1. Start lnwjing (`pnpm desktop` or the installed app).
 2. On Home or Projects, add the project directory path.
 3. The selected project is persisted; switching projects restarts MCP automatically.
 4. Desktop MCP uses the selected Permission profile; stdio/tunnel MCP uses its separately configured STDIO profile (backward-compatible default: `full`) and optional Strict Roots.
@@ -679,11 +679,11 @@ Always use the path shown by the installed shortcut or Get-Command.
 
 ### Tool readiness and Doctor
 
-The Desktop **Tools** page is generated from the live first-party `ToolRegistry` plus separately discovered External MCP servers. It does not maintain a hand-written tool count. Each tool shows its declared permission, the active profile decision, dependency requirements, and one of six readiness states: `ready`, `needs_setup`, `blocked`, `disabled`, `unsupported`, or `unknown`. `unknown` means lnwjud could not safely prove readiness; it is never treated as success.
+The Desktop **Tools** page is generated from the live first-party `ToolRegistry` plus separately discovered External MCP servers. It does not maintain a hand-written tool count. Each tool shows its declared permission, the active profile decision, dependency requirements, and one of six readiness states: `ready`, `needs_setup`, `blocked`, `disabled`, `unsupported`, or `unknown`. `unknown` means lnwjing could not safely prove readiness; it is never treated as success.
 
 Readiness probes are read-only/owned status checks with bounded timeouts and caching. They never prove readiness by invoking the tool, creating project files, controlling user input, opening an Office document, or running a project command. Changing language reuses the same cached requirement snapshot rather than reprobeing the machine.
 
-**Doctor** uses the same requirement/remediation snapshot as Tools. Failed, unknown, and warning checks are shown before passed checks, affected tool names are listed, and selected **Recheck** refreshes both Doctor and Tools together. Required `fail` or `unknown` startup checks do not count as a successful startup gate; optional failures remain visible without blocking onboarding. Remediation actions are typed and allowlisted: they can navigate to the exact app setting, open Windows Optional Features, open an official URL, copy an allowlisted command, start lnwjud's managed browser, enable only the explicit Codex opt-in, or recheck selected requirements. Disabled/planned tools that are not actually enable-able say so instead of pointing at an unrelated setting; renderer/server text cannot inject an arbitrary URL or command.
+**Doctor** uses the same requirement/remediation snapshot as Tools. Failed, unknown, and warning checks are shown before passed checks, affected tool names are listed, and selected **Recheck** refreshes both Doctor and Tools together. Required `fail` or `unknown` startup checks do not count as a successful startup gate; optional failures remain visible without blocking onboarding. Remediation actions are typed and allowlisted: they can navigate to the exact app setting, open Windows Optional Features, open an official URL, copy an allowlisted command, start lnwjing's managed browser, enable only the explicit Codex opt-in, or recheck selected requirements. Disabled/planned tools that are not actually enable-able say so instead of pointing at an unrelated setting; renderer/server text cannot inject an arbitrary URL or command.
 
 External MCP tools stay in their own origin/tab. Once the server connection and `tools/list` discovery succeed, those discovered tools are shown as `ready` at the transport/catalog layer. That does not invent child-server guarantees: permission/profile classification, cancellation, and dry-run support remain undeclared/unverified when the server does not publish them, and `mcp_call` still crosses the existing opaque dangerous approval boundary.
 
@@ -712,19 +712,19 @@ The exact recoverable `delete_file` is the only mutation that can use scoped
 auto-approval. Destructive Git forms that would rewrite/discard/delete state are
 blocked when policy cannot prove a safe supported mutation; any allowed opaque
 mutation still requires explicit chat confirmation and independent host
-exact-action approval when Full Bypass is OFF. When Full Bypass is ON, lnwjud skips those application checks; operating-system and external-service failures remain possible.
+exact-action approval when Full Bypass is OFF. When Full Bypass is ON, lnwjing skips those application checks; operating-system and external-service failures remain possible.
 
 ### Optional local capability roots
 
 The local desktop capability layer can receive additional roots through the
-semicolon-separated environment variable LNWJUD_CAPABILITY_ROOTS:
+semicolon-separated environment variable LNWJING_CAPABILITY_ROOTS:
 
 ```powershell
-$env:LNWJUD_CAPABILITY_ROOTS = 'E:/work;E:/projects'
+$env:LNWJING_CAPABILITY_ROOTS = 'E:/work;E:/projects'
 ```
 
 Local capabilities use registered projects and explicitly configured roots; they
-never add A:–Z: automatically. `LNWJUD_CAPABILITY_ROOTS` is optional extra
+never add A:–Z: automatically. `LNWJING_CAPABILITY_ROOTS` is optional extra
 configuration. With Full Bypass OFF, core file
 tools still require a registered workspace and mutation-capable tools use the exact
 Active Project plus normal confirmation/host-approval boundaries. Full Bypass ON
@@ -765,12 +765,12 @@ Local Codex clients can use stdio directly; they do not need Secure MCP Tunnel.
 Point the entry at the stdio-capable installed executable:
 
 ```powershell
-codex mcp add lnwjud -- "$env:LOCALAPPDATA\Programs\lnwjud\lnwjud-mcp-stdio.cmd" --workspace D:\Projects\my-app
+codex mcp add lnwjing -- "$env:LOCALAPPDATA\Programs\lnwjing\lnwjing-mcp-stdio.cmd" --workspace D:\Projects\my-app
 codex mcp list
 ```
 
-The stdio launcher is `lnwjud-mcp-stdio.cmd` on Windows or
-`lnwjud-mcp-stdio` on macOS/Linux, shipped next to the desktop app (not the GUI
+The stdio launcher is `lnwjing-mcp-stdio.cmd` on Windows or
+`lnwjing-mcp-stdio` on macOS/Linux, shipped next to the desktop app (not the GUI
 entrypoint). It exposes the full tool catalog and needs no separate Node.js
 installation for an installed release.
 
@@ -781,9 +781,9 @@ In Codex, /mcp lists active servers.
 Example user-scoped or trusted project-scoped config.toml:
 
 ```toml
-[mcp_servers.lnwjud]
-command = "C:/Users/<WindowsUser>/AppData/Local/Programs/lnwjud/lnwjud-mcp-stdio.cmd"
-args = ["--workspace", "E:/lnwjud"]
+[mcp_servers.lnwjing]
+command = "C:/Users/<WindowsUser>/AppData/Local/Programs/lnwjing/lnwjing-mcp-stdio.cmd"
+args = ["--workspace", "E:/lnwjing"]
 startup_timeout_sec = 20
 tool_timeout_sec = 3600
 ```
@@ -794,7 +794,7 @@ belongs in this local MCP entry.
 ## Create an OpenAI Secure MCP Tunnel
 
 This is the path that lets ChatGPT web, which cannot read local files or local
-Codex configuration, call lnwjud.
+Codex configuration, call lnwjing.
 
 ### 1. Create or select a Platform tunnel
 
@@ -842,15 +842,15 @@ automatically. Manual initialization is still supported when you need it:
 
 ```powershell
 $env:CONTROL_PLANE_API_KEY = '<runtime-key-for-this-session>'
-$mcpEndpoint = 'http://127.0.0.1:<port>/mcp' # copy the actual Local MCP endpoint shown by lnwjud
+$mcpEndpoint = 'http://127.0.0.1:<port>/mcp' # copy the actual Local MCP endpoint shown by lnwjing
 
-& $tc init --force --sample sample_mcp_remote_no_auth --profile lnwjud --tunnel-id 'tunnel_0123456789abcdef0123456789abcdef' --control-plane-api-key-ref 'env:CONTROL_PLANE_API_KEY' --health-listen-addr '127.0.0.1:0' --mcp-server-url $mcpEndpoint
+& $tc init --force --sample sample_mcp_remote_no_auth --profile lnwjing --tunnel-id 'tunnel_0123456789abcdef0123456789abcdef' --control-plane-api-key-ref 'env:CONTROL_PLANE_API_KEY' --health-listen-addr '127.0.0.1:0' --mcp-server-url $mcpEndpoint
 ```
 
 The Secure Tunnel profile stores a loopback HTTP MCP URL and an
 `env:CONTROL_PLANE_API_KEY` secret reference instead of a source-tree command or
 literal runtime key. Direct local stdio hosts can still use
-`lnwjud-mcp-stdio.cmd`, but the OpenAI Secure Tunnel path intentionally goes
+`lnwjing-mcp-stdio.cmd`, but the OpenAI Secure Tunnel path intentionally goes
 through the Desktop HTTP runtime so Active Project selection and native approval
 stay host-owned.
 
@@ -865,25 +865,25 @@ Manual session (still supported):
 ```powershell
 $env:CONTROL_PLANE_API_KEY = '<runtime-key-for-this-session>'
 $env:MCP_CONNECTION_MAX_TTL = '168h0m0s'
-& $tc doctor --profile lnwjud --explain
+& $tc doctor --profile lnwjing --explain
 if ($LASTEXITCODE -ne 0) { throw 'tunnel-client doctor failed' }
-& $tc run --profile lnwjud --mcp.connection-max-ttl 168h0m0s
+& $tc run --profile lnwjing --mcp.connection-max-ttl 168h0m0s
 ```
 
-Keep lnwjud and `tunnel-client` running while ChatGPT is using the connector.
-The tunnel forwards to lnwjud's Desktop loopback HTTP MCP, so Work Log entries,
+Keep lnwjing and `tunnel-client` running while ChatGPT is using the connector.
+The tunnel forwards to lnwjing's Desktop loopback HTTP MCP, so Work Log entries,
 Active Project selection, and native approval remain in the same Desktop runtime.
 
 ### 6. Verify the tunnel target locally
 
 ```powershell
 Test-Path -LiteralPath $tc
-Get-Content (Join-Path $env:APPDATA 'tunnel-client\lnwjud.yaml') | Select-String 'server_urls:|url:'
+Get-Content (Join-Path $env:APPDATA 'tunnel-client\lnwjing.yaml') | Select-String 'server_urls:|url:'
 ```
 
 The `main` MCP channel must point to a loopback URL ending in `/mcp` (for
 example `http://127.0.0.1:<port>/mcp`). It must not point to a source checkout,
-a public/LAN MCP address, or `lnwjud-mcp-stdio.cmd` for the Secure Tunnel flow.
+a public/LAN MCP address, or `lnwjing-mcp-stdio.cmd` for the Secure Tunnel flow.
 
 ## Advanced: manual tunnel runner at Windows logon
 
@@ -894,12 +894,12 @@ the active tunnel process without putting it in the profile or command line.
 
 ### Create a runner script
 
-Save as start-lnwjud-tunnel.ps1:
+Save as start-lnwjing-tunnel.ps1:
 
 ```powershell
 $ErrorActionPreference = 'Stop'
 $tc = 'C:/path/to/tunnel-client.exe' # advanced manual override only
-$profile = 'lnwjud'
+$profile = 'lnwjing'
 
 if (-not (Test-Path $tc)) { throw "Missing tunnel-client: $tc" }
 if (-not $env:CONTROL_PLANE_API_KEY) { throw 'Set CONTROL_PLANE_API_KEY for this transient troubleshooting session, or use Desktop Start Tunnel.' }
@@ -915,24 +915,24 @@ Run only as a temporary troubleshooting task. Do not place the key in the
 scheduled-task command line; prefer Desktop Start Tunnel for persisted use.
 
 ```powershell
-$runner = 'C:/path/to/start-lnwjud-tunnel.ps1'
+$runner = 'C:/path/to/start-lnwjing-tunnel.ps1'
 $userId = "$env:USERDOMAIN/$env:USERNAME"
 $argument = '-NoProfile -ExecutionPolicy Bypass -File "' + $runner + '"'
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
 $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType InteractiveToken -RunLevel Limited
-Register-ScheduledTask -TaskName 'lnwjud Secure MCP Tunnel' -Action $action -Trigger $trigger -Principal $principal -Force
+Register-ScheduledTask -TaskName 'lnwjing Secure MCP Tunnel' -Action $action -Trigger $trigger -Principal $principal -Force
 ```
 
 Check or start it:
 
 ```powershell
-Get-ScheduledTask -TaskName 'lnwjud Secure MCP Tunnel'
-Start-ScheduledTask -TaskName 'lnwjud Secure MCP Tunnel'
+Get-ScheduledTask -TaskName 'lnwjing Secure MCP Tunnel'
+Start-ScheduledTask -TaskName 'lnwjing Secure MCP Tunnel'
 ```
 
 Use Run only when user is logged on and a limited principal unless your
-organization has a documented service-account design. lnwjud does not need an
+organization has a documented service-account design. lnwjing does not need an
 administrator token for normal workspace operations.
 
 ## Add the connector in ChatGPT Developer mode
@@ -951,21 +951,21 @@ Enterprise/Edu administrators may need to enable this before it appears.
 
 1. Open [ChatGPT Plugins](https://chatgpt.com/plugins).
 2. Select the plus (+) button.
-3. Enter a name such as lnwjud and a short description such as
+3. Enter a name such as lnwjing and a short description such as
    Local Windows development workspace gateway.
 4. Under Connection, choose Tunnel.
 5. Select the tunnel or enter its tunnel_id.
 6. Create the connection and review the discovered tools and schemas.
 
-lnwjud v4.52.0 contains a local desktop OAuth sign-in framework for Tunnel credential provisioning, but it is enabled only when a configured provider explicitly supports the official Secure MCP Tunnel runtime-credential contract. Do not invent OAuth URLs, reuse ChatGPT/Codex browser-session tokens, or paste the runtime key into the ChatGPT connector form. Tunnel transport authentication remains handled by tunnel-client; ChatGPT selects the OpenAI-hosted tunnel. Choose a no-extra-auth option only when the tunnel form offers it.
+lnwjing v4.52.0 contains a local desktop OAuth sign-in framework for Tunnel credential provisioning, but it is enabled only when a configured provider explicitly supports the official Secure MCP Tunnel runtime-credential contract. Do not invent OAuth URLs, reuse ChatGPT/Codex browser-session tokens, or paste the runtime key into the ChatGPT connector form. Tunnel transport authentication remains handled by tunnel-client; ChatGPT selects the OpenAI-hosted tunnel. Choose a no-extra-auth option only when the tunnel form offers it.
 
 ### Attach it to a new chat
 
-Start a new conversation, open the tools menu, and add the lnwjud connection.
+Start a new conversation, open the tools menu, and add the lnwjing connection.
 A good smoke test is:
 
 ```text
-Use lnwjud to inspect the available workspace and report only registered workspace IDs and display names. Do not read file contents yet.
+Use lnwjing to inspect the available workspace and report only registered workspace IDs and display names. Do not read file contents yet.
 ```
 
 Then test a read-only project flow:
@@ -974,7 +974,7 @@ Then test a read-only project flow:
 For workspace <workspace-id>, show the project snapshot, Git status, and the top-level workspace tree. Do not modify anything.
 ```
 
-When a first-party tool is enabled or disabled, standards-compliant MCP clients receive `notifications/tools/list_changed` and can refresh the live list without restarting lnwjud. ChatGPT app/action catalogs may additionally use a host-managed approved snapshot: use the ChatGPT action refresh/tool-scan flow that is actually available for the workspace. A browser F5 alone is **not** guaranteed to update an approved/frozen action snapshot, and lnwjud does not claim host synchronization without evidence.
+When a first-party tool is enabled or disabled, standards-compliant MCP clients receive `notifications/tools/list_changed` and can refresh the live list without restarting lnwjing. ChatGPT app/action catalogs may additionally use a host-managed approved snapshot: use the ChatGPT action refresh/tool-scan flow that is actually available for the workspace. A browser F5 alone is **not** guaranteed to update an approved/frozen action snapshot, and lnwjing does not claim host synchronization without evidence.
 
 <!-- BEGIN GENERATED README TOOL REGISTRY -->
 ## Complete MCP tool catalog (294 total definitions; 282 advertised by default; 294 with Codex delegation plus Agent Swarm enabled)
@@ -983,7 +983,7 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 
 | # | Tool | Permission | Advertised | Delivery | Runtime evidence | Runtime description |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | `workspace_list` | READ | default | operational | service_dispatch | List registered project workspaces available to lnwjud. Legacy explicitly registered drive roots may also appear as kind=machine_root. |
+| 1 | `workspace_list` | READ | default | operational | service_dispatch | List registered project workspaces available to lnwjing. Legacy explicitly registered drive roots may also appear as kind=machine_root. |
 | 2 | `workspace_path_preflight` | READ | default | operational | service_dispatch | Read-only exact absolute-path preflight before workspace registration. Requires explicit authorization; probes only the nominated path and ancestors without directory listing, registration, indexing, shell, writes or lease. Windows effective ACL/reparse proof is reported UNVERIFIABLE where the runtime cannot prove it. Registration always revalidates independently. |
 | 3 | `workspace_writer_lease_acquire` | WRITE | default | operational | service_dispatch | Acquire a durable exclusive writer lease for one registered workspace. Explicit recoverAbandoned with user confirmation may fence an idle previous session of the same client after 60 seconds; unrelated clients and active/unknown writers remain blocked. |
 | 4 | `workspace_writer_lease_status` | READ | default | operational | service_dispatch | Inspect a registered workspace writer lease without exposing its credential. |
@@ -1006,35 +1006,35 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 | 21 | `git_clone_safe` | EXECUTE | default | operational | service_dispatch | Start an explicitly authorized workspace-scoped HTTPS Git import pinned to one exact full commit. Requires a clean URL, new relative directory, UUID requestId, and host approval. No arbitrary Git arguments, inherited credentials, overwrite or Full Bypass are required. Native Windows publication fails closed on unknown state. |
 | 22 | `git_clone_status` | READ | default | operational | service_dispatch | Inspect an owned repository import by exact workspace and durable task identity; returns only verified status and no credentials. |
 | 23 | `git_clone_cancel` | EXECUTE | default | operational | service_dispatch | Cancel only an owned durable repository import, keeping native unknown/child liveness fail-closed. |
-| 24 | `git` | EXECUTE | default | operational | service_dispatch | Run a Git subcommand with a separate args array. With Full Bypass OFF, Full Access runs ordinary read and non-destructive Git mutations without confirmation while destructive/data-loss forms, scope overrides, aliases, unsafe pathspecs, unknown commands, and destructive remote/history rewrites remain guarded or denied. Trusted Full Bypass skips lnwjud approval, command-policy, and Active Project scope checks, including explicitly absolute outside paths, without bypassing Git or OS errors. Do not wrap Git in PowerShell/cmd. |
-| 25 | `write_file` | WRITE | default | operational | service_dispatch | Create or replace a UTF-8 text file and missing parents. Balanced/Safe refuse existing targets unless overwriteExisting is explicit; Full may replace an existing target without a confirmation prompt only when strict create-only was not requested; mode=create_new or overwriteExisting=false atomically refuses all existing destinations, regardless of profile. Prefer edit_file for narrow repairs. Use this instead of shell scripts that call fs.writeFile, writeFileSync, Set-Content, or equivalent when the task is simply to create or replace guarded text. Do not use write_file to persist lnwjud continuation/recovery as USER_INSTRUCTIONS, user-instruction, or generic handoff-history files; use checkpoint_goal/session_handoff for that state. |
+| 24 | `git` | EXECUTE | default | operational | service_dispatch | Run a Git subcommand with a separate args array. With Full Bypass OFF, Full Access runs ordinary read and non-destructive Git mutations without confirmation while destructive/data-loss forms, scope overrides, aliases, unsafe pathspecs, unknown commands, and destructive remote/history rewrites remain guarded or denied. Trusted Full Bypass skips lnwjing approval, command-policy, and Active Project scope checks, including explicitly absolute outside paths, without bypassing Git or OS errors. Do not wrap Git in PowerShell/cmd. |
+| 25 | `write_file` | WRITE | default | operational | service_dispatch | Create or replace a UTF-8 text file and missing parents. Balanced/Safe refuse existing targets unless overwriteExisting is explicit; Full may replace an existing target without a confirmation prompt only when strict create-only was not requested; mode=create_new or overwriteExisting=false atomically refuses all existing destinations, regardless of profile. Prefer edit_file for narrow repairs. Use this instead of shell scripts that call fs.writeFile, writeFileSync, Set-Content, or equivalent when the task is simply to create or replace guarded text. Do not use write_file to persist lnwjing continuation/recovery as USER_INSTRUCTIONS, user-instruction, or generic handoff-history files; use checkpoint_goal/session_handoff for that state. |
 | 26 | `apply_patch` | WRITE | default | operational | service_dispatch | Apply reviewed whole-file replacement content to at most twenty files. Existing targets are checkpointed first; Full profile does not prompt for non-destructive replacement. Prefer edit_file for narrow repairs. Use this instead of shell-generated whole-file rewrites when several reviewed text files must change. |
 | 27 | `edit_file` | WRITE | default | operational | service_dispatch | First choice for narrow source, config, and text repairs. Replaces exact text only when the expected occurrence count matches, checkpoints the original, and refuses conflicts instead of rewriting an unverified whole file. Exact-match conflicts are recoverable and include structured conflict kind, mismatch hints, candidate context when available, and a re-read/retry suggestion; never fuzzy-edit automatically. Use edit_file instead of shell, node -e, python -c, PowerShell Set-Content, or inline filesystem scripts when a guarded text edit can express the change. When skill_load for Ponytail used a goalId, include the matching goalLease on edit_file; otherwise load the skill with workspaceId only for unbound edits. Full Access performs ordinary edits without a confirmation prompt; destructive deletion remains separately guarded. |
-| 28 | `move_file` | WRITE | default | operational | service_dispatch | Move a file or directory, creating missing destination parents. With Full Bypass OFF, Full Access performs ordinary in-project moves without a confirmation prompt while conflicting or destructive forms remain policy-gated. Trusted Full Bypass skips lnwjud approval/scope checks for explicit absolute outside paths; OS/filesystem errors still apply. |
+| 28 | `move_file` | WRITE | default | operational | service_dispatch | Move a file or directory, creating missing destination parents. With Full Bypass OFF, Full Access performs ordinary in-project moves without a confirmation prompt while conflicting or destructive forms remain policy-gated. Trusted Full Bypass skips lnwjing approval/scope checks for explicit absolute outside paths; OS/filesystem errors still apply. |
 | 29 | `copy_file` | WRITE | default | operational | service_dispatch | Copy a file or directory within one workspace, creating missing destination parents. |
-| 30 | `delete_file` | DANGEROUS | default | operational | service_dispatch | Delete one file or empty directory. With Full Bypass OFF, eligible in-project targets move to Recovery Trash and exact safe targets can use scoped auto-approval; critical paths, roots, non-empty directories, ambiguous paths, and mismatched workspaces remain guarded. Trusted Full Bypass skips lnwjud approval/scope checks and permits an exact absolute outside target, which is deleted without Recovery Trash; root and non-empty-directory input guards still apply. |
+| 30 | `delete_file` | DANGEROUS | default | operational | service_dispatch | Delete one file or empty directory. With Full Bypass OFF, eligible in-project targets move to Recovery Trash and exact safe targets can use scoped auto-approval; critical paths, roots, non-empty directories, ambiguous paths, and mismatched workspaces remain guarded. Trusted Full Bypass skips lnwjing approval/scope checks and permits an exact absolute outside target, which is deleted without Recovery Trash; root and non-empty-directory input guards still apply. |
 | 31 | `list_recovery_items` | READ | default | operational | service_dispatch | List trusted Recovery Trash entries for one workspace, including deleted items, binary pre-replacement backups, original paths, timestamps, payload availability, and the local Recovery Trash root. |
 | 32 | `restore_deleted_file` | WRITE | default | operational | service_dispatch | Restore one Recovery Trash item to its original path. Deleted-item restores refuse existing targets. A pre-replacement restore first backs up the current live version for undo, then restores the older binary or text payload. Full runs recoverable restores without an extra prompt; stricter profiles may require confirmation. The operation remains scoped to the recorded workspace. |
 | 33 | `list_checkpoints` | READ | default | operational | service_dispatch | List encrypted pre-mutation checkpoints for one workspace without returning saved file content. |
-| 34 | `restore_checkpoint` | WRITE | default | operational | service_dispatch | Restore a reviewed pre-mutation checkpoint. Standard mode requires explicit confirmation; trusted Full Bypass skips the lnwjud confirmation gate. A new rollback checkpoint is created before replacing current content when the target is inside a recoverable workspace. |
-| 35 | `process_start` | EXECUTE | default | operational | service_dispatch | Immediate-return managed process launcher for real executables and long-lived processes. With Full Bypass OFF, inline text-file rewrites must use edit_file/apply_patch/write_file and risky commands, scope changes, or permission-profile ASK decisions require confirmation. Trusted Full Bypass skips lnwjud command/profile/scope approval, including an explicitly absolute cwd outside the Active Project; input validation, executable availability, OS rights, and exact process ownership still apply. Starts one executable with separate arguments and returns processId as soon as the child is spawned; it never waits for command completion. Follow with process_status/process_logs/process_stop. For restart-safe durable work, use shell, whose MCP run mode is forced to background. |
+| 34 | `restore_checkpoint` | WRITE | default | operational | service_dispatch | Restore a reviewed pre-mutation checkpoint. Standard mode requires explicit confirmation; trusted Full Bypass skips the lnwjing confirmation gate. A new rollback checkpoint is created before replacing current content when the target is inside a recoverable workspace. |
+| 35 | `process_start` | EXECUTE | default | operational | service_dispatch | Immediate-return managed process launcher for real executables and long-lived processes. With Full Bypass OFF, inline text-file rewrites must use edit_file/apply_patch/write_file and risky commands, scope changes, or permission-profile ASK decisions require confirmation. Trusted Full Bypass skips lnwjing command/profile/scope approval, including an explicitly absolute cwd outside the Active Project; input validation, executable availability, OS rights, and exact process ownership still apply. Starts one executable with separate arguments and returns processId as soon as the child is spawned; it never waits for command completion. Follow with process_status/process_logs/process_stop. For restart-safe durable work, use shell, whose MCP run mode is forced to background. |
 | 36 | `process_list` | READ | default | operational | service_dispatch | List managed process handles owned by this client in a workspace, including launches whose response was cancelled. |
 | 37 | `process_status` | READ | default | operational | service_dispatch | Read one status snapshot for an owned process handle. Do not tight-poll this tool; use project_* for normal project verification, or shell background + durable task_id for work expected to exceed ~5 minutes. |
 | 38 | `process_logs` | READ | default | operational | service_dispatch | Read bounded logs for an owned process handle. Prefer one bounded log read after meaningful progress rather than repeated status polling. |
-| 39 | `process_stop` | EXECUTE | default | operational | service_dispatch | Stop an owned managed process tree after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjud confirmation gate; exact process ownership still applies. |
-| 40 | `project_dev` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project dev command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjud approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
-| 41 | `project_test` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project test command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjud approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
-| 42 | `project_lint` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project lint command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjud approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
-| 43 | `project_typecheck` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project typecheck command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjud approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
-| 44 | `project_build` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project build command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjud approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
+| 39 | `process_stop` | EXECUTE | default | operational | service_dispatch | Stop an owned managed process tree after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjing confirmation gate; exact process ownership still applies. |
+| 40 | `project_dev` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project dev command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjing approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
+| 41 | `project_test` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project test command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjing approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
+| 42 | `project_lint` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project lint command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjing approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
+| 43 | `project_typecheck` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project typecheck command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjing approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
+| 44 | `project_build` | EXECUTE | default | operational | service_dispatch | Immediate-return launcher for the detected project build command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjing approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash. |
 | 45 | `codex_status` | READ | Codex opt-in | operational | service_dispatch | Report local Codex installation and capabilities without credential inspection. |
-| 46 | `codex_run` | EXECUTE | Codex opt-in | operational | service_dispatch | Delegate an instruction to the local Codex CLI in the Active Project. Starting Codex requires explicit chat confirmation and host approval in standard mode; trusted Full Bypass skips those lnwjud application checks without forging userConfirmed. |
+| 46 | `codex_run` | EXECUTE | Codex opt-in | operational | service_dispatch | Delegate an instruction to the local Codex CLI in the Active Project. Starting Codex requires explicit chat confirmation and host approval in standard mode; trusted Full Bypass skips those lnwjing application checks without forging userConfirmed. |
 | 47 | `codex_task_list` | READ | Codex opt-in | operational | service_dispatch | List local Codex task handles owned by this client, including launches whose response was cancelled. |
 | 48 | `codex_task_status` | READ | Codex opt-in | operational | service_dispatch | Read status for an owned Codex task. |
 | 49 | `codex_task_logs` | READ | Codex opt-in | operational | service_dispatch | Read bounded logs for an owned Codex task. |
-| 50 | `codex_stop` | EXECUTE | Codex opt-in | operational | service_dispatch | Stop an owned Codex task process after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjud confirmation gate; task ownership still applies. |
+| 50 | `codex_stop` | EXECUTE | Codex opt-in | operational | service_dispatch | Stop an owned Codex task process after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjing confirmation gate; task ownership still applies. |
 | 51 | `agent_swarm_run` | EXECUTE | Codex opt-in | dependency_gated | service_dispatch | Run or inspect a bounded 1-4 task Codex-backed agent swarm in enforced read-only mode. The tool is available only when Codex tools are explicitly enabled. start/cancel require trusted host approval; status/result/list are owner-scoped reads. Prompts are never persisted in plaintext and unverifiable post-restart tasks report termination_unverified. |
-| 52 | `shell` | EXECUTE | default | operational | service_dispatch | Non-blocking command runner for real command execution, builds/tests, package managers, and system operations. Never use shell as a source/config/text editor. For any direct text-file change, call edit_file first; use apply_patch for reviewed whole-file or multi-file replacements and write_file for file creation/replacement. Inline Node/Python/PowerShell/sed commands that rewrite text files are rejected before native approval so the client can route to the guarded file tools instead. MCP run calls are ALWAYS forced to execution=background, even if a client requests foreground or auto, so the call returns a task_id immediately instead of waiting for command completion. Follow with status/logs/result; wait uses the user-configurable MCP poll window (5-60 seconds, default 5). When the user requires babysitting until completion, keep using bounded waits and do not report completion until the terminal result is inspected. Otherwise, if the host turn must yield while a durable task is still running, checkpoint it as trackedTasks {taskId, provider: shell, role: blocking_job, cancelWithGoal: true} and use the active scheduled-continuation handoff instead of abandoning the goal. Shared services must be marked supporting_service with cancelWithGoal false. With Full Bypass OFF, Full Access runs ordinary policy-allowed commands without confirmation while destructive, broad, recursive, critical, outside-project, or unparseable forms retain normal approval/command policy. Trusted Full Bypass skips lnwjud approval, command-policy, Active Project, and allowed-root checks; an active rolling scheduled goal still requires the current goalLease ownership proof. Full Bypass may still use an explicitly absolute cwd outside the project; input validation, executable availability, Windows ACL/UAC, and child-process failures still apply. dry_run and task observation are non-mutating. |
+| 52 | `shell` | EXECUTE | default | operational | service_dispatch | Non-blocking command runner for real command execution, builds/tests, package managers, and system operations. Never use shell as a source/config/text editor. For any direct text-file change, call edit_file first; use apply_patch for reviewed whole-file or multi-file replacements and write_file for file creation/replacement. Inline Node/Python/PowerShell/sed commands that rewrite text files are rejected before native approval so the client can route to the guarded file tools instead. MCP run calls are ALWAYS forced to execution=background, even if a client requests foreground or auto, so the call returns a task_id immediately instead of waiting for command completion. Follow with status/logs/result; wait uses the user-configurable MCP poll window (5-60 seconds, default 5). When the user requires babysitting until completion, keep using bounded waits and do not report completion until the terminal result is inspected. Otherwise, if the host turn must yield while a durable task is still running, checkpoint it as trackedTasks {taskId, provider: shell, role: blocking_job, cancelWithGoal: true} and use the active scheduled-continuation handoff instead of abandoning the goal. Shared services must be marked supporting_service with cancelWithGoal false. With Full Bypass OFF, Full Access runs ordinary policy-allowed commands without confirmation while destructive, broad, recursive, critical, outside-project, or unparseable forms retain normal approval/command policy. Trusted Full Bypass skips lnwjing approval, command-policy, Active Project, and allowed-root checks; an active rolling scheduled goal still requires the current goalLease ownership proof. Full Bypass may still use an explicitly absolute cwd outside the project; input validation, executable availability, Windows ACL/UAC, and child-process failures still apply. dry_run and task observation are non-mutating. |
 | 53 | `dom_cdp` | READ | default | operational | service_dispatch | Default for web-page DOM work inside managed Chrome. Call list_tabs first, select the exact returned tab_id by URL/title, and pass that tab_id to every query, click, type, navigate, evaluate, wait, screenshot, activate_tab, set_files, close, or steps call. Use activate_tab before crossing into native accessibility/input_event when foreground state matters. Use set_files for a browser file input instead of native dialog choreography; uploaded files remain subject to Active Project path policy. If no safe matching tab exists, call new_tab and use its returned ID. Target order and the OS-active tab are never ownership signals. Never navigate through the browser address bar with computer_use/accessibility/input_event. Protected ChatGPT tab mutations additionally require allow_protected_tab_action=true plus explicit user confirmation. |
 | 54 | `computer_use` | EXECUTE | default | operational | service_dispatch | Codex-style native computer use for testing desktop apps when the host provider and session permissions are available. Take annotated screenshots, inspect semantic controls, and operate by semantic target, numbered visual mark, or explicit coordinates. Routes through Accessibility first and uses guarded pointer/keyboard input only when needed. Supports click, typing, keys, hotkeys, scroll, drag, pointer movement, and window activation. For web navigation, do not focus/type into a browser address bar; use dom_cdp list_tabs/new_tab plus an explicit tab_id. |
 | 55 | `accessibility` | READ | default | operational | service_dispatch | Semantic host-native UI tool. Inspect UI trees and named controls, then click, focus, read or set values, select controls and menus, or manage a native element when the platform provider and permission are available. Mutating calls may include postcondition {parameters, expected_value} to report whether a follow-up read_value observed the requested state. Prefer shell for direct system work and dom_cdp for web pages. |
@@ -1043,24 +1043,24 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 | 58 | `vision_annotated_capture` | READ | default | operational | service_dispatch | Capture a local host screen/region/window and return a short-lived Set-of-Marks observation with numbered bounds, a content hash, and an annotated PNG when the host capture provider is ready. This tool only observes; use ui_target_action for a separately gated action. |
 | 59 | `ui_target_action` | EXECUTE | default | operational | service_dispatch | Act on one mark from a current vision_annotated_capture observation. The observation ID, optional hash, TTL, workspace owner, and current Accessibility element are checked before the action is sent. |
 | 60 | `window` | EXECUTE | default | operational | service_dispatch | Direct host-native window management. List, inspect, activate, move, resize, minimize, maximize, restore, or close windows when the active session provider proves the operation is supported. |
-| 61 | `health` | READ | default | operational | service_dispatch | Diagnostics only. Check all lnwjud backends or one public tool after a failure, when asked for status, or while diagnosing permissions. Do not use as a preflight before normal work. |
+| 61 | `health` | READ | default | operational | service_dispatch | Diagnostics only. Check all lnwjing backends or one public tool after a failure, when asked for status, or while diagnosing permissions. Do not use as a preflight before normal work. |
 | 62 | `system_info` | READ | default | operational | service_dispatch | Read-only system information: OS, CPU, memory, disks, battery, uptime, and top processes by memory. Use for environment checks and diagnostics. |
 | 63 | `notification` | EXECUTE | default | operational | service_dispatch | Show a host-native desktop notification when a notification session is available. Use to tell the user when a long task finishes. |
 | 64 | `file_dialog` | EXECUTE | default | operational | service_dispatch | Open a host-native file open/save dialog and return the chosen path(s). The dialog does not read or write files itself; use the guarded file tools afterwards. |
 | 65 | `clipboard` | EXECUTE | default | operational | service_dispatch | Read or write the host clipboard (text or PNG image as base64). Use get_text/get_image to read and set_text to write. |
-| 66 | `web_fetch` | READ | default | operational | service_dispatch | Fetch an http/https URL (GET/POST/PUT/DELETE/HEAD) with bounded size and timeout. In standard mode every POST, PUT, or DELETE requires explicit chat confirmation and host approval; trusted Full Bypass skips lnwjud approval. dry_run remains safe. Returns status, headers, and text or base64 body. |
+| 66 | `web_fetch` | READ | default | operational | service_dispatch | Fetch an http/https URL (GET/POST/PUT/DELETE/HEAD) with bounded size and timeout. In standard mode every POST, PUT, or DELETE requires explicit chat confirmation and host approval; trusted Full Bypass skips lnwjing approval. dry_run remains safe. Returns status, headers, and text or base64 body. |
 | 67 | `audio` | EXECUTE | default | operational | service_dispatch | Record microphone audio or play a scoped local file through the native media provider. Native macOS/Linux starts return an owned handle; use status to observe it and stop to finalize or cancel it. An initial running receipt does not prove an artifact exists. Terminal artifacts include verification evidence. Duration is bounded to 600 seconds and max_bytes to 64 MiB. Windows delivery behavior is reported by its provider. Recording requires application authorization and a scoped output; existing outputs use Recovery Trash when available. Cancellation of a macOS/Linux native request closes that owner process and its resources while preserving other owners. |
 | 68 | `screen_record` | EXECUTE | default | operational | service_dispatch | Start a bounded native screen recording and retain its returned owned handle. Use status to observe the handle and stop to finalize or cancel it. macOS/Linux artifacts are published only after terminal content verification, with a duration limit of 600 seconds and max_bytes of 64 MiB. Linux Wayland capture requires a granted session_id and reports denial or revocation. Application authorization, Active Project paths and replacement recovery apply to capture output. Cancellation of a macOS/Linux native request closes that owner process and its resources while preserving other owners. |
-| 69 | `office` | WRITE | default | operational | service_dispatch | Automate a supported spreadsheet/document provider when installed. In standard mode every write, replace, merge, or save_as action requires an Active Project workspaceId, explicit chat confirmation, and host approval. Trusted Full Bypass skips lnwjud approval/scope checks without forging userConfirmed. Existing in-workspace targets use Recovery Trash before replacement when available. Unsupported app/action pairs are dependency-gated rather than approximated. |
-| 70 | `scheduler` | EXECUTE | default | operational | service_dispatch | Manage host-native scheduled tasks. list is read-only; in standard mode create, run, and delete require explicit chat confirmation and host approval. Trusted Full Bypass skips lnwjud approval without forging userConfirmed. The provider uses the current OS scheduler and never silently falls back to another scheduler. |
-| 71 | `wsl_exec` | EXECUTE | default | operational | service_dispatch | Non-blocking WSL2 developer runner for one Linux executable plus argv; shell command strings are not accepted. cwd accepts either an absolute Windows workspace path or an absolute WSL path such as /mnt/e/project returned by wsl_fs. Do not use wsl_exec as a source/config/text editor. For any direct text-file change, call edit_file first; use apply_patch for reviewed whole-file or multi-file replacements and write_file for file creation/replacement. Inline Node/Python/PowerShell-style rewrites and sed in-place edits are rejected before native approval so the client can route to guarded file tools. MCP run calls are ALWAYS forced to execution=background, even if a client requests foreground or auto, and return a task_id immediately. Follow with status/logs/result; wait uses the user-configurable MCP poll window (5-60 seconds, default 5). When the user requires babysitting until completion, keep using bounded waits and do not report completion until the terminal result is inspected. Otherwise, if the host turn must yield while a durable task is still running, checkpoint it as trackedTasks {taskId, provider: shell, role: blocking_job, cancelWithGoal: true} and use the active scheduled-continuation handoff instead of abandoning the goal. With Full Bypass OFF, Full Access runs ordinary WSL commands without confirmation while destructive, broad, recursive, outside-project, or unparseable forms retain normal approval/command policy. Trusted Full Bypass skips lnwjud approval, command-policy, Active Project, and allowed-root checks; an active rolling scheduled goal still requires the current goalLease ownership proof. Full Bypass may still use an explicitly requested external cwd; WSL availability, argv validation, Linux permissions, and process failures still apply. |
+| 69 | `office` | WRITE | default | operational | service_dispatch | Automate a supported spreadsheet/document provider when installed. In standard mode every write, replace, merge, or save_as action requires an Active Project workspaceId, explicit chat confirmation, and host approval. Trusted Full Bypass skips lnwjing approval/scope checks without forging userConfirmed. Existing in-workspace targets use Recovery Trash before replacement when available. Unsupported app/action pairs are dependency-gated rather than approximated. |
+| 70 | `scheduler` | EXECUTE | default | operational | service_dispatch | Manage host-native scheduled tasks. list is read-only; in standard mode create, run, and delete require explicit chat confirmation and host approval. Trusted Full Bypass skips lnwjing approval without forging userConfirmed. The provider uses the current OS scheduler and never silently falls back to another scheduler. |
+| 71 | `wsl_exec` | EXECUTE | default | operational | service_dispatch | Non-blocking WSL2 developer runner for one Linux executable plus argv; shell command strings are not accepted. cwd accepts either an absolute Windows workspace path or an absolute WSL path such as /mnt/e/project returned by wsl_fs. Do not use wsl_exec as a source/config/text editor. For any direct text-file change, call edit_file first; use apply_patch for reviewed whole-file or multi-file replacements and write_file for file creation/replacement. Inline Node/Python/PowerShell-style rewrites and sed in-place edits are rejected before native approval so the client can route to guarded file tools. MCP run calls are ALWAYS forced to execution=background, even if a client requests foreground or auto, and return a task_id immediately. Follow with status/logs/result; wait uses the user-configurable MCP poll window (5-60 seconds, default 5). When the user requires babysitting until completion, keep using bounded waits and do not report completion until the terminal result is inspected. Otherwise, if the host turn must yield while a durable task is still running, checkpoint it as trackedTasks {taskId, provider: shell, role: blocking_job, cancelWithGoal: true} and use the active scheduled-continuation handoff instead of abandoning the goal. With Full Bypass OFF, Full Access runs ordinary WSL commands without confirmation while destructive, broad, recursive, outside-project, or unparseable forms retain normal approval/command policy. Trusted Full Bypass skips lnwjing approval, command-policy, Active Project, and allowed-root checks; an active rolling scheduled goal still requires the current goalLease ownership proof. Full Bypass may still use an explicitly requested external cwd; WSL availability, argv validation, Linux permissions, and process failures still apply. |
 | 72 | `wsl_fs` | READ | default | operational | service_dispatch | Translate paths and inspect metadata between a registered Windows workspace and WSL without exposing raw \\wsl$ read/write access. |
-| 73 | `skills_list` | READ | default | operational | service_dispatch | List the union of bundled skills and every discovered machine-global or active-workspace skill from Cursor, Claude, Agents, Codex, the Codex plugin cache, GitHub workspace roots, and lnwjud settings. Nested and symlinked skill collections are included. Filter with query or source. |
-| 74 | `skills_read` | READ | default | operational | service_dispatch | Read a local skill SKILL.md (or a relative file inside the skill folder). Prefer the source-qualified id returned by skills_list; an unambiguous bare name or $name is also accepted. Pass workspaceId and the active goalId when loading a policy-required skill, then follow it with lnwjud tools and mcp_call. |
+| 73 | `skills_list` | READ | default | operational | service_dispatch | List the union of bundled skills and every discovered machine-global or active-workspace skill from Cursor, Claude, Agents, Codex, the Codex plugin cache, GitHub workspace roots, and lnwjing settings. Nested and symlinked skill collections are included. Filter with query or source. |
+| 74 | `skills_read` | READ | default | operational | service_dispatch | Read a local skill SKILL.md (or a relative file inside the skill folder). Prefer the source-qualified id returned by skills_list; an unambiguous bare name or $name is also accepted. Pass workspaceId and the active goalId when loading a policy-required skill, then follow it with lnwjing tools and mcp_call. |
 | 75 | `ponytail_session` | WRITE | default | operational | service_dispatch | Temporarily suppress or resume the effective Ponytail coding policy for this MCP session and workspace/goal only. This does not change persisted global, workspace, or durable-goal settings. Use suppressed=true when the user explicitly asks to stop Ponytail or return to normal mode; use false to resume the effective policy. |
-| 76 | `mcp_list` | READ | default | operational | service_dispatch | List local MCP servers discovered from Cursor, Claude Desktop, and lnwjud settings. This inspection is read-only and does not flatten child tools into the lnwjud catalog. |
+| 76 | `mcp_list` | READ | default | operational | service_dispatch | List local MCP servers discovered from Cursor, Claude Desktop, and lnwjing settings. This inspection is read-only and does not flatten child tools into the lnwjing catalog. |
 | 77 | `mcp_describe` | READ | default | operational | service_dispatch | Connect to one local MCP server (if needed) and return its tool names, descriptions, and input schemas. This operation only inspects the child tool catalog. |
-| 78 | `mcp_call` | DANGEROUS | default | operational | service_dispatch | Call a tool on a discovered local MCP server. Child side effects and filesystem/network scope are controlled by that child server, so standard mode treats every mcp_call as opaque mutation and requires explicit chat plus host exact-action approval. Trusted Full Bypass skips lnwjud application approval; the child server still enforces its own policy. |
+| 78 | `mcp_call` | DANGEROUS | default | operational | service_dispatch | Call a tool on a discovered local MCP server. Child side effects and filesystem/network scope are controlled by that child server, so standard mode treats every mcp_call as opaque mutation and requires explicit chat plus host exact-action approval. Trusted Full Bypass skips lnwjing application approval; the child server still enforces its own policy. |
 | 79 | `workspace_context` | READ | default | operational | service_dispatch | Aggregate ranked workspace context with snippets, symbols, Git/test relevance and continuation. Preserve per-source observations and explicit completeness when a provider fails or search is truncated. |
 | 80 | `workspace_context_continue` | READ | default | operational | service_dispatch | Continue a workspace_context result without discarding unreturned candidates. |
 | 81 | `workspace_full_scan` | READ | default | operational | service_dispatch | Enumerate workspace files with per-source completeness. With includeIgnored false, use a fresh clean automatic index for prefix scans; stale or unavailable indexes and glob requests fall back to real filename search. |
@@ -1075,8 +1075,8 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 | 90 | `workspace_index_watch` | WRITE | default | operational | service_dispatch | Watch all workspace paths and incrementally re-index only changed paths with configurable debounce/concurrency. |
 | 91 | `workspace_index_stop` | WRITE | default | operational | service_dispatch | Stop a workspace watcher after draining all queued path updates. |
 | 92 | `session_handoff` | READ | default | operational | service_dispatch | Create concise recovery state after a client/page interruption or missing assistant summary without rerunning completed work. Prefer the active Durable Goal; when none exists, recover the latest terminal Durable Goal and its terminal receipt. Also inspect recent durable shell tasks with bounded status/output tails so a terminal result can be summarized immediately instead of relaunched. Then include Git/workspace state and an optional legacy phase tracker fallback. This is task state, not persistent user/agent instructions. It never opens, clicks, types into, or creates a ChatGPT browser conversation; resume must happen through supported host-native turns/chats. |
-| 93 | `verify_incremental` | EXECUTE | default | operational | service_dispatch | Run the detected project typecheck only when the current git status/diff fingerprint changed. Starting a new verification process requires explicit user confirmation in standard mode; trusted Full Bypass skips that lnwjud gate. Returns cache=hit when unchanged and cache=miss after a new verification. Prefer this during iterative edits; use project_test/project_lint/project_build only when that specific verification is needed. For full suites or packaging expected to exceed ~5 minutes, launch a durable shell background task and record its task_id in the tracker. |
-| 94 | `run_goal` | WRITE | default | operational | service_dispatch | Immediate-return durable goal create/resume and lease acquisition. Every invocation re-reads workspace AGENTS.md when present and returns it as projectInstructionsPreflight so repository rules are available before subsequent work; the preflight is never cached. Invoke run_goal before the first mutation of any non-trivial multi-step change. For an active rolling goal whose prior worker died, stale-lease recovery still requires trustworthy runtime liveness and rotates the lease generation. Unfinished goals default to scheduledContinuation=auto: the client must load/follow the bundled lnwjud-scheduled-continuation skill and maintain exactly one Native ChatGPT hourly recurring watchdog with cloud execution requested. New v4.53 goals reuse the same native task ID across ordinary hourly wakes; checkpoints and collisions never imply per-wake successor creation or recurrence retiming. Historical v4.52 occurrence=once rows are migrated compatibly and must not overlap a new recurring watchdog. Continue useful work without waiting for the user to type continue/ทำต่อ. The leased worker is work-conserving: a milestone checkpoint is not a turn boundary, a transient tool/task-observation failure is not a handoff signal, and a safely reacquirable lease expiry should be recovered with the same goalKey so useful work continues in the same host turn. A concrete fixable failure discovered during CI, tests, code scanning, packaging, release validation, or another tool is the next unit of work; diagnose, repair, and validate it in the same host turn while safe useful actions remain instead of stopping to report it. A truthful native create failure or Resource not found is scheduler transport degradation only: keep the durable goal active and continue the current leased worker rather than terminalizing the work, and never substitute another scheduler. Stop scheduling only when the goal is terminal or scheduling is explicitly disabled. Native ChatGPT task operations remain host-owned through the Scheduled Task surface exposed to the chat; this tool never claims that a task was created and never substitutes browser/DOM automation, Windows Task Scheduler, cron, or shell timers. |
+| 93 | `verify_incremental` | EXECUTE | default | operational | service_dispatch | Run the detected project typecheck only when the current git status/diff fingerprint changed. Starting a new verification process requires explicit user confirmation in standard mode; trusted Full Bypass skips that lnwjing gate. Returns cache=hit when unchanged and cache=miss after a new verification. Prefer this during iterative edits; use project_test/project_lint/project_build only when that specific verification is needed. For full suites or packaging expected to exceed ~5 minutes, launch a durable shell background task and record its task_id in the tracker. |
+| 94 | `run_goal` | WRITE | default | operational | service_dispatch | Immediate-return durable goal create/resume and lease acquisition. Every invocation re-reads workspace AGENTS.md when present and returns it as projectInstructionsPreflight so repository rules are available before subsequent work; the preflight is never cached. Invoke run_goal before the first mutation of any non-trivial multi-step change. For an active rolling goal whose prior worker died, stale-lease recovery still requires trustworthy runtime liveness and rotates the lease generation. Unfinished goals default to scheduledContinuation=auto: the client must load/follow the bundled lnwjing-scheduled-continuation skill and maintain exactly one Native ChatGPT hourly recurring watchdog with cloud execution requested. New v4.53 goals reuse the same native task ID across ordinary hourly wakes; checkpoints and collisions never imply per-wake successor creation or recurrence retiming. Historical v4.52 occurrence=once rows are migrated compatibly and must not overlap a new recurring watchdog. Continue useful work without waiting for the user to type continue/ทำต่อ. The leased worker is work-conserving: a milestone checkpoint is not a turn boundary, a transient tool/task-observation failure is not a handoff signal, and a safely reacquirable lease expiry should be recovered with the same goalKey so useful work continues in the same host turn. A concrete fixable failure discovered during CI, tests, code scanning, packaging, release validation, or another tool is the next unit of work; diagnose, repair, and validate it in the same host turn while safe useful actions remain instead of stopping to report it. A truthful native create failure or Resource not found is scheduler transport degradation only: keep the durable goal active and continue the current leased worker rather than terminalizing the work, and never substitute another scheduler. Stop scheduling only when the goal is terminal or scheduling is explicitly disabled. Native ChatGPT task operations remain host-owned through the Scheduled Task surface exposed to the chat; this tool never claims that a task was created and never substitutes browser/DOM automation, Windows Task Scheduler, cron, or shell timers. |
 | 95 | `get_goal` | READ | default | operational | service_dispatch | Read the latest durable goal snapshot without changing state or returning a lease token. |
 | 96 | `get_goal_plan` | READ | default | operational | service_dispatch | Read the user-facing plan projection, acceptance criteria, intent revision, and bounded-iteration policy from authoritative durable goal state. This is a projection, not a second workflow engine. |
 | 97 | `update_goal_plan` | WRITE | default | operational | service_dispatch | Atomically replace the user-facing durable goal plan through the current lease and revision fence. It only updates plan state; it does not execute plan steps by itself. |
@@ -1101,9 +1101,9 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 | 116 | `workflow_templates` | READ | default | operational | service_dispatch | List six built-in Thai/English workflows for a registered workspace. Read-only; does not create a Goal. |
 | 117 | `workflow_prepare` | READ | default | operational | service_dispatch | Validate bounded inputs, workspace paths, provider readiness, and return a deterministic preview. No side effects. |
 | 118 | `workflow_start` | WRITE | default | operational | service_dispatch | Start or attach the selected validated workflow to an existing Durable Goal contract with hashed idempotency key. Never creates any scheduled task; caller must hold returned Goal lease to execute. |
-| 119 | `prepare_scheduled_continuation` | WRITE | default | operational | service_dispatch | Checkpoint durable progress and ensure exactly one live current-chat Native ChatGPT hourly recurring watchdog with cloud execution requested. When the current chat exposes a host-provided connector mention (`@name` or `[$name](app://asdk_app_<32 hex digits>)`), preserve that exact identity via connectorMention so the generated Scheduled Task prompt targets the same installed app; never guess the connector ID, and omit it when the host exposes none. Connector mention text does not bypass host approval. At a meaningful continuation handoff include reconstruction-grade resumeContext (changed files, exact commands/results, decisions, failed attempts, pending validation, resume prerequisites, state facts, artifacts); summary alone is not sufficient resume state. New v4.53 watchdogs use occurrence=interval and intervalMinutes=60; when successorDelayMinutes is omitted the first firing is one hour from prepare, while a legacy explicit 2–25 minute value changes only the first firing and never the hourly recurrence cadence. Reuse the same confirmed native task ID across checkpoints and ordinary wakes; never create a per-wake successor or retime the recurring cadence. If an active v4.52 one-time watchdog already exists, reuse that legacy task until it becomes historical before creating the recurring watchdog, so one-time and recurring native tasks never overlap for one goal. prepared means reservation only and is not confirmed host coverage. Record native create failure or uncertainty truthfully and reconcile uncertain host state before any blind create. On an explicit host-surface lookup/dispatch failure such as Resource not found that proves the operation was not dispatched, re-resolve the current Native Scheduled Task host operation once and retry that exact native operation once; never retry ambiguous possible-success and never switch scheduler providers. Host create and cleanup remain Native ChatGPT Scheduled Task operations exposed by the current chat; never use browser/DOM automation, Windows Task Scheduler, cron, shell timers, or an lnwjud-local scheduler as a substitute. |
+| 119 | `prepare_scheduled_continuation` | WRITE | default | operational | service_dispatch | Checkpoint durable progress and ensure exactly one live current-chat Native ChatGPT hourly recurring watchdog with cloud execution requested. When the current chat exposes a host-provided connector mention (`@name` or `[$name](app://asdk_app_<32 hex digits>)`), preserve that exact identity via connectorMention so the generated Scheduled Task prompt targets the same installed app; never guess the connector ID, and omit it when the host exposes none. Connector mention text does not bypass host approval. At a meaningful continuation handoff include reconstruction-grade resumeContext (changed files, exact commands/results, decisions, failed attempts, pending validation, resume prerequisites, state facts, artifacts); summary alone is not sufficient resume state. New v4.53 watchdogs use occurrence=interval and intervalMinutes=60; when successorDelayMinutes is omitted the first firing is one hour from prepare, while a legacy explicit 2–25 minute value changes only the first firing and never the hourly recurrence cadence. Reuse the same confirmed native task ID across checkpoints and ordinary wakes; never create a per-wake successor or retime the recurring cadence. If an active v4.52 one-time watchdog already exists, reuse that legacy task until it becomes historical before creating the recurring watchdog, so one-time and recurring native tasks never overlap for one goal. prepared means reservation only and is not confirmed host coverage. Record native create failure or uncertainty truthfully and reconcile uncertain host state before any blind create. On an explicit host-surface lookup/dispatch failure such as Resource not found that proves the operation was not dispatched, re-resolve the current Native Scheduled Task host operation once and retry that exact native operation once; never retry ambiguous possible-success and never switch scheduler providers. Host create and cleanup remain Native ChatGPT Scheduled Task operations exposed by the current chat; never use browser/DOM automation, Windows Task Scheduler, cron, shell timers, or an lnwjing-local scheduler as a substitute. |
 | 120 | `record_scheduled_continuation_receipt` | WRITE | default | operational | service_dispatch | Record truthful cleanup/run receipts for recurring Native ChatGPT watchdogs and legacy one-time watchdogs. created requires the real native task ID and host-reported absolute dueAt. A recurring interval firing never consumes or replaces the native task, so outcome=consumed and reschedule_* remain legacy one-time compatibility only. For outcome=cancelled prefer matching native host evidence that the exact task is non-runnable: delete may report deleted/not_found and hosts without delete may report an exact disable receipt. If the host management surface is unavailable and the user explicitly deleted the exact task in ChatGPT Scheduled Tasks, userCancellationReceipt may record that separately as user-attested manual deletion only with userConfirmed=true; never label user testimony as host-native proof. The stored native task ID is immutable for the lifetime of the watchdog. |
-| 121 | `claim_scheduled_continuation` | WRITE | default | operational | service_dispatch | Scheduled-wake entrypoint and the first lnwjud action before any workspace mutation. Native watchdogs should pass the expected goalId and workspaceId from their wake metadata so the host-visible WRITE scope is explicit and lnwjud can reject mismatched identity before liveness or lease mutation; legacy callers that only have continuationId remain compatible. For occurrence=interval, the same native hourly task remains scheduled across firings: a live/uncertain worker returns worker_busy_noop without lease theft or host-task mutation, a true concurrent/stale duplicate whose observation predates an already-recorded lease acquisition returns already_claimed, an existing interval runKey alone never suppresses a fresh current-liveness check, a safely available lease returns recurring_acquired, and a still-valid stale lease with trustworthy no-worker/no-blocking-work evidence is recovered in the same hourly tick after the bounded 60-second stale-heartbeat grace rather than waiting for expiry or a second hourly firing. Only recurring_acquired may include a read-only automationResume hint; busy/no-op claims never inspect or mutate automation state. After recurring_acquired, discovering a fixable CI, test, code-scanning, packaging, release, or tool failure is not permission to yield: continue diagnosis, repair, and relevant validation in the same host turn while safe useful actions remain, rather than ending the hourly wake with a status-only report. Ordinary recurring wakes never create a successor, never consume the native task, and never retime its cadence. terminal_noop performs no work; if terminal cleanup is pending, make the exact recurring native task non-runnable rather than resuming goal work. Historical occurrence=once rows retain the v4.52 acquired/successor_required/reschedule compatibility paths. Never count prepared as confirmed and never mutate the workspace without the acquired goal lease. |
+| 121 | `claim_scheduled_continuation` | WRITE | default | operational | service_dispatch | Scheduled-wake entrypoint and the first lnwjing action before any workspace mutation. Native watchdogs should pass the expected goalId and workspaceId from their wake metadata so the host-visible WRITE scope is explicit and lnwjing can reject mismatched identity before liveness or lease mutation; legacy callers that only have continuationId remain compatible. For occurrence=interval, the same native hourly task remains scheduled across firings: a live/uncertain worker returns worker_busy_noop without lease theft or host-task mutation, a true concurrent/stale duplicate whose observation predates an already-recorded lease acquisition returns already_claimed, an existing interval runKey alone never suppresses a fresh current-liveness check, a safely available lease returns recurring_acquired, and a still-valid stale lease with trustworthy no-worker/no-blocking-work evidence is recovered in the same hourly tick after the bounded 60-second stale-heartbeat grace rather than waiting for expiry or a second hourly firing. Only recurring_acquired may include a read-only automationResume hint; busy/no-op claims never inspect or mutate automation state. After recurring_acquired, discovering a fixable CI, test, code-scanning, packaging, release, or tool failure is not permission to yield: continue diagnosis, repair, and relevant validation in the same host turn while safe useful actions remain, rather than ending the hourly wake with a status-only report. Ordinary recurring wakes never create a successor, never consume the native task, and never retime its cadence. terminal_noop performs no work; if terminal cleanup is pending, make the exact recurring native task non-runnable rather than resuming goal work. Historical occurrence=once rows retain the v4.52 acquired/successor_required/reschedule compatibility paths. Never count prepared as confirmed and never mutate the workspace without the acquired goal lease. |
 | 122 | `get_scheduled_continuation` | READ | default | operational | service_dispatch | Read one scheduled-continuation snapshot by continuation ID or the latest record for a goal. In v4.53, occurrence=interval identifies the single hourly recurring watchdog; its dueAt is the first scheduled firing, not a mutation handoff deadline, and its native task ID remains stable across ordinary wakes. Historical occurrence=once rows preserve legacy one-time compatibility state. |
 | 123 | `expedite_scheduled_continuation` | WRITE | default | operational | service_dispatch | Legacy one-time compatibility only. For a still-pending occurrence=once watchdog and an enumerated handoff-risk signal, adaptively move that exact native task closer using the existing v4.52 rules. occurrence=interval recurring watchdogs must not use expedite_scheduled_continuation because ordinary recurring cadence is fixed at one hour and the host contract exposes no truthful immediate-run operation. Never create a replacement task through this operation. |
 | 124 | `cancel_scheduled_continuation` | WRITE | default | operational | service_dispatch | Cancel the scheduled watchdog independently of its durable goal. For v4.53 occurrence=interval, make the exact recurring Native ChatGPT task non-runnable with the strongest host operation actually exposed: prefer true delete, otherwise a host-confirmed disable. One recurring firing never consumes the task, so a past first due time is not cleanup proof. Historical occurrence=once rows retain their legacy cancellation/reconciliation behavior. Never treat a model assertion or unverified host state as cleanup proof. This does not cancel the durable goal or stop its running tasks. |
@@ -1234,7 +1234,7 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 | 249 | `debug_attach` | EXECUTE | default | dependency_gated | truthful_unavailable | Attach to an already running numeric-loopback TCP DAP adapter with bounded initialization and attach-only configuration. The host retains sockets under the actual client, MCP session and registered workspace. dryRun validates without connecting. No debugger process is launched. |
 | 250 | `debug_step` | EXECUTE | default | dependency_gated | truthful_unavailable | Read bounded owned-session status/events by cursor, disconnect the adapter without terminating the debuggee, or issue a validated DAP command. Adapter replies and output retain their exact values. Event overflow and connection gaps are explicit. Control/evaluation uses current host permission, Engineering and Goal lease admission. dryRun sends no frame. |
 | 251 | `git_worktree_spawn` | WRITE | default | dependency_gated | deterministic_operation | Create a confined, ledger-owned Git worktree for isolated agent work with collision metadata. |
-| 252 | `git_worktree_remove` | DANGEROUS | default | dependency_gated | deterministic_operation | Remove a ledger-owned Git worktree after dry-run and standard-mode confirmation; trusted Full Bypass skips lnwjud approval. |
+| 252 | `git_worktree_remove` | DANGEROUS | default | dependency_gated | deterministic_operation | Remove a ledger-owned Git worktree after dry-run and standard-mode confirmation; trusted Full Bypass skips lnwjing approval. |
 | 253 | `db_inspect` | READ | default | dependency_gated | truthful_unavailable | Inspect a local database schema through a configured, read-only connection. |
 | 254 | `db_query` | READ | default | dependency_gated | truthful_unavailable | Run a bounded read-only local SQLite SELECT, PRAGMA, or WITH...SELECT query. |
 | 255 | `office_ppt` | WRITE | default | dependency_gated | service_dispatch | Read PowerPoint content or save a copy through the existing Office policy boundary. |
@@ -1259,7 +1259,7 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 | 274 | `pdf_extract_tables` | READ | default | dependency_gated | truthful_unavailable | Extract bounded PDF text and tables through a local document provider. |
 | 275 | `docx_merge` | WRITE | default | dependency_gated | service_dispatch | Create a deterministic DOCX merge plan and write only after approval. |
 | 276 | `self_heal_plan` | READ | default | operational | service_dispatch | Propose safe, deterministic, reversible recovery steps without applying mutations. |
-| 277 | `self_heal_apply` | DANGEROUS | default | dependency_gated | service_dispatch | Apply a current reversible recovery plan without automatic destructive retries; standard mode requires confirmation and trusted Full Bypass skips lnwjud approval. |
+| 277 | `self_heal_apply` | DANGEROUS | default | dependency_gated | service_dispatch | Apply a current reversible recovery plan without automatic destructive retries; standard mode requires confirmation and trusted Full Bypass skips lnwjing approval. |
 | 278 | `skills_import` | WRITE | default | operational | service_dispatch | Import a validated local SKILL.md into the selected workspace skill catalog through guarded file read/write operations. |
 | 279 | `ecc_status` | READ | default | operational | deterministic_operation | Report the pinned ECC provider, provenance, activation policy, and bundled security-scanner readiness. |
 | 280 | `ecc_catalog` | READ | default | operational | deterministic_operation | Search the pinned ECC artifact catalog without eagerly loading artifact bodies. |
@@ -1291,7 +1291,7 @@ This complete index is generated from `ToolRegistry.listAll()`, not copied from 
 
 ### Explicit workspace registration
 
-lnwjud never scans A:–Z: or registers drive roots during startup. Add a project
+lnwjing never scans A:–Z: or registers drive roots during startup. Add a project
 folder explicitly through MCP or the Desktop Projects UI. `workspace_register`
 accepts an absolute project path directly; `parentWorkspaceId` remains optional
 only for compatibility with an explicitly registered legacy machine root. A
@@ -1415,7 +1415,7 @@ persisted by this telemetry.
 | codex_run | EXECUTE | Delegates an instruction to local Codex in workspace-write sandbox mode after exact approval and returns codexTaskId |
 | codex_task_status | READ | Reads state for an owned Codex task |
 | codex_task_logs | READ | Reads bounded logs for an owned Codex task |
-| codex_stop | EXECUTE | Stops only a Codex task launched by lnwjud |
+| codex_stop | EXECUTE | Stops only a Codex task launched by lnwjing |
 | agent_swarm_run | EXECUTE | Lists or inspects owned Agent Swarm runs; starting or cancelling a bounded read-only swarm requires trusted host approval |
 
 Typical flow: codex_run → inspect task status/logs → inspect git_diff → run checks.
@@ -1453,9 +1453,9 @@ and policy-bounded; a permission profile never grants free-form shell strings.
 ### Skills and local MCP bridge
 
 These meta-tools discover local agent skills and other MCP servers on the
-machine (Cursor `mcp.json`, Claude Desktop config, plus lnwjud settings). They
-do not flatten every child tool into the lnwjud catalog. Default mode enables
-all discovered servers except lnwjud itself (recursion guard).
+machine (Cursor `mcp.json`, Claude Desktop config, plus lnwjing settings). They
+do not flatten every child tool into the lnwjing catalog. Default mode enables
+all discovered servers except lnwjing itself (recursion guard).
 
 | Tool | Permission | What it does |
 | --- | --- | --- |
@@ -1470,7 +1470,7 @@ Secure MCP Tunnel, but the permission profile is not a bypass. Child `mcp_call`
 side effects are treated as opaque mutation and still require independent host
 exact-action approval. A standalone/headless runtime with no trusted approval
 provider denies the mutation instead of granting it from the `full` profile.
-Disable individual servers through the lnwjud `extensions` settings JSON
+Disable individual servers through the lnwjing `extensions` settings JSON
 (`disabledServers`) when needed.
 
 Settings key `extensions` (SQLite) example:
@@ -1529,7 +1529,7 @@ Project mutation boundary, shared command/Git policy, independent host approval,
 or hard blocks. Enable the visibility mode either way:
 
 - Settings → Unrestricted mode (checkbox; restart the app to apply), or
-- `$env:LNWJUD_UNRESTRICTED = '1'` before launching lnwjud (the tunnel script
+- `$env:LNWJING_UNRESTRICTED = '1'` before launching lnwjing (the tunnel script
   below sets this automatically for the stdio runtime).
 
 When enabled:
@@ -1555,7 +1555,7 @@ automatically recoverable through Recovery Trash.
 
 The desktop app includes a Live Logs screen (sidebar) with three tabs:
 
-- Tunnel — tails `%APPDATA%\tunnel-client\lnwjud-tunnel.log` continuously
+- Tunnel — tails `%APPDATA%\tunnel-client\lnwjing-tunnel.log` continuously
 - MCP activity — every tool call received by MCP appears immediately
 - Processes — state and recent output of managed processes
 
@@ -1564,7 +1564,7 @@ and "Pop out viewer" opens a compact separate window. The viewer can also be
 launched directly:
 
 ```powershell
-& "$env:LOCALAPPDATA\Programs\lnwjud\lnwjud.exe" --log-viewer
+& "$env:LOCALAPPDATA\Programs\lnwjing\lnwjing.exe" --log-viewer
 ```
 
 The app is single-instance: launching with `--log-viewer` while the dashboard
@@ -1587,15 +1587,15 @@ Tunnel button, and both reflect the same state:
 
 ## Run the tunnel with a resilient script
 
-The repository ships `scripts/start-lnwjud-tunnel.ps1`. Copy it anywhere and
+The repository ships `scripts/start-lnwjing-tunnel.ps1`. Copy it anywhere and
 run it instead of a manual `tunnel-client run`:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\start-lnwjud-tunnel.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\start-lnwjing-tunnel.ps1"
 ```
 
 The script sets `--mcp.connection-max-ttl 168h0m0s` (prevents the 10-minute
-disconnect), writes `lnwjud-tunnel.log`, aligns `LNWJUD_DATA_PATH` with the
+disconnect), writes `lnwjing-tunnel.log`, aligns `LNWJING_DATA_PATH` with the
 desktop app so ChatGPT activity shows in the Work Log and Live Logs, enables
 unrestricted read/discovery mode, restarts the tunnel automatically when it
 drops (including TTL shutdowns that exit 0), avoids double-starting, and opens
@@ -1624,7 +1624,7 @@ The classification is evidence-based, not a remote root-cause guarantee:
 - `healthy_or_inconclusive` — the collected evidence cannot safely select one
   of the cases above. Collect the report before restarting layers.
 
-Desktop Start Tunnel and `start-lnwjud-tunnel.ps1` share one profile lock. The
+Desktop Start Tunnel and `start-lnwjing-tunnel.ps1` share one profile lock. The
 losing launcher reports the actual owner PID and does not start or stop another
 owner's `tunnel-client`. A stale lock is reclaimed only when the recorded PID
 and process start time no longer match; do not manually delete a lock merely to
@@ -1641,13 +1641,13 @@ current client rather than copying a fixed port:
 
 ```powershell
 $profile = Join-Path $env:APPDATA 'tunnel-client'
-$tc = if ($env:LNWJUD_TUNNEL_CLIENT_PATH) { $env:LNWJUD_TUNNEL_CLIENT_PATH } else { Join-Path $env:LOCALAPPDATA 'Programs\lnwjud\resources\tunnel-client\tunnel-client.exe' }
+$tc = if ($env:LNWJING_TUNNEL_CLIENT_PATH) { $env:LNWJING_TUNNEL_CLIENT_PATH } else { Join-Path $env:LOCALAPPDATA 'Programs\lnwjing\resources\tunnel-client\tunnel-client.exe' }
 if (-not (Test-Path -LiteralPath $tc -PathType Leaf)) { throw "Missing tunnel-client executable: $tc" }
-if (-not (Test-Path -LiteralPath (Join-Path $profile 'lnwjud.yaml') -PathType Leaf)) { throw "Missing configured profile: $(Join-Path $profile 'lnwjud.yaml')" }
-Get-Content (Join-Path $profile 'lnwjud.tunnel.lock') -ErrorAction SilentlyContinue
-& $tc doctor --profile lnwjud --profile-dir $profile --explain
+if (-not (Test-Path -LiteralPath (Join-Path $profile 'lnwjing.yaml') -PathType Leaf)) { throw "Missing configured profile: $(Join-Path $profile 'lnwjing.yaml')" }
+Get-Content (Join-Path $profile 'lnwjing.tunnel.lock') -ErrorAction SilentlyContinue
+& $tc doctor --profile lnwjing --profile-dir $profile --explain
 if ($LASTEXITCODE -ne 0) { throw 'tunnel-client doctor failed' }
-$match = Select-String -LiteralPath (Join-Path $profile 'lnwjud-tunnel.log') -Pattern 'health.*(?:listening|listen_addr).*?(127\.0\.0\.1|localhost):(\d{2,5})' | Select-Object -Last 1
+$match = Select-String -LiteralPath (Join-Path $profile 'lnwjing-tunnel.log') -Pattern 'health.*(?:listening|listen_addr).*?(127\.0\.0\.1|localhost):(\d{2,5})' | Select-Object -Last 1
 if ($null -eq $match) { throw 'No runtime health address was reported by the configured tunnel' }
 $address = [regex]::Match($match.Line, '(127\.0\.0\.1|localhost):(\d{2,5})').Value
 Invoke-WebRequest -UseBasicParsing "http://$address/healthz"
@@ -1695,7 +1695,7 @@ They do not persist full prompts, environment variables, bearer tokens, API
 keys, passwords, or unlimited terminal history. Existing-file writes checkpoint
 before overwrite where supported; native/binary replacement paths use Recovery
 Trash backups where the provider can be made recoverable. Opaque external
-mutation is explicitly not represented as recoverable when lnwjud cannot own a
+mutation is explicitly not represented as recoverable when lnwjing cannot own a
 pre-image.
 
 ### Explicitly unavailable tools
@@ -1721,23 +1721,23 @@ launch; standalone `git_reset` / `git_clean` capabilities do not exist.
 
 | Symptom | Fix |
 | --- | --- |
-| Secure Tunnel profile still contains `mcp.commands` or `lnwjud-mcp-stdio.cmd` | Open lnwjud Desktop → Settings → OpenAI Secure MCP Tunnel → Configure Tunnel. v4.10.0 rewrites the profile to the current Desktop loopback HTTP `/mcp` endpoint. |
-| Direct local stdio launcher is missing | This affects local stdio hosts such as Codex CLI, not Secure Tunnel. Reinstall the current package and confirm the target-native `lnwjud-mcp-stdio` launcher is shipped beside the packaged Electron executable. |
-| profile_load says the YAML file is missing | Run init with profile lnwjud and verify %APPDATA%/tunnel-client/lnwjud.yaml |
+| Secure Tunnel profile still contains `mcp.commands` or `lnwjing-mcp-stdio.cmd` | Open lnwjing Desktop → Settings → OpenAI Secure MCP Tunnel → Configure Tunnel. v4.10.0 rewrites the profile to the current Desktop loopback HTTP `/mcp` endpoint. |
+| Direct local stdio launcher is missing | This affects local stdio hosts such as Codex CLI, not Secure Tunnel. Reinstall the current package and confirm the target-native `lnwjing-mcp-stdio` launcher is shipped beside the packaged Electron executable. |
+| profile_load says the YAML file is missing | Run init with profile lnwjing and verify %APPDATA%/tunnel-client/lnwjing.yaml |
 | doctor rejects the key | Use a runtime key with Tunnels Read + Use; do not substitute an Admin or unrelated project key |
 | Tunnel is not listed in ChatGPT | Associate it with the target ChatGPT workspace and verify Tunnels Read + Use |
-| ChatGPT reports no tools | Check that lnwjud Desktop is running, the profile `server_urls` points to its loopback `/mcp` endpoint, doctor/tunnel health passes, then Refresh connector. |
-| Tunnel doctor cannot reach local MCP | Keep lnwjud Desktop running and use Configure Tunnel again so the profile receives the current loopback `/mcp` endpoint. |
-| ChatGPT shows 424 or “Access token is missing” while creating a no-auth Tunnel connection | Install v5.6.4 or later, open lnwjud, and check that the existing Tunnel is running. On Windows, lnwjud retires an older duplicate only when it verifies the same profile and Tunnel ID. If it cannot verify the old process, restart Windows, reopen lnwjud, then retry or refresh the ChatGPT connection. Do not switch to OAuth to solve a stale local destination. |
+| ChatGPT reports no tools | Check that lnwjing Desktop is running, the profile `server_urls` points to its loopback `/mcp` endpoint, doctor/tunnel health passes, then Refresh connector. |
+| Tunnel doctor cannot reach local MCP | Keep lnwjing Desktop running and use Configure Tunnel again so the profile receives the current loopback `/mcp` endpoint. |
+| ChatGPT shows 424 or “Access token is missing” while creating a no-auth Tunnel connection | Install v5.6.4 or later, open lnwjing, and check that the existing Tunnel is running. On Windows, lnwjing retires an older duplicate only when it verifies the same profile and Tunnel ID. If it cannot verify the old process, restart Windows, reopen lnwjing, then retry or refresh the ChatGPT connection. Do not switch to OAuth to solve a stale local destination. |
 | WORKSPACE_NOT_FOUND | Use the exact registered workspace ID, not a path or display name |
 | PATH_OUTSIDE_WORKSPACE | Register/select the correct root and use a workspace-relative path |
 | A secret file is denied | Check the active read/Strict Roots policy and that the intended root is registered; do not weaken mutation scope to make a read succeed |
 | process_start refuses PowerShell/CMD or an interpreter-style command | Use a policy-supported executable + argv inside the Active Project; free-form inline command strings and prohibited destructive forms fail closed |
 | Child process windows are visible | This is expected for the current visible-window Windows build; use handles/logs to manage them |
-| codex_status is unavailable | Install Codex or continue with process_* and project_*; lnwjud does not inspect credentials |
-| Tunnel disconnects with context canceled / context deadline exceeded | MCP connection TTL teardown; start-lnwjud-tunnel.ps1 restarts even on exit 0. After restart, Refresh the connector or send a new ChatGPT message |
-| ChatGPT advertises old tools | Verify lnwjud/tunnel health, then Refresh the connector. If a new conversation sees the refreshed tools but the old conversation returns `FORBIDDEN: This conversation does not support developer MCPs`, that refusal is ChatGPT conversation-level developer-MCP binding state; lnwjud cannot grant or bypass it. Continue in a new conversation rather than repeatedly restarting a healthy local tunnel. |
-| Long tool run looks dead / silent | lnwjud emits progress heartbeats every ~15s after the first 15s; ensure tunnel-client is current and TTL is set via `--mcp.connection-max-ttl 168h0m0s` |
+| codex_status is unavailable | Install Codex or continue with process_* and project_*; lnwjing does not inspect credentials |
+| Tunnel disconnects with context canceled / context deadline exceeded | MCP connection TTL teardown; start-lnwjing-tunnel.ps1 restarts even on exit 0. After restart, Refresh the connector or send a new ChatGPT message |
+| ChatGPT advertises old tools | Verify lnwjing/tunnel health, then Refresh the connector. If a new conversation sees the refreshed tools but the old conversation returns `FORBIDDEN: This conversation does not support developer MCPs`, that refusal is ChatGPT conversation-level developer-MCP binding state; lnwjing cannot grant or bypass it. Continue in a new conversation rather than repeatedly restarting a healthy local tunnel. |
+| Long tool run looks dead / silent | lnwjing emits progress heartbeats every ~15s after the first 15s; ensure tunnel-client is current and TTL is set via `--mcp.connection-max-ttl 168h0m0s` |
 
 For ambiguous failures, call health locally and run tunnel-client doctor
 --explain before restarting both layers.
@@ -1791,7 +1791,7 @@ not want to publish a personal email address should configure a GitHub-provided
 - [Contributing guide](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Security Policy](SECURITY.md)
-- [Issue tracker](https://github.com/engasnm111/lnwjud/issues)
+- [Issue tracker](https://github.com/crystalicez/lnwjing/issues)
 
 Please use the security policy instead of public issues for vulnerability details.
 ## Development and verification

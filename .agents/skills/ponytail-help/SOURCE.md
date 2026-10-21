@@ -6,6 +6,6 @@
 - Upstream path: `skills/ponytail-help/SKILL.md`
 - License: MIT, Copyright (c) 2026 DietrichGebert
 - Verified: 2026-09-16
-- lnwjud source bytes: `2796`
+- lnwjing source bytes: `2796`
 
-`SKILL.md` and `LICENSE` are vendored from the pinned upstream commit without lnwjud-specific edits. The help text describes upstream host defaults; lnwjud's native policy remains authoritative and defaults automatic activation to OFF.
+`SKILL.md` and `LICENSE` are vendored from the pinned upstream commit without lnwjing-specific edits. The help text describes upstream host defaults; lnwjing's native policy remains authoritative and defaults automatic activation to OFF.

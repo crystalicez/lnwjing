@@ -12,7 +12,7 @@ import {
   type AuditCallHistoryPage,
   type AuditCallHistoryRow,
   type AuditMutationReceiptRow,
-} from '@lnwjud/audit';
+} from '@lnwjing/audit';
 import type { SqliteDatabase } from './database.js';
 
 interface AuditEventRow {

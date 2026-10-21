@@ -17,7 +17,7 @@ test('fresh user sees Thai Tips, enters Secure Tunnel guide, and switches langua
   await withFreshDesktop(async (page) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await ensureThaiLocale(page);
-    await expect(page.getByRole('dialog', { name: 'ตั้งค่า ChatGPT ให้ใช้ lnwjud' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('dialog', { name: 'ตั้งค่า ChatGPT ให้ใช้ lnwjing' })).toBeVisible({ timeout: 30_000 });
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole('button', { name: 'เริ่มตั้งค่า' }).click();
@@ -39,7 +39,7 @@ test('Set up later closes Tips and the Home recovery entry reopens Secure Tunnel
   await withFreshDesktop(async (page) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await ensureThaiLocale(page);
-    const dialog = page.getByRole('dialog', { name: 'ตั้งค่า ChatGPT ให้ใช้ lnwjud' });
+    const dialog = page.getByRole('dialog', { name: 'ตั้งค่า ChatGPT ให้ใช้ lnwjing' });
     await expect(dialog).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: 'ไว้ทีหลัง' }).click();
     await expect(dialog).toBeHidden();
@@ -55,10 +55,10 @@ test('Set up later closes Tips and the Home recovery entry reopens Secure Tunnel
 
 async function ensureThaiLocale(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    await window.lnwjud.setLocale({ locale: 'th' });
+    await window.lnwjing.setLocale({ locale: 'th' });
   });
   await expect.poll(async () => page.evaluate(async () => (
-    await window.lnwjud.getDashboard()
+    await window.lnwjing.getDashboard()
   ).locale), { timeout: 15_000, intervals: [100, 250, 500] }).toBe('th');
 }
 
@@ -79,10 +79,10 @@ async function withFreshDesktop(run: (page: Page) => Promise<void>): Promise<voi
       env: {
         ...process.env,
         APPDATA: dataRoot,
-        LNWJUD_DATA_PATH: dataRoot,
-        LNWJUD_WORKSPACE: workspaceRoot,
-        LNWJUD_E2E_FIXTURE: '1',
-        LNWJUD_E2E_NODE_PATH: process.execPath,
+        LNWJING_DATA_PATH: dataRoot,
+        LNWJING_WORKSPACE: workspaceRoot,
+        LNWJING_E2E_FIXTURE: '1',
+        LNWJING_E2E_NODE_PATH: process.execPath,
       },
     },
   );

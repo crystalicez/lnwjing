@@ -1,4 +1,4 @@
-import type { MutateAutomationRunRequest } from '@lnwjud/application';
+import type { MutateAutomationRunRequest } from '@lnwjing/application';
 import {
   automationControlSchema,
   automationCreateSchema,

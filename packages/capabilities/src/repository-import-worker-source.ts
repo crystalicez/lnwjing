@@ -35,7 +35,7 @@ function assertTree(input) {
       const name = segments[i];
       if (!component.test(name) || name === '.' || name === '..' || name.endsWith('.')
         || device.test(name) || name.toLowerCase() === '.git'
-        || name.toLowerCase() === '.gitmodules' || name.toLowerCase().startsWith('.lnwjud')) throw Error('INVALID_TREE');
+        || name.toLowerCase() === '.gitmodules' || name.toLowerCase().startsWith('.lnwjing')) throw Error('INVALID_TREE');
       const prefix = segments.slice(0, i+1).join('/');
       const folded = prefix.toLowerCase();
       if (i === segments.length-1) {

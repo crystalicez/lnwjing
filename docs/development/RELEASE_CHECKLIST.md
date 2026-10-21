@@ -1,4 +1,4 @@
-# lnwjud Release Checklist
+# lnwjing Release Checklist
 
 The canonical release sequence is [RELEASE_PROCESS.md](RELEASE_PROCESS.md). This file keeps the historical checklist path stable for older links and separates operational release sequencing from per-version acceptance evidence.
 

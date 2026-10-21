@@ -10,7 +10,7 @@ import { validateMacosSigningPolicyEvidence } from './inspect-macos-signing-poli
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDependencies = JSON.parse(await readFile(path.join(desktopRoot, 'src', 'main', 'runtime-dependencies.json'), 'utf8'));
 const BUNDLED_TUNNEL_CLIENT_VERSION = runtimeDependencies.tunnelClient.version;
-const configuredInstallerDirectory = process.env.LNWJUD_RELEASE_INSTALLER_DIRECTORY?.trim();
+const configuredInstallerDirectory = process.env.LNWJING_RELEASE_INSTALLER_DIRECTORY?.trim();
 const installerDirectory = configuredInstallerDirectory
   ? path.resolve(configuredInstallerDirectory)
   : path.join(desktopRoot, 'dist', 'installers');
@@ -23,7 +23,7 @@ const provenance = JSON.parse(await readFile(provenancePath, 'utf8'));
 const sumsText = await readFile(sumsPath, 'utf8');
 const sums = parseSums(sumsText);
 
-if (provenance?.schemaVersion !== 1 || provenance.product !== 'lnwjud') throw new Error('PROVENANCE.json schema/product is invalid');
+if (provenance?.schemaVersion !== 1 || provenance.product !== 'lnwjing') throw new Error('PROVENANCE.json schema/product is invalid');
 if (provenance.version !== packageJson.version) throw new Error(`Provenance version mismatch: ${String(provenance.version)} != ${String(packageJson.version)}`);
 if (!isPlatform(provenance.platform)) throw new Error('Provenance platform is invalid');
 let macSigning = null;
@@ -32,23 +32,23 @@ if (provenance.platform === 'darwin') {
   if (!['ad-hoc', 'certificate'].includes(signing.mode)
     || signing.mode === 'certificate' && !/^[0-9a-f]{40}$/i.test(signing.certificateSha1 ?? '')
     || signing.mode !== 'certificate' && signing.certificateSha1 !== undefined) throw new Error('macOS signing evidence is invalid');
-  if ((process.env.LNWJUD_REQUIRE_CODESIGN === '1' || process.env.LNWJUD_REQUIRE_NOTARIZATION === '1')
+  if ((process.env.LNWJING_REQUIRE_CODESIGN === '1' || process.env.LNWJING_REQUIRE_NOTARIZATION === '1')
     && signing.mode !== 'certificate') throw new Error('Certificate-signed macOS release evidence is required');
   macSigning = signing;
 }
 if (typeof provenance.source?.commit !== 'string' || !/^[0-9a-f]{40}$/i.test(provenance.source.commit)) throw new Error('Provenance commit SHA is invalid');
 
-const expectedPlatform = process.env.LNWJUD_RELEASE_PLATFORM?.trim();
+const expectedPlatform = process.env.LNWJING_RELEASE_PLATFORM?.trim();
 if (expectedPlatform && provenance.platform !== expectedPlatform) throw new Error(`Provenance platform mismatch: ${provenance.platform} != ${expectedPlatform}`);
-const expectedCommit = process.env.LNWJUD_EXPECTED_COMMIT_SHA?.trim();
+const expectedCommit = process.env.LNWJING_EXPECTED_COMMIT_SHA?.trim();
 if (expectedCommit && provenance.source.commit.toLowerCase() !== expectedCommit.toLowerCase()) {
   throw new Error(`Provenance commit mismatch: ${provenance.source.commit} != ${expectedCommit}`);
 }
-if (process.env.LNWJUD_REQUIRE_CLEAN_PROVENANCE === '1' && provenance.source.dirty !== false) {
+if (process.env.LNWJING_REQUIRE_CLEAN_PROVENANCE === '1' && provenance.source.dirty !== false) {
   throw new Error('Public release provenance must be built from a clean tracked source tree');
 }
 
-const releaseArtifactOnly = process.env.LNWJUD_RELEASE_ARTIFACT_ONLY === '1';
+const releaseArtifactOnly = process.env.LNWJING_RELEASE_ARTIFACT_ONLY === '1';
 const packagedBridgePath = releaseArtifactOnly
   ? undefined
   : path.join(installerDirectory, 'win-unpacked', 'resources', 'windows-capability-bridge.ps1');
@@ -87,7 +87,7 @@ for (const name of artifactNames) {
 }
 if (provenance.platform === 'win32') {
   const windowsAuthenticode = validateWindowsAuthenticode(provenance.build?.windowsAuthenticode, provenance.artifacts, {
-    required: process.env.LNWJUD_REQUIRE_WINDOWS_AUTHENTICODE === '1',
+    required: process.env.LNWJING_REQUIRE_WINDOWS_AUTHENTICODE === '1',
     signingCredentialConfigured: provenance.build?.signingCredentialConfigured === true,
   });
   process.stdout.write(`Windows Authenticode evidence verified: ${windowsAuthenticode.map((entry) => `${entry.name}=${entry.status}`).join(', ')}\n`);
@@ -111,7 +111,7 @@ for (const runtime of provenance.runtime) {
 }
 if (requiredRuntime.size > 0) throw new Error(`Runtime provenance is incomplete: ${[...requiredRuntime].join(', ')}`);
 if (macSigning) {
-  const rootExecutable = provenance.runtime.find((entry) => entry.relativePath === 'Contents/MacOS/lnwjud');
+  const rootExecutable = provenance.runtime.find((entry) => entry.relativePath === 'Contents/MacOS/lnwjing');
   validateMacosSigningPolicyEvidence(macSigning.policy, {
     mode: macSigning.mode,
     arch: provenance.arch,
@@ -120,7 +120,7 @@ if (macSigning) {
   process.stdout.write(`macOS effective signing evidence verified: ${macSigning.mode}, ${macSigning.policy.inspectedNestedCodeCount} nested targets\n`);
 }
 
-process.stdout.write(`Release evidence verified for lnwjud ${provenance.version} ${provenance.platform}/${String(provenance.arch)} commit ${provenance.source.commit}\n`);
+process.stdout.write(`Release evidence verified for lnwjing ${provenance.version} ${provenance.platform}/${String(provenance.arch)} commit ${provenance.source.commit}\n`);
 
 function isPlatform(value) {
   return value === 'win32' || value === 'darwin' || value === 'linux';
@@ -128,14 +128,14 @@ function isPlatform(value) {
 
 function expectedArtifactNames(platform, version, arch) {
   if (platform === 'win32') return [
-    `lnwjud-Setup-${version}.exe`,
-    `lnwjud-Setup-${version}.exe.blockmap`,
-    `lnwjud-Portable-${version}.exe`,
+    `lnwjing-Setup-${version}.exe`,
+    `lnwjing-Setup-${version}.exe.blockmap`,
+    `lnwjing-Portable-${version}.exe`,
     'latest.yml',
     'portable.yml',
   ];
-  if (platform === 'darwin') return [`lnwjud-${version}-${normalizeArtifactArch(arch)}.dmg`, `lnwjud-${version}-${normalizeArtifactArch(arch)}.zip`, 'latest-mac.yml'];
-  return [`lnwjud-${version}-${normalizeArtifactArch(arch)}.AppImage`, `lnwjud-${version}-${normalizeArtifactArch(arch)}.deb`, linuxUpdateMetadataName(arch)];
+  if (platform === 'darwin') return [`lnwjing-${version}-${normalizeArtifactArch(arch)}.dmg`, `lnwjing-${version}-${normalizeArtifactArch(arch)}.zip`, 'latest-mac.yml'];
+  return [`lnwjing-${version}-${normalizeArtifactArch(arch)}.AppImage`, `lnwjing-${version}-${normalizeArtifactArch(arch)}.deb`, linuxUpdateMetadataName(arch)];
 }
 
 function linuxUpdateMetadataName(arch) {
@@ -153,13 +153,13 @@ function requiredRuntimePaths(platform, arch) {
   const tunnelPrefix = `tunnel-client-v${BUNDLED_TUNNEL_CLIENT_VERSION}-${releaseTarget}-${releaseArch}`;
   const paths = platform === 'win32'
     ? [
-      'lnwjud.exe',
-      'lnwjud-mcp-stdio.cmd',
+      'lnwjing.exe',
+      'lnwjing-mcp-stdio.cmd',
       'resources/windows-capability-bridge.ps1',
       'resources/windows-capability-bridge.sha256',
       'resources/windows-capability-bridge.integrity.json',
-      'resources/windows-secret-migrator/lnwjud-windows-secret-migrator.exe',
-      'resources/windows-secret-migrator/lnwjud-windows-secret-migrator.sha256',
+      'resources/windows-secret-migrator/lnwjing-windows-secret-migrator.exe',
+      'resources/windows-secret-migrator/lnwjing-windows-secret-migrator.sha256',
       'resources/runtime-tools/ripgrep/rg.exe',
       'resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json',
       'resources/tunnel-client/tunnel-client.exe',
@@ -169,8 +169,8 @@ function requiredRuntimePaths(platform, arch) {
       `resources/tunnel-client/tunnel-client-v${BUNDLED_TUNNEL_CLIENT_VERSION}-provenance.sigstore.json`,
     ]
     : platform === 'darwin'
-      ? ['Contents/MacOS/lnwjud', 'Contents/Resources/lnwjud-mcp-stdio', 'Contents/Resources/runtime-tools/ripgrep/rg', 'Contents/Resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json', 'Contents/Resources/tunnel-client/tunnel-client', 'Contents/Resources/tunnel-client/BUNDLED_TUNNEL_CLIENT.json', `Contents/Resources/tunnel-client/${tunnelPrefix}-licenses.txt`, `Contents/Resources/tunnel-client/${tunnelPrefix}.spdx.json`, `Contents/Resources/tunnel-client/tunnel-client-v${BUNDLED_TUNNEL_CLIENT_VERSION}-provenance.sigstore.json`, `Contents/Resources/native-host/macos/${provenance.arch}/lnwjud-macos-host`, `Contents/Resources/native-host/macos/${provenance.arch}/NATIVE_HOST.json`]
-      : ['lnwjud', 'lnwjud-mcp-stdio', 'resources/runtime-tools/ripgrep/rg', 'resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json', 'resources/tunnel-client/tunnel-client', 'resources/tunnel-client/BUNDLED_TUNNEL_CLIENT.json', `resources/tunnel-client/${tunnelPrefix}-licenses.txt`, `resources/tunnel-client/${tunnelPrefix}.spdx.json`, `resources/tunnel-client/tunnel-client-v${BUNDLED_TUNNEL_CLIENT_VERSION}-provenance.sigstore.json`, `resources/native-host/linux/${provenance.arch}/lnwjud-linux-host`, `resources/native-host/linux/${provenance.arch}/NATIVE_HOST.json`];
+      ? ['Contents/MacOS/lnwjing', 'Contents/Resources/lnwjing-mcp-stdio', 'Contents/Resources/runtime-tools/ripgrep/rg', 'Contents/Resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json', 'Contents/Resources/tunnel-client/tunnel-client', 'Contents/Resources/tunnel-client/BUNDLED_TUNNEL_CLIENT.json', `Contents/Resources/tunnel-client/${tunnelPrefix}-licenses.txt`, `Contents/Resources/tunnel-client/${tunnelPrefix}.spdx.json`, `Contents/Resources/tunnel-client/tunnel-client-v${BUNDLED_TUNNEL_CLIENT_VERSION}-provenance.sigstore.json`, `Contents/Resources/native-host/macos/${provenance.arch}/lnwjing-macos-host`, `Contents/Resources/native-host/macos/${provenance.arch}/NATIVE_HOST.json`]
+      : ['lnwjing', 'lnwjing-mcp-stdio', 'resources/runtime-tools/ripgrep/rg', 'resources/runtime-tools/ripgrep/BUNDLED_RIPGREP.json', 'resources/tunnel-client/tunnel-client', 'resources/tunnel-client/BUNDLED_TUNNEL_CLIENT.json', `resources/tunnel-client/${tunnelPrefix}-licenses.txt`, `resources/tunnel-client/${tunnelPrefix}.spdx.json`, `resources/tunnel-client/tunnel-client-v${BUNDLED_TUNNEL_CLIENT_VERSION}-provenance.sigstore.json`, `resources/native-host/linux/${provenance.arch}/lnwjing-linux-host`, `resources/native-host/linux/${provenance.arch}/NATIVE_HOST.json`];
   return new Set(paths);
 }
 

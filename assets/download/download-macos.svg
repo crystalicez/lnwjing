@@ -1,15 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="340" height="96" viewBox="0 0 340 96" role="img" aria-labelledby="title desc">
-  <title id="title">Download lnwjud for macOS</title>
-  <desc id="desc">macOS Apple silicon DMG download card</desc>
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#151423"/><stop offset="1" stop-color="#0e1020"/></linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#6366f1"/></linearGradient>
-  </defs>
-  <rect x="1" y="1" width="338" height="94" rx="18" fill="url(#bg)" stroke="#3f3f5f" stroke-width="2"/>
-  <rect x="18" y="18" width="60" height="60" rx="16" fill="url(#accent)"/>
-  <path d="M34 57V39l14-8 14 8v18l-14 8-14-8zm14-19-8 5v10l8 5 8-5V43l-8-5z" fill="#fff" fill-rule="evenodd" opacity=".96"/>
-  <text x="96" y="42" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif" font-size="20" font-weight="700">macOS</text>
-  <text x="96" y="64" fill="#a5b4fc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif" font-size="13">Apple silicon · DMG</text>
-  <circle cx="306" cy="48" r="18" fill="#1c1d35" stroke="#55567a"/>
-  <path d="M306 37v17m-7-6 7 7 7-7M298 62h16" fill="none" stroke="#eef2ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzNDAiIGhlaWdodD0iOTYiIHZpZXdCb3g9IjAgMCAzNDAgOTYiIHJvbGU9ImltZyIgYXJpYS1sYWJlbGxlZGJ5PSJ0aXRsZSBkZXNjIj4NCiAgPHRpdGxlIGlkPSJ0aXRsZSI+RG93bmxvYWQgbG53anVkIGZvciBtYWNPUzwvdGl0bGU+DQogIDxkZXNjIGlkPSJkZXNjIj5tYWNPUyBBcHBsZSBzaWxpY29uIERNRyBkb3dubG9hZCBjYXJkPC9kZXNjPg0KICA8ZGVmcz4NCiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMTUxNDIzIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMGUxMDIwIi8+PC9saW5lYXJHcmFkaWVudD4NCiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImFjY2VudCIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2MwODRmYyIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzYzNjZmMSIvPjwvbGluZWFyR3JhZGllbnQ+DQogIDwvZGVmcz4NCiAgPHJlY3QgeD0iMSIgeT0iMSIgd2lkdGg9IjMzOCIgaGVpZ2h0PSI5NCIgcng9IjE4IiBmaWxsPSJ1cmwoI2JnKSIgc3Ryb2tlPSIjM2YzZjVmIiBzdHJva2Utd2lkdGg9IjIiLz4NCiAgPHJlY3QgeD0iMTgiIHk9IjE4IiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSIxNiIgZmlsbD0idXJsKCNhY2NlbnQpIi8+DQogIDxwYXRoIGQ9Ik0zNCA1N1YzOWwxNC04IDE0IDh2MThsLTE0IDgtMTQtOHptMTQtMTktOCA1djEwbDggNSA4LTVWNDNsLTgtNXoiIGZpbGw9IiNmZmYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgb3BhY2l0eT0iLjk2Ii8+DQogIDx0ZXh0IHg9Ijk2IiB5PSI0MiIgZmlsbD0iI2Y4ZmFmYyIgZm9udC1mYW1pbHk9Ii1hcHBsZS1zeXN0ZW0sQmxpbmtNYWNTeXN0ZW1Gb250LFNlZ29lIFVJLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZvbnQtd2VpZ2h0PSI3MDAiPm1hY09TPC90ZXh0Pg0KICA8dGV4dCB4PSI5NiIgeT0iNjQiIGZpbGw9IiNhNWI0ZmMiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLEJsaW5rTWFjU3lzdGVtRm9udCxTZWdvZSBVSSxBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj5BcHBsZSBzaWxpY29uIMK3IERNRzwvdGV4dD4NCiAgPGNpcmNsZSBjeD0iMzA2IiBjeT0iNDgiIHI9IjE4IiBmaWxsPSIjMWMxZDM1IiBzdHJva2U9IiM1NTU2N2EiLz4NCiAgPHBhdGggZD0iTTMwNiAzN3YxN20tNy02IDcgNyA3LTdNMjk4IDYyaDE2IiBmaWxsPSJub25lIiBzdHJva2U9IiNlZWYyZmYiIHN0cm9rZS13aWR0aD0iMi40IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4NCjwvc3ZnPg0K

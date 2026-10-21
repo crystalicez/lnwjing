@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 async function openDatabase(): Promise<SqliteDatabase> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-scheduled-continuation-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-scheduled-continuation-'));
   temporaryRoots.push(root);
   const database = new SqliteDatabase(path.join(root, 'state.sqlite'));
   database.connection.prepare(`
@@ -165,7 +165,7 @@ describe('scheduled continuation migration', () => {
   });
 
   it('upgrades a database that already recorded the pre-fence 007 migration', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-scheduled-continuation-upgrade-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-scheduled-continuation-upgrade-'));
     temporaryRoots.push(root);
     const filename = path.join(root, 'state.sqlite');
     const legacy = new DatabaseSync(filename);
@@ -194,7 +194,7 @@ describe('scheduled continuation migration', () => {
   });
 
   it('repairs an active legacy lease whose session owner was missing after migration 008', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-goal-lease-repair-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-goal-lease-repair-'));
     temporaryRoots.push(root);
     const filename = path.join(root, 'state.sqlite');
     const first = new SqliteDatabase(filename);
@@ -240,7 +240,7 @@ describe('scheduled continuation migration', () => {
   });
 
   it('quarantines a malformed partial active lease instead of clearing it for immediate takeover', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-goal-lease-quarantine-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-goal-lease-quarantine-'));
     temporaryRoots.push(root);
     const filename = path.join(root, 'state.sqlite');
     const first = new SqliteDatabase(filename);
@@ -298,7 +298,7 @@ describe('scheduled continuation migration', () => {
   });
 
   it('quarantines a live continuation that an already-applied fail-open repair left without a lease', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-live-continuation-quarantine-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-continuation-quarantine-'));
     temporaryRoots.push(root);
     const filename = path.join(root, 'state.sqlite');
     const first = new SqliteDatabase(filename);

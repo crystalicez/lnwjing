@@ -1,20 +1,20 @@
 {
-  "name": "@lnwjud/cli",
+  "name": "@lnwjing/cli",
   "version": "5.8.7",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@lnwjud/application": "workspace:*",
-    "@lnwjud/audit": "workspace:*",
-    "@lnwjud/capabilities": "workspace:*",
-    "@lnwjud/codex": "workspace:*",
-    "@lnwjud/domain": "workspace:*",
-    "@lnwjud/extensions": "workspace:*",
-    "@lnwjud/mcp-server": "workspace:*",
-    "@lnwjud/permissions": "workspace:*",
-    "@lnwjud/shared": "workspace:*",
-    "@lnwjud/storage": "workspace:*",
-    "@lnwjud/workspace": "workspace:*"
+    "@lnwjing/application": "workspace:*",
+    "@lnwjing/audit": "workspace:*",
+    "@lnwjing/capabilities": "workspace:*",
+    "@lnwjing/codex": "workspace:*",
+    "@lnwjing/domain": "workspace:*",
+    "@lnwjing/extensions": "workspace:*",
+    "@lnwjing/mcp-server": "workspace:*",
+    "@lnwjing/permissions": "workspace:*",
+    "@lnwjing/shared": "workspace:*",
+    "@lnwjing/storage": "workspace:*",
+    "@lnwjing/workspace": "workspace:*"
   },
   "scripts": {
     "test": "vitest run --fileParallelism=false",

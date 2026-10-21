@@ -45,13 +45,13 @@ export async function reconcileLocalTunnelRuntimeProcesses(
   const verified: LocalTunnelRuntimeProcess[] = [];
   for (const candidate of candidates) {
     // The managed CLI starts its detached child with an empty --log.file;
-    // lnwjud's legacy/profile child and user-started clients write their own
+    // lnwjing's legacy/profile child and user-started clients write their own
     // log file and must not be silently taken over.
     if (commandFlag(candidate.commandLine, '--log.file') !== '') {
-      throw new Error(`Another tunnel-client PID ${candidate.pid} uses the lnwjud profile outside the managed runtime; stop it before starting this runtime`);
+      throw new Error(`Another tunnel-client PID ${candidate.pid} uses the lnwjing profile outside the managed runtime; stop it before starting this runtime`);
     }
     if (!sameWindowsPath(candidate.executablePath, request.clientPath)) {
-      throw new Error(`Another tunnel-client PID ${candidate.pid} uses the lnwjud profile from a different executable; stop it before starting this runtime`);
+      throw new Error(`Another tunnel-client PID ${candidate.pid} uses the lnwjing profile from a different executable; stop it before starting this runtime`);
     }
     const ports = dependencies.listListeningPorts === undefined
       ? candidate.ports
@@ -108,13 +108,13 @@ const windowsDependencies: LocalTunnelRuntimeGuardDependencies = {
     if (process.platform !== 'win32' || !Number.isInteger(pid) || pid <= 0 || pid > 2_147_483_647) return [];
     const script = [
       "$ErrorActionPreference='Stop'",
-      '$pidValue=[int]$env:LNWJUD_TUNNEL_GUARD_PID',
+      '$pidValue=[int]$env:LNWJING_TUNNEL_GUARD_PID',
       "$ports=@(Get-NetTCPConnection -OwningProcess $pidValue -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -in @('127.0.0.1','::1') } | Select-Object -ExpandProperty LocalPort)",
       'ConvertTo-Json -InputObject $ports -Compress',
     ].join('; ');
     const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
       windowsHide: true, encoding: 'utf8', timeout: 8_000, maxBuffer: 64 * 1024,
-      env: { ...process.env, LNWJUD_TUNNEL_GUARD_PID: String(pid) },
+      env: { ...process.env, LNWJING_TUNNEL_GUARD_PID: String(pid) },
     });
     const parsed: unknown = JSON.parse(stdout);
     if (!Array.isArray(parsed) || !parsed.every((port) => typeof port === 'number' && Number.isInteger(port) && port > 0 && port <= 65_535)) {
@@ -151,22 +151,22 @@ const windowsDependencies: LocalTunnelRuntimeGuardDependencies = {
   terminate: async (candidate: LocalTunnelRuntimeProcess): Promise<void> => {
     const script = [
       "$ErrorActionPreference='Stop'",
-      '$target=Get-CimInstance Win32_Process -Filter ("ProcessId = " + $env:LNWJUD_TUNNEL_GUARD_PID) -ErrorAction Stop',
+      '$target=Get-CimInstance Win32_Process -Filter ("ProcessId = " + $env:LNWJING_TUNNEL_GUARD_PID) -ErrorAction Stop',
       "if($null -eq $target){exit 0}",
       "$started=$target.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',[Globalization.CultureInfo]::InvariantCulture)",
-      "if($started -cne $env:LNWJUD_TUNNEL_GUARD_STARTED -or $target.ExecutablePath -ine $env:LNWJUD_TUNNEL_GUARD_PATH -or $target.CommandLine -cne $env:LNWJUD_TUNNEL_GUARD_COMMAND){throw 'Tunnel process identity changed; refusing to stop it'}",
+      "if($started -cne $env:LNWJING_TUNNEL_GUARD_STARTED -or $target.ExecutablePath -ine $env:LNWJING_TUNNEL_GUARD_PATH -or $target.CommandLine -cne $env:LNWJING_TUNNEL_GUARD_COMMAND){throw 'Tunnel process identity changed; refusing to stop it'}",
       'Stop-Process -Id $target.ProcessId -Force -ErrorAction Stop',
-      'for($i=0;$i -lt 20;$i++){ $still=Get-CimInstance Win32_Process -Filter ("ProcessId = " + $env:LNWJUD_TUNNEL_GUARD_PID) -ErrorAction Stop; if($null -eq $still -or $still.CreationDate.ToUniversalTime().ToString(\'yyyy-MM-ddTHH:mm:ss.fffZ\',[Globalization.CultureInfo]::InvariantCulture) -cne $env:LNWJUD_TUNNEL_GUARD_STARTED){exit 0}; Start-Sleep -Milliseconds 100 }',
+      'for($i=0;$i -lt 20;$i++){ $still=Get-CimInstance Win32_Process -Filter ("ProcessId = " + $env:LNWJING_TUNNEL_GUARD_PID) -ErrorAction Stop; if($null -eq $still -or $still.CreationDate.ToUniversalTime().ToString(\'yyyy-MM-ddTHH:mm:ss.fffZ\',[Globalization.CultureInfo]::InvariantCulture) -cne $env:LNWJING_TUNNEL_GUARD_STARTED){exit 0}; Start-Sleep -Milliseconds 100 }',
       "throw 'Tunnel process did not stop'",
     ].join('; ');
     await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
       windowsHide: true, encoding: 'utf8', timeout: 8_000, maxBuffer: 4_096,
       env: {
         ...process.env,
-        LNWJUD_TUNNEL_GUARD_PID: String(candidate.pid),
-        LNWJUD_TUNNEL_GUARD_STARTED: candidate.startedAt,
-        LNWJUD_TUNNEL_GUARD_PATH: candidate.executablePath,
-        LNWJUD_TUNNEL_GUARD_COMMAND: candidate.commandLine,
+        LNWJING_TUNNEL_GUARD_PID: String(candidate.pid),
+        LNWJING_TUNNEL_GUARD_STARTED: candidate.startedAt,
+        LNWJING_TUNNEL_GUARD_PATH: candidate.executablePath,
+        LNWJING_TUNNEL_GUARD_COMMAND: candidate.commandLine,
       },
     });
   },

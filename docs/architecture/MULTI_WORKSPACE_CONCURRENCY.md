@@ -1,8 +1,8 @@
 # Multi-Workspace / Multi-Session Concurrency Upgrade
 
 Status: **complete; full verification passed**
-Owner scope: lnwjud desktop, HTTP MCP, STDIO/tunnel MCP, activity/audit/logging  
-Primary invariant: **one lnwjud installation can serve many concurrent AI sessions and many workspaces while all user settings remain global.**
+Owner scope: lnwjing desktop, HTTP MCP, STDIO/tunnel MCP, activity/audit/logging
+Primary invariant: **one lnwjing installation can serve many concurrent AI sessions and many workspaces while all user settings remain global.**
 
 The dated phase evidence below preserves the catalog counts that were measured
 at each historical checkpoint (including the earlier 214/208 baseline). The
@@ -24,7 +24,7 @@ at the same time, without one session restarting, re-scoping, cancelling, hiding
 The target topology is:
 
 ```text
-                         lnwjud
+                         lnwjing
                            |
                   Global machine settings
             permissions / timeouts / delete policy
@@ -49,7 +49,7 @@ A session may still perform explicit reads across registered workspaces where an
 - Do not create separate user settings per workspace.
 - Do not create one desktop app, one tunnel, or one port per workspace.
 - Do not weaken existing workspace path guards or destructive-operation confirmation rules.
-- Do not require a ChatGPT conversation ID; lnwjud must work with protocol/session identities it can actually observe.
+- Do not require a ChatGPT conversation ID; lnwjing must work with protocol/session identities it can actually observe.
 - Do not remove explicit multi-workspace read/search capabilities.
 - Do not make hidden automatic workspace switching a prerequisite for normal tools.
 
@@ -86,7 +86,7 @@ The service layer is mostly ready for concurrency:
    CLI and packaged desktop STDIO bootstrap a single workspace and close `activeProjectProvider` over it. Registered workspaces can exist, but the destructive-scope identity remains single-workspace.
 
 5. **Shared activity snapshot is single-owner.**
-   `lnwjud.mcp.activity.json` stores one process owner and one active count. Multiple simultaneous STDIO MCP processes can overwrite one another, which can make update quiet-time accounting incorrect.
+   `lnwjing.mcp.activity.json` stores one process owner and one active count. Multiple simultaneous STDIO MCP processes can overwrite one another, which can make update quiet-time accounting incorrect.
 
 6. **Upgrade runtime persistence is one shared JSON file.**
    `upgrade-runtime.json` contains session/checkpoint/task/plugin/worktree state. Multiple server/session runtimes can race or overwrite unrelated state.
@@ -195,7 +195,7 @@ These clear cursors are runtime/log-view state, not user security settings.
 Replace the single fixed shared-activity owner snapshot with a multi-owner representation. Preferred shape:
 
 ```text
-<TUNNEL_CLIENT_PROFILE_DIR>/lnwjud.mcp.activity.d/
+<TUNNEL_CLIENT_PROFILE_DIR>/lnwjing.mcp.activity.d/
   <owner-key-1>.json
   <owner-key-2>.json
   ...
@@ -544,7 +544,7 @@ Add a dedicated concurrency acceptance test instead of relying only on unit test
 - resolver failures, missing workspace IDs, unknown workspaces, cross-workspace absolute targets, machine-root scopes, wildcards, recursive deletes, and protected critical targets all fail closed to normal confirmation;
 - added optional `workspaceId` to the `shell` schema for backwards compatibility; confirmed shell execution remains available without it, but destructive auto-approval does not;
 - Desktop HTTP, packaged Desktop STDIO, and CLI STDIO no longer close destructive authorization over a startup/selected workspace;
-- kept `activeProjectProvider` as deprecated internal API compatibility only; current lnwjud runtimes no longer use it;
+- kept `activeProjectProvider` as deprecated internal API compatibility only; current lnwjing runtimes no longer use it;
 - updated destructive tool descriptions and regenerated the 214-tool catalog;
 - verification: MCP targeted tests 29/29, CLI STDIO runtime 4/4, Desktop persistence 7/7, MCP/CLI/Desktop typechecks, targeted ESLint, and `docs:tools:check` all passed.
 ## Progress update rules

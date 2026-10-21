@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import { createProcessTreeTerminator, type ProcessTreeTerminator } from '@lnwjud/process';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import { createProcessTreeTerminator, type ProcessTreeTerminator } from '@lnwjing/process';
 import type { BrowserCdpEventChannel, BrowserCdpProtocol, BrowserCdpTab } from './browser-cdp-backend.js';
 import { openBrowserCdpEventChannel } from './browser-cdp-event-channel.js';
 
@@ -34,9 +34,9 @@ export class NodeBrowserCdpProtocol implements BrowserCdpProtocol {
 
   public constructor(options: BrowserCdpProtocolOptions = {}) {
     this.platform = options.platform ?? process.platform;
-    this.port = options.port ?? readPort(process.env.LNWJUD_BROWSER_CDP_PORT);
-    this.profileDir = options.profileDir ?? process.env.LNWJUD_BROWSER_PROFILE ?? path.join(os.tmpdir(), 'lnwjud-browser-profile');
-    this.chromeExecutable = options.chromeExecutable ?? process.env.LNWJUD_BROWSER_EXECUTABLE;
+    this.port = options.port ?? readPort(process.env.LNWJING_BROWSER_CDP_PORT);
+    this.profileDir = options.profileDir ?? process.env.LNWJING_BROWSER_PROFILE ?? path.join(os.tmpdir(), 'lnwjing-browser-profile');
+    this.chromeExecutable = options.chromeExecutable ?? process.env.LNWJING_BROWSER_EXECUTABLE;
     this.terminator = options.terminator ?? (isSupportedBrowserPlatform(this.platform)
       ? createProcessTreeTerminator(this.platform)
       : unsupportedBrowserTerminator());

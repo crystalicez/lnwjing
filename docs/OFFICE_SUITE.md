@@ -1,6 +1,6 @@
 # Office Suite v5.5.0
 
-lnwjud v5.5.0 adds semantic Office tools on top of the existing Office capability while preserving the legacy `office`, `office_ppt`, `office_outlook`, `inspect_workbook`, `render_excel_preview`, `compare_workbook_layout`, and `docx_merge` surfaces.
+lnwjing v5.5.0 adds semantic Office tools on top of the existing Office capability while preserving the legacy `office`, `office_ppt`, `office_outlook`, `inspect_workbook`, `render_excel_preview`, `compare_workbook_layout`, and `docx_merge` surfaces.
 
 ## Provider truthfulness
 
@@ -33,12 +33,12 @@ The v5.5.0 catalog includes:
 
 ## Permissions, recovery, and security
 
-Office semantic tools remain inside the normal lnwjud safety boundary:
+Office semantic tools remain inside the normal lnwjing safety boundary:
 
 - workspace/Active Project scope is checked for file mutations;
 - mutation policy classifies reads, creates, replacements, destructive operations, sending and other dangerous actions;
 - recoverable replacement operations retain a pre-image and return recovery identity/path information;
-- recovery is explicit—lnwjud does not silently restore an older file after reporting success;
+- recovery is explicit—lnwjing does not silently restore an older file after reporting success;
 - send mail and send invitation remain confirmation-gated;
 - macro execution is not enabled by v5.5.0 and `run_macro` remains unsupported/default-disabled;
 - Office Trust Center settings are never lowered automatically;
@@ -51,7 +51,7 @@ Office semantic tools remain inside the normal lnwjud safety boundary:
 
 For the Windows COM provider, install the corresponding desktop Microsoft Office application. v5.5.0 real-provider acceptance targets Word, Excel, PowerPoint and Outlook 16.x on Windows.
 
-The provider owns only the automation process/session it starts for document work. Outlook is treated specially because `Outlook.Application` is commonly a shared single-instance COM server: acceptance and runtime cleanup release COM references but do **not** call `Outlook.Application.Quit()` merely to finish an lnwjud operation.
+The provider owns only the automation process/session it starts for document work. Outlook is treated specially because `Outlook.Application` is commonly a shared single-instance COM server: acceptance and runtime cleanup release COM references but do **not** call `Outlook.Application.Quit()` merely to finish an lnwjing operation.
 
 ## Real-provider acceptance
 
@@ -77,11 +77,11 @@ macOS and Linux still expose the Office provider boundary, but v5.5.0 does not c
 
 Mutation-capable semantic tools default to the runtime's policy-aware dry-run behavior where the action can be previewed. A dry-run result means a plan was produced; it does not mean the Office application executed the change.
 
-For file replacements, keep the returned recovery identifier/path until the result is validated. Restoration is a separate explicit operation through lnwjud recovery tooling.
+For file replacements, keep the returned recovery identifier/path until the result is validated. Restoration is a separate explicit operation through lnwjing recovery tooling.
 
 ## Related documentation
 
 - [Thai usage guide](USAGE_TH.md)
-- [Capability overview](LNWJUD_CAPABILITIES.md)
+- [Capability overview](LNWJING_CAPABILITIES.md)
 - [MCP tool catalog](mcp/MCP_TOOL_CATALOG.md)
 - [v5.5.0 implementation plan](codebase/2026-09-22-v5.5.0-office-suite-whats-new-plan.md)

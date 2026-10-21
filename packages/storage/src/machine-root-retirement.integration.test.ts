@@ -13,7 +13,7 @@ afterEach(async () => {
 
 describe('automatic machine-root retirement migration', () => {
   it('archives generated Local Disk roots while preserving projects and explicitly named roots', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-retire-machine-roots-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-retire-machine-roots-'));
     temporaryRoots.push(root);
     const filename = path.join(root, 'state.sqlite');
     const legacy = new SqliteDatabase(filename);

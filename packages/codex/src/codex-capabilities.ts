@@ -1,4 +1,4 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 export type CodexInstructionMode = 'exec-argument' | 'prompt-option' | 'positional-argument';
 

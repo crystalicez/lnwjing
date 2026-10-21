@@ -8,7 +8,7 @@ import {
   ok,
   type InvocationAuthorization,
   type Result,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 import { prohibitedAgentCommandReason, riskyAgentCommandReason } from './agent-command-policy.js';
 import { capabilityTaskOwnerMatches, readCapabilityActiveWorkspaceRoot, readCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import { DEFAULT_SEARCH_RESULTS, err, MAX_PROCESS_LOG_BYTES, MAX_SEARCH_RESULTS, ok, type AppError, type Result } from '@lnwjud/domain';
-import { createProcessTreeTerminator, createSpawnInvocationFactory, PathExecutableResolver, type ExecutableResolver, type ProcessTreeTerminator, type SpawnInvocationFactory } from '@lnwjud/process';
+import { DEFAULT_SEARCH_RESULTS, err, MAX_PROCESS_LOG_BYTES, MAX_SEARCH_RESULTS, ok, type AppError, type Result } from '@lnwjing/domain';
+import { createProcessTreeTerminator, createSpawnInvocationFactory, PathExecutableResolver, type ExecutableResolver, type ProcessTreeTerminator, type SpawnInvocationFactory } from '@lnwjing/process';
 import {
   classifyContextPath,
   DEFAULT_CONTEXT_IGNORE_GLOBS,

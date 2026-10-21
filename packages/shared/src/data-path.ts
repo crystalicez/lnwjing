@@ -2,21 +2,21 @@ import os from 'node:os';
 import path from 'node:path';
 
 export interface DataPathEnvironment {
-  readonly LNWJUD_DATA_PATH?: string;
+  readonly LNWJING_DATA_PATH?: string;
   readonly APPDATA?: string;
   readonly USERPROFILE?: string;
   readonly HOME?: string;
   readonly XDG_DATA_HOME?: string;
 }
 
-/** Resolve the per-user lnwjud data directory without embedding a developer profile path. */
-export function resolveLnwjudDataPath(
+/** Resolve the per-user lnwjing data directory without embedding a developer profile path. */
+export function resolveLnwjingDataPath(
   environment: DataPathEnvironment = process.env,
   electronAppData?: string,
   platform: NodeJS.Platform = process.platform,
 ): string {
   const pathApi = platform === 'win32' ? path.win32 : path.posix;
-  const configured = absolutePathOrUndefined(environment.LNWJUD_DATA_PATH, pathApi);
+  const configured = absolutePathOrUndefined(environment.LNWJING_DATA_PATH, pathApi);
   if (configured !== undefined) return configured;
 
   const home = absolutePathOrUndefined(environment.HOME, pathApi)
@@ -30,7 +30,7 @@ export function resolveLnwjudDataPath(
       home ? pathApi.join(home, 'AppData', 'Roaming') : undefined,
       pathApi.join(os.homedir(), 'AppData', 'Roaming'),
     );
-    return pathApi.join(appData, 'lnwjud');
+    return pathApi.join(appData, 'lnwjing');
   }
 
   if (platform === 'darwin') {
@@ -40,7 +40,7 @@ export function resolveLnwjudDataPath(
       home ? pathApi.join(home, 'Library', 'Application Support') : undefined,
       pathApi.join(os.homedir(), 'Library', 'Application Support'),
     );
-    return pathApi.join(appData, 'lnwjud');
+    return pathApi.join(appData, 'lnwjing');
   }
 
   const appData = firstAbsolutePath(
@@ -50,7 +50,7 @@ export function resolveLnwjudDataPath(
     home ? pathApi.join(home, '.local', 'share') : undefined,
     pathApi.join(os.homedir(), '.local', 'share'),
   );
-  return pathApi.join(appData, 'lnwjud');
+  return pathApi.join(appData, 'lnwjing');
 }
 
 function absolutePathOrUndefined(value: string | undefined, pathApi: typeof path.win32 | typeof path.posix): string | undefined {
@@ -64,5 +64,5 @@ function firstAbsolutePath(pathApi: typeof path.win32 | typeof path.posix, ...va
     const absolute = absolutePathOrUndefined(value, pathApi);
     if (absolute !== undefined) return absolute;
   }
-  throw new Error('Unable to resolve an absolute lnwjud data directory');
+  throw new Error('Unable to resolve an absolute lnwjing data directory');
 }

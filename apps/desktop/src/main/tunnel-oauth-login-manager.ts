@@ -124,14 +124,14 @@ export class TunnelOAuthLoginManager {
       this.state = 'completed';
       this.message = 'OAuth tunnel authentication activated';
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-      response.end('<!doctype html><meta charset="utf-8"><title>lnwjud</title><p>Authentication completed. You can return to lnwjud.</p>');
+      response.end('<!doctype html><meta charset="utf-8"><title>lnwjing</title><p>Authentication completed. You can return to lnwjing.</p>');
       this.closeInFlight();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'OAuth login failed';
       this.state = 'failed';
       this.message = message;
       response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
-      response.end('OAuth login failed. Return to lnwjud for details.');
+      response.end('OAuth login failed. Return to lnwjing for details.');
       this.closeInFlight();
     }
   }

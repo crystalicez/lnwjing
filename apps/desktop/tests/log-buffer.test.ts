@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LogLine } from '@lnwjud/ipc-contracts';
+import type { LogLine } from '@lnwjing/ipc-contracts';
 import { appendLogBatch, applyLogSnapshot, rememberLogId } from '../src/renderer/features/live/log-buffer.js';
 
 function line(id: number, text: string): LogLine {

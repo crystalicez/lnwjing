@@ -1,4 +1,4 @@
-# รายงานวิเคราะห์ lnwjud ปิดตัวเองแบบเงียบ ๆ บน Windows
+# รายงานวิเคราะห์ lnwjing ปิดตัวเองแบบเงียบ ๆ บน Windows
 
 วันที่ตรวจสอบ: 2026-09-13 (Asia/Bangkok)
 
@@ -6,14 +6,14 @@
 
 ## สถานะการตรวจเพิ่มเติม (2026-09-13)
 
-- exact CI run `34759240096` ไม่พบ silent native crash ของ lnwjud บน macOS 26: x64 มีหน้าต่างและ process ยังอยู่ ส่วน arm64 ค้างก่อนสร้างหน้าต่างในช่วง safeStorage/keychain bootstrap
+- exact CI run `34759240096` ไม่พบ silent native crash ของ lnwjing บน macOS 26: x64 มีหน้าต่างและ process ยังอยู่ ส่วน arm64 ค้างก่อนสร้างหน้าต่างในช่วง safeStorage/keychain bootstrap
 - x64 พบ false negative ใน startup Doctor: MCP identity probe แบบครั้งเดียว timeout ที่ 750 ms ระหว่าง loopback listener กำลังขึ้น แล้ว RequirementRegistry cache ผล fail ไว้ 30 วินาที แก้โดย retry เฉพาะ timeout/transport ภายใน probe budget; identity mismatch จริงยัง fail closed
 - arm64 finding เป็นข้อจำกัดของ hosted packaged Keychain ไม่ใช่หลักฐานว่าปัญหา Windows เดิมกลับมา และไม่ใช่ DYLD signature failure; compatibility smoke จึงใช้ explicit in-memory secret fixture ที่เปิดได้เฉพาะ macOS 26 arm64 + packaged E2E flags ขณะที่ production ยังคงบังคับ Electron safeStorage
-- ข้อสรุปของ Windows เดิมยังเหมือนเดิม: เหตุที่ยืนยันได้คือ Application Hang และ renderer-recovery race รุ่นเก่า; หากรอบใหม่ยังปิดโดยไม่มี lifecycle record ให้เก็บ `%APPDATA%\\lnwjud\\crashes\\crash-events.ndjson` คู่กับ Event Viewer/WER
+- ข้อสรุปของ Windows เดิมยังเหมือนเดิม: เหตุที่ยืนยันได้คือ Application Hang และ renderer-recovery race รุ่นเก่า; หากรอบใหม่ยังปิดโดยไม่มี lifecycle record ให้เก็บ `%APPDATA%\\lnwjing\\crashes\\crash-events.ndjson` คู่กับ Event Viewer/WER
 
 ## 1. บทสรุป
 
-อาการที่เรียกว่า “lnwjud ปิดตัวเองแบบเงียบ ๆ” มีอย่างน้อย 3 กรณีที่หน้าตาเหมือนกัน แต่กลไกต่างกัน:
+อาการที่เรียกว่า “lnwjing ปิดตัวเองแบบเงียบ ๆ” มีอย่างน้อย 3 กรณีที่หน้าตาเหมือนกัน แต่กลไกต่างกัน:
 
 1. **Windows ปิด process หลังแอปค้าง** — ยืนยันว่าเคยเกิดจริงกับ v4.44.0 และ v4.51.0 จาก `Application Hang` Event ID 1002
 2. **renderer ตาย แล้ว recovery race สั่งปิด main process โดยไม่ตั้งใจ** — ยืนยันจากโค้ดและ Git diff ก่อน commit `4b26cd2`; นี่คือบั๊กที่อธิบาย “ปิดเงียบ” ได้ตรงที่สุด
@@ -29,7 +29,7 @@ log/search ปริมาณสูง
   -> Electron ส่ง window-all-closed
   -> Windows/Linux handler เรียก app.quit() ทันที
   -> timer ที่จะสร้างหน้าต่างใหม่หลัง 250 ms ไม่ทันทำงาน
-  -> ผู้ใช้เห็น lnwjud หายไปโดยไม่มี error dialog
+  -> ผู้ใช้เห็น lnwjing หายไปโดยไม่มี error dialog
 ```
 
 แพตช์ลดแรงกดดันจาก log/search อยู่ใน commit `da08ed1` และแพตช์ปิด recovery race อยู่ใน commit `4b26cd2`; ทั้งสอง commit เป็น ancestor ของ tag `v4.62.1`
@@ -54,7 +54,7 @@ log/search ปริมาณสูง
 
 ### 2.2 สถานะรอบปัจจุบัน
 
-- executable ที่ติดตั้ง: `%LOCALAPPDATA%\Programs\lnwjud\lnwjud.exe`
+- executable ที่ติดตั้ง: `%LOCALAPPDATA%\Programs\lnwjing\lnwjing.exe`
 - รุ่น: `4.62.1`
 - main process เริ่มเวลา `2026-09-13 11:53:47 +07:00`
 - command line มี `--updated` แปลว่ารอบนี้ถูกเปิดต่อจากขั้นตอนติดตั้ง/อัปเดต
@@ -213,7 +213,7 @@ Acceptance ที่ควรกำหนดก่อนลงมือ:
 
 ## 7. วิธีอ่าน crash log หากเกิดซ้ำ
 
-ไฟล์: `%APPDATA%\lnwjud\crashes\crash-events.ndjson`
+ไฟล์: `%APPDATA%\lnwjing\crashes\crash-events.ndjson`
 
 | ลำดับที่พบ | ความหมายเบื้องต้น |
 |---|---|
@@ -226,7 +226,7 @@ Acceptance ที่ควรกำหนดก่อนลงมือ:
 
 ## 8. ข้อสรุปสุดท้าย
 
-- **ยืนยันแล้ว:** Windows เคยปิด lnwjud รุ่นเก่าเพราะแอปไม่ตอบสนอง
+- **ยืนยันแล้ว:** Windows เคยปิด lnwjing รุ่นเก่าเพราะแอปไม่ตอบสนอง
 - **ยืนยันแล้ว:** โค้ด recovery รุ่นเก่ามี race ที่เปลี่ยน renderer crash ให้กลายเป็น silent full-app exit
 - **มีน้ำหนักสูง:** high-volume Live Logs/ripgrep เป็นแหล่ง pressure ที่อธิบาย hang/leak signals รุ่นเก่า และถูกแก้ตรงกลไกหลัง event ล่าสุดที่พบ
 - **ยังไม่ยืนยัน:** v4.62.1 ปิดจาก crash เดิม เพราะรอบปัจจุบันไม่มี crash/quit event และยังรันตอบสนอง

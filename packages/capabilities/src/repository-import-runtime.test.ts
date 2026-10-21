@@ -11,7 +11,7 @@ import { SecureRepositoryImportRuntime } from './repository-import-runtime.js';
 
 describe('repository import crash recovery', () => {
   it.skipIf(process.platform !== 'win32')('atomically refuses racing stage creators instead of adopting a foreign directory', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-stage-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-stage-'));
     try {
       const script = path.join(root, 'create-stage.ps1');
       const stage = path.join(root, 'stage');
@@ -32,7 +32,7 @@ describe('repository import crash recovery', () => {
 
 
   it.skipIf(process.platform !== 'win32')('revalidates NTFS identity after a published destination is replaced', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-native-readback-')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-native-readback-')));
     const requestId = '77777777-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const taskId = 'repository-import-' + requestId;
     const owner = { clientId: 'identity-client', sessionId: 'identity-session', workspaceId: 'identity-workspace' };
@@ -93,7 +93,7 @@ describe('repository import crash recovery', () => {
   }, process.env.CI ? 220000 : 65000);
 
   it('does not trust a published receipt when the live native destination is absent', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-stale-receipt-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-stale-receipt-'));
     const requestId = 'ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const taskId = 'repository-import-' + requestId;
     const owner = { clientId: 'stale-client', sessionId: 'stale-session', workspaceId: 'stale-workspace' };
@@ -131,7 +131,7 @@ describe('repository import crash recovery', () => {
   }, process.env.CI ? 130000 : 30000);
 
   it.skipIf(process.platform !== 'win32')('fails closed on a failed worker with an existing destination even without a native receipt', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-missing-receipt-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-missing-receipt-'));
     const requestId = 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const taskId = 'repository-import-' + requestId;
     const owner = { clientId: 'no-receipt-client', sessionId: 'no-receipt-session', workspaceId: 'no-receipt-workspace' };
@@ -170,7 +170,7 @@ describe('repository import crash recovery', () => {
   }, process.env.CI ? 130000 : 30000);
 
   it('reports unresolved when a failed worker has a prepared native receipt', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-import-prepared-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-prepared-'));
     const requestId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const taskId = 'repository-import-' + requestId;
     const owner = { clientId: 'crash-client', sessionId: 'crash-session', workspaceId: 'crash-workspace' };

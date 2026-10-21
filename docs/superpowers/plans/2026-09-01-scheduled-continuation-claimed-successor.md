@@ -218,7 +218,7 @@ Run the focused command from Step 2, then the complete application continuation 
 - Modify: `packages/mcp-server/src/tools/scheduled-continuation-tools.ts`
 - Modify: `packages/mcp-server/src/tools/scheduled-continuation-tools.test.ts`
 - Modify: `packages/mcp-server/src/scheduled-continuation-skill-contract.test.ts`
-- Modify: `.agents/skills/lnwjud-scheduled-continuation/SKILL.md`
+- Modify: `.agents/skills/lnwjing-scheduled-continuation/SKILL.md`
 - Modify: `AGENTS.md`
 
 **Interfaces:**
@@ -340,7 +340,7 @@ Confirm every working-tree file belongs to v4.45 tunnel/runtime, continuation, v
 
 **Files:**
 - Stage: every authorized tracked v4.45 working-tree change plus the force-added ignored spec/plan documents.
-- Produce locally: `apps/desktop/dist/installers/lnwjud-Setup-4.45.0.exe`, `lnwjud-Portable-4.45.0.exe`, update metadata, blockmaps, `SHA256SUMS.txt`, and `PROVENANCE.json`.
+- Produce locally: `apps/desktop/dist/installers/lnwjing-Setup-4.45.0.exe`, `lnwjing-Portable-4.45.0.exe`, update metadata, blockmaps, `SHA256SUMS.txt`, and `PROVENANCE.json`.
 
 **Interfaces:**
 - Consumes: verified Task 5 tree.

@@ -1,4 +1,4 @@
-import type { WorkspaceId } from '@lnwjud/domain';
+import type { WorkspaceId } from '@lnwjing/domain';
 
 export interface Workspace {
   readonly id: WorkspaceId;

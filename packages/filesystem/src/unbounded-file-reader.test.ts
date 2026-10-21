@@ -12,7 +12,7 @@ afterEach(async () => {
 
 describe('UnboundedFileReader', () => {
   it('returns image files as base64 even when they contain no NULs', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-unbounded-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-unbounded-'));
     temporaryRoots.push(root);
     const svgPath = path.join(root, 'icon.svg');
     await writeFile(svgPath, '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8');
@@ -28,7 +28,7 @@ describe('UnboundedFileReader', () => {
   });
 
   it('maps additional image extensions', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-unbounded-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-unbounded-'));
     temporaryRoots.push(root);
     const icoPath = path.join(root, 'app.ico');
     await writeFile(icoPath, Buffer.from([0x00, 0x00, 0x01, 0x00]));

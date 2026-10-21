@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $binDir = Join-Path $repoRoot 'native\windows-ocr\bin'
-$helperPath = Join-Path $binDir 'lnwjud-windows-ocr.exe'
+$helperPath = Join-Path $binDir 'lnwjing-windows-ocr.exe'
 
 New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 

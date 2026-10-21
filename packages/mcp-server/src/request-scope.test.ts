@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAPABILITY_TASK_OWNER_METADATA_KEY } from '@lnwjud/capabilities';
+import { CAPABILITY_TASK_OWNER_METADATA_KEY } from '@lnwjing/capabilities';
 import { actorForRequestScope, createHttpRequestScope, createProtocolHttpRequestScope, createStdioRequestScope, withCapabilityOwnerMetadata } from './request-scope.js';
 
 describe('MCP request scope', () => {

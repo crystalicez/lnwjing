@@ -22,14 +22,14 @@ export interface TunnelRuntimeReconcilerAdapter {
   connect(request: NativeRuntimeConnectRequest): Promise<NativeTunnelRuntimeStatus>;
   stop(tunnelId?: string): Promise<NativeTunnelRuntimeStatus>;
   ensureSingleProcess?(tunnelId: string, status: NativeTunnelRuntimeStatus): Promise<void>;
-  /** Retire only the verified stopped lnwjud alias; never stop an unknown process. */
+  /** Retire only the verified stopped lnwjing alias; never stop an unknown process. */
   retireStoppedAlias?(tunnelId: string): Promise<void>;
 }
 
 export interface TunnelRuntimeReconcilerOptions {
   readonly adapter: TunnelRuntimeReconcilerAdapter | TunnelRuntimeAdapter;
   readonly desiredState: () => TunnelRuntimeDesiredState | Promise<TunnelRuntimeDesiredState>;
-  /** Manual Start may replace the dedicated lnwjud alias only after the prior runtime is confirmed stopped. */
+  /** Manual Start may replace the dedicated lnwjing alias only after the prior runtime is confirmed stopped. */
   readonly allowStoppedTunnelIdReplacement?: boolean;
   readonly now?: () => Date;
 }

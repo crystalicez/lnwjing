@@ -6,6 +6,6 @@
 - Upstream path: `skills/ponytail-debt/SKILL.md`
 - License: MIT, Copyright (c) 2026 DietrichGebert
 - Verified: 2026-09-16
-- lnwjud source bytes: `1703`
+- lnwjing source bytes: `1703`
 
-`SKILL.md` and `LICENSE` are vendored from the pinned upstream commit without lnwjud-specific edits. This secondary skill is routed by explicit intent or lnwjud policy, not automatically loaded for every coding request.
+`SKILL.md` and `LICENSE` are vendored from the pinned upstream commit without lnwjing-specific edits. This secondary skill is routed by explicit intent or lnwjing policy, not automatically loaded for every coding request.

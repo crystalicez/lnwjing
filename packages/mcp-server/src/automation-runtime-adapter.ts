@@ -4,7 +4,7 @@ import {
   ok,
   type AppErrorCode,
   type Result,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import type {
   AutomationDispatchObservation,
   AutomationDispatchPort,
@@ -12,7 +12,7 @@ import type {
   AutomationTaskEvidenceSnapshot,
   AutomationVerificationRuntimePort,
   FileActor,
-} from '@lnwjud/application';
+} from '@lnwjing/application';
 import type { McpToolResponse } from './result-mapper.js';
 
 export interface AutomationToolRegistryPort {

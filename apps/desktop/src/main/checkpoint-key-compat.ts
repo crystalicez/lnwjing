@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const V3_SECRET_PREFIX = 'lnwjud-secret:v3:';
+const V3_SECRET_PREFIX = 'lnwjing-secret:v3:';
 const WINDOWS_PROVIDER = ['windows', 'dpapi'].join('-');
 
 export interface SafeStorageDecryptor {

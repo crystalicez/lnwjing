@@ -1,5 +1,5 @@
 {
-  "name": "@lnwjud/storage",
+  "name": "@lnwjing/storage",
   "version": "5.8.7",
   "private": true,
   "type": "module",
@@ -13,10 +13,10 @@
     }
   },
   "dependencies": {
-    "@lnwjud/audit": "workspace:*",
-    "@lnwjud/domain": "workspace:*",
-    "@lnwjud/shared": "workspace:*",
-    "@lnwjud/workspace": "workspace:*"
+    "@lnwjing/audit": "workspace:*",
+    "@lnwjing/domain": "workspace:*",
+    "@lnwjing/shared": "workspace:*",
+    "@lnwjing/workspace": "workspace:*"
   },
   "scripts": {
     "test": "vitest run --fileParallelism=false",

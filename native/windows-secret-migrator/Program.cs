@@ -3,7 +3,7 @@ using System.Security;
 using System.Text;
 using System.Text.Json;
 
-namespace Lnwjud.WindowsSecretMigrator;
+namespace Lnwjing.WindowsSecretMigrator;
 
 internal static class Program
 {

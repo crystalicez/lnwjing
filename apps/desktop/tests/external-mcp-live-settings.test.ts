@@ -16,7 +16,7 @@ afterEach(async () => {
 
 describe('Desktop live External MCP settings', () => {
   it('explicit Tool Catalog recheck connects a live-saved external MCP while passive reads remain side-effect free', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-live-external-mcp-recheck-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-external-mcp-recheck-'));
     temporaryRoots.push(rawDataRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot), { checkpointEncryptionKey: Buffer.alloc(32, 7) });
     try {
@@ -32,7 +32,7 @@ describe('Desktop live External MCP settings', () => {
               args: [fixturePath],
               cwd: '',
               type: 'stdio',
-              env: { LNWJUD_EXTERNAL_MCP_FIXTURE_ERA: 'modern' },
+              env: { LNWJING_EXTERNAL_MCP_FIXTURE_ERA: 'modern' },
             }],
           },
         },
@@ -50,7 +50,7 @@ describe('Desktop live External MCP settings', () => {
   });
 
   it('connects a server saved after runtime startup without requiring an app restart', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-live-external-mcp-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-external-mcp-'));
     temporaryRoots.push(rawDataRoot);
     const runtime = createDesktopRuntime(await realpath(rawDataRoot), { checkpointEncryptionKey: Buffer.alloc(32, 7) });
     try {
@@ -66,7 +66,7 @@ describe('Desktop live External MCP settings', () => {
               args: [fixturePath],
               cwd: '',
               type: 'stdio',
-              env: { LNWJUD_EXTERNAL_MCP_FIXTURE_ERA: 'modern' },
+              env: { LNWJING_EXTERNAL_MCP_FIXTURE_ERA: 'modern' },
             }],
           },
         },

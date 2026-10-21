@@ -1,5 +1,5 @@
-import { appError, err, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import type { ProcessTreeTerminator } from '@lnwjud/process';
+import { appError, err, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import type { ProcessTreeTerminator } from '@lnwjing/process';
 import { NativeHostProcessBridge, type NativeHostProtocolOptions, type NativeHostSpawner } from './native-host-protocol.js';
 
 export interface MacosProcessBridgeOptions {

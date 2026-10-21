@@ -12,7 +12,7 @@ afterEach(async () => {
 });
 
 async function fixture(): Promise<{ database: SqliteDatabase; repository: SqliteAgentSwarmRepository }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-agent-swarm-db-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-agent-swarm-db-'));
   temporaryRoots.push(root);
   const database = new SqliteDatabase(path.join(root, 'state.sqlite'));
   return { database, repository: new SqliteAgentSwarmRepository(database) };

@@ -1,4 +1,4 @@
-import type { ToolCatalogItem, ToolReadinessReason, ToolReadinessStatus, UiLocale } from '@lnwjud/ipc-contracts';
+import type { ToolCatalogItem, ToolReadinessReason, ToolReadinessStatus, UiLocale } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import type { MessageKey } from '../../i18n/messages.js';
 

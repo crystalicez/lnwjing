@@ -35,7 +35,7 @@ describe('POSIX tunnel ownership lock', () => {
       },
     });
     await expect(publishEntered.promise).resolves.toBeUndefined();
-    await expect(access(path.join(directory, 'lnwjud.tunnel.lock'))).rejects.toThrow();
+    await expect(access(path.join(directory, 'lnwjing.tunnel.lock'))).rejects.toThrow();
 
     let secondSettled = false;
     const secondAttempt = acquireTunnelLock({
@@ -54,8 +54,8 @@ describe('POSIX tunnel ownership lock', () => {
     expect(await readTunnelLock(directory)).toEqual(firstOwner);
 
     if (first.acquired) await expect(first.release()).resolves.toBe(true);
-    await expect(access(path.join(directory, 'lnwjud.tunnel.lock'))).rejects.toThrow();
-    await expect(access(path.join(directory, 'lnwjud.tunnel.mutex'))).rejects.toThrow();
+    await expect(access(path.join(directory, 'lnwjing.tunnel.lock'))).rejects.toThrow();
+    await expect(access(path.join(directory, 'lnwjing.tunnel.mutex'))).rejects.toThrow();
     expect((await readdir(directory)).filter((name) => name.includes('.publish.') || name.includes('.released.'))).toEqual([]);
   });
 
@@ -63,7 +63,7 @@ describe('POSIX tunnel ownership lock', () => {
     const directory = await temporaryDirectory();
     const stale = owner(1501, '2026-08-20T00:00:00.000Z');
     await writeFile(
-      path.join(directory, 'lnwjud.tunnel.mutex'),
+      path.join(directory, 'lnwjing.tunnel.mutex'),
       JSON.stringify({ version: 1, pid: stale.pid, processStartedAt: stale.processStartedAt }),
       'utf8',
     );
@@ -80,14 +80,14 @@ describe('POSIX tunnel ownership lock', () => {
     expect(next.acquired).toBe(true);
     expect(await readTunnelLock(directory)).toEqual(next.owner);
     if (next.acquired) await expect(next.release()).resolves.toBe(true);
-    await expect(readFile(path.join(directory, 'lnwjud.tunnel.mutex'), 'utf8')).rejects.toThrow();
+    await expect(readFile(path.join(directory, 'lnwjing.tunnel.mutex'), 'utf8')).rejects.toThrow();
   });
 
   it('fails closed when a POSIX mutex owner cannot be verified', async () => {
     const directory = await temporaryDirectory();
     const stale = owner(1601, '2026-08-20T00:00:00.000Z');
     await writeFile(
-      path.join(directory, 'lnwjud.tunnel.mutex'),
+      path.join(directory, 'lnwjing.tunnel.mutex'),
       JSON.stringify({ version: 1, pid: stale.pid, processStartedAt: stale.processStartedAt }),
       'utf8',
     );
@@ -98,12 +98,12 @@ describe('POSIX tunnel ownership lock', () => {
       owner: owner(1602, '2026-08-20T00:02:00.000Z'),
       inspectProcess: async () => ({ state: 'unverifiable', reason: 'probe_timeout' }),
     })).rejects.toThrow('critical section owner is unverifiable: probe_timeout');
-    await expect(readFile(path.join(directory, 'lnwjud.tunnel.mutex'), 'utf8')).resolves.toContain(String(stale.pid));
+    await expect(readFile(path.join(directory, 'lnwjing.tunnel.mutex'), 'utf8')).resolves.toContain(String(stale.pid));
   });
 });
 
 async function temporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tunnel-lock-posix-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tunnel-lock-posix-'));
   temporaryRoots.push(directory);
   return directory;
 }

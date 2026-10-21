@@ -1,10 +1,10 @@
 # Windows Defender / SmartScreen false-positive response
 
-lnwjud treats a Microsoft Defender malware detection and a Microsoft Defender SmartScreen reputation warning as two different signals. Neither should be worked around by telling end users to disable Defender or add a permanent exclusion.
+lnwjing treats a Microsoft Defender malware detection and a Microsoft Defender SmartScreen reputation warning as two different signals. Neither should be worked around by telling end users to disable Defender or add a permanent exclusion.
 
-## If Defender detects an lnwjud file as malware
+## If Defender detects an lnwjing file as malware
 
-1. Record the lnwjud version, exact Defender detection name, Defender engine/security-intelligence version, UTC time, installation type (Setup or Portable), and the SHA-256 of the detected file. Do not collect credentials or unrelated user files.
+1. Record the lnwjing version, exact Defender detection name, Defender engine/security-intelligence version, UTC time, installation type (Setup or Portable), and the SHA-256 of the detected file. Do not collect credentials or unrelated user files.
 2. Compare the file against the release `SHA256SUMS.txt` and `PROVENANCE.json`. The provenance file binds the Windows artifacts and packaged runtime hashes to the exact Git commit that produced them.
 3. If the hash matches an official artifact/runtime entry, submit the detected file to Microsoft Security Intelligence as a **Software developer** at https://www.microsoft.com/wdsi/filesubmission. For an incorrect malware classification, select the option indicating that you do **not** believe the submitted file contains malware.
 4. Record the Microsoft Submission ID (and Case ID if one is issued), submitted SHA-256, submission time, detection name, and final Microsoft analysis outcome in the release incident record.
@@ -14,7 +14,7 @@ Microsoft's current guidance for software developers is to dispute incorrect det
 
 ## If SmartScreen says Unknown/Unrecognized publisher
 
-SmartScreen reputation is not the same as a Defender malware verdict. Authenticode signing with a stable trusted publisher identity is recommended for non-Store distribution because it improves publisher identity and reputation behavior, but lnwjud does not require a paid signing credential to publish. When production signing secrets are configured, Setup and Portable must have `Get-AuthenticodeSignature` status `Valid`; when they are absent, the workflow permits an unsigned community release only after the same SHA-256 and source-provenance verification and reports the unsigned status explicitly.
+SmartScreen reputation is not the same as a Defender malware verdict. Authenticode signing with a stable trusted publisher identity is recommended for non-Store distribution because it improves publisher identity and reputation behavior, but lnwjing does not require a paid signing credential to publish. When production signing secrets are configured, Setup and Portable must have `Get-AuthenticodeSignature` status `Valid`; when they are absent, the workflow permits an unsigned community release only after the same SHA-256 and source-provenance verification and reports the unsigned status explicitly.
 
 The build pipeline supports electron-builder Authenticode signing through repository secrets:
 
@@ -31,8 +31,8 @@ Signing reduces Unknown publisher/reputation problems but does not guarantee tha
 
 Every Windows package build produces:
 
-- `lnwjud-Setup-<version>.exe`
-- `lnwjud-Portable-<version>.exe`
+- `lnwjing-Setup-<version>.exe`
+- `lnwjing-Portable-<version>.exe`
 - `latest.yml`
 - `portable.yml`
 - Setup blockmap
@@ -41,9 +41,9 @@ Every Windows package build produces:
 
 `PROVENANCE.json` records the exact source commit and hashes/sizes for the distributed Setup/Portable artifacts plus critical installed runtime files, including:
 
-- `lnwjud.exe`
-- `lnwjud-mcp-stdio.cmd`
-- `windows-secret-migrator/lnwjud-windows-secret-migrator.exe`
+- `lnwjing.exe`
+- `lnwjing-mcp-stdio.cmd`
+- `windows-secret-migrator/lnwjing-windows-secret-migrator.exe`
 - bundled `rg.exe`
 - bundled `tunnel-client.exe`
 
@@ -51,4 +51,4 @@ The release workflow verifies the provenance commit against the tagged commit, r
 
 ## User support rule
 
-Do **not** use "disable Microsoft Defender", "allow all threats", or a permanent Defender exclusion as the primary support response. First verify the hash/provenance and obtain Microsoft analysis for a suspected false positive. A temporary organization-specific security-policy exception, if ever required, is an administrator decision outside lnwjud's normal support path.
+Do **not** use "disable Microsoft Defender", "allow all threats", or a permanent Defender exclusion as the primary support response. First verify the hash/provenance and obtain Microsoft analysis for a suspected false positive. A temporary organization-specific security-policy exception, if ever required, is an administrator decision outside lnwjing's normal support path.

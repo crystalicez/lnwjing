@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { GoalLeaseProof, Result } from '@lnwjud/domain';
-import type { PermissionProfile } from '@lnwjud/permissions';
+import type { GoalLeaseProof, Result } from '@lnwjing/domain';
+import type { PermissionProfile } from '@lnwjing/permissions';
 import type { McpToolResponse } from './result-mapper.js';
 
 export const goalLeaseProofSchema = z.object({

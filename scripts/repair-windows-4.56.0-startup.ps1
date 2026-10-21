@@ -2,14 +2,14 @@
 # No user data, secrets, application binaries, or existing files are replaced.
 [CmdletBinding()]
 param(
-    [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\lnwjud')
+    [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\lnwjing')
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $InstallDirectory).ProviderPath
 $directory = Join-Path $root 'resources\windows-secret-migrator'
-$helper = Join-Path $directory 'lnwjud-windows-secret-migrator.exe'
-$source = Join-Path $directory 'lnwjud-windows-secret-migrator.sha256'
-$destination = Join-Path $directory 'lnwjud-windows-secret-migrator.exe.sha256'
+$helper = Join-Path $directory 'lnwjing-windows-secret-migrator.exe'
+$source = Join-Path $directory 'lnwjing-windows-secret-migrator.sha256'
+$destination = Join-Path $directory 'lnwjing-windows-secret-migrator.exe.sha256'
 
 # This digest comes from the published v4.56.0 Windows provenance.
 $expected = '5a6c64343000a2a100e12742fa1240f192817d48cb5981e9644c9d291c491afe'
@@ -28,7 +28,7 @@ if ((Get-FileHash -LiteralPath $helper -Algorithm SHA256).Hash.ToLowerInvariant(
     throw 'This is not the verified official v4.56.0 helper. No changes made.'
 }
 $metadata = [IO.File]::ReadAllText($source).Trim()
-if ($metadata -notmatch '^([0-9a-fA-F]{64})\s+lnwjud-windows-secret-migrator\.exe$' -or $Matches[1].ToLowerInvariant() -ne $expected) {
+if ($metadata -notmatch '^([0-9a-fA-F]{64})\s+lnwjing-windows-secret-migrator\.exe$' -or $Matches[1].ToLowerInvariant() -ne $expected) {
     throw 'Release metadata does not match the verified helper. No changes made.'
 }
 if (Test-Path -LiteralPath $destination) {
@@ -39,11 +39,11 @@ if (Test-Path -LiteralPath $destination) {
     if ((Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $source).Hash) {
         throw 'Existing compatibility metadata differs. No changes made.'
     }
-    Write-Host 'Already repaired. You can reopen lnwjud.'
+    Write-Host 'Already repaired. You can reopen lnwjing.'
     return
 }
 [IO.File]::Copy($source, $destination, $false)
 if ((Get-FileHash -LiteralPath $destination).Hash -ne (Get-FileHash -LiteralPath $source).Hash) {
     throw 'Copied metadata verification failed. Do not launch the application.'
 }
-Write-Host 'Startup metadata repaired. Reopen lnwjud. Your data and secrets were not changed.'
+Write-Host 'Startup metadata repaired. Reopen lnwjing. Your data and secrets were not changed.'

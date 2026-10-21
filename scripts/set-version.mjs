@@ -37,7 +37,7 @@ async function syncAllVersions() {
   const rootPkgPath = path.join(rootDir, 'package.json');
   const rootPkg = JSON.parse(await readFile(rootPkgPath, 'utf8'));
   const version = targetVersion || rootPkg.version;
-  const name = rootPkg.name || 'lnwjud';
+  const name = rootPkg.name || 'lnwjing';
 
   console.log(`Synchronizing single source of truth for name "${name}" and version "${version}"...`);
 
@@ -119,8 +119,8 @@ async function syncAllVersions() {
       .replace(/The v[0-9.]+ release target and runtime contract/g, 'The v' + version + ' release target and runtime contract')
       .replace(/current source\/release candidate is `v[0-9.]+`/g, 'current version is `v' + version + '`')
       .replace(/current v[0-9.]+ source line/g, `current v${version} source line`)
-      .replace(/apps\/desktop\/dist\/installers\/lnwjud-Setup-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjud-Setup-${version}.exe`)
-      .replace(/apps\/desktop\/dist\/installers\/lnwjud-Portable-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjud-Portable-${version}.exe`)
+      .replace(/apps\/desktop\/dist\/installers\/lnwjing-Setup-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjing-Setup-${version}.exe`)
+      .replace(/apps\/desktop\/dist\/installers\/lnwjing-Portable-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjing-Portable-${version}.exe`)
       .replace(/current v[0-9.]+ `ToolRegistry`/g, 'current v' + version + ' `ToolRegistry`');
     await writeFile(readmePath, readmeContent, 'utf8');
     console.log(`Updated ${path.basename(readmePath)} -> v${version}`);
@@ -133,22 +133,22 @@ async function syncAllVersions() {
   const markdownTargets = [
     ['.github/RELEASE_CHECKLIST.md', (content) => content
       .replace(/\*\*Current (?:version|release candidate):\*\* `v[0-9.]+`/g, `**Current version:** ` + '`v' + version + '`')
-      .replace(/(\*\*Current (?:version|release candidate):\*\*[^\r\n]*Windows installer `lnwjud-Setup-)[0-9.]+(\.exe`)/g, (_match, prefix, suffix) => prefix + version + suffix)
-      .replace(/(portable executable `lnwjud-Portable-)[0-9.]+(\.exe`)/g, (_match, prefix, suffix) => prefix + version + suffix)],
+      .replace(/(\*\*Current (?:version|release candidate):\*\*[^\r\n]*Windows installer `lnwjing-Setup-)[0-9.]+(\.exe`)/g, (_match, prefix, suffix) => prefix + version + suffix)
+      .replace(/(portable executable `lnwjing-Portable-)[0-9.]+(\.exe`)/g, (_match, prefix, suffix) => prefix + version + suffix)],
     ['docs/development/PACKAGING_WINDOWS.md', (content) => content
       .replace(/For v[0-9.]+:/g, `For v${version}:`)
       .replace(/current v[0-9.]+ packaging contract/g, `current v${version} packaging contract`)
-      .replace(/lnwjud-Setup-[0-9.]+\.exe/g, `lnwjud-Setup-${version}.exe`)
-      .replace(/lnwjud-Portable-[0-9.]+\.exe/g, `lnwjud-Portable-${version}.exe`)],
+      .replace(/lnwjing-Setup-[0-9.]+\.exe/g, `lnwjing-Setup-${version}.exe`)
+      .replace(/lnwjing-Portable-[0-9.]+\.exe/g, `lnwjing-Portable-${version}.exe`)],
     ['docs/INSTALL_MACOS.md', (content) => content.replace(/This guide covers the v[0-9.]+ native macOS release target/g, `This guide covers the v${version} native macOS release target`)],
     ['docs/USAGE_TH.md', (content) => content
-      .replace(/^# คู่มือใช้งาน lnwjud v[0-9.]+ \(ภาษาไทย\)/m, `# คู่มือใช้งาน lnwjud v${version} (ภาษาไทย)`)
+      .replace(/^# คู่มือใช้งาน lnwjing v[0-9.]+ \(ภาษาไทย\)/m, `# คู่มือใช้งาน lnwjing v${version} (ภาษาไทย)`)
       .replace(/^คู่มือนี้อัปเดตตาม (?:source|public release)[^\r\n]*$/m, `คู่มือนี้อัปเดตตาม source ` + '`v' + version + '`; public release `v' + publishedVersion + '` คือรุ่นที่เผยแพร่แล้วบน [GitHub Releases](https://github.com/engasnm111/lnwjud/releases/tag/v' + publishedVersion + ')')
-      .replace(/lnwjud-Setup-[0-9.]+\.exe/g, `lnwjud-Setup-${publishedVersion}.exe`)
-      .replace(/lnwjud-Portable-[0-9.]+\.exe/g, `lnwjud-Portable-${publishedVersion}.exe`)
-      .replace(/apps\/desktop\/dist\/installers\/lnwjud-Setup-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjud-Setup-${version}.exe`)
-      .replace(/apps\/desktop\/dist\/installers\/lnwjud-Portable-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjud-Portable-${version}.exe`)],
-    ['docs/LNWJUD_CAPABILITIES.md', (content) => content.replace(/lnwjud v[0-9.]+/g, `lnwjud v${version}`).replace(/ความสามารถหลักใน v[0-9.]+(?= source\/runtime ปัจจุบัน คือ:| คือ:)/g, `ความสามารถหลักใน v${version}`)],
+      .replace(/lnwjing-Setup-[0-9.]+\.exe/g, `lnwjing-Setup-${publishedVersion}.exe`)
+      .replace(/lnwjing-Portable-[0-9.]+\.exe/g, `lnwjing-Portable-${publishedVersion}.exe`)
+      .replace(/apps\/desktop\/dist\/installers\/lnwjing-Setup-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjing-Setup-${version}.exe`)
+      .replace(/apps\/desktop\/dist\/installers\/lnwjing-Portable-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjing-Portable-${version}.exe`)],
+    ['docs/LNWJING_CAPABILITIES.md', (content) => content.replace(/lnwjing v[0-9.]+/g, `lnwjing v${version}`).replace(/ความสามารถหลักใน v[0-9.]+(?= source\/runtime ปัจจุบัน คือ:| คือ:)/g, `ความสามารถหลักใน v${version}`)],
     ['docs/architecture/MULTI_WORKSPACE_CONCURRENCY.md', (content) => content.replace(/current v[0-9.]+ runtime contract/g, `current v${version} runtime contract`)],
     ['docs/architecture/TOOL_CONTRACT.md', (content) => content.replace(/snapshot synchronized for `v[0-9.]+`/g, `snapshot synchronized for ` + '`v' + version + '`')],
     ['docs/architecture/UPGRADE_ARCHITECTURE.md', (content) => content.replace(/checkpoint synchronized for `v[0-9.]+`/g, `checkpoint synchronized for ` + '`v' + version + '`')],

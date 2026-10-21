@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectProfile } from '@lnwjud/project';
-import { DEFAULT_ENGINEERING_HARNESS_SETTINGS } from '@lnwjud/shared';
+import type { ProjectProfile } from '@lnwjing/project';
+import { DEFAULT_ENGINEERING_HARNESS_SETTINGS } from '@lnwjing/shared';
 import { classifyEngineeringTaskScope, resolveEngineeringPolicy } from './engineering-policy.js';
 
 const project: ProjectProfile = {

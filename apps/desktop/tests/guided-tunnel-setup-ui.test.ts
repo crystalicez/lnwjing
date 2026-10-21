@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { TunnelStatus, UiLocale } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus, UiLocale } from '@lnwjing/ipc-contracts';
 import { FirstRunTunnelTip } from '../src/renderer/features/onboarding/FirstRunTunnelTip.js';
 import { GuidedTunnelSetup } from '../src/renderer/features/onboarding/GuidedTunnelSetup.js';
 
@@ -30,7 +30,7 @@ function guideMarkup(locale: UiLocale, status: TunnelStatus): string {
     onOpenChange: noop,
     onOpenExternal: noopAsync,
     onSaveApiKey: noopAsync,
-    onConfigureProfile: async (): Promise<string> => 'C:\\fixture\\lnwjud.yaml',
+    onConfigureProfile: async (): Promise<string> => 'C:\\fixture\\lnwjing.yaml',
     onStartTunnel: async (): Promise<TunnelStatus> => status,
     onRefresh: noopAsync,
     onLocalComplete: noop,
@@ -42,11 +42,11 @@ describe('guided tunnel onboarding UI', () => {
     const th = renderToStaticMarkup(createElement(FirstRunTunnelTip, { locale: 'th', permissionProfile: 'balanced', onPermissionProfileChange: noop, onStart: noop, onLater: noop }));
     const en = renderToStaticMarkup(createElement(FirstRunTunnelTip, { locale: 'en', permissionProfile: 'balanced', onPermissionProfileChange: noop, onStart: noop, onLater: noop }));
 
-    expect(th).toContain('ตั้งค่า ChatGPT ให้ใช้ lnwjud');
+    expect(th).toContain('ตั้งค่า ChatGPT ให้ใช้ lnwjing');
     expect(th).toContain('secure storage');
     expect(th).toContain('เริ่มตั้งค่า');
     expect(th).toContain('ไว้ทีหลัง');
-    expect(en).toContain('Connect ChatGPT to lnwjud');
+    expect(en).toContain('Connect ChatGPT to lnwjing');
     expect(en).toContain('Start setup');
     expect(en).toContain('Set up later');
     expect(en).toContain('AI permissions for Desktop / Secure Tunnel');
@@ -95,7 +95,7 @@ describe('guided tunnel onboarding UI', () => {
       persistent: {
         enabled: true,
         tunnelIdMasked: 'tunnel_0123********cdef',
-        runtimeAlias: 'lnwjud',
+        runtimeAlias: 'lnwjing',
         mode: 'native-managed',
         state: 'running',
         healthy: true,
@@ -128,7 +128,7 @@ describe('guided tunnel onboarding UI', () => {
       persistent: {
         enabled: true,
         tunnelIdMasked: 'tunnel_old********3456',
-        runtimeAlias: 'lnwjud',
+        runtimeAlias: 'lnwjing',
         mode: 'native-managed',
         state: 'error',
         healthy: true,

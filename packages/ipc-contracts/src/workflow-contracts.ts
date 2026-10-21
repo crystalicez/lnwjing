@@ -1,4 +1,4 @@
-/** Serializable renderer-safe DTOs: must not import server-side @lnwjud/domain. */
+/** Serializable renderer-safe DTOs: must not import server-side @lnwjing/domain. */
 export type WorkflowTemplateId = 'project-check' | 'code-review' | 'release-readiness' | 'connection-check' | 'data-audit' | 'template-report';
 export interface WorkflowTemplate {
   readonly id: WorkflowTemplateId; readonly revision: number; readonly titleTh: string; readonly titleEn: string;
@@ -84,7 +84,7 @@ export interface ResourceSnapshot {
   readonly workspaceId: string; readonly sampledAt: string; readonly stale: boolean;
   readonly coverage: 'complete' | 'partial' | 'unknown';
   readonly contextScope: 'workspace' | 'transport' | 'unavailable';
-  /** Only the lnwjud Desktop main process, not Electron child processes or any Goal. */
+  /** Only the lnwjing Desktop main process, not Electron child processes or any Goal. */
   readonly desktopMain?: { readonly rssBytes: number; readonly cpuAveragePercent: number | null };
   readonly resources: readonly { readonly taskId?: string; readonly provider: string; readonly goalId?: string; readonly role: string; readonly ownership: 'owned' | 'shared' | 'foreign' | 'unknown'; readonly workingSetBytes?: number; readonly cpuPercent?: number; readonly canCancel: boolean }[];
   readonly context: { readonly rawContextBytes: number | null; readonly contextSentBytes: number | null; readonly previouslySeenBytesAvoided: number | null; readonly ledgerHits: number | null };

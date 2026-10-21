@@ -7,7 +7,7 @@ import { readRuntimeDiagnosticsHistory, RuntimeDiagnosticsHistoryRecorder, type 
 const roots: string[] = [];
 
 function tempRoot(): string {
-  const root = mkdtempSync(path.join(os.tmpdir(), 'lnwjud-runtime-diagnostics-'));
+  const root = mkdtempSync(path.join(os.tmpdir(), 'lnwjing-runtime-diagnostics-'));
   roots.push(root);
   return root;
 }

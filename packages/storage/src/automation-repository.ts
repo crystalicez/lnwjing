@@ -25,7 +25,7 @@ import {
   type TransitionAutomationRunRequest,
   type UpdateAutomationAttemptRequest,
   type Result,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import type { SqliteDatabase } from './database.js';
 
 type MutationScope =
@@ -44,7 +44,7 @@ export type {
   TransitionAutomationMilestoneRequest,
   TransitionAutomationRunRequest,
   UpdateAutomationAttemptRequest,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 
 interface RunRow {
   readonly id: string;

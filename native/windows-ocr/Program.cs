@@ -5,7 +5,7 @@ using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
 
-namespace Lnwjud.WindowsOcr;
+namespace Lnwjing.WindowsOcr;
 
 internal static class Program
 {

@@ -114,7 +114,7 @@ describe('tunnel lock mutex cleanup semantics', () => {
 });
 
 async function temporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-tunnel-lock-mutex-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-tunnel-lock-mutex-'));
   temporaryRoots.push(directory);
   return directory;
 }

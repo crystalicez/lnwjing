@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
+import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
 import type { McpApplicationServices } from './tools/tool-types.js';
 import { buildSandboxExecutionPlan } from './sandbox-contract.js';
 
@@ -27,7 +27,7 @@ export interface SandboxRuntimeOptions {
 
 export const SANDBOX_RUNNER_SCRIPT = [
   '$ErrorActionPreference = \'Continue\'',
-  '$manifestPath = \'C:\\lnwjud\\output\\job-manifest.json\'',
+  '$manifestPath = \'C:\\lnwjing\\output\\job-manifest.json\'',
   '$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json',
   '$quoted = @($manifest.arguments | ForEach-Object {',
   '  $argument = [string]$_',
@@ -84,7 +84,7 @@ export class SandboxRuntimeService {
     if (!root.ok) return root;
 
     const jobId = readTrimmed(input.jobId) ?? `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-    const staging = path.win32.join(root.value, '.lnwjud', 'sandbox', jobId);
+    const staging = path.win32.join(root.value, '.lnwjing', 'sandbox', jobId);
     const inputPath = path.win32.join(staging, 'input');
     const outputPath = path.win32.join(staging, 'output');
     const executable = readTrimmed(input.executable);

@@ -1,4 +1,4 @@
-import { appError, err, MAX_MULTI_FILE_BYTES, ok, type Result } from '@lnwjud/domain';
+import { appError, err, MAX_MULTI_FILE_BYTES, ok, type Result } from '@lnwjing/domain';
 
 export interface FilePatch {
   readonly path: string;

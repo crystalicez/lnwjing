@@ -179,7 +179,7 @@ Returns stdout/stderr records with sequence numbers and truncation metadata.
 
 Permission: EXECUTE.
 
-Can stop only process IDs created/owned by lnwjud.
+Can stop only process IDs created/owned by lnwjing.
 
 ## 19–23. project_* commands
 
@@ -227,12 +227,12 @@ Same bounded log behavior as process logs.
 
 Permission: EXECUTE.
 
-Stops only Codex process launched by lnwjud.
+Stops only Codex process launched by lnwjing.
 
 ## Local desktop capabilities
 
 The following sixteen tools are available through the same loopback MCP server when the desktop
-runtime is running. They expose the local capability contract while preserving lnwjud's
+runtime is running. They expose the local capability contract while preserving lnwjing's
 loopback-only boundary.
 
 ## 29. shell
@@ -403,7 +403,7 @@ Input:
 Records the screen to MP4 using `ffmpeg -f gdigrab` (requires ffmpeg on PATH).
 `start` spawns a background capture; recording stops automatically after 3600 seconds.
 `stop` finalizes the file; `status` reports the active capture. State is kept in
-`%TEMP%\lnwjud-screen-record-state.json`.
+`%TEMP%\lnwjing-screen-record-state.json`.
 
 ## 43. office
 
@@ -485,7 +485,7 @@ bounded top-K facade. Local rerank is opt-in and falls back locally.
 Permission: READ; read-only skill discovery.
 
 Lists local agent skills discovered from Cursor, Claude, Agents, workspace skill
-roots, and lnwjud `extensions.extraSkillRoots`. Optional filters: `query`, `source`.
+roots, and lnwjing `extensions.extraSkillRoots`. Optional filters: `query`, `source`.
 
 ## 46. skills_read
 
@@ -499,7 +499,7 @@ Paths may not escape the skill directory.
 Permission: READ; read-only child MCP discovery.
 
 Lists MCP servers discovered from `%USERPROFILE%\.cursor\mcp.json`,
-`%APPDATA%\Claude\claude_desktop_config.json`, and lnwjud settings. lnwjud itself
+`%APPDATA%\Claude\claude_desktop_config.json`, and lnwjing settings. lnwjing itself
 is excluded to prevent recursion. Default mode enables all other discovered
 servers.
 
@@ -544,4 +544,4 @@ The core V1 catalog intentionally has no:
 The local capability layer is the separate parity extension described in the
 [upgrade architecture contract](../architecture/UPGRADE_ARCHITECTURE.md#god-tier-local-first-vertical-slices).
 
-The skills/MCP bridge package is `@lnwjud/extensions`.
+The skills/MCP bridge package is `@lnwjing/extensions`.

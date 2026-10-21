@@ -4,10 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appError, err, ok, type GoalLeaseProof } from '@lnwjud/domain';
-import { FileService, GitService, ProcessService, SearchService, type FileActor } from '@lnwjud/application';
-import { permissionProfiles, type PermissionProfile } from '@lnwjud/permissions';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type GoalLeaseProof } from '@lnwjing/domain';
+import { FileService, GitService, ProcessService, SearchService, type FileActor } from '@lnwjing/application';
+import { permissionProfiles, type PermissionProfile } from '@lnwjing/permissions';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { ToolRegistry, type McpApplicationServices, type ToolRegistryOptions } from './tool-registry.js';
 
 const actor: FileActor = { clientId: 'recipe-client', clientName: 'recipe-test', sessionId: 'recipe-session' };
@@ -263,7 +263,7 @@ function createFence(): NonNullable<McpApplicationServices['goalMutationFence']>
 }
 
 async function createFixture(): Promise<{ directory: string; workspace: Workspace; services: McpApplicationServices; options: ToolRegistryOptions; process: ProcessService; git: GitService }> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-checked-recipe-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checked-recipe-'));
   directories.push(directory);
   const root = await realpath(directory);
   const workspace: Workspace = { id: 'recipe-workspace', displayName: 'Recipe fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };

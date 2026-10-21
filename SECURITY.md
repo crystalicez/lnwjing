@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes are prioritized for the latest published lnwjud release and the current `main` branch. Older releases may not receive backported fixes; users should normally update to the latest stable release after reviewing release notes and operational requirements.
+Security fixes are prioritized for the latest published lnwjing release and the current `main` branch. Older releases may not receive backported fixes; users should normally update to the latest stable release after reviewing release notes and operational requirements.
 
 ## Reporting a vulnerability
 
@@ -21,7 +21,7 @@ If private vulnerability reporting is not available, contact the repository main
 
 Useful reports contain:
 
-- lnwjud version and installation type.
+- lnwjing version and installation type.
 - Windows version and relevant optional runtime (WSL, browser, Office, etc.).
 - The affected tool/capability and workspace/trust-boundary context.
 - Minimal reproduction steps.
@@ -30,6 +30,6 @@ Useful reports contain:
 
 ## Security model notes
 
-lnwjud intentionally exposes powerful local capabilities. A report is especially useful when it demonstrates behavior outside the documented permission, workspace, confirmation, or process-ownership boundaries rather than merely showing that an explicitly authorized local capability is powerful.
+lnwjing intentionally exposes powerful local capabilities. A report is especially useful when it demonstrates behavior outside the documented permission, workspace, confirmation, or process-ownership boundaries rather than merely showing that an explicitly authorized local capability is powerful.
 
 Do not test against machines, accounts, repositories, or data you do not own or have explicit permission to assess.

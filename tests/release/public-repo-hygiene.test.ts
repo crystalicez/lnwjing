@@ -18,18 +18,18 @@ async function trackedFiles(): Promise<string[]> {
 }
 
 describe('public repository hygiene', () => {
-  it('ignores exported lnwjud diagnostic text logs at the repository root', async () => {
+  it('ignores exported lnwjing diagnostic text logs at the repository root', async () => {
     const ignore = await readFile(path.join(repositoryRoot, '.gitignore'), 'utf8');
-    expect(ignore).toContain('lnwjud-*-logs.txt');
+    expect(ignore).toContain('lnwjing-*-logs.txt');
   });
 
   it('does not track generated stdio bundles', async () => {
     const tracked = await trackedFiles();
     const generated = [
-      'apps/desktop/build/lnwjud-mcp-stdio.cjs',
-      'apps/desktop/build/lnwjud-mcp-stdio.cmd',
-      'apps/desktop/build/lnwjud-mcp-stdio.mjs',
-      'apps/desktop/build/lnwjud-node.exe',
+      'apps/desktop/build/lnwjing-mcp-stdio.cjs',
+      'apps/desktop/build/lnwjing-mcp-stdio.cmd',
+      'apps/desktop/build/lnwjing-mcp-stdio.mjs',
+      'apps/desktop/build/lnwjing-node.exe',
     ];
 
     for (const file of generated) {
@@ -80,10 +80,10 @@ describe('public repository hygiene', () => {
     expect(publishedVersion).toBeTruthy();
     expect(expandedReadme).toContain(`## Current published version: v${publishedVersion}`);
     expect(usageTh).toContain(`public release \`v${publishedVersion}\``);
-    expect(packagingWindows).toContain(`lnwjud-Setup-${version}.exe`);
-    expect(packagingWindows).toContain(`lnwjud-Portable-${version}.exe`);
-    expect(packagingWindows).toContain(`apps/desktop/dist/installers/lnwjud-Setup-${version}.exe`);
-    expect(packagingWindows).toContain(`apps/desktop/dist/installers/lnwjud-Portable-${version}.exe`);
+    expect(packagingWindows).toContain(`lnwjing-Setup-${version}.exe`);
+    expect(packagingWindows).toContain(`lnwjing-Portable-${version}.exe`);
+    expect(packagingWindows).toContain(`apps/desktop/dist/installers/lnwjing-Setup-${version}.exe`);
+    expect(packagingWindows).toContain(`apps/desktop/dist/installers/lnwjing-Portable-${version}.exe`);
     expect(readme).not.toContain('current source/release candidate is');
     expect(readme).not.toContain('pending publication');
   });
@@ -99,7 +99,7 @@ describe('public repository hygiene', () => {
   });
 
   it('documents the live tool catalog instead of a hand-maintained count', async () => {
-    const { ToolRegistry } = await import('@lnwjud/mcp-server');
+    const { ToolRegistry } = await import('@lnwjing/mcp-server');
     const readme = await readFile(path.join(repositoryRoot, 'README.md'), 'utf8');
     const actor = { clientId: 'public-repo-hygiene', clientName: 'public-repo-hygiene' };
     const defaultRegistry = new ToolRegistry({}, actor);
@@ -138,8 +138,8 @@ describe('public repository hygiene', () => {
       'utf8',
     );
 
-    expect(envExample).toContain('LNWJUD_MCP_PORT=18765');
-    expect(envExample).not.toContain('LNWJUD_PORT=3000');
+    expect(envExample).toContain('LNWJING_MCP_PORT=18765');
+    expect(envExample).not.toContain('LNWJING_PORT=3000');
     expect(settings).toContain('OpenAI Secure MCP Tunnel');
     expect(settings).not.toContain('Cloudflare Remote Tunnel');
 
@@ -192,7 +192,7 @@ describe('public repository hygiene', () => {
   });
 
   it('keeps recurring scheduled cleanup explicit and host-proven before terminal completion', async () => {
-    const skill = await readFile(path.join(repositoryRoot, '.agents', 'skills', 'lnwjud-scheduled-continuation', 'SKILL.md'), 'utf8');
+    const skill = await readFile(path.join(repositoryRoot, '.agents', 'skills', 'lnwjing-scheduled-continuation', 'SKILL.md'), 'utf8');
     expect(skill).toContain('`terminal_cleanup_required`');
     expect(skill).toContain('Make the exact recurring native task non-runnable');
     expect(skill).toContain('host-confirmed delete or disable evidence');

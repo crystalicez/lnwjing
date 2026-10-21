@@ -1,10 +1,10 @@
 # Guided Local Tunnel Setup
 
-lnwjud includes a bilingual first-run guide for connecting ChatGPT through the official OpenAI Secure MCP Tunnel without requiring users to edit config files or run Terminal commands.
+lnwjing includes a bilingual first-run guide for connecting ChatGPT through the official OpenAI Secure MCP Tunnel without requiring users to edit config files or run Terminal commands.
 
 ## Who sees the first-run Tips dialog
 
-The dialog is shown only when the local tunnel setup is pristine: there is no saved Runtime API key, no configured tunnel profile, no persisted Tunnel ID, and the guide has not previously been dismissed or completed. Existing users with a key or profile are not interrupted automatically. If setup was started but not completed, lnwjud resumes the Secure Tunnel guide from the state it can derive from the actual tunnel status.
+The dialog is shown only when the local tunnel setup is pristine: there is no saved Runtime API key, no configured tunnel profile, no persisted Tunnel ID, and the guide has not previously been dismissed or completed. Existing users with a key or profile are not interrupted automatically. If setup was started but not completed, lnwjing resumes the Secure Tunnel guide from the state it can derive from the actual tunnel status.
 
 Choosing **Set up later / ไว้ทีหลัง** only dismisses the automatic Tips dialog. The guide remains available from Home and **Settings > Secure Tunnel**.
 
@@ -12,18 +12,18 @@ Choosing **Set up later / ไว้ทีหลัง** only dismisses the autom
 
 ### ภาษาไทย
 
-1. เปิดหน้า OpenAI Tunnel Settings เลือกองค์กรที่ใช้กับ ChatGPT สร้าง tunnel แล้วคัดลอกค่า `tunnel_...` มาวางใน lnwjud หากสร้างไม่ได้ ให้ตรวจสิทธิ์ Tunnels Read + Manage.
-2. เปิดหน้า API Keys สร้าง Runtime API key ที่มีสิทธิ์ Tunnels Read + Use แล้ววางใน lnwjud. คีย์เต็มจะแสดงจาก OpenAI เพียงครั้งเดียว.
-3. กด **ตั้งค่าและตรวจสอบ** ให้ lnwjud ใช้ `tunnel-client` ที่มากับโปรแกรมเพื่อสร้าง local profile และตรวจสอบการเชื่อมต่อ. สำหรับการตั้งค่าครั้งแรก ขั้นตอนนี้จะเตรียม Persistent Tunnel Runtime ไว้แต่ยังไม่สั่งเริ่มทำงาน จึงไม่ชนกับปุ่ม **Start Tunnel** ในขั้นตอนถัดไป.
-4. กด **Start Tunnel**. lnwjud จะถือว่าขั้นตอนฝั่งเครื่องเสร็จเมื่อสถานะจริงกลับมาเป็น Running เท่านั้น และจะ reconnect Tunnel ID เดิมอัตโนมัติเมื่อจำเป็น.
+1. เปิดหน้า OpenAI Tunnel Settings เลือกองค์กรที่ใช้กับ ChatGPT สร้าง tunnel แล้วคัดลอกค่า `tunnel_...` มาวางใน lnwjing หากสร้างไม่ได้ ให้ตรวจสิทธิ์ Tunnels Read + Manage.
+2. เปิดหน้า API Keys สร้าง Runtime API key ที่มีสิทธิ์ Tunnels Read + Use แล้ววางใน lnwjing. คีย์เต็มจะแสดงจาก OpenAI เพียงครั้งเดียว.
+3. กด **ตั้งค่าและตรวจสอบ** ให้ lnwjing ใช้ `tunnel-client` ที่มากับโปรแกรมเพื่อสร้าง local profile และตรวจสอบการเชื่อมต่อ. สำหรับการตั้งค่าครั้งแรก ขั้นตอนนี้จะเตรียม Persistent Tunnel Runtime ไว้แต่ยังไม่สั่งเริ่มทำงาน จึงไม่ชนกับปุ่ม **Start Tunnel** ในขั้นตอนถัดไป.
+4. กด **Start Tunnel**. lnwjing จะถือว่าขั้นตอนฝั่งเครื่องเสร็จเมื่อสถานะจริงกลับมาเป็น Running เท่านั้น และจะ reconnect Tunnel ID เดิมอัตโนมัติเมื่อจำเป็น.
 5. เปิด ChatGPT Plugins. หากยังไม่เปิด Developer mode ให้ไปที่ **Settings > Security and login > Developer mode**, เพิ่ม connection, เลือก **Tunnel**, แล้วเลือกหรือวาง Tunnel ID.
 
 ### English
 
-1. Open OpenAI Tunnel Settings, choose the organization used with ChatGPT, create a tunnel, and paste the `tunnel_...` value into lnwjud. If tunnel creation is unavailable, verify Tunnels Read + Manage permissions.
-2. Open API Keys, create a Runtime API key with Tunnels Read + Use, and paste it into lnwjud. OpenAI displays the full secret only once.
-3. Select **Configure and check**. lnwjud uses the bundled `tunnel-client` to create the local profile and validate the connection. On first-time setup this arms the Persistent Tunnel Runtime but leaves it stopped, so it cannot race or conflict with the explicit **Start Tunnel** action in the next step.
-4. Select **Start Tunnel**. Local setup is considered complete only after the real status returns Running. lnwjud reconnects the same Tunnel ID automatically when required.
+1. Open OpenAI Tunnel Settings, choose the organization used with ChatGPT, create a tunnel, and paste the `tunnel_...` value into lnwjing. If tunnel creation is unavailable, verify Tunnels Read + Manage permissions.
+2. Open API Keys, create a Runtime API key with Tunnels Read + Use, and paste it into lnwjing. OpenAI displays the full secret only once.
+3. Select **Configure and check**. lnwjing uses the bundled `tunnel-client` to create the local profile and validate the connection. On first-time setup this arms the Persistent Tunnel Runtime but leaves it stopped, so it cannot race or conflict with the explicit **Start Tunnel** action in the next step.
+4. Select **Start Tunnel**. Local setup is considered complete only after the real status returns Running. lnwjing reconnects the same Tunnel ID automatically when required.
 5. Open ChatGPT Plugins. If Developer mode is off, go to **Settings > Security and login > Developer mode**, add a connection, choose **Tunnel**, then select or paste the Tunnel ID.
 
 ## Official pages opened by the guide
@@ -38,7 +38,7 @@ If opening a page fails, the guide shows the same allowlisted URL so it can be c
 
 ## Credential boundary
 
-The Runtime API key is passed to the existing desktop credential path only when the user saves it. On Windows it is protected with DPAPI and stored locally. lnwjud does not operate a central credential server. The onboarding state stored in renderer storage is only one finite UI value: `not_started`, `in_progress`, `dismissed`, or `completed`.
+The Runtime API key is passed to the existing desktop credential path only when the user saves it. On Windows it is protected with DPAPI and stored locally. lnwjing does not operate a central credential server. The onboarding state stored in renderer storage is only one finite UI value: `not_started`, `in_progress`, `dismissed`, or `completed`.
 
 The full API key and Tunnel ID draft are not stored in localStorage or sessionStorage. The Runtime API key draft is cleared from React state after a successful save and whenever the guide closes or leaves the key step. Status and logs use only safe state plus a masked Tunnel ID.
 
@@ -48,6 +48,6 @@ Open **Settings > Secure Tunnel** and choose **Open setup guide** at any time. E
 
 Use **Doctor** to check the local tunnel-client/profile/runtime/health conditions and **Live Logs** to inspect sanitized runtime evidence. A revoked key should be replaced through the existing Runtime API key save path, then the profile/runtime should be checked again before retrying Start Tunnel.
 
-## What lnwjud can and cannot prove
+## What lnwjing can and cannot prove
 
-lnwjud can verify the local configuration and observe the tunnel reaching **Running**. It cannot verify that the ChatGPT plugin connection was successfully added inside ChatGPT, because that final connection step is performed by the user in ChatGPT and is outside the local application's authority.
+lnwjing can verify the local configuration and observe the tunnel reaching **Running**. It cannot verify that the ChatGPT plugin connection was successfully added inside ChatGPT, because that final connection step is performed by the user in ChatGPT and is outside the local application's authority.

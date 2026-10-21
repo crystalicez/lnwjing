@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-lnwjud v4.70.1 includes pinned resources from the following MIT-licensed projects.
+lnwjing v4.70.1 includes pinned resources from the following MIT-licensed projects.
 
 ## Everything Claude Code / ECC (`ecc-universal` 2.2.1)
 
@@ -26,8 +26,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-lnwjud preserves the pinned AgentShield package metadata as the source of truth and normalizes the packaged AgentShield CLI version at its owned wrapper boundary. This avoids exposing a conflicting upstream hard-coded CLI version string while keeping the original bundled runtime intact and separately hashed in provenance.
+lnwjing preserves the pinned AgentShield package metadata as the source of truth and normalizes the packaged AgentShield CLI version at its owned wrapper boundary. This avoids exposing a conflicting upstream hard-coded CLI version string while keeping the original bundled runtime intact and separately hashed in provenance.
 
 ## Integration boundary
 
-ECC content is imported as a pinned provider and activated selectively. Imported rules, hooks, workflows, MCP templates, memories, and instincts do not override lnwjud permissions, durable-goal ownership, mutation policy, or runtime security boundaries. Executable ECC hooks/workflows and MCP templates are not auto-started by discovery.
+ECC content is imported as a pinned provider and activated selectively. Imported rules, hooks, workflows, MCP templates, memories, and instincts do not override lnwjing permissions, durable-goal ownership, mutation policy, or runtime security boundaries. Executable ECC hooks/workflows and MCP templates are not auto-started by discovery.

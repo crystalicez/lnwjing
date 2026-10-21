@@ -16,7 +16,7 @@ function snapshot() {
   };
 }
 
-process.stderr.write('lnwjud-stdio-test-diagnostic\n');
+process.stderr.write('lnwjing-stdio-test-diagnostic\n');
 startMcpStdio({
   services: {
     capabilities: {

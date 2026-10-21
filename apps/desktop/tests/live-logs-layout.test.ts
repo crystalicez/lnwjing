@@ -174,11 +174,11 @@ describe('viewport-sized log and list layout', () => {
 
   it('treats legacy slash/case path workspace IDs as the registered project and exports the exact visible order', () => {
     const workspaces = [
-      { id: 'project-a', displayName: 'lnwjud', rootPath: 'E:\\lnwjud', realRootPath: 'E:\\lnwjud', createdAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'project-a', displayName: 'lnwjing', rootPath: 'E:\\lnwjing', realRootPath: 'E:\\lnwjing', createdAt: '2026-08-01T00:00:00.000Z' },
     ];
     const lines = [
-      { id: 30, source: 'mcp' as const, timestamp: '2026-08-22T00:00:30.000Z', level: 'info' as const, text: 'backslash', workspaceId: 'E:\\lnwjud', sessionId: 'session-a' },
-      { id: 31, source: 'mcp' as const, timestamp: '2026-08-22T00:00:31.000Z', level: 'info' as const, text: 'slash', workspaceId: 'e:/LNWJUD/', sessionId: 'session-a' },
+      { id: 30, source: 'mcp' as const, timestamp: '2026-08-22T00:00:30.000Z', level: 'info' as const, text: 'backslash', workspaceId: 'E:\\lnwjing', sessionId: 'session-a' },
+      { id: 31, source: 'mcp' as const, timestamp: '2026-08-22T00:00:31.000Z', level: 'info' as const, text: 'slash', workspaceId: 'e:/LNWJING/', sessionId: 'session-a' },
       { id: 32, source: 'mcp' as const, timestamp: '2026-08-22T00:00:32.000Z', level: 'info' as const, text: 'other', workspaceId: 'other-workspace', sessionId: 'session-a' },
     ];
     expect(filterLogLinesByScope(lines, { workspaceId: 'project-a', sessionId: null }, '', workspaces).map((line) => line.id)).toEqual([30, 31]);
@@ -188,8 +188,8 @@ describe('viewport-sized log and list layout', () => {
   it('shows each project root once and hides machine roots in the workspace selector', () => {
     const workspaces = [
       { id: 'drive-e', displayName: 'Local Disk E:', rootPath: 'E:\\', realRootPath: 'E:\\', createdAt: '2026-08-01T00:00:00.000Z', kind: 'machine_root' as const },
-      { id: 'project-a', displayName: 'lnwjud', rootPath: 'E:\\lnwjud', realRootPath: 'E:\\lnwjud', createdAt: '2026-08-01T00:00:00.000Z' },
-      { id: 'project-alias', displayName: 'lnwjud', rootPath: 'E:/lnwjud/', realRootPath: 'E:/lnwjud/', createdAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'project-a', displayName: 'lnwjing', rootPath: 'E:\\lnwjing', realRootPath: 'E:\\lnwjing', createdAt: '2026-08-01T00:00:00.000Z' },
+      { id: 'project-alias', displayName: 'lnwjing', rootPath: 'E:/lnwjing/', realRootPath: 'E:/lnwjing/', createdAt: '2026-08-01T00:00:00.000Z' },
     ];
     const markup = renderToStaticMarkup(createElement(LogStreamPanel, {
       source: 'mcp', title: 'MCP', lines: [], tunnelLogPath: null, tunnelLogExists: false,
@@ -197,7 +197,7 @@ describe('viewport-sized log and list layout', () => {
       workspaceLabel: 'Workspace', sessionLabel: 'Session', scopeAllLabel: 'All', onClear: noop, onExport: noop, workspaces,
     }));
     expect(markup).not.toContain('Local Disk E:');
-    expect(collectWorkspaceFilterOptions([], workspaces)).toEqual([{ id:'project-a', label:'lnwjud — E:\\lnwjud' }]);
+    expect(collectWorkspaceFilterOptions([], workspaces)).toEqual([{ id:'project-a', label:'lnwjing — E:\\lnwjing' }]);
   });
 
   it('keeps a long correlated line collapsed and exposes an accessible localized detail control', () => {
@@ -247,13 +247,13 @@ describe('viewport-sized log and list layout', () => {
       correlation: { kind: 'mcp' as const, phase: 'completed' as const, callId, toolName: 'run_goal', resultCode: 'SUCCESS' as const },
       targetDetail: { detailRef: `${callId}:completed`, itemCount: 3, preview: [], legacyIncomplete: false },
     };
-    const workspaces = [{ id: workspaceId, displayName: 'lnwjud', rootPath: 'E:\\lnwjud', realRootPath: 'E:\\lnwjud', createdAt: '2026-08-01T00:00:00.000Z' }];
+    const workspaces = [{ id: workspaceId, displayName: 'lnwjing', rootPath: 'E:\\lnwjing', realRootPath: 'E:\\lnwjing', createdAt: '2026-08-01T00:00:00.000Z' }];
     const markup = renderToStaticMarkup(createElement(LogStreamPanel, {
       source: 'mcp', title: 'MCP', lines: [line], tunnelLogPath: null, tunnelLogExists: false,
       filterPlaceholder: 'filter', pauseLabel: 'pause', followLabel: 'follow', clearLabel: 'clear', clearSessionLabel: 'clear session', clearWorkspaceLabel: 'clear workspace', exportLabel: 'export',
       onClear: noop, onExport: noop, workspaces,
     }));
-    expect(markup).toContain(`lnwjud — ${workspaceId}`);
+    expect(markup).toContain(`lnwjing — ${workspaceId}`);
     expect(markup).toContain(sessionId);
     expect(markup).not.toContain('372e9384…1383');
 

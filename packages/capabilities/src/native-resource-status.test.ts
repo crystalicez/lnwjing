@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { err, appError, ok } from '@lnwjud/domain';
+import { err, appError, ok } from '@lnwjing/domain';
 import { LinuxNativeCapabilityBackend } from './linux-native-backend.js';
 import { MacosNativeCapabilityBackend } from './macos-native-backend.js';
 import type { NativeHostProcessBridge } from './native-host-protocol.js';
 
 describe.each([LinuxNativeCapabilityBackend, MacosNativeCapabilityBackend])('native resource status', (Backend) => {
   it.each(['audio', 'screen_record', 'input_event', 'vision'] as const)('forwards %s identity and owner without asking for mutation approval', async (capability) => {
-    const metadata = { 'lnwjud.taskOwner.v1': { clientId: 'client', sessionId: 'session', workspaceId: 'workspace' } };
+    const metadata = { 'lnwjing.taskOwner.v1': { clientId: 'client', sessionId: 'session', workspaceId: 'workspace' } };
     const input = { action: 'status', handle: 'recording-handle', session_id: 'portal-session', metadata };
     const execute = vi.fn().mockResolvedValue(ok({ handle: input.handle, state: 'running', session_id: input.session_id }));
     const backend = new Backend(capability, { bridge: { execute } as unknown as NativeHostProcessBridge });

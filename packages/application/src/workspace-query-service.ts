@@ -1,6 +1,6 @@
-import { type Result } from '@lnwjud/domain';
-import { TreeReader, type TreeOptions, type TreeResult } from '@lnwjud/filesystem';
-import { WorkspacePathGuard, type WorkspaceRepository } from '@lnwjud/workspace';
+import { type Result } from '@lnwjing/domain';
+import { TreeReader, type TreeOptions, type TreeResult } from '@lnwjing/filesystem';
+import { WorkspacePathGuard, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 import { resolveWorkspaceForPath } from './workspace-locator.js';
 

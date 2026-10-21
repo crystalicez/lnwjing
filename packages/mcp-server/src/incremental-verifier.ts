@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import type { McpToolContext } from './tools/tool-types.js';
 
 const DEFAULT_VERIFY_WAIT_MS = 5 * 60 * 1000;

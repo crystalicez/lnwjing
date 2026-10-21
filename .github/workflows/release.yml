@@ -127,7 +127,7 @@ jobs:
       - name: Verify each downloaded release evidence bundle
         shell: bash
         env:
-          LNWJUD_RELEASE_ARTIFACT_ONLY: '1'
+          LNWJING_RELEASE_ARTIFACT_ONLY: '1'
         run: |
           set -euo pipefail
           staging_directory="$PWD/release-staging"
@@ -148,20 +148,20 @@ jobs:
               exit 1
             fi
             installer_directory="$(dirname "${provenance_files[0]}")"
-            LNWJUD_RELEASE_INSTALLER_DIRECTORY="$installer_directory" \
-            LNWJUD_RELEASE_PLATFORM="$platform" \
-            LNWJUD_RELEASE_ARCH="$arch" \
-            LNWJUD_EXPECTED_COMMIT_SHA="$sha" \
-            LNWJUD_REQUIRE_CLEAN_PROVENANCE='1' \
+            LNWJING_RELEASE_INSTALLER_DIRECTORY="$installer_directory" \
+            LNWJING_RELEASE_PLATFORM="$platform" \
+            LNWJING_RELEASE_ARCH="$arch" \
+            LNWJING_EXPECTED_COMMIT_SHA="$sha" \
+            LNWJING_REQUIRE_CLEAN_PROVENANCE='1' \
               node apps/desktop/scripts/verify-release-evidence.mjs
           done
 
       - name: Aggregate target-native artifacts and update feeds
         shell: bash
         env:
-          LNWJUD_RELEASE_STAGING_DIRECTORY: ${{ github.workspace }}/release-staging
-          LNWJUD_RELEASE_ASSETS_DIRECTORY: ${{ github.workspace }}/release-assets
-          LNWJUD_RELEASE_COMMIT: ${{ github.sha }}
+          LNWJING_RELEASE_STAGING_DIRECTORY: ${{ github.workspace }}/release-staging
+          LNWJING_RELEASE_ASSETS_DIRECTORY: ${{ github.workspace }}/release-assets
+          LNWJING_RELEASE_COMMIT: ${{ github.sha }}
         run: node scripts/collect-release-assets.mjs
 
       - name: Publish verified cross-platform release assets

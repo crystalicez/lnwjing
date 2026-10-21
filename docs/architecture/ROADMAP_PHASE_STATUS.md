@@ -23,7 +23,7 @@ Codex installation, or browser session exists when it is not connected.
 | 13 | complete | Runtime cache with content identity and hit/miss telemetry |
 | 14 | complete | Lifecycle hook registry with before/after events and deny/modify results |
 | 15 | complete | On-demand skill match/load surface over the existing local skill bridge |
-| 16 | complete | `LnwjudPlugin` SDK contract and plugin lifecycle tools |
+| 16 | complete | `LnwjingPlugin` SDK contract and plugin lifecycle tools |
 | 17 | complete | Redacted persisted session checkpoints, tasks, delegates, and handoff state |
 | 18 | complete | Compact/normal/verbose/stream response-mode contract |
 | 19 | complete | Browser/UI debug facade over existing CDP/vision/window capabilities |
@@ -65,8 +65,8 @@ is absent; it does not claim that dependency is installed.
 | 3 | complete | `vision.ocr` remains public; WinRT helper ships with build/register scripts (`scripts/build-windows-ocr.ps1`, `scripts/register-windows-ocr.ps1` for self-signed dev or release certs), a real cached host-side identity probe (`createOcrPackageIdentityProbe`), and packaged `windows-ocr` extra resources; live registration runs on machines with .NET SDK + Windows SDK |
 | 4 | complete | Deterministic semantic scorer, primitive-visible ranked candidates, reason codes, permission metadata, `tool_dynamic_filter`, and local-rerank fallback |
 | 5 | complete | `event_watch`/`crash_trace` serve bounded `Get-WinEvent` queries through the allowlisted `EventLogCapabilityBackend`; `sandbox_exec` stages the artifact-only WSB plan, launches `WindowsSandbox.exe`, and retrieves stdout/stderr/exit-code with dry-run default and confirmation gating |
-| 6 | complete | Read-only SQLite `db_inspect`/`db_query` through `node:sqlite` (workspace-confined targets, single SELECT/PRAGMA, bounded rows); minimal stdio LSP client for `lsp_diagnostics`/`lsp_rename` configured via `LNWJUD_LSP_<LANGUAGE>_COMMAND`; persisted Git worktree ownership ledger with `git_worktree_remove` (dry-run + confirmation). DAP (`debug_attach`/`debug_step`) intentionally remains contract-only |
-| 7 | complete | PowerPoint `read`/`save_as` and read-only Outlook folder/message headers (no bodies) behind the Office COM boundary with array-aware path guards; `pdf_extract_tables`/`inspect_pdf` through an optional local PDF provider (pdftotext-style, `LNWJUD_PDF_PROVIDER`); `docx_merge` via Word COM with dry-run/confirmation; `inspect_workbook` via Excel COM `sheets`+bounded sample; `compare_workbook_layout`/`render_excel_preview`/`compare_pdf_pages` now report truthful optional availability instead of metadata-only "ready" |
+| 6 | complete | Read-only SQLite `db_inspect`/`db_query` through `node:sqlite` (workspace-confined targets, single SELECT/PRAGMA, bounded rows); minimal stdio LSP client for `lsp_diagnostics`/`lsp_rename` configured via `LNWJING_LSP_<LANGUAGE>_COMMAND`; persisted Git worktree ownership ledger with `git_worktree_remove` (dry-run + confirmation). DAP (`debug_attach`/`debug_step`) intentionally remains contract-only |
+| 7 | complete | PowerPoint `read`/`save_as` and read-only Outlook folder/message headers (no bodies) behind the Office COM boundary with array-aware path guards; `pdf_extract_tables`/`inspect_pdf` through an optional local PDF provider (pdftotext-style, `LNWJING_PDF_PROVIDER`); `docx_merge` via Word COM with dry-run/confirmation; `inspect_workbook` via Excel COM `sheets`+bounded sample; `compare_workbook_layout`/`render_excel_preview`/`compare_pdf_pages` now report truthful optional availability instead of metadata-only "ready" |
 | 8 | complete | `self_heal_plan` gathers live evidence (index status, durable task list) and proposes allowlisted reversible fixes mapped to existing tools; `self_heal_apply` executes only those fix kinds behind dry-run + explicit `userConfirmed` with no automatic destructive retry. `agent_swarm_run` intentionally remains planned: the only local subagent provider is Codex, which the chat-quota-only policy keeps off-limits |
 
 ## Phase 04 visibility and economy rule
@@ -86,8 +86,8 @@ credentials.
 Connection paths are deliberately separated:
 
 ```text
-Codex CLI / local MCP host -> packaged lnwjud-mcp-stdio.cmd -> direct Node MCP stdio
-ChatGPT web / Secure Tunnel -> tunnel-client -> lnwjud Desktop loopback HTTP MCP
+Codex CLI / local MCP host -> packaged lnwjing-mcp-stdio.cmd -> direct Node MCP stdio
+ChatGPT web / Secure Tunnel -> tunnel-client -> lnwjing Desktop loopback HTTP MCP
 ```
 
 Secure Tunnel uses the Desktop runtime so the host-selected Active Project and

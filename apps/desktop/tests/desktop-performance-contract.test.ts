@@ -39,7 +39,7 @@ describe('desktop performance contract', () => {
     expect(desktop).toContain("new AsyncTtlCache<DashboardSnapshot['gitSummary']>(5_000)");
     expect(desktop).toContain("new AsyncTtlCache<DashboardSnapshot['codex']>(60_000)");
     expect(desktop).toContain("new AsyncTtlCache<DashboardSnapshot['capabilities']>(15_000)");
-    expect(capabilities).toContain('const wslAvailabilityCache = new AsyncTtlCache<import(\'@lnwjud/domain\').Result<unknown>>(15_000);');
+    expect(capabilities).toContain('const wslAvailabilityCache = new AsyncTtlCache<import(\'@lnwjing/domain\').Result<unknown>>(15_000);');
     expect(capabilities).toContain('wslAvailabilityCache.get(async () =>');
   });
 

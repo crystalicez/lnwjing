@@ -1,4 +1,4 @@
-import type { AuditEvent } from '@lnwjud/audit';
+import type { AuditEvent } from '@lnwjing/audit';
 
 const LOG_VIEW_STATE_KEY = 'internal.log_view.work_log_clear_state.v1';
 const LEGACY_GLOBAL_CLEAR_KEY = 'work_log_cleared_at';

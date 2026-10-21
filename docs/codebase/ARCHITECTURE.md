@@ -1,10 +1,10 @@
-# lnwjud architecture
+# lnwjing architecture
 
 Audit date: 2026-09-19
 
 ## Architectural model
 
-lnwjud is a local AI-agent runtime and MCP gateway using explicit composition roots and service interfaces rather than a global DI container.
+lnwjing is a local AI-agent runtime and MCP gateway using explicit composition roots and service interfaces rather than a global DI container.
 
 ```mermaid
 flowchart LR
@@ -71,7 +71,7 @@ External-trust skills are not auto-injected unless explicitly named by the user.
 
 ## Engineering Harness
 
-Engineering Harness is an opt-in projection over existing lnwjud authorities rather than a second orchestration engine.
+Engineering Harness is an opt-in projection over existing lnwjing authorities rather than a second orchestration engine.
 
 - `EngineeringPreparationService` performs bounded project assessment and resolves effective global/workspace/project policy. Default-off work returns before expensive project assessment on the Desktop dashboard.
 - `engineering_start_task` creates/resumes the existing durable Goal and stores optional schema-versioned `EngineeringGoalMetadata` on the same goal row. There is no separate EngineeringRun database or competing lease model.

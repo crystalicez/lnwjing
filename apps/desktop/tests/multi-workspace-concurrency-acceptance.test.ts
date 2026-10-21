@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const temporaryRoots: string[] = [];
 
 beforeEach(() => {
-  vi.stubEnv('LNWJUD_UNRESTRICTED', '1');
+  vi.stubEnv('LNWJING_UNRESTRICTED', '1');
 });
 
 afterEach(async () => {
@@ -27,7 +27,7 @@ afterEach(async () => {
 
 describe('multi-workspace concurrency acceptance', () => {
   it('runs two real MCP sessions in parallel without mixing workspace or session ownership', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-multi-session-data-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-multi-session-data-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRootA = await createWorkspaceFixture('a');
@@ -257,7 +257,7 @@ describe('multi-workspace concurrency acceptance', () => {
   }, process.env.CI ? 180_000 : 90_000);
 
   it('serves three real MCP sessions and a 12-request burst through one Desktop listener', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-three-chat-data-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-three-chat-data-'));
     temporaryRoots.push(rawDataRoot);
     const dataRoot = await realpath(rawDataRoot);
     const workspaceRoot = await createWorkspaceFixture('three-chat');
@@ -294,7 +294,7 @@ describe('multi-workspace concurrency acceptance', () => {
 });
 
 async function createWorkspaceFixture(label: string): Promise<string> {
-  const rawRoot = await mkdtemp(path.join(os.tmpdir(), `lnwjud-multi-${label}-`));
+  const rawRoot = await mkdtemp(path.join(os.tmpdir(), `lnwjing-multi-${label}-`));
   temporaryRoots.push(rawRoot);
   const root = await realpath(rawRoot);
   const barrierScript = [
@@ -312,7 +312,7 @@ async function createWorkspaceFixture(label: string): Promise<string> {
   await writeFile(path.join(root, 'barrier.js'), barrierScript, 'utf8');
   await writeFile(path.join(root, 'background.js'), backgroundScript, 'utf8');
   await writeFile(path.join(root, 'package.json'), JSON.stringify({
-    name: `lnwjud-multi-${label}`,
+    name: `lnwjing-multi-${label}`,
     private: true,
     scripts: {
       build: 'node barrier.js build',
@@ -321,8 +321,8 @@ async function createWorkspaceFixture(label: string): Promise<string> {
   }), 'utf8');
   await writeFile(path.join(root, 'package-lock.json'), '{}', 'utf8');
   await execFileAsync('git', ['init', '--quiet'], { cwd: root, windowsHide: true });
-  await execFileAsync('git', ['config', 'user.email', 'lnwjud-test@example.invalid'], { cwd: root, windowsHide: true });
-  await execFileAsync('git', ['config', 'user.name', 'lnwjud acceptance'], { cwd: root, windowsHide: true });
+  await execFileAsync('git', ['config', 'user.email', 'lnwjing-test@example.invalid'], { cwd: root, windowsHide: true });
+  await execFileAsync('git', ['config', 'user.name', 'lnwjing acceptance'], { cwd: root, windowsHide: true });
   await execFileAsync('git', ['add', '--', 'barrier.js', 'background.js', 'package.json', 'package-lock.json'], { cwd: root, windowsHide: true });
   await execFileAsync('git', ['commit', '--quiet', '-m', 'fixture'], { cwd: root, windowsHide: true });
   return root;

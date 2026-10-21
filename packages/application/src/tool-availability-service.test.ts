@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { USER_SETTING_KEYS } from '@lnwjud/shared';
+import { USER_SETTING_KEYS } from '@lnwjing/shared';
 import { ToolAvailabilityService } from './tool-availability-service.js';
 
 class MemorySettings {

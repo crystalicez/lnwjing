@@ -1,4 +1,4 @@
-import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;

@@ -1,6 +1,6 @@
-# lnwjud Release Process
+# lnwjing Release Process
 
-This document is the canonical release sequence for lnwjud maintainers and
+This document is the canonical release sequence for lnwjing maintainers and
 coding agents. If another planning note, old handoff, or historical checklist
 conflicts with this file, follow this file for release sequencing.
 

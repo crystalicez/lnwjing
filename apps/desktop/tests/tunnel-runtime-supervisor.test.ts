@@ -5,7 +5,7 @@ import type { TunnelRuntimeSnapshot } from '../src/main/tunnel-runtime-state.js'
 
 function snapshot(overrides: Partial<TunnelRuntimeSnapshot> = {}): TunnelRuntimeSnapshot {
   return {
-    alias: 'lnwjud',
+    alias: 'lnwjing',
     mode: 'native-managed',
     tunnelId: 'tunnel_fixture012345',
     mcpServerUrl: 'http://127.0.0.1:18765/mcp',

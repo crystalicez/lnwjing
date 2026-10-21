@@ -1,6 +1,6 @@
 import { realpath, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { ProcessManager } from '@lnwjud/process';
+import { ProcessManager } from '@lnwjing/process';
 import type { ManagedWriterAdmissionPort } from './writer-admission.js';
 import path from 'node:path';
 import {
@@ -11,7 +11,7 @@ import {
   ok,
   type InvocationAuthorization,
   type Result,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import {
   GitAdapter,
   type GitCommandResult,
@@ -20,9 +20,9 @@ import {
   type GitLogRequest,
   type GitLogResult,
   type GitStatusResult,
-} from '@lnwjud/git';
-import { WorkspacePathGuard, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
-import { isProvablyReadOnlyGitInvocation, prohibitedAgentGitInvocationReason } from '@lnwjud/shared';
+} from '@lnwjing/git';
+import { WorkspacePathGuard, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
+import { isProvablyReadOnlyGitInvocation, prohibitedAgentGitInvocationReason } from '@lnwjing/shared';
 import type { FileActor } from './file-service.js';
 import { isAbsoluteFsPath, resolveWorkspaceForPath } from './workspace-locator.js';
 

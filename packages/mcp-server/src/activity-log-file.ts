@@ -3,7 +3,7 @@ import { appendFileSync, closeSync, mkdirSync, openSync, readSync, renameSync, r
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
-import { decodeActivityTargetReference, Redactor } from '@lnwjud/audit';
+import { decodeActivityTargetReference, Redactor } from '@lnwjing/audit';
 import type { ActivitySink, ActivitySinkEvent } from './activity-tracker.js';
 
 const MAX_ACTIVITY_LOG_FIELD_CHARS = 4_096;

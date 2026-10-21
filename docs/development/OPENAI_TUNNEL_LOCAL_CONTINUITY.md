@@ -1,11 +1,11 @@
 # OpenAI Secure MCP Tunnel — Local-First Continuity Guide
 
 Status: **v4.11.0 design note**
-Goal: keep each user's lnwjud installation local while reusing the OpenAI Secure MCP Tunnel and tunnel-client they already own.
+Goal: keep each user's lnwjing installation local while reusing the OpenAI Secure MCP Tunnel and tunnel-client they already own.
 
 ## Recommendation
 
-For lnwjud users who already have an OpenAI Secure MCP Tunnel, the best architecture is:
+For lnwjing users who already have an OpenAI Secure MCP Tunnel, the best architecture is:
 
 ```text
 ChatGPT
@@ -19,10 +19,10 @@ OpenAI Secure MCP Tunnel (persistent tunnel_id)
 tunnel-client on the user's PC
    |
    v
-lnwjud local MCP
+lnwjing local MCP
 ```
 
-Do **not** add another public static URL, domain, VPS, Cloudflare tunnel, or lnwjud relay merely to make the connection persistent.
+Do **not** add another public static URL, domain, VPS, Cloudflare tunnel, or lnwjing relay merely to make the connection persistent.
 
 The user's OpenAI tunnel identity is already the stable remote identity.
 
@@ -30,13 +30,13 @@ The user's OpenAI tunnel identity is already the stable remote identity.
 
 Per machine/user:
 
-1. lnwjud Desktop;
+1. lnwjing Desktop;
 2. official `tunnel-client`;
 3. their OpenAI `tunnel_id`;
 4. their runtime API key;
 5. optional Windows startup integration.
 
-No lnwjud-operated server is required.
+No lnwjing-operated server is required.
 
 ## What stays local
 
@@ -53,13 +53,13 @@ All of the following remain on the user's machine:
 - recovery/checkpoints;
 - runtime API key.
 
-OpenAI Secure MCP Tunnel provides the remote transport path to the local MCP server; it does not require lnwjud to make its own MCP port public.
+OpenAI Secure MCP Tunnel provides the remote transport path to the local MCP server; it does not require lnwjing to make its own MCP port public.
 
 ## Stable URL vs stable tunnel identity
 
 The original product question was "how do we get a static URL?"
 
-With the existing OpenAI Tunnel flow, a normal lnwjud user does not actually need to own a literal public URL.
+With the existing OpenAI Tunnel flow, a normal lnwjing user does not actually need to own a literal public URL.
 
 ChatGPT supports:
 
@@ -86,21 +86,21 @@ A local process can restart while the remote tunnel object continues to exist.
 
 ## Does this cost extra?
 
-This design adds **no additional lnwjud infrastructure cost**:
+This design adds **no additional lnwjing infrastructure cost**:
 
 - no VPS required;
 - no domain required;
 - no Cloudflare account required;
-- no paid lnwjud relay required;
+- no paid lnwjing relay required;
 - no inbound public IP required.
 
 Users still need whatever OpenAI plan, organization permissions, API/runtime credentials, and product access are required for Secure MCP Tunnel and the target ChatGPT/Codex flow.
 
-As of this design date, the reviewed OpenAI documentation does not publish a separate per-tunnel infrastructure price line that lnwjud should hard-code or promise as permanently free. Product/API subscription and usage costs can still apply. Documentation must therefore say **"no extra lnwjud/VPS/domain cost"**, not promise that every OpenAI use case costs $0.
+As of this design date, the reviewed OpenAI documentation does not publish a separate per-tunnel infrastructure price line that lnwjing should hard-code or promise as permanently free. Product/API subscription and usage costs can still apply. Documentation must therefore say **"no extra lnwjing/VPS/domain cost"**, not promise that every OpenAI use case costs $0.
 
 ## Why the old custom-relay plan was unnecessary for this requirement
 
-A custom lnwjud relay would require:
+A custom lnwjing relay would require:
 
 - an always-on public server;
 - stable DNS/TLS;
@@ -113,7 +113,7 @@ A custom lnwjud relay would require:
 - new security surface;
 - potentially ongoing hosting cost.
 
-That architecture is useful only if lnwjud wants to become independent of OpenAI Secure MCP Tunnel or support arbitrary remote MCP clients without their own tunnel/control plane.
+That architecture is useful only if lnwjing wants to become independent of OpenAI Secure MCP Tunnel or support arbitrary remote MCP clients without their own tunnel/control plane.
 
 It is not necessary when the target user already has OpenAI Tunnel and wants local continuity.
 
@@ -135,7 +135,7 @@ local MCP target
 tunnel-client POST /v1/tunnels/{tunnel_id}/response
 ```
 
-This means the process polling the tunnel can be replaced/restarted without requiring lnwjud to invent a new remote routing identity.
+This means the process polling the tunnel can be replaced/restarted without requiring lnwjing to invent a new remote routing identity.
 
 ## Native runtime management
 
@@ -150,10 +150,10 @@ tunnel-client runtimes stop
 tunnel-client runtimes rm
 ```
 
-For lnwjud the preferred alias is:
+For lnwjing the preferred alias is:
 
 ```text
-lnwjud
+lnwjing
 ```
 
 The key idea is:
@@ -164,7 +164,7 @@ runtime alias = reconstructable
 tunnel_id = persistent
 ```
 
-Official tunnel-client guidance also states that stopping/disconnecting local runtime supervision leaves the remote tunnel object intact. That is exactly the behavior lnwjud needs for restart recovery.
+Official tunnel-client guidance also states that stopping/disconnecting local runtime supervision leaves the remote tunnel object intact. That is exactly the behavior lnwjing needs for restart recovery.
 
 ## Proposed first-time setup
 
@@ -190,7 +190,7 @@ Tunnel ID:     tunnel_***************
 API key:       Saved securely
 
 Persistent runtime: ON
-Start with lnwjud:   ON
+Start with lnwjing:   ON
 
 [Enable / Repair Persistent Runtime]
 ```
@@ -205,7 +205,7 @@ Every Desktop launch:
 1. Start local MCP.
 2. Get current loopback MCP URL.
 3. Read existing saved tunnel identity.
-4. Inspect runtime alias `lnwjud`.
+4. Inspect runtime alias `lnwjing`.
 5. If healthy and correct -> leave it alone.
 6. If absent/stale -> connect same tunnel_id to current MCP URL.
 7. Verify health/ready/control-plane polling.
@@ -223,7 +223,7 @@ Internet down
    |
 tunnel-client cannot poll
    |
-lnwjud local MCP remains alive
+lnwjing local MCP remains alive
 local durable tasks remain alive
    |
 Internet returns
@@ -248,7 +248,7 @@ Desktop starts again
    |
 new loopback MCP endpoint starts
    |
-lnwjud reconnects/reconfigures local runtime binding
+lnwjing reconnects/reconfigures local runtime binding
    |
 same tunnel_id
 ```
@@ -268,7 +268,7 @@ boot 1: 127.0.0.1:51820/mcp
 boot 2: 127.0.0.1:52111/mcp
 ```
 
-lnwjud simply repairs the tunnel-client local binding to the current URL.
+lnwjing simply repairs the tunnel-client local binding to the current URL.
 
 A dynamic loopback port is safer against conflicts and does not affect the ChatGPT tunnel identity.
 
@@ -283,14 +283,14 @@ Goal:
 ```text
 one call ends
 connection/process later restarts
-next call still reaches same lnwjud installation/tunnel
+next call still reaches same lnwjing installation/tunnel
 ```
 
 ### Long-running work
 
 A remote MCP command can carry an individual response deadline. That does not justify a run-wide elapsed-time timer or a handoff instruction injected into unrelated tool results.
 
-For long work lnwjud must continue using:
+For long work lnwjing must continue using:
 
 ```text
 shell/build/test
@@ -312,11 +312,11 @@ Important protocol rule:
 - if response delivery returns `404` because the request is already fulfilled/no longer pending, treat it as terminal;
 - do not rerun the local MCP operation simply to manufacture another response.
 
-Therefore lnwjud should not implement its own competing tunnel poller or response retry logic.
+Therefore lnwjing should not implement its own competing tunnel poller or response retry logic.
 
 The official binary owns that protocol.
 
-## What lnwjud should implement
+## What lnwjing should implement
 
 ### Required
 
@@ -364,13 +364,13 @@ This lets users with current configurations upgrade without redoing their tunnel
 
 A clean v4.11 user story should be:
 
-1. install lnwjud;
+1. install lnwjing;
 2. download/install official tunnel-client;
 3. enter/select their existing tunnel ID and save runtime key once;
 4. enable Persistent Runtime;
 5. configure ChatGPT to that tunnel once;
-6. use lnwjud normally;
-7. reboot Windows or restart lnwjud;
+6. use lnwjing normally;
+7. reboot Windows or restart lnwjing;
 8. wait for `Connected`;
 9. continue using the same ChatGPT tunnel.
 
@@ -413,7 +413,7 @@ Remote tunnel identity unchanged
 
 ## Future optional architectures
 
-A self-hosted or managed lnwjud relay can still be explored later for scenarios such as:
+A self-hosted or managed lnwjing relay can still be explored later for scenarios such as:
 
 - non-OpenAI clients that cannot use Secure MCP Tunnel;
 - cross-provider persistent profiles;

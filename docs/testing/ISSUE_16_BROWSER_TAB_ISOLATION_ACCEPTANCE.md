@@ -1,6 +1,6 @@
 # Issue #16 Browser Tab Isolation Acceptance
 
-Status: acceptance A-H passed for lnwjud `4.29.0` on 2026-08-29; final packaging/provenance verification follows this evidence update.
+Status: acceptance A-H passed for lnwjing `4.29.0` on 2026-08-29; final packaging/provenance verification follows this evidence update.
 
 This record is intentionally redacted. It records only version/transport metadata, tab IDs, harmless URLs, tool names, permission outcomes, and pass/fail evidence. It must not contain cookies, auth headers, page contents, SQL, tokens, or ChatGPT conversation text.
 
@@ -22,9 +22,9 @@ Mutating a ChatGPT tab additionally requires both `allow_protected_tab_action: t
 | Source branch | `dev` |
 | Candidate code commit | `38ab96f` (acceptance evidence is committed afterward; no browser implementation changed during H) |
 | Package version | `4.29.0` |
-| Installed executable version/path | `%LOCALAPPDATA%\Programs\lnwjud\lnwjud.exe`; FileVersion `4.29.0`, ProductVersion `4.29.0.0` |
-| MCP transport | A-G: source-built `@lnwjud/capabilities` candidate against real lnwjud-managed Chrome CDP; H: actual ChatGPT request through the installed Secure MCP Tunnel runtime |
-| Chrome CDP port/profile | Managed Chrome CDP `127.0.0.1:9222`; disposable lnwjud-managed browser lifecycle used |
+| Installed executable version/path | `%LOCALAPPDATA%\Programs\lnwjing\lnwjing.exe`; FileVersion `4.29.0`, ProductVersion `4.29.0.0` |
+| MCP transport | A-G: source-built `@lnwjing/capabilities` candidate against real lnwjing-managed Chrome CDP; H: actual ChatGPT request through the installed Secure MCP Tunnel runtime |
+| Chrome CDP port/profile | Managed Chrome CDP `127.0.0.1:9222`; disposable lnwjing-managed browser lifecycle used |
 | Harmless navigation destinations | A-G: `https://example.com/?issue16=verified`; H: `https://example.com/?issue16=case-h` |
 
 ## Acceptance matrix
@@ -42,7 +42,7 @@ Mutating a ChatGPT tab additionally requires both `allow_protected_tab_action: t
 
 ## Managed Chrome A-G evidence
 
-A-G ran on 2026-08-29 against real lnwjud-managed Chrome on CDP port `9222`, using the source-built 4.29.0 candidate backend and the real CDP protocol. The protected sentinel ID was `B362...AD91` at `https://chatgpt.com/`; the application target ID was `2FD5...FEC3` at `https://example.com/`. The acceptance harness wrapped only `listTabs`/`request` for bounded dispatch evidence while delegating all browser operations to the real `NodeBrowserCdpProtocol`. Case C deliberately reversed the returned target-list ordering between resolutions; both batch requests still used the same application ID. No cookies, page payloads, credentials, or conversation contents were recorded.
+A-G ran on 2026-08-29 against real lnwjing-managed Chrome on CDP port `9222`, using the source-built 4.29.0 candidate backend and the real CDP protocol. The protected sentinel ID was `B362...AD91` at `https://chatgpt.com/`; the application target ID was `2FD5...FEC3` at `https://example.com/`. The acceptance harness wrapped only `listTabs`/`request` for bounded dispatch evidence while delegating all browser operations to the real `NodeBrowserCdpProtocol`. Case C deliberately reversed the returned target-list ordering between resolutions; both batch requests still used the same application ID. No cookies, page payloads, credentials, or conversation contents were recorded.
 
 ## Actual ChatGPT / Secure MCP Tunnel H evidence
 

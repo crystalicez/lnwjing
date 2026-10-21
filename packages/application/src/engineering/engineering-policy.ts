@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { ProjectProfile } from '@lnwjud/project';
+import type { ProjectProfile } from '@lnwjing/project';
 import {
   projectEngineeringSettings,
   type EngineeringHarnessSettings,
   type EngineeringProfile,
   type ProjectEngineeringSettings,
-} from '@lnwjud/shared';
+} from '@lnwjing/shared';
 
 export type EngineeringWorkspaceMode = 'inherit' | 'on' | 'off';
 export type EngineeringTaskScope = 'coding' | 'non_code' | 'unknown';

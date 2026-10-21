@@ -17,12 +17,12 @@ const outputLimit = 1024 * 1024;
 await access(electronExecutable);
 await access(mainEntry);
 
-const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-electron-startup-'));
+const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-electron-startup-'));
 const child = spawn(electronExecutable, ['--enable-logging=stderr', '--v=1', mainEntry], {
   cwd: desktopRoot,
   shell: false,
   windowsHide: true,
-  env: { ...process.env, LNWJUD_DATA_PATH: dataRoot },
+  env: { ...process.env, LNWJING_DATA_PATH: dataRoot },
 });
 let stdout = '';
 let stderr = '';

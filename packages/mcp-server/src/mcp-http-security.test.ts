@@ -5,7 +5,7 @@ import {
   PROTOCOL_VERSION_META_KEY,
 } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LNWJUD_MCP_IDENTITY_PATH, MAX_MCP_HTTP_BODY_BYTES, startMcpHttp, type McpHttpServerHandle } from './http.js';
+import { LNWJING_MCP_IDENTITY_PATH, MAX_MCP_HTTP_BODY_BYTES, startMcpHttp, type McpHttpServerHandle } from './http.js';
 
 function getStatus(url: URL, hostHeader?: string): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -38,12 +38,12 @@ describe('MCP localhost HTTP security boundary', () => {
     if (handle.ipv6Endpoint === null || handle.ipv6Endpoint === undefined) return;
 
     expect(handle.ipv6Endpoint.port).toBe(String(handle.address.port));
-    expect(await getStatus(new URL(LNWJUD_MCP_IDENTITY_PATH, handle.ipv6Endpoint))).toBe(200);
+    expect(await getStatus(new URL(LNWJING_MCP_IDENTITY_PATH, handle.ipv6Endpoint))).toBe(200);
   });
 
   it('denies public Host headers by default and permits an explicitly allowed tunnel hostname', async () => {
     const hostname = 'issue104.ngrok-free.dev';
-    const identity = new URL(LNWJUD_MCP_IDENTITY_PATH, handle.endpoint);
+    const identity = new URL(LNWJING_MCP_IDENTITY_PATH, handle.endpoint);
     expect(await getStatus(identity, hostname)).toBe(403);
 
     await handle.close();
@@ -54,7 +54,7 @@ describe('MCP localhost HTTP security boundary', () => {
       services: {},
       actor: { clientId: 'http-security-test', clientName: 'http-security-test' },
     });
-    expect(await getStatus(new URL(LNWJUD_MCP_IDENTITY_PATH, handle.endpoint), hostname)).toBe(200);
+    expect(await getStatus(new URL(LNWJING_MCP_IDENTITY_PATH, handle.endpoint), hostname)).toBe(200);
   });
 
   it('allows local origins and denies an untrusted origin', async () => {

@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { configureLinuxAutostart } from '../src/main/linux-autostart.js';
 
 describe('Linux XDG autostart', () => {
-  it('writes only the lnwjud entry atomically and escapes executable paths', async (): Promise<void> => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-autostart-'));
+  it('writes only the lnwjing entry atomically and escapes executable paths', async (): Promise<void> => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-autostart-'));
     try {
-      const file = await configureLinuxAutostart({ configDirectory: root, executablePath: '/opt/lnwjud path/lnwjud', enabled: true });
-      await expect(readFile(file, 'utf8')).resolves.toContain('Exec=/opt/lnwjud\\spath/lnwjud');
-      await expect(readFile(file, 'utf8')).resolves.toContain('TryExec=/opt/lnwjud\\spath/lnwjud');
-      await configureLinuxAutostart({ configDirectory: root, executablePath: '/opt/lnwjud path/lnwjud', enabled: false });
+      const file = await configureLinuxAutostart({ configDirectory: root, executablePath: '/opt/lnwjing path/lnwjing', enabled: true });
+      await expect(readFile(file, 'utf8')).resolves.toContain('Exec=/opt/lnwjing\\spath/lnwjing');
+      await expect(readFile(file, 'utf8')).resolves.toContain('TryExec=/opt/lnwjing\\spath/lnwjing');
+      await configureLinuxAutostart({ configDirectory: root, executablePath: '/opt/lnwjing path/lnwjing', enabled: false });
       await expect(readFile(file, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       await rm(root, { recursive: true, force: true });

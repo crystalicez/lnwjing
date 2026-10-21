@@ -9,7 +9,7 @@ import { WindowsProcessTree } from './windows-process-tree.js';
 describe('WindowsProcessTree', () => {
   it('does not resolve a successful stop until the target child has exited', async () => {
     if (process.platform !== 'win32') return;
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-process-tree-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-process-tree-'));
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       cwd: root,
       windowsHide: true,

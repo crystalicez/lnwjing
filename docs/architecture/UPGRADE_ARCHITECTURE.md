@@ -1,4 +1,4 @@
-# lnwjud upgrade architecture contract
+# lnwjing upgrade architecture contract
 
 Status: God-Tier local-first implementation checkpoint synchronized for `v5.8.7`.
 
@@ -22,7 +22,7 @@ The phase-by-phase implementation checklist is
 3. **Authorization is independent from ranking.** Context ordering is an
    optimization. In standard mode path guards, command policy, permission
    profiles, ownership, and hard blocks remain authoritative. Explicit trusted
-   Full Bypass skips lnwjud application authorization but ranking never enables it.
+   Full Bypass skips lnwjing application authorization but ranking never enables it.
 4. **Deterministic work stays local.** Search, file enumeration, Git parsing,
    symbol extraction, cache lookup, routing, policy checks, and test discovery
    must not require an LLM call.
@@ -144,7 +144,7 @@ continuation rather than lowering an existing limit silently.
 ### stdio
 
 - MCP protocol is the only stdout payload; diagnostics go to stderr.
-- The packaged direct-node `lnwjud-mcp-stdio.cmd` launcher remains available
+- The packaged direct-node `lnwjing-mcp-stdio.cmd` launcher remains available
   for direct local stdio hosts such as Codex CLI. Secure Tunnel does **not** use
   this headless runtime; it forwards to the Desktop loopback HTTP MCP and uses
   Desktop profile/Full Bypass state. Active Project and native approval remain
@@ -182,7 +182,7 @@ and surfaces unexpected exits/reconnect state.
 - Desktop HTTP/Secure Tunnel and direct STDIO expose separate Full Bypass toggles
   under Full Access (Unrestricted). They default OFF, require profile `full`, and
   are never inferred merely from selecting Full.
-- Trusted Full Bypass skips ordinary lnwjud application prompts/denials,
+- Trusted Full Bypass skips ordinary lnwjing application prompts/denials,
   including always-confirm tools, host approval, command policy, Active
   Project/allowed roots/protected paths, and explicit absolute outside targets.
   It does not bypass a live rolling scheduled-Goal ownership fence: workspace
@@ -209,7 +209,7 @@ tool call.
 
 `LogHub` merges three sources:
 
-1. `tunnel`: persistent `lnwjud-tunnel.log` tail;
+1. `tunnel`: persistent `lnwjing-tunnel.log` tail;
 2. `mcp`: activity NDJSON plus synchronized work-log entries;
 3. `process`: owned-process summaries and output metadata.
 

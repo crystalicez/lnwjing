@@ -1,4 +1,4 @@
-import type { IncidentExportResult } from '@lnwjud/ipc-contracts';
+import type { IncidentExportResult } from '@lnwjing/ipc-contracts';
 import type { IncidentReport } from './incident-report.js';
 
 export interface IncidentSaveCoordinatorOptions {

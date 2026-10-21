@@ -1,5 +1,5 @@
-import { isProtectedCriticalPath, type DestructiveAutoApprovalPolicy } from '@lnwjud/shared';
-import { hostPathApi, isAbsoluteHostPath, isFilesystemRoot, isHostPathWithin, relativeHostPath, resolveHostPath } from '@lnwjud/workspace';
+import { isProtectedCriticalPath, type DestructiveAutoApprovalPolicy } from '@lnwjing/shared';
+import { hostPathApi, isAbsoluteHostPath, isFilesystemRoot, isHostPathWithin, relativeHostPath, resolveHostPath } from '@lnwjing/workspace';
 import type { MutationPolicyDecision } from './mutation-policy.js';
 
 export interface WorkspaceScope {

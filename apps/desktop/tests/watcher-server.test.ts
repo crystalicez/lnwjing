@@ -140,7 +140,7 @@ describe('Watcher server', () => {
         timestamp: new Date().toISOString(),
         kind: 'project_test',
         status: 'running',
-        actor: '@lnwjud',
+        actor: '@lnwjing',
         summary: 'Running project test',
         workspaceId: 'workspace-b',
       };

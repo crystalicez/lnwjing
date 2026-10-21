@@ -1,4 +1,4 @@
-import type { CommandSpec } from '@lnwjud/domain';
+import type { CommandSpec } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import { processHandleSchema, processLogsSchema, processStartSchema, processStopSchema, projectCommandSchema } from './schemas.js';
 
@@ -8,7 +8,7 @@ export function processTools(context: McpToolContext): McpToolDefinition[] {
   return [
     defineTool({
       name: 'process_start',
-      description: 'Immediate-return managed process launcher for real executables and long-lived processes. With Full Bypass OFF, inline text-file rewrites must use edit_file/apply_patch/write_file and risky commands, scope changes, or permission-profile ASK decisions require confirmation. Trusted Full Bypass skips lnwjud command/profile/scope approval, including an explicitly absolute cwd outside the Active Project; input validation, executable availability, OS rights, and exact process ownership still apply. Starts one executable with separate arguments and returns processId as soon as the child is spawned; it never waits for command completion. Follow with process_status/process_logs/process_stop. For restart-safe durable work, use shell, whose MCP run mode is forced to background.',
+      description: 'Immediate-return managed process launcher for real executables and long-lived processes. With Full Bypass OFF, inline text-file rewrites must use edit_file/apply_patch/write_file and risky commands, scope changes, or permission-profile ASK decisions require confirmation. Trusted Full Bypass skips lnwjing command/profile/scope approval, including an explicitly absolute cwd outside the Active Project; input validation, executable availability, OS rights, and exact process ownership still apply. Starts one executable with separate arguments and returns processId as soon as the child is spawned; it never waits for command completion. Follow with process_status/process_logs/process_stop. For restart-safe durable work, use shell, whose MCP run mode is forced to background.',
       permission: 'EXECUTE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: processStartSchema,
@@ -57,7 +57,7 @@ export function processTools(context: McpToolContext): McpToolDefinition[] {
     }),
     defineTool({
       name: 'process_stop',
-      description: 'Stop an owned managed process tree after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjud confirmation gate; exact process ownership still applies.',
+      description: 'Stop an owned managed process tree after explicit chat confirmation in standard mode. Trusted Full Bypass skips the lnwjing confirmation gate; exact process ownership still applies.',
       permission: 'EXECUTE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: processStopSchema,
@@ -79,7 +79,7 @@ function projectCommandTools(context: McpToolContext): McpToolDefinition[] {
   ];
   return definitions.map(({ name, kind }) => defineTool({
     name,
-    description: `Immediate-return launcher for the detected project ${kind} command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjud approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash.`,
+    description: `Immediate-return launcher for the detected project ${kind} command. In standard mode the gateway previews the exact executable/argv for host approval and re-resolves it immediately before spawn; any change requires fresh approval. Trusted Full Bypass skips the lnwjing approval boundary. Project-owned script bodies remain opaque and are not covered by Recovery Trash.`,
     permission: 'EXECUTE',
     annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: projectCommandSchema,
@@ -98,8 +98,8 @@ function projectCommandTools(context: McpToolContext): McpToolDefinition[] {
 }
 
 function readApprovedProjectCommand(input: unknown): CommandSpec | undefined {
-  if (typeof input !== 'object' || input === null || !('__lnwjudApprovedProjectCommand' in input)) return undefined;
-  const value = (input as { __lnwjudApprovedProjectCommand?: unknown }).__lnwjudApprovedProjectCommand;
+  if (typeof input !== 'object' || input === null || !('__lnwjingApprovedProjectCommand' in input)) return undefined;
+  const value = (input as { __lnwjingApprovedProjectCommand?: unknown }).__lnwjingApprovedProjectCommand;
   if (typeof value !== 'object' || value === null) return undefined;
   const executable = (value as { executable?: unknown }).executable;
   const args = (value as { args?: unknown }).args;

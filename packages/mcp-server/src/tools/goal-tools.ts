@@ -4,8 +4,8 @@ import {
   MAX_GOAL_LEASE_SECONDS,
   MIN_GOAL_LEASE_SECONDS,
   engineeringGoalMetadata,
-} from '@lnwjud/application';
-import { ok } from '@lnwjud/domain';
+} from '@lnwjing/application';
+import { ok } from '@lnwjing/domain';
 import { rankSkillMatches, selectAutoSkillMatches } from '../skill-routing.js';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 
@@ -308,7 +308,7 @@ export function goalTools(context: McpToolContext): McpToolDefinition[] {
   const tools: McpToolDefinition[] = [
     defineTool({
       name: 'run_goal',
-      description: 'Immediate-return durable goal create/resume and lease acquisition. Every invocation re-reads workspace AGENTS.md when present and returns it as projectInstructionsPreflight so repository rules are available before subsequent work; the preflight is never cached. Invoke run_goal before the first mutation of any non-trivial multi-step change. For an active rolling goal whose prior worker died, stale-lease recovery still requires trustworthy runtime liveness and rotates the lease generation. Unfinished goals default to scheduledContinuation=auto: the client must load/follow the bundled lnwjud-scheduled-continuation skill and maintain exactly one Native ChatGPT hourly recurring watchdog with cloud execution requested. New v4.53 goals reuse the same native task ID across ordinary hourly wakes; checkpoints and collisions never imply per-wake successor creation or recurrence retiming. Historical v4.52 occurrence=once rows are migrated compatibly and must not overlap a new recurring watchdog. Continue useful work without waiting for the user to type continue/ทำต่อ. The leased worker is work-conserving: a milestone checkpoint is not a turn boundary, a transient tool/task-observation failure is not a handoff signal, and a safely reacquirable lease expiry should be recovered with the same goalKey so useful work continues in the same host turn. A concrete fixable failure discovered during CI, tests, code scanning, packaging, release validation, or another tool is the next unit of work; diagnose, repair, and validate it in the same host turn while safe useful actions remain instead of stopping to report it. A truthful native create failure or Resource not found is scheduler transport degradation only: keep the durable goal active and continue the current leased worker rather than terminalizing the work, and never substitute another scheduler. Stop scheduling only when the goal is terminal or scheduling is explicitly disabled. Native ChatGPT task operations remain host-owned through the Scheduled Task surface exposed to the chat; this tool never claims that a task was created and never substitutes browser/DOM automation, Windows Task Scheduler, cron, or shell timers.',
+      description: 'Immediate-return durable goal create/resume and lease acquisition. Every invocation re-reads workspace AGENTS.md when present and returns it as projectInstructionsPreflight so repository rules are available before subsequent work; the preflight is never cached. Invoke run_goal before the first mutation of any non-trivial multi-step change. For an active rolling goal whose prior worker died, stale-lease recovery still requires trustworthy runtime liveness and rotates the lease generation. Unfinished goals default to scheduledContinuation=auto: the client must load/follow the bundled lnwjing-scheduled-continuation skill and maintain exactly one Native ChatGPT hourly recurring watchdog with cloud execution requested. New v4.53 goals reuse the same native task ID across ordinary hourly wakes; checkpoints and collisions never imply per-wake successor creation or recurrence retiming. Historical v4.52 occurrence=once rows are migrated compatibly and must not overlap a new recurring watchdog. Continue useful work without waiting for the user to type continue/ทำต่อ. The leased worker is work-conserving: a milestone checkpoint is not a turn boundary, a transient tool/task-observation failure is not a handoff signal, and a safely reacquirable lease expiry should be recovered with the same goalKey so useful work continues in the same host turn. A concrete fixable failure discovered during CI, tests, code scanning, packaging, release validation, or another tool is the next unit of work; diagnose, repair, and validate it in the same host turn while safe useful actions remain instead of stopping to report it. A truthful native create failure or Resource not found is scheduler transport degradation only: keep the durable goal active and continue the current leased worker rather than terminalizing the work, and never substitute another scheduler. Stop scheduling only when the goal is terminal or scheduling is explicitly disabled. Native ChatGPT task operations remain host-owned through the Scheduled Task surface exposed to the chat; this tool never claims that a task was created and never substitutes browser/DOM automation, Windows Task Scheduler, cron, or shell timers.',
       permission: 'WRITE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: runGoalSchema,
@@ -408,7 +408,7 @@ export function goalTools(context: McpToolContext): McpToolDefinition[] {
             : {}),
           continuationDirective: {
             mode: scheduledContinuation,
-            skillId: 'workspace-agents-skills/lnwjud-scheduled-continuation',
+            skillId: 'workspace-agents-skills/lnwjing-scheduled-continuation',
             nativeTaskHostRequired: true,
             userMustPromptAgain: false,
             successorHostState,

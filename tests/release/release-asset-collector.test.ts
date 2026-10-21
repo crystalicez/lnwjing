@@ -15,7 +15,7 @@ describe('release asset collector', () => {
   it('validates target evidence beside provenance without confusing bundled dependency checksums', async () => {
     // Windows hosted runners may expose TEMP through a DOS short-name alias;
     // the collector intentionally requires canonical staging paths.
-    const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-release-collector-')));
+    const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-release-collector-')));
     const stagingDirectory = path.join(temporaryRoot, 'staging');
     const assetsDirectory = path.join(temporaryRoot, 'assets');
     try {
@@ -36,23 +36,23 @@ describe('release asset collector', () => {
         cwd: repositoryRoot,
         env: {
           ...process.env,
-          LNWJUD_RELEASE_STAGING_DIRECTORY: stagingDirectory,
-          LNWJUD_RELEASE_ASSETS_DIRECTORY: assetsDirectory,
-          LNWJUD_RELEASE_COMMIT: commit,
+          LNWJING_RELEASE_STAGING_DIRECTORY: stagingDirectory,
+          LNWJING_RELEASE_ASSETS_DIRECTORY: assetsDirectory,
+          LNWJING_RELEASE_COMMIT: commit,
         },
         windowsHide: true,
       });
 
       const assetNames = new Set(await readdir(assetsDirectory));
       for (const name of [
-        `lnwjud-Setup-${version}.exe`,
-        `lnwjud-Portable-${version}.exe`,
-        `lnwjud-${version}-arm64.dmg`,
-        `lnwjud-${version}-arm64.zip`,
-        `lnwjud-${version}-x64.dmg`,
-        `lnwjud-${version}-x64.zip`,
-        `lnwjud-${version}-x64.AppImage`,
-        `lnwjud-${version}-arm64.AppImage`,
+        `lnwjing-Setup-${version}.exe`,
+        `lnwjing-Portable-${version}.exe`,
+        `lnwjing-${version}-arm64.dmg`,
+        `lnwjing-${version}-arm64.zip`,
+        `lnwjing-${version}-x64.dmg`,
+        `lnwjing-${version}-x64.zip`,
+        `lnwjing-${version}-x64.AppImage`,
+        `lnwjing-${version}-arm64.AppImage`,
         'latest-linux.yml',
         'latest-linux-arm64.yml',
         'latest-mac.yml',
@@ -64,8 +64,8 @@ describe('release asset collector', () => {
         expect(assetNames.has(name), name).toBe(true);
       }
       const macManifest = await readFile(path.join(assetsDirectory, 'latest-mac.yml'), 'utf8');
-      expect(macManifest).toContain(`lnwjud-${version}-arm64.zip`);
-      expect(macManifest).toContain(`lnwjud-${version}-x64.zip`);
+      expect(macManifest).toContain(`lnwjing-${version}-arm64.zip`);
+      expect(macManifest).toContain(`lnwjing-${version}-x64.zip`);
       for (const name of assetNames) {
         if (!/^SHA256SUMS(?:-.+)?\.txt$/.test(name)) continue;
         const sums = await readFile(path.join(assetsDirectory, name), 'utf8');
@@ -89,7 +89,7 @@ describe('release asset collector', () => {
   });
 
   it('rejects a missing sibling checksum instead of using a nested copy', async () => {
-    const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjud-release-collector-')));
+    const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-release-collector-')));
     const stagingDirectory = path.join(temporaryRoot, 'staging');
     try {
       await writeTargetFixture(stagingDirectory, { key: 'win32-x64', platform: 'win32', arch: 'x64' });
@@ -102,9 +102,9 @@ describe('release asset collector', () => {
         cwd: repositoryRoot,
         env: {
           ...process.env,
-          LNWJUD_RELEASE_STAGING_DIRECTORY: stagingDirectory,
-          LNWJUD_RELEASE_ASSETS_DIRECTORY: path.join(temporaryRoot, 'assets'),
-          LNWJUD_RELEASE_COMMIT: commit,
+          LNWJING_RELEASE_STAGING_DIRECTORY: stagingDirectory,
+          LNWJING_RELEASE_ASSETS_DIRECTORY: path.join(temporaryRoot, 'assets'),
+          LNWJING_RELEASE_COMMIT: commit,
         },
         windowsHide: true,
       })).rejects.toThrow(/ENOENT.*SHA256SUMS\.txt/s);
@@ -121,17 +121,17 @@ async function writeTargetFixture(
   const targetDirectory = path.join(stagingDirectory, target.key, 'apps', 'desktop', 'dist', 'installers');
   await mkdir(targetDirectory, { recursive: true });
   const artifactNames = target.platform === 'win32'
-    ? [`lnwjud-Setup-${version}.exe`, `lnwjud-Setup-${version}.exe.blockmap`, `lnwjud-Portable-${version}.exe`, 'latest.yml', 'portable.yml']
+    ? [`lnwjing-Setup-${version}.exe`, `lnwjing-Setup-${version}.exe.blockmap`, `lnwjing-Portable-${version}.exe`, 'latest.yml', 'portable.yml']
     : target.platform === 'darwin'
-      ? [`lnwjud-${version}-${target.arch}.dmg`, `lnwjud-${version}-${target.arch}.zip`, 'latest-mac.yml']
-      : [`lnwjud-${version}-${target.arch}.AppImage`, `lnwjud-${version}-${target.arch}.deb`, target.arch === 'x64' ? 'latest-linux.yml' : 'latest-linux-arm64.yml'];
+      ? [`lnwjing-${version}-${target.arch}.dmg`, `lnwjing-${version}-${target.arch}.zip`, 'latest-mac.yml']
+      : [`lnwjing-${version}-${target.arch}.AppImage`, `lnwjing-${version}-${target.arch}.deb`, target.arch === 'x64' ? 'latest-linux.yml' : 'latest-linux-arm64.yml'];
   const artifactEntries = [];
   for (const name of artifactNames) {
     const contents = name.endsWith('.yml') && target.platform === 'darwin'
       ? [
         `version: ${version}`,
         'files:',
-        `  - url: lnwjud-${version}-${target.arch}.zip`,
+        `  - url: lnwjing-${version}-${target.arch}.zip`,
         '    sha512: YmFzZTY0',
         "releaseDate: '2026-09-08T00:00:00.000Z'",
         '',
@@ -142,11 +142,11 @@ async function writeTargetFixture(
   }
   const provenance = {
     schemaVersion: 1,
-    product: 'lnwjud',
+    product: 'lnwjing',
     version,
     platform: target.platform,
     arch: target.arch,
-    source: { repository: 'https://github.com/engasnm111/lnwjud', commit, dirty: false },
+    source: { repository: 'https://github.com/crystalicez/lnwjing', commit, dirty: false },
     build: { environment: 'github-actions', workingTreeDirtyAtEvidence: false },
     capabilityBridge: null,
     artifacts: artifactEntries,

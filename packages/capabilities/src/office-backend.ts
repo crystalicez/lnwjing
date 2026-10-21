@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { appError, err, isApplicationAuthorized, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, isApplicationAuthorized, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import { readCapabilityActiveWorkspaceRoot } from './task-ownership.js';
 import type { CapabilityBackend } from './local-capability-service.js';
 

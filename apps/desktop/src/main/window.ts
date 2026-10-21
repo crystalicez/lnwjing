@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserWindow, screen } from 'electron';
-import { comparableHostPath } from '@lnwjud/workspace';
+import { comparableHostPath } from '@lnwjing/workspace';
 import { mutationApprovalWindowSize } from './mutation-approval-layout.js';
 import { windowChromeOptions } from './window-chrome.js';
 
@@ -93,7 +93,7 @@ export function createLogViewerWindow(): BrowserWindow {
     height: 680,
     show: true,
     autoHideMenuBar: true,
-    title: 'lnwjud — Live Logs',
+    title: 'lnwjing — Live Logs',
     ...windowChromeOptions(),
     ...(iconPath !== undefined ? { icon: iconPath } : {}),
     webPreferences: {

@@ -2,8 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import path from 'node:path';
-import { appError, err, ok, type AppErrorCode, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import type { ProcessTreeTerminator } from '@lnwjud/process';
+import { appError, err, ok, type AppErrorCode, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import type { ProcessTreeTerminator } from '@lnwjing/process';
 import { CAPABILITY_TASK_OWNER_METADATA_KEY, capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;

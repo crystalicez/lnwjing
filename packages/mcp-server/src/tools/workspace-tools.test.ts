@@ -1,4 +1,4 @@
-import { appError, err, ok } from '@lnwjud/domain';
+import { appError, err, ok } from '@lnwjing/domain';
 import { describe, expect, it } from 'vitest';
 import { ContextEconomyRuntime } from '../context-economy.js';
 import type { McpApplicationServices, McpToolContext } from './tool-types.js';

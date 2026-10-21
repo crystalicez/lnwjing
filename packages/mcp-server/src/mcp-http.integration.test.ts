@@ -1,11 +1,11 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { ok } from '@lnwjud/domain';
-import type { ToolAvailabilitySnapshot } from '@lnwjud/shared';
+import { ok } from '@lnwjing/domain';
+import type { ToolAvailabilitySnapshot } from '@lnwjing/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityTracker } from './activity-tracker.js';
 import { ToolRegistry, type McpApplicationServices } from './tool-registry.js';
 import { BUNDLED_PONYTAIL_SKILL_ID } from './ponytail-runtime.js';
-import { LNWJUD_MCP_IDENTITY_PATH, startMcpHttp, type McpHttpServerHandle } from './http.js';
+import { LNWJING_MCP_IDENTITY_PATH, startMcpHttp, type McpHttpServerHandle } from './http.js';
 
 const TEST_PNG_640X480 = 'iVBORw0KGgoAAAANSUhEUgAAAoAAAAHgCAIAAAC6s0uzAAAF9klEQVR42u3VoQEAMAjAsDGJRvP/mXwBJjmhppHVDwDY9SUAAAMGAAMGAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgADBgAMGAAMGAAwYAAwYADAgAHAgAEAAwYAAwYAAwYADBgADBgAMGAAMGAAwIABwIABAAMGAAMGAAMGAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgADBgAMGAAMGAAwYAAwYADAgAHAgAEAAwYAAwYAAwYADBgADBgAMGAAMGAAwIABwIABAAMGAAMGAAMGAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgADBgAMGAAMGAAwYAAwYADAgAHAgAEAAwYAAwYAAwYADBgADBgAMGAAMGAAwIABwIABAAMGAAMGAAMGAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgADBgAMGAAMGAAwYAAwYADAgAHAgAEAAwYAAwYAAwYADBgADBgAMGAAMGAAwIABwIABAAMGAAMGAAMGAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAMGAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgADBgAMGAAMGAAwIABwIABAAMGAAMGAAwYAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAMGAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgADBgAMGAAMGAAwIABwIABAAMGAAMGAAwYAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAMGAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgADBgAMGAAMGAAwIABwIABAAMGAAMGAAwYAAwYAAwYADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAwYAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgAMGAAMGAAMGAAwIABwIABAAMGAAMGAAwYAAwYADBgADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAwYAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgAMGAAMGAAMGAAwIABwIABAAMGAAMGAAwYAAwYADBgADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAwYAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgAMGAAMGAAMGAAwIABwIABAAMGAAMGAAwYAAwYADBgADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAwYAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgAMGAAMGAAMGAAwIABwIABAAMGAAMGAAwYAAwYADBgADBgADBgAMCAAcCAAQADBgADBgAMGAAMGAAwYAAwYAAwYADAgAHAgAEAAwYAAwYADBgADBgAMGAAMGAAMGAAwIABwIABAAMGAAMGAAwYAO4Ng+cD/NAAns4AAAAASUVORK5CYII=';
 const expectedAdvertisedToolCount = new ToolRegistry({}, { clientId: 'count-test', clientName: 'count-test' }).list().length;
@@ -46,7 +46,7 @@ describe('MCP localhost HTTP transport', () => {
     expect(handle.endpoint.pathname).toBe('/mcp');
 
     const client = new Client(
-      { name: 'lnwjud-http-test-client', version: '0.1.0' },
+      { name: 'lnwjing-http-test-client', version: '0.1.0' },
       { versionNegotiation: { mode: { pin: '2026-07-28' } } },
     );
     const transport = new StreamableHTTPClientTransport(handle.endpoint);
@@ -636,12 +636,12 @@ describe('MCP localhost HTTP transport', () => {
   });
 
   it('serves a loopback identity document that Doctor can distinguish from an unrelated listener', async () => {
-    const identityUrl = new URL(LNWJUD_MCP_IDENTITY_PATH, handle.endpoint);
+    const identityUrl = new URL(LNWJING_MCP_IDENTITY_PATH, handle.endpoint);
     const response = await fetch(identityUrl);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('x-lnwjud-service')).toBe('desktop-mcp');
-    await expect(response.json()).resolves.toMatchObject({ product: 'lnwjud', service: 'desktop-mcp', protocol: 1 });
+    expect(response.headers.get('x-lnwjing-service')).toBe('desktop-mcp');
+    await expect(response.json()).resolves.toMatchObject({ product: 'lnwjing', service: 'desktop-mcp', protocol: 1 });
   });
 
   it('does not poison a legacy session after one protocol-level tool error', async () => {

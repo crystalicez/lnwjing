@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DoctorReport, ResolvedRemediation, ToolCatalogItem } from '@lnwjud/ipc-contracts';
+import type { DoctorReport, ResolvedRemediation, ToolCatalogItem } from '@lnwjing/ipc-contracts';
 import { formatDateTime } from '../src/renderer/date-time.js';
 import { DoctorPanel } from '../src/renderer/features/doctor/DoctorPanel.js';
 import { ToolDetailModal } from '../src/renderer/features/tools/ToolDetailModal.js';
@@ -20,7 +20,7 @@ const remediation: ResolvedRemediation = {
 
 const tool: ToolCatalogItem = {
   name: 'db_inspect',
-  origin: 'lnwjud',
+  origin: 'lnwjing',
   category: 'automation',
   title: 'DB Inspect · งานอัตโนมัติ',
   shortDescription: 'Inspect a database.',
@@ -86,7 +86,7 @@ describe('Tools and Doctor UX', () => {
   it('renders actionable system/browser remediation labels instead of a generic settings button', () => {
     const browserRemediation: ResolvedRemediation = {
       id: 'configure_browser_cdp',
-      title: 'เปิดเบราว์เซอร์ที่ lnwjud จัดการ',
+      title: 'เปิดเบราว์เซอร์ที่ lnwjing จัดการ',
       explanation: 'เปิด Managed Browser',
       steps: ['กดเปิด Managed Browser'],
       actions: [{ kind: 'launch_managed_browser' }],
@@ -107,7 +107,7 @@ describe('Tools and Doctor UX', () => {
     expect(toolMarkup).toContain('เปิด Managed Browser');
 
     const englishMarkup = renderToStaticMarkup(createElement(ToolDetailModal, {
-      locale: 'en', item: browserTool, remediations: [{ ...browserRemediation, title: 'Start the lnwjud managed browser' }], onClose: () => undefined, onRemediation: () => undefined,
+      locale: 'en', item: browserTool, remediations: [{ ...browserRemediation, title: 'Start the lnwjing managed browser' }], onClose: () => undefined, onRemediation: () => undefined,
     }));
     expect(englishMarkup).toContain('Start required');
     expect(englishMarkup).not.toContain('Needs setup');
@@ -205,7 +205,7 @@ describe('Tools and Doctor UX', () => {
       locale: 'th', report, remediations: [], onRunDoctor: async () => undefined,
     }));
     expect(markup).toContain('รายการนี้ต้องตรวจหรือแก้ด้วยตนเอง');
-    expect(markup).toContain('จึงไม่มีสวิตช์ใน lnwjud ที่แก้ให้ได้อย่างปลอดภัย');
+    expect(markup).toContain('จึงไม่มีสวิตช์ใน lnwjing ที่แก้ให้ได้อย่างปลอดภัย');
   });
 
   it('renders a polished accessible availability switch in both the catalog and detail modal', () => {

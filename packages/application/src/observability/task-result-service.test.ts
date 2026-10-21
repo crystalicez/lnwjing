@@ -3,9 +3,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
-import type { AuditEventRepository } from '@lnwjud/audit';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { ok } from '@lnwjing/domain';
+import type { AuditEventRepository } from '@lnwjing/audit';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from '../file-service.js';
 import type { GoalContinuationService } from '../goal-continuation-service.js';
 import { TaskResultService } from './task-result-service.js';
@@ -14,7 +14,7 @@ const created:string[]=[];
 afterEach(async()=>{await Promise.all(created.splice(0).map((dir)=>rm(dir,{recursive:true,force:true})))});
 const actor:FileActor={clientId:'goal-owner',clientName:'Goal Owner'};
 async function fixture(): Promise<{dir:string;workspace:WorkspaceRepository;service:GoalContinuationService}> {
-  const dir=await mkdtemp(path.join(os.tmpdir(),'lnwjud-task-results-'));
+  const dir=await mkdtemp(path.join(os.tmpdir(),'lnwjing-task-results-'));
   created.push(dir);
   const workspace={get:async(id:string)=>id==='ws'?{id:'ws',realRootPath:dir}:null} as WorkspaceRepository;
   const goal={goalId:'goal-1',workspaceId:'ws',revision:4,status:'active',blockers:[],

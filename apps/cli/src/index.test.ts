@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { err } from '@lnwjud/domain';
+import { err } from '@lnwjing/domain';
 import { parseCliArgs, runCli, type CliDependencies } from './index.js';
 
 describe('CLI argument parser', () => {

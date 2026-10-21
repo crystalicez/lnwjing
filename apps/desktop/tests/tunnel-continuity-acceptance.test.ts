@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus } from '@lnwjing/ipc-contracts';
 import { applyConfiguredTunnelRuntimePolicy, autoStartPersistentTunnel, configuredTunnelRuntimePolicy } from '../src/main/desktop-services.js';
 import { TunnelRuntimeReconciler, type TunnelRuntimeDesiredState, type TunnelRuntimeReconcilerAdapter } from '../src/main/tunnel-runtime-reconciler.js';
 import { TunnelRuntimeSupervisor, TRANSIENT_BACKOFF_MS } from '../src/main/tunnel-runtime-supervisor.js';
@@ -33,7 +33,7 @@ class MutableRuntimeAdapter implements TunnelRuntimeReconcilerAdapter {
     this.current = runtime(initial);
   }
 
-  public runtimeAlias(): string { return 'lnwjud'; }
+  public runtimeAlias(): string { return 'lnwjing'; }
   public async capabilities(): Promise<TunnelRuntimeCapabilities> { return CAPABILITIES; }
   public async status(): Promise<NativeTunnelRuntimeStatus> { return { ...this.current }; }
 
@@ -80,7 +80,7 @@ describe('v4.11 persistent tunnel continuity acceptance', () => {
   it('reconciles configured stopped intent instead of bypassing a surviving runtime', async () => {
     const stopped: TunnelStatus = {
       state: 'stopped', source: 'desktop', hasApiKey: true, authReady: true, runtimeCredentialAvailable: true,
-      clientPath: 'tunnel-client.exe', profileExists: true, message: null, logPath: 'lnwjud-tunnel.log', persistent: null,
+      clientPath: 'tunnel-client.exe', profileExists: true, message: null, logPath: 'lnwjing-tunnel.log', persistent: null,
     };
     const reconcileStoppedRuntime = vi.fn(async (): Promise<TunnelStatus | null> => stopped);
     const startAutomatically = vi.fn(async (): Promise<TunnelStatus> => stopped);
@@ -95,7 +95,7 @@ describe('v4.11 persistent tunnel continuity acceptance', () => {
   it('auto-starts a legacy configured profile with no saved desired state when auto reconnect is enabled', async () => {
     const running: TunnelStatus = {
       state: 'running', source: 'desktop', hasApiKey: true, authReady: true, runtimeCredentialAvailable: true,
-      clientPath: 'tunnel-client.exe', profileExists: true, message: null, logPath: 'lnwjud-tunnel.log', persistent: null,
+      clientPath: 'tunnel-client.exe', profileExists: true, message: null, logPath: 'lnwjing-tunnel.log', persistent: null,
     };
     const reconcileStoppedRuntime = vi.fn(async (): Promise<TunnelStatus | null> => null);
     const startAutomatically = vi.fn(async (): Promise<TunnelStatus> => running);
@@ -219,10 +219,10 @@ describe('v4.11 persistent tunnel continuity acceptance', () => {
       state: 'running',
       source: 'external',
       hasApiKey: true,
-      clientPath: 'C:\\Program Files\\lnwjud\\resources\\tunnel-client\\tunnel-client.exe',
+      clientPath: 'C:\\Program Files\\lnwjing\\resources\\tunnel-client\\tunnel-client.exe',
       profileExists: true,
       message: null,
-      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjud.log',
+      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjing.log',
       persistent: null,
     };
     const prerequisiteGaps: TunnelStatus[] = [
@@ -244,10 +244,10 @@ describe('v4.11 persistent tunnel continuity acceptance', () => {
       state: 'running',
       source: 'external',
       hasApiKey: true,
-      clientPath: 'C:\\Program Files\\lnwjud\\resources\\tunnel-client\\tunnel-client.exe',
+      clientPath: 'C:\\Program Files\\lnwjing\\resources\\tunnel-client\\tunnel-client.exe',
       profileExists: true,
       message: null,
-      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjud.log',
+      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjing.log',
       persistent: null,
     };
     const startAutomatically = vi.fn(async (): Promise<TunnelStatus> => status);
@@ -265,7 +265,7 @@ describe('v4.11 persistent tunnel continuity acceptance', () => {
       clientPath: null,
       profileExists: false,
       message: null,
-      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjud.log',
+      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjing.log',
       persistent: null,
     };
     const reconcileStoppedRuntime = vi.fn(async (): Promise<TunnelStatus | null> => stopped);
@@ -286,10 +286,10 @@ describe('v4.11 persistent tunnel continuity acceptance', () => {
       state: 'stopped',
       source: 'desktop',
       hasApiKey: true,
-      clientPath: 'C:\\Program Files\\lnwjud\\resources\\tunnel-client\\tunnel-client.exe',
+      clientPath: 'C:\\Program Files\\lnwjing\\resources\\tunnel-client\\tunnel-client.exe',
       profileExists: true,
       message: null,
-      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjud.log',
+      logPath: 'C:\\Users\\fixture\\AppData\\Roaming\\tunnel-client\\lnwjing.log',
       persistent: null,
     };
     const controller = {

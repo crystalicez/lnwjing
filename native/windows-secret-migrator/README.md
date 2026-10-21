@@ -1,6 +1,6 @@
 # Windows secret migrator
 
-`lnwjud-windows-secret-migrator.exe` is a one-time, Windows-only compatibility
+`lnwjing-windows-secret-migrator.exe` is a one-time, Windows-only compatibility
 helper for v4.44.0 legacy secrets. It reads one JSON request per line and
 returns one JSON response per line on stdout. It calls `CryptUnprotectData`
 directly for the current Windows user; it never starts PowerShell and never

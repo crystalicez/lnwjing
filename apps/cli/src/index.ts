@@ -1,7 +1,7 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import { formatCodexDiscoveryError, type CodexDiscoveryResult } from '@lnwjud/codex';
-import type { DoctorReport } from '@lnwjud/application';
-import type { Workspace } from '@lnwjud/workspace';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import { formatCodexDiscoveryError, type CodexDiscoveryResult } from '@lnwjing/codex';
+import type { DoctorReport } from '@lnwjing/application';
+import type { Workspace } from '@lnwjing/workspace';
 import { formatDoctorReport } from './commands/doctor.js';
 
 export { formatDoctorReport } from './commands/doctor.js';
@@ -42,7 +42,7 @@ export function parseCliArgs(args: readonly string[]): Result<CliCommand> {
   if (args[0] === 'codex' && args[1] === 'doctor' && args.length === 2) return ok({ kind: 'codex-doctor' });
   if (args[0] === 'workspace') return parseWorkspaceArgs(args);
   if (args[0] === 'mcp') return parseMcpArgs(args);
-  return err(appError('INVALID_INPUT', 'Unknown lnwjud command'));
+  return err(appError('INVALID_INPUT', 'Unknown lnwjing command'));
 }
 
 export async function runCli(args: readonly string[], dependencies: CliDependencies): Promise<number> {
@@ -99,7 +99,7 @@ export async function runCli(args: readonly string[], dependencies: CliDependenc
 function parseWorkspaceArgs(args: readonly string[]): Result<CliCommand> {
   if (args[1] === 'add' && args.length === 3 && args[2] !== undefined) return ok({ kind: 'workspace-add', rootPath: args[2] });
   if (args[1] === 'list' && args.length === 2) return ok({ kind: 'workspace-list' });
-  return err(appError('INVALID_INPUT', 'Usage: lnwjud workspace add <path> | workspace list'));
+  return err(appError('INVALID_INPUT', 'Usage: lnwjing workspace add <path> | workspace list'));
 }
 
 function parseMcpArgs(args: readonly string[]): Result<CliCommand> {
@@ -114,7 +114,7 @@ function parseMcpArgs(args: readonly string[]): Result<CliCommand> {
       workspaceReference = args[index + 1];
       index += 1;
     } else {
-      return err(appError('INVALID_INPUT', 'Usage: lnwjud mcp --stdio|--http [--workspace <id-or-path>]'));
+      return err(appError('INVALID_INPUT', 'Usage: lnwjing mcp --stdio|--http [--workspace <id-or-path>]'));
     }
   }
   if (kind === undefined) return err(appError('INVALID_INPUT', 'Choose an MCP transport with --stdio or --http'));

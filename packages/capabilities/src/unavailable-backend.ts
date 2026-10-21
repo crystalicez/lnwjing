@@ -1,4 +1,4 @@
-import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 
 export type UnavailableCapabilityReason =

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DoctorCheck } from '@lnwjud/ipc-contracts';
+import type { DoctorCheck } from '@lnwjing/ipc-contracts';
 import { DoctorPanel } from '../src/renderer/features/doctor/DoctorPanel.js';
 
 function check(overrides: Partial<DoctorCheck> & Pick<DoctorCheck, 'id' | 'status'>): DoctorCheck {

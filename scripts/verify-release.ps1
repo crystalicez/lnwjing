@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$previousSourceDirtyAtStart = $env:LNWJUD_SOURCE_DIRTY_AT_START
+$previousSourceDirtyAtStart = $env:LNWJING_SOURCE_DIRTY_AT_START
 
 function Invoke-ReleaseStage {
     param(
@@ -56,7 +56,7 @@ try {
         throw "Unable to inspect repository status before release verification"
     }
     $sourceDirtyAtStart = (($sourceStatusAtStart -join "`n").Trim().Length -gt 0)
-    $env:LNWJUD_SOURCE_DIRTY_AT_START = if ($sourceDirtyAtStart) { '1' } else { '0' }
+    $env:LNWJING_SOURCE_DIRTY_AT_START = if ($sourceDirtyAtStart) { '1' } else { '0' }
     if ($env:GITHUB_ACTIONS -eq 'true' -and $sourceDirtyAtStart) {
         throw "GitHub release verification requires a clean source tree before verification begins"
     }
@@ -92,9 +92,9 @@ try {
         }
         $rootPackage = Get-Content -LiteralPath (Join-Path $repositoryRoot 'package.json') -Raw | ConvertFrom-Json
         $requiredWindowsArtifacts = @(
-            "lnwjud-Setup-$($rootPackage.version).exe",
-            "lnwjud-Setup-$($rootPackage.version).exe.blockmap",
-            "lnwjud-Portable-$($rootPackage.version).exe",
+            "lnwjing-Setup-$($rootPackage.version).exe",
+            "lnwjing-Setup-$($rootPackage.version).exe.blockmap",
+            "lnwjing-Portable-$($rootPackage.version).exe",
             'latest.yml',
             'portable.yml',
             'SHA256SUMS.txt',
@@ -113,10 +113,10 @@ try {
 }
 finally {
     if ($null -eq $previousSourceDirtyAtStart) {
-        Remove-Item Env:LNWJUD_SOURCE_DIRTY_AT_START -ErrorAction SilentlyContinue
+        Remove-Item Env:LNWJING_SOURCE_DIRTY_AT_START -ErrorAction SilentlyContinue
     }
     else {
-        $env:LNWJUD_SOURCE_DIRTY_AT_START = $previousSourceDirtyAtStart
+        $env:LNWJING_SOURCE_DIRTY_AT_START = $previousSourceDirtyAtStart
     }
     Pop-Location
 }

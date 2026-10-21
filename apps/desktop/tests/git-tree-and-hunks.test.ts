@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { GitFileTree } from '../src/renderer/features/git/GitFileTree.js';
-import type { GitStatusEntrySummary } from '@lnwjud/ipc-contracts';
+import type { GitStatusEntrySummary } from '@lnwjing/ipc-contracts';
 import { buildGitFileTree } from '../src/renderer/features/git/git-file-tree.js';
 import { formatGitHunkLabel } from '../src/renderer/features/git/SplitDiffViewer.js';
 

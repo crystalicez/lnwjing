@@ -1,4 +1,4 @@
-# lnwjud macOS native host
+# lnwjing macOS native host
 
 This helper is a signed, least-privilege companion inside the macOS app bundle.
 It speaks bounded newline-delimited JSON on stdin/stdout. `stdout` contains only

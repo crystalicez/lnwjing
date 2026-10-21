@@ -39,24 +39,24 @@ import {
   ToolAvailabilityService,
   type FileActor,
   type DoctorProbeResult,
-} from '@lnwjud/application';
-import { SharedManagedWriterAdmission, SqliteWorkspaceWriterLease, SecureRepositoryImportRuntime } from '@lnwjud/capabilities';
-import { AuditService, decodeActivityTargetReference, type ActivityAuditEvent, type ActivityTargetDetail, type AuditEventRepository, type AuditEventSummaryProjection } from '@lnwjud/audit';
-import { CodexDiscovery, formatCodexDiscoveryError } from '@lnwjud/codex';
-import type { GoalRecord, Result } from '@lnwjud/domain';
+} from '@lnwjing/application';
+import { SharedManagedWriterAdmission, SqliteWorkspaceWriterLease, SecureRepositoryImportRuntime } from '@lnwjing/capabilities';
+import { AuditService, decodeActivityTargetReference, type ActivityAuditEvent, type ActivityTargetDetail, type AuditEventRepository, type AuditEventSummaryProjection } from '@lnwjing/audit';
+import { CodexDiscovery, formatCodexDiscoveryError } from '@lnwjing/codex';
+import type { GoalRecord, Result } from '@lnwjing/domain';
 import {
   EXTENSIONS_SETTINGS_KEY,
   createLocalExtensionsService,
   parseExtensionsSettings,
   type ExtensionsService,
   type ExtensionsSettings,
-} from '@lnwjud/extensions';
+} from '@lnwjing/extensions';
 import {
   ActivityTracker,
   ContextEconomyRuntime,
   DapSessionService,
   OfficeDataWorkflowService,
-  LNWJUD_MCP_IDENTITY_PATH,
+  LNWJING_MCP_IDENTITY_PATH,
   RuntimeEngineeringEvidenceVerifier,
   createEngineeringArtifactVerifier,
   createEngineeringSourceStateProvider,
@@ -69,10 +69,10 @@ import {
   type McpApplicationServices,
   type McpHttpServerOptions,
   type WorkspaceScope,
-} from '@lnwjud/mcp-server';
-import { permissionProfiles, type PermissionProfile, type PermissionProfileName } from '@lnwjud/permissions';
-import type { ManagedProcess } from '@lnwjud/process';
-import { PathExecutableResolver } from '@lnwjud/search';
+} from '@lnwjing/mcp-server';
+import { permissionProfiles, type PermissionProfile, type PermissionProfileName } from '@lnwjing/permissions';
+import type { ManagedProcess } from '@lnwjing/process';
+import { PathExecutableResolver } from '@lnwjing/search';
 import {
   ALLOW_AI_DELETE_SETTING_KEY,
   DESTRUCTIVE_AUTO_APPROVAL_SETTING_KEY,
@@ -128,11 +128,11 @@ import {
   type DestructiveAutoApprovalPolicy,
   type EngineeringHarnessSettings,
   type EngineeringHarnessWorkspaceOverride,
-} from '@lnwjud/shared';
-import { AesGcmCheckpointCipher, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjud/storage';
-import { SqliteGoalRepository } from '@lnwjud/storage';
-import type { Workspace } from '@lnwjud/workspace';
-import { comparableHostPath, isDriveRoot, isMachineRootPath, resolveHostPath, SecretPolicy, WorkspacePathGuard, WorkspaceService } from '@lnwjud/workspace';
+} from '@lnwjing/shared';
+import { AesGcmCheckpointCipher, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
+import { SqliteGoalRepository } from '@lnwjing/storage';
+import type { Workspace } from '@lnwjing/workspace';
+import { comparableHostPath, isDriveRoot, isMachineRootPath, resolveHostPath, SecretPolicy, WorkspacePathGuard, WorkspaceService } from '@lnwjing/workspace';
 import {
   type AddWorkspaceRequest,
   type BackupRestoreNotice as IpcBackupRestoreNotice,
@@ -212,7 +212,7 @@ import {
   type UiLocale,
   type WorkLogEntry,
   type WorkspaceSummary,
-} from '@lnwjud/ipc-contracts';
+} from '@lnwjing/ipc-contracts';
 import type { DesktopIpcServices } from './main.js';
 import { buildCapabilitySummary, createLocalCapabilityRuntime } from './capability-runtime.js';
 import { AsyncTtlCache } from './async-ttl-cache.js';
@@ -327,8 +327,8 @@ export function toolAvailabilityHostSyncDisposition(
   return {
     chatgptActionRefreshMayBeRequired: true,
     hostSyncMessage: locale === 'th'
-      ? 'lnwjud อัปเดตรายการ MCP แบบ live แล้ว แต่ ChatGPT App ที่อนุมัติ action snapshot ไว้อาจยังใช้รายการเดิม การกด F5 ในเบราว์เซอร์ไม่รับประกันว่าจะรีเฟรช snapshot นี้ ให้ใช้ Action Refresh / Scan Tools ใน ChatGPT; ถ้า deployment ไม่มีคำสั่งดังกล่าว ให้ recreate + republish app ตาม workflow ของผู้ดูแล'
-      : 'lnwjud updated the live MCP tool list, but an approved ChatGPT App action snapshot may still use the previous list. Browser F5 is not guaranteed to refresh that snapshot. Use ChatGPT Action Refresh / Scan Tools; if that workflow is unavailable for this deployment, recreate + republish the app through the administrator workflow.',
+      ? 'lnwjing อัปเดตรายการ MCP แบบ live แล้ว แต่ ChatGPT App ที่อนุมัติ action snapshot ไว้อาจยังใช้รายการเดิม การกด F5 ในเบราว์เซอร์ไม่รับประกันว่าจะรีเฟรช snapshot นี้ ให้ใช้ Action Refresh / Scan Tools ใน ChatGPT; ถ้า deployment ไม่มีคำสั่งดังกล่าว ให้ recreate + republish app ตาม workflow ของผู้ดูแล'
+      : 'lnwjing updated the live MCP tool list, but an approved ChatGPT App action snapshot may still use the previous list. Browser F5 is not guaranteed to refresh that snapshot. Use ChatGPT Action Refresh / Scan Tools; if that workflow is unavailable for this deployment, recreate + republish the app through the administrator workflow.',
   };
 }
 
@@ -413,7 +413,7 @@ function watcherActivityFromSink(event: ActivitySinkEvent): WatcherActivityEvent
   const status: WatcherStatus = event.phase === 'started'
     ? isReadLike ? 'analyzing' : 'running'
     : failed ? 'error' : 'done';
-  const actorName = /^(codex|delegate_|agent_swarm_)/.test(event.toolName) ? 'Codex' : '@lnwjud';
+  const actorName = /^(codex|delegate_|agent_swarm_)/.test(event.toolName) ? 'Codex' : '@lnwjing';
   const toolLabel = event.toolName.replaceAll('_', ' ');
   return {
     id: `${event.callId}:${event.phase}`,
@@ -431,7 +431,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   if (options.secretProtector !== undefined && options.checkpointEncryptionKey === undefined && options.checkpointCipher === undefined) {
     throw new Error('Desktop runtime requires a resolved checkpoint encryption key or fail-closed checkpoint cipher before startup');
   }
-  const databaseFilename = path.join(dataPath, 'lnwjud.sqlite');
+  const databaseFilename = path.join(dataPath, 'lnwjing.sqlite');
   const backupDirectory = path.join(dataPath, 'backups');
   const database = new SqliteDatabase(databaseFilename, {
     backupDirectory,
@@ -553,7 +553,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     recoverableDelete: (): boolean => destructivePolicyProvider().recoverableDelete,
     recoveryTrashRoot,
   });
-  const ponytailProfilePath = '.lnwjud/project-profile.json';
+  const ponytailProfilePath = '.lnwjing/project-profile.json';
   const readWorkspaceProfile = async (workspaceId: string): Promise<Record<string, unknown>> => {
     const loaded = await fileService.readFile(actor, workspaceId, { path: ponytailProfilePath });
     if (!loaded.ok) {
@@ -841,8 +841,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       },
     },
   );
-  const mcpPort = readMcpPort(process.env.LNWJUD_MCP_PORT ?? settingsRepository.get(USER_SETTING_KEYS.mcpHttpPort) ?? undefined);
-  const mcpAllowedHostnames = parseMcpAllowedHostnames(process.env.LNWJUD_MCP_ALLOWED_HOSTNAMES ?? settingsRepository.get(USER_SETTING_KEYS.mcpAllowedHostnames) ?? undefined);
+  const mcpPort = readMcpPort(process.env.LNWJING_MCP_PORT ?? settingsRepository.get(USER_SETTING_KEYS.mcpHttpPort) ?? undefined);
+  const mcpAllowedHostnames = parseMcpAllowedHostnames(process.env.LNWJING_MCP_ALLOWED_HOSTNAMES ?? settingsRepository.get(USER_SETTING_KEYS.mcpAllowedHostnames) ?? undefined);
   // One transport-owned ledger is shared across Modern HTTP requests and the
   // Desktop read-only diagnostics view. It is not a per-Goal counter.
   const desktopContextEconomy = new ContextEconomyRuntime();
@@ -884,8 +884,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     if (watcherStartOperation !== null) return watcherStartOperation;
 
     const operation = resolveWatcherAccessToken().then((accessToken) => startWatcherServer({
-      port: readWatcherPort(process.env.LNWJUD_WATCHER_PORT, DEFAULT_WATCHER_PORT, 'LNWJUD_WATCHER_PORT'),
-      pairingPort: readWatcherPort(process.env.LNWJUD_WATCHER_PAIR_PORT, DEFAULT_WATCHER_PAIRING_PORT, 'LNWJUD_WATCHER_PAIR_PORT'),
+      port: readWatcherPort(process.env.LNWJING_WATCHER_PORT, DEFAULT_WATCHER_PORT, 'LNWJING_WATCHER_PORT'),
+      pairingPort: readWatcherPort(process.env.LNWJING_WATCHER_PAIR_PORT, DEFAULT_WATCHER_PAIRING_PORT, 'LNWJING_WATCHER_PAIR_PORT'),
       accessToken,
       subscribeActivity: (listener) => activityTracker.subscribe((event) => listener(watcherActivityFromSink(event))),
       buildSnapshot: async (recentActivity) => {
@@ -929,7 +929,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
               timestamp: checkpoint.createdAt,
               kind: 'goal.checkpoint',
               status: checkpoint.blockers.length > 0 ? 'blocked' as const : 'done' as const,
-              actor: '@lnwjud',
+              actor: '@lnwjing',
               summary: checkpoint.currentPhase.length > 0 ? checkpoint.currentPhase : 'Goal checkpoint',
               ...(checkpoint.nextAction.length === 0 ? {} : { detail: checkpoint.nextAction.slice(0, 500) }),
               workspaceId: item.workspace.id,
@@ -958,11 +958,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           if (item.inflight.length > 0) orchestratorStatus = 'running';
           else if (hasBlockedGoal) orchestratorStatus = 'blocked';
           const workspaceAgents: Array<WatcherSnapshot['agents'][number]> = [{
-            id: `lnwjud:${item.workspace.id}`,
-            name: '@lnwjud',
+            id: `lnwjing:${item.workspace.id}`,
+            name: '@lnwjing',
             role: 'Orchestrator',
             status: orchestratorStatus,
-            provider: 'lnwjud',
+            provider: 'lnwjing',
             ...(orchestratorTask === undefined || orchestratorTask.length === 0 ? {} : { task: orchestratorTask }),
             workspaceId: item.workspace.id,
             workspaceName: item.workspace.displayName,
@@ -991,11 +991,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           const unscopedTask = latestUnscoped?.targetSummary?.slice(0, 500)
             ?? latestUnscoped?.toolName.replaceAll('_', ' ').slice(0, 500);
           agents.push({
-            id: 'lnwjud:runtime',
-            name: '@lnwjud',
+            id: 'lnwjing:runtime',
+            name: '@lnwjing',
             role: 'Runtime',
             status: 'running',
-            provider: 'lnwjud',
+            provider: 'lnwjing',
             ...(unscopedTask === undefined || unscopedTask.length === 0 ? {} : { task: unscopedTask }),
           });
         }
@@ -1084,7 +1084,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       const status = await mcpLifecycle.start();
       return status.url;
     },
-    ...(process.env.LNWJUD_E2E_FIXTURE === '1'
+    ...(process.env.LNWJING_E2E_FIXTURE === '1'
       ? { isExternalTunnelRunning: async (): Promise<boolean> => false }
       : {}),
     autoReconnect: (): boolean => readSettings().tunnelAutoReconnect,
@@ -1584,12 +1584,12 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     enabled: boolean | null,
   ): Promise<SetToolAvailabilityResult> => {
     const beforeCatalog = await toolCatalogService.getSnapshot(request.locale);
-    const beforeItem = beforeCatalog.items.find((item) => item.origin === 'lnwjud' && item.name === request.name);
+    const beforeItem = beforeCatalog.items.find((item) => item.origin === 'lnwjing' && item.name === request.name);
     if (beforeItem === undefined) throw new Error(`Unknown first-party tool: ${request.name}`);
     if (enabled === null) toolAvailabilityService.resetTool(request.name);
     else toolAvailabilityService.setToolEnabled(request.name, enabled);
     const catalog = await toolCatalogService.getSnapshot(request.locale);
-    const item = catalog.items.find((candidate) => candidate.origin === 'lnwjud' && candidate.name === request.name);
+    const item = catalog.items.find((candidate) => candidate.origin === 'lnwjing' && candidate.name === request.name);
     if (item === undefined) throw new Error(`Tool Catalog item disappeared after availability update: ${request.name}`);
     const exposureChanged = beforeItem.effectiveExposed !== item.effectiveExposed;
     const remoteMcp = exposureChanged ? await remoteMcpController.status() : null;
@@ -1853,7 +1853,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     },
     listProcesses: async (): Promise<readonly ProcessSummary[]> => listTrackedProcesses(processService, trackedProcesses),
     startProcess: async (request: StartProcessRequest): Promise<ProcessSummary> => {
-      if (request.mode === 'fixture' && process.env.LNWJUD_E2E_FIXTURE !== '1') {
+      if (request.mode === 'fixture' && process.env.LNWJING_E2E_FIXTURE !== '1') {
         throw new Error('Fixture process is only available in the desktop test harness');
       }
       const started = request.mode === 'fixture'
@@ -2369,10 +2369,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       throw new Error('No project workspace is available');
     },
     autoStartMcp: async (): Promise<McpConnectionStatus> => {
-      const envWorkspacePath = process.env.LNWJUD_WORKSPACE?.trim();
+      const envWorkspacePath = process.env.LNWJING_WORKSPACE?.trim();
       if (envWorkspacePath !== undefined && envWorkspacePath.length > 0) {
         const resolvedPath = resolveHostPath(envWorkspacePath, process.platform);
-        if (resolvedPath === null) throw new Error('LNWJUD_WORKSPACE uses a foreign host path syntax');
+        if (resolvedPath === null) throw new Error('LNWJING_WORKSPACE uses a foreign host path syntax');
         const existing = await workspaceService.list();
         const comparablePath = comparableHostPath(resolvedPath, process.platform);
         const matched = comparablePath === null ? undefined : existing.find((workspace) => comparableHostPath(workspace.realRootPath, process.platform) === comparablePath);
@@ -2409,10 +2409,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
 /** Direct DesktopRuntime construction is test-only; production injects safeStorage output. */
 function resolveTestCheckpointEncryptionKey(): Buffer | undefined {
   if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') return undefined;
-  const encoded = process.env.LNWJUD_CHECKPOINT_KEY_BASE64?.trim();
+  const encoded = process.env.LNWJING_CHECKPOINT_KEY_BASE64?.trim();
   if (encoded === undefined || encoded.length === 0) return undefined;
   const key = Buffer.from(encoded, 'base64');
-  if (key.byteLength !== 32 || key.toString('base64') !== encoded) throw new Error('LNWJUD_CHECKPOINT_KEY_BASE64 must decode to 32 bytes');
+  if (key.byteLength !== 32 || key.toString('base64') !== encoded) throw new Error('LNWJING_CHECKPOINT_KEY_BASE64 must decode to 32 bytes');
   return key;
 }
 
@@ -2464,7 +2464,7 @@ export function resolveBundledTunnelClientPath(options: {
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
     const verified = manifest.verified as Record<string, unknown> | undefined;
     if (manifest.schemaVersion !== 1
-      || manifest.product !== 'lnwjud'
+      || manifest.product !== 'lnwjing'
       || manifest.version !== BUNDLED_TUNNEL_CLIENT_VERSION
       || manifest.platform !== platform
       || manifest.arch !== architecture
@@ -2503,7 +2503,7 @@ function isTrustedBundledFile(filePath: string): boolean {
 }
 
 function fixtureNodeExecutable(): string {
-  const executable = process.env.LNWJUD_E2E_NODE_PATH;
+  const executable = process.env.LNWJING_E2E_NODE_PATH;
   if (typeof executable !== 'string' || executable.trim().length === 0) {
     throw new Error('Fixture Node executable is not configured');
   }
@@ -2960,9 +2960,9 @@ function buildConnectionModes(input: {
   readonly fullBypassAll: boolean;
 }): ConnectionModes {
   const isWindows = process.platform === 'win32';
-  const launcherName = isWindows ? 'lnwjud-mcp-stdio.cmd' : 'lnwjud-mcp-stdio';
+  const launcherName = isWindows ? 'lnwjing-mcp-stdio.cmd' : 'lnwjing-mcp-stdio';
   const executableName = isWindows ? path.win32.basename(process.execPath).toLowerCase() : path.basename(process.execPath);
-  const launcher = executableName === (isWindows ? 'lnwjud.exe' : 'lnwjud')
+  const launcher = executableName === (isWindows ? 'lnwjing.exe' : 'lnwjing')
     ? path.join(path.dirname(process.execPath), ...(process.platform === 'darwin' ? ['..', 'Resources'] : []), launcherName)
     : launcherName;
   const args = [quoteCommandArgument(launcher)];
@@ -2995,8 +2995,8 @@ function readUserSettings(settingsRepository: SqliteSettingsRepository, env: Nod
     capabilityRoots: parsePathList(settingsRepository.get(USER_SETTING_KEYS.capabilityRoots)),
     pdfProviderPath: settingsRepository.get(USER_SETTING_KEYS.pdfProviderPath)?.trim() ?? '',
     lspCommands: parseStringRecordSetting(settingsRepository.get(USER_SETTING_KEYS.lspCommands)),
-    mcpHttpPort: readMcpPort(env.LNWJUD_MCP_PORT ?? settingsRepository.get(USER_SETTING_KEYS.mcpHttpPort) ?? undefined),
-    mcpAllowedHostnames: parseMcpAllowedHostnames(env.LNWJUD_MCP_ALLOWED_HOSTNAMES ?? settingsRepository.get(USER_SETTING_KEYS.mcpAllowedHostnames) ?? undefined),
+    mcpHttpPort: readMcpPort(env.LNWJING_MCP_PORT ?? settingsRepository.get(USER_SETTING_KEYS.mcpHttpPort) ?? undefined),
+    mcpAllowedHostnames: parseMcpAllowedHostnames(env.LNWJING_MCP_ALLOWED_HOSTNAMES ?? settingsRepository.get(USER_SETTING_KEYS.mcpAllowedHostnames) ?? undefined),
     codexToolsEnabled: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.codexToolsEnabled), DEFAULT_CODEX_TOOLS_ENABLED),
     eccEnabled: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.eccEnabled), DEFAULT_ECC_ENABLED),
     ponytailMode: parsePonytailMode(settingsRepository.get(USER_SETTING_KEYS.ponytailMode), DEFAULT_PONYTAIL_MODE),
@@ -3123,7 +3123,7 @@ export const DEFAULT_MCP_HTTP_PORT = 0;
 const LEGACY_DEFAULT_MCP_HTTP_PORT = 18_765;
 
 function migrateLegacyMcpHttpPort(settingsRepository: SqliteSettingsRepository, env: NodeJS.ProcessEnv): void {
-  if ((env.LNWJUD_MCP_PORT ?? '').trim().length > 0) return;
+  if ((env.LNWJING_MCP_PORT ?? '').trim().length > 0) return;
   if (settingsRepository.get(USER_SETTING_KEYS.mcpHttpPortAutoMigrationV1) === '1') return;
   const stored = settingsRepository.get(USER_SETTING_KEYS.mcpHttpPort)?.trim();
   if (stored === undefined || stored.length === 0 || stored === String(LEGACY_DEFAULT_MCP_HTTP_PORT) || stored === '5000') {
@@ -3135,7 +3135,7 @@ function migrateLegacyMcpHttpPort(settingsRepository: SqliteSettingsRepository, 
 function readMcpPort(value: string | undefined): number {
   if (value === undefined || value.trim().length === 0) return DEFAULT_MCP_HTTP_PORT;
   const port = Number(value);
-  if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error('LNWJUD_MCP_PORT must be an integer from 0 to 65535');
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error('LNWJING_MCP_PORT must be an integer from 0 to 65535');
   if (port === 5_000) return DEFAULT_MCP_HTTP_PORT;
   return port;
 }
@@ -3341,7 +3341,7 @@ export function buildPersistentTunnelDoctorChecks(input: {
   const check = (id: string, status: DoctorCheck['status'], message: string, isRequired = required): DoctorCheck => toStructuredDoctorCheck(id, isRequired, status, message);
   return [
     check('persistent_tunnel_identity', identityPresent ? 'pass' : required ? 'fail' : 'warn', identityPresent ? 'Saved tunnel identity is configured' : 'TUNNEL_ID_MISMATCH: persistent tunnel identity is not configured'),
-    check('runtime_alias_state', nativeRuntime ? 'pass' : persistent === null ? 'warn' : 'warn', nativeRuntime ? 'Native runtime alias lnwjud is active' : 'TUNNEL_RUNTIME_DOWN: native runtime alias is not active', false),
+    check('runtime_alias_state', nativeRuntime ? 'pass' : persistent === null ? 'warn' : 'warn', nativeRuntime ? 'Native runtime alias lnwjing is active' : 'TUNNEL_RUNTIME_DOWN: native runtime alias is not active', false),
     check('runtime_process_running', runtimeRunning ? 'pass' : required ? 'fail' : 'warn', runtimeRunning ? 'Tunnel runtime is running' : 'TUNNEL_RUNTIME_DOWN: tunnel runtime is not running'),
     check('tunnel_health', health === true ? 'pass' : health === false ? 'fail' : 'warn', health === true ? 'Tunnel health is OK' : health === false ? 'TUNNEL_RUNTIME_DOWN: tunnel health probe failed' : 'Tunnel health is not currently observable'),
     check('tunnel_ready', ready === true ? 'pass' : ready === false ? 'fail' : 'warn', ready === true ? 'Tunnel readiness is OK' : ready === false ? 'TUNNEL_RUNTIME_DOWN: tunnel is not ready' : 'Tunnel readiness is not currently observable'),
@@ -3410,21 +3410,21 @@ export type McpIdentityProbe = (endpoint: URL) => Promise<boolean>;
 export async function checkConfiguredMcpPort(
   status: McpConnectionStatus,
   configuredPort: number,
-  identityProbe: McpIdentityProbe = probeLnwjudMcpIdentity,
+  identityProbe: McpIdentityProbe = probeLnwjingMcpIdentity,
 ): Promise<DoctorProbeResult> {
   if (status.running && status.url !== null) {
     try {
       const endpoint = new URL(status.url);
       const livePort = Number(endpoint.port);
       if (!(await identityProbe(endpoint))) {
-        return { status: 'fail', message: `Desktop MCP endpoint failed the lnwjud identity check at ${endpoint.origin}` };
+        return { status: 'fail', message: `Desktop MCP endpoint failed the lnwjing identity check at ${endpoint.origin}` };
       }
       if (configuredPort === 0 || livePort === configuredPort) {
-        return { status: 'pass', message: `lnwjud Desktop MCP identity verified at ${endpoint.origin}${endpoint.pathname}` };
+        return { status: 'pass', message: `lnwjing Desktop MCP identity verified at ${endpoint.origin}${endpoint.pathname}` };
       }
       return {
         status: 'warn',
-        message: `lnwjud Desktop MCP identity verified at fallback port ${livePort}; configured port ${configuredPort} was unavailable`,
+        message: `lnwjing Desktop MCP identity verified at fallback port ${livePort}; configured port ${configuredPort} was unavailable`,
       };
     } catch {
       return { status: 'fail', message: `Desktop MCP reported an invalid endpoint: ${status.url}` };
@@ -3448,20 +3448,20 @@ export async function checkConfiguredMcpPort(
   } catch (error: unknown) {
     const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'unknown';
     const endpoint = new URL(`http://127.0.0.1:${configuredPort}/mcp`);
-    const isLnwjud = await identityProbe(endpoint);
-    return isLnwjud
-      ? { status: 'fail', message: `Configured MCP port ${configuredPort} is owned by an lnwjud listener that this Desktop instance is not managing (${code})` }
-      : { status: 'fail', message: `Configured MCP port ${configuredPort} is occupied by a listener that is not an lnwjud Desktop MCP (${code})` };
+    const isLnwjing = await identityProbe(endpoint);
+    return isLnwjing
+      ? { status: 'fail', message: `Configured MCP port ${configuredPort} is owned by an lnwjing listener that this Desktop instance is not managing (${code})` }
+      : { status: 'fail', message: `Configured MCP port ${configuredPort} is occupied by a listener that is not an lnwjing Desktop MCP (${code})` };
   } finally {
     if (listening) await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 }
 
-async function probeLnwjudMcpIdentity(endpoint: URL): Promise<boolean> {
+async function probeLnwjingMcpIdentity(endpoint: URL): Promise<boolean> {
   const MCP_IDENTITY_PROBE_TIMEOUT_MS = 750;
   const MCP_IDENTITY_PROBE_MAX_ATTEMPTS = 2;
   const started = Date.now();
-  const identityUrl = new URL(LNWJUD_MCP_IDENTITY_PATH, endpoint.origin);
+  const identityUrl = new URL(LNWJING_MCP_IDENTITY_PATH, endpoint.origin);
   let lastFailure = 'transport error';
   for (let attempt = 0; attempt < MCP_IDENTITY_PROBE_MAX_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
@@ -3472,13 +3472,13 @@ async function probeLnwjudMcpIdentity(endpoint: URL): Promise<boolean> {
         cache: 'no-store',
         signal: controller.signal,
       });
-      if (!response.ok || response.headers.get('x-lnwjud-service') !== 'desktop-mcp') {
+      if (!response.ok || response.headers.get('x-lnwjing-service') !== 'desktop-mcp') {
         lastFailure = `unexpected HTTP response (${response.status})`;
         break;
       }
       const body: unknown = await response.json();
       const matches = typeof body === 'object' && body !== null
-        && 'product' in body && body.product === 'lnwjud'
+        && 'product' in body && body.product === 'lnwjing'
         && 'service' in body && body.service === 'desktop-mcp'
         && 'protocol' in body && body.protocol === 1;
       if (matches) return true;

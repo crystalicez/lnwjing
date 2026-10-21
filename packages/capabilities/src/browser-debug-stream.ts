@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { BoundedEventBuffer } from './bounded-event-buffer.js';
 import { BrowserCdpChannelCleanupError } from './browser-cdp-event-channel.js';
 import { browserDebugObservation, observesProtectedBrowserPage, type BrowserDebugObservation } from './browser-debug-observation.js';

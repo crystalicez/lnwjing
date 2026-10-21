@@ -1,6 +1,6 @@
 import { realpath, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { appError, err, ok, type Result, type WorkspaceId } from '@lnwjud/domain';
+import { appError, err, ok, type Result, type WorkspaceId } from '@lnwjing/domain';
 import type { Workspace } from './workspace-types.js';
 import { isPosixMountRoot, resolveHostPath } from './filesystem-root.js';
 

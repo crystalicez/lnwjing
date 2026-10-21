@@ -1,4 +1,4 @@
-import type { DestructiveApprovalKey } from '@lnwjud/shared';
+import type { DestructiveApprovalKey } from '@lnwjing/shared';
 import { inspectMutationOperation, requiresMutationConfirmation } from './mutation-policy.js';
 import type { McpPermissionLevel } from './tools/tool-types.js';
 

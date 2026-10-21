@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { UpdateStatus } from '@lnwjud/ipc-contracts';
+import type { UpdateStatus } from '@lnwjing/ipc-contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { nativeMessages } from '../src/main/native-i18n.js';
 import {
@@ -44,7 +44,7 @@ describe('desktop tray behavior', () => {
     });
 
     expect(menu.map((item) => item.type === 'separator' ? 'separator' : item.label)).toEqual([
-      'Open lnwjud',
+      'Open lnwjing',
       'Check for Updates',
       'separator',
       'Quit',
@@ -87,8 +87,8 @@ describe('desktop tray behavior', () => {
     expect(createTrayUpdateLabel(ready, 'en')).toBe('Install update v4.6.2');
     expect(createTrayUpdateLabel(downloading, 'th')).toBe('กำลังดาวน์โหลด v4.6.2 42%');
     expect(createTrayUpdateLabel(downloading, 'en')).toBe('Downloading v4.6.2 42%');
-    expect(createTrayToolTip('th')).toBe('lnwjud — ทำงานเบื้องหลัง');
-    expect(createTrayToolTip('en')).toBe('lnwjud — running in background');
+    expect(createTrayToolTip('th')).toBe('lnwjing — ทำงานเบื้องหลัง');
+    expect(createTrayToolTip('en')).toBe('lnwjing — running in background');
   });
 
   it('uses a PNG source for the macOS menu-bar icon instead of the Windows ICO', () => {
@@ -118,7 +118,7 @@ describe('desktop tray behavior', () => {
   });
 
   it('keeps manual update feedback localized in the native catalog', () => {
-    expect(nativeMessages('th').updateCurrentDialog('4.6.1')).toBe('lnwjud v4.6.1 เป็นเวอร์ชันล่าสุดแล้ว');
-    expect(nativeMessages('en').updateCurrentDialog('4.6.1')).toBe('lnwjud v4.6.1 is up to date');
+    expect(nativeMessages('th').updateCurrentDialog('4.6.1')).toBe('lnwjing v4.6.1 เป็นเวอร์ชันล่าสุดแล้ว');
+    expect(nativeMessages('en').updateCurrentDialog('4.6.1')).toBe('lnwjing v4.6.1 is up to date');
   });
 });

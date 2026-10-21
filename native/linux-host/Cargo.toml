@@ -1,9 +1,9 @@
 [package]
-name = "lnwjud-linux-host"
+name = "lnwjing-linux-host"
 version = "4.44.0"
 edition = "2021"
 license = "MIT"
-description = "Bounded protocol host for lnwjud Linux native providers"
+description = "Bounded protocol host for lnwjing Linux native providers"
 
 [dependencies]
 base64 = "0.22.1"
@@ -12,5 +12,5 @@ serde_json = "1.0.145"
 x11rb = { version = "0.14.0", default-features = false, features = ["xtest"] }
 
 [[bin]]
-name = "lnwjud-linux-host"
+name = "lnwjing-linux-host"
 path = "src/main.rs"

@@ -14,7 +14,7 @@ describe('native automation package isolation', () => {
       };
       const dependencies = { ...manifest.dependencies, ...manifest.devDependencies };
       expect(Object.keys(dependencies), packageName).not.toEqual(expect.arrayContaining([
-        'electron', '@lnwjud/mcp-server', '@modelcontextprotocol/server', '@modelcontextprotocol/client',
+        'electron', '@lnwjing/mcp-server', '@modelcontextprotocol/server', '@modelcontextprotocol/client',
       ]));
     }
 
@@ -29,7 +29,7 @@ describe('native automation package isolation', () => {
       const source = await readFile(path.join(repositoryRoot, relativePath), 'utf8');
       const imports = importedModules(source);
       expect(imports, relativePath).not.toEqual(expect.arrayContaining([
-        'electron', '@lnwjud/mcp-server', '@modelcontextprotocol/server', '@modelcontextprotocol/client',
+        'electron', '@lnwjing/mcp-server', '@modelcontextprotocol/server', '@modelcontextprotocol/client',
       ]));
       expect(imports.some((value) => /(?:^|\/)apps\/desktop|renderer|electron/i.test(value)), relativePath).toBe(false);
     }

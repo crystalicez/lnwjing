@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ok, type AutomationPlan, type StoredAutomationRun } from '@lnwjud/domain';
+import { ok, type AutomationPlan, type StoredAutomationRun } from '@lnwjing/domain';
 import { SqliteAutomationRepository } from '../../storage/src/automation-repository.js';
 import { SqliteDatabase } from '../../storage/src/database.js';
 import { SqliteGoalRepository } from '../../storage/src/goal-repository.js';

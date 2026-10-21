@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { RuntimeGoalManagedTaskStateReader } from './goal-managed-task-state-reader.js';
 
 describe('RuntimeGoalManagedTaskStateReader', () => {

@@ -1,11 +1,11 @@
-import type { WorkflowDraft, WorkflowTemplate } from '@lnwjud/ipc-contracts';
+import type { WorkflowDraft, WorkflowTemplate } from '@lnwjing/ipc-contracts';
 
 /** A copyable message, not an executable command or a promise of model execution. */
 export function workflowLaunchPrompt(draft: WorkflowDraft, template: WorkflowTemplate): string {
   if (draft.schemaVersion !== 1 || draft.templateId !== template.id || draft.templateRevision !== template.revision
     || draft.readiness !== 'ready') throw new Error('Workflow is not ready for launch');
   return [
-    `Use the lnwjud MCP workflow_start tool for the built-in workflow "${template.id}".`,
+    `Use the lnwjing MCP workflow_start tool for the built-in workflow "${template.id}".`,
     `Workspace ID: ${draft.workspaceId}`,
     `Prepared template revision: ${draft.templateRevision}`,
     `Prepared input digest: ${draft.digest}`,

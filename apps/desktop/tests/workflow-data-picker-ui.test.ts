@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { WorkflowTemplate } from '@lnwjud/ipc-contracts';
+import type { WorkflowTemplate } from '@lnwjing/ipc-contracts';
 import { WorkflowInputForm } from '../src/renderer/features/workflows/WorkflowInputForm.js';
 
 const template = {

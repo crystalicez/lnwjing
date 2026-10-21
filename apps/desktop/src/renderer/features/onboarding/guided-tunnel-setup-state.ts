@@ -1,11 +1,11 @@
-import type { TunnelStatus } from '@lnwjud/ipc-contracts';
+import type { TunnelStatus } from '@lnwjing/ipc-contracts';
 import { tunnelRuntimeCredentialAvailable } from '../../tunnel-auth-readiness.js';
 
 export type GuidedTunnelSetupState = 'not_started' | 'in_progress' | 'dismissed' | 'completed';
 export type GuidedTunnelLaunchDecision = 'none' | 'show_tip' | 'resume_settings';
 export type GuidedTunnelStep = 'create_tunnel' | 'save_key' | 'configure' | 'start' | 'connect_chatgpt';
 
-export const GUIDED_TUNNEL_SETUP_STORAGE_KEY = 'lnwjud.guided-tunnel-setup.v1';
+export const GUIDED_TUNNEL_SETUP_STORAGE_KEY = 'lnwjing.guided-tunnel-setup.v1';
 
 const guidedTunnelSetupStates = new Set<GuidedTunnelSetupState>([
   'not_started',
@@ -25,7 +25,7 @@ export function isTunnelConfigured(tunnel: TunnelStatus): boolean {
 export function isTunnelRunning(tunnel: TunnelStatus): boolean {
   // A managed persistent runtime intentionally survives Desktop restarts and
   // installer/update handoffs. During that detached window TunnelController may
-  // report source=external even though this is the same configured lnwjud tunnel.
+  // report source=external even though this is the same configured lnwjing tunnel.
   // Runtime usability is therefore defined by the saved prerequisites + live
   // state, not by which process currently owns the child handle.
   return isTunnelConfigured(tunnel) && tunnel.state === 'running';

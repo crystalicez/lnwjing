@@ -1,11 +1,11 @@
-# lnwjud Phase 02 Compatibility Benchmark
+# lnwjing Phase 02 Compatibility Benchmark
 
 Generated: 2026-08-16T18:32:43.446Z
 Repository: `main` @ `687c362c5af1ec6c8930e61bc35fd3361bdd29b7`
 
 ## Scope
 
-This is a post-Phase-02 compatibility snapshot. It starts the built lnwjud application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It retains the original sequential scenarios so the expanded context surface can be compared against the Phase 00 baseline.
+This is a post-Phase-02 compatibility snapshot. It starts the built lnwjing application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It retains the original sequential scenarios so the expanded context surface can be compared against the Phase 00 baseline.
 
 | Field | Value |
 | --- | --- |

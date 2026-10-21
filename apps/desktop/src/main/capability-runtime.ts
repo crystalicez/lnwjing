@@ -14,10 +14,10 @@ import {
   LinuxProcessBridge,
   MacosProcessBridge,
   type NativeHostProcessBridge,
-} from '@lnwjud/capabilities';
-import { createProcessTreeTerminator } from '@lnwjud/process';
-import type { DashboardSnapshot } from '@lnwjud/ipc-contracts';
-import { DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS } from '@lnwjud/shared';
+} from '@lnwjing/capabilities';
+import { createProcessTreeTerminator } from '@lnwjing/process';
+import type { DashboardSnapshot } from '@lnwjing/ipc-contracts';
+import { DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS } from '@lnwjing/shared';
 import { createElectronNativeCapabilityBackends, type ElectronNativeCapabilityApi } from './electron-native-capability-backend.js';
 
 export interface LocalCapabilityRuntime {
@@ -51,7 +51,7 @@ export function createLocalCapabilityRuntime(
     dataPath,
     workspaceRootsProvider,
     unrestricted,
-    configuredRootsProvider: () => [...readCapabilityRoots(process.env.LNWJUD_CAPABILITY_ROOTS), ...configuredRootsProvider()],
+    configuredRootsProvider: () => [...readCapabilityRoots(process.env.LNWJING_CAPABILITY_ROOTS), ...configuredRootsProvider()],
     synchronousWaitSecondsProvider,
     ...(nativeApi === undefined ? {} : { shared: createElectronNativeCapabilityBackends({ platform: process.platform, api: nativeApi, allowedRootsProvider: workspaceRootsProvider }) }),
     ...(windows === undefined ? {} : { windows }),
@@ -66,7 +66,7 @@ function nativeHostBridge(): NativeHostProcessBridge | undefined {
   if (arch === undefined) return undefined;
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   const platformDirectory = process.platform === 'darwin' ? 'macos' : 'linux';
-  const executableName = process.platform === 'darwin' ? 'lnwjud-macos-host' : 'lnwjud-linux-host';
+  const executableName = process.platform === 'darwin' ? 'lnwjing-macos-host' : 'lnwjing-linux-host';
   const candidates = [
     resourcesPath === undefined ? undefined : path.join(resourcesPath, 'native-host', platformDirectory, arch, executableName),
     path.resolve(process.cwd(), 'build', 'native-host', platformDirectory, arch, executableName),
@@ -114,7 +114,7 @@ function readCapabilityRoots(value: string | undefined): readonly string[] {
 }
 
 function capabilityBridgeScriptPath(): string {
-  const configured = process.env.LNWJUD_CAPABILITY_BRIDGE_SCRIPT;
+  const configured = process.env.LNWJING_CAPABILITY_BRIDGE_SCRIPT;
   if (configured !== undefined && configured.trim().length > 0) return path.resolve(configured);
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   const candidates = [
@@ -128,27 +128,27 @@ function capabilityBridgeScriptPath(): string {
 }
 
 function capabilityBridgeExpectedSha256(): string {
-  const configuredScript = process.env.LNWJUD_CAPABILITY_BRIDGE_SCRIPT;
+  const configuredScript = process.env.LNWJING_CAPABILITY_BRIDGE_SCRIPT;
   if (configuredScript === undefined || configuredScript.trim().length === 0) return WINDOWS_CAPABILITY_BRIDGE_SHA256;
-  const configuredHash = process.env.LNWJUD_CAPABILITY_BRIDGE_SHA256?.trim().toLowerCase();
+  const configuredHash = process.env.LNWJING_CAPABILITY_BRIDGE_SHA256?.trim().toLowerCase();
   return configuredHash !== undefined && /^[0-9a-f]{64}$/.test(configuredHash) ? configuredHash : 'missing';
 }
 
 function capabilityBridgeExpectedSizeBytes(): number | undefined {
-  const configuredScript = process.env.LNWJUD_CAPABILITY_BRIDGE_SCRIPT;
+  const configuredScript = process.env.LNWJING_CAPABILITY_BRIDGE_SCRIPT;
   if (configuredScript === undefined || configuredScript.trim().length === 0) return WINDOWS_CAPABILITY_BRIDGE_SIZE_BYTES;
-  const configuredSize = Number.parseInt(process.env.LNWJUD_CAPABILITY_BRIDGE_SIZE_BYTES ?? '', 10);
+  const configuredSize = Number.parseInt(process.env.LNWJING_CAPABILITY_BRIDGE_SIZE_BYTES ?? '', 10);
   return Number.isSafeInteger(configuredSize) && configuredSize > 0 ? configuredSize : undefined;
 }
 
 function windowsOcrHelperPath(): string | undefined {
-  const configured = process.env.LNWJUD_WINDOWS_OCR_HELPER;
+  const configured = process.env.LNWJING_WINDOWS_OCR_HELPER;
   if (configured !== undefined && configured.trim().length > 0) return path.resolve(configured);
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   const candidates = [
-    path.resolve(process.cwd(), 'native', 'windows-ocr', 'bin', 'lnwjud-windows-ocr.exe'),
-    resourcesPath === undefined ? undefined : path.join(resourcesPath, 'windows-ocr', 'lnwjud-windows-ocr.exe'),
-    path.join(path.dirname(process.execPath), 'windows-ocr', 'lnwjud-windows-ocr.exe'),
+    path.resolve(process.cwd(), 'native', 'windows-ocr', 'bin', 'lnwjing-windows-ocr.exe'),
+    resourcesPath === undefined ? undefined : path.join(resourcesPath, 'windows-ocr', 'lnwjing-windows-ocr.exe'),
+    path.join(path.dirname(process.execPath), 'windows-ocr', 'lnwjing-windows-ocr.exe'),
   ].filter((candidate): candidate is string => candidate !== undefined);
   return candidates.find((candidate) => existsSync(candidate));
 }

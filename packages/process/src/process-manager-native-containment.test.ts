@@ -6,7 +6,7 @@ import { ProcessManager } from './process-manager.js';
 
 describe.skipIf(process.platform !== 'win32')('native contained ProcessManager', () => {
   it('keeps detached descendants alive until they exit, and then fires verified completion callback', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-direct-process-contained-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-direct-process-contained-'));
     try {
       const containedRoot = path.join(root, 'managed-processes');
       await mkdir(containedRoot);

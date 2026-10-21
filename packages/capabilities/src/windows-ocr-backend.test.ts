@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import type { CapabilityBackend } from './local-capability-service.js';
 import { createOcrPackageIdentityProbe, VisionCapabilityBackend, WindowsOcrCapabilityBackend } from './windows-ocr-backend.js';
 

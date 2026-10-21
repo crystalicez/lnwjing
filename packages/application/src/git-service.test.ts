@@ -2,8 +2,8 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { GitAdapter } from '@lnwjud/git';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import type { GitAdapter } from '@lnwjing/git';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { GitService } from './git-service.js';
 
 const temporaryRoots: string[] = [];
@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 async function createWorkspace(): Promise<Workspace> {
-  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-service-'));
+  const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-service-'));
   temporaryRoots.push(rawRoot);
   const root = await realpath(rawRoot);
   return {
@@ -37,7 +37,7 @@ function repository(workspace: Workspace): WorkspaceRepository {
 describe('GitService', () => {
   it('accepts prohibited Git forms and an outside cwd only with trusted Full Bypass authorization', async () => {
     const workspace = await createWorkspace();
-    const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-outside-'));
+    const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-outside-'));
     temporaryRoots.push(outsideRoot);
     const calls: Array<{ readonly cwd: string; readonly args: readonly string[] }> = [];
     const adapter = {

@@ -1,4 +1,4 @@
-import type { UiLocale } from '@lnwjud/ipc-contracts';
+import type { UiLocale } from '@lnwjing/ipc-contracts';
 import { catalogDefinitions, catalogSourceDescriptions } from './catalog-definitions.js';
 
 interface ToolCopy {
@@ -62,7 +62,7 @@ export function resolveCatalogCopy(locale: UiLocale, key: string): string {
   }
   return locale === 'th'
     ? `เครื่องมือ ${title} ใช้เพื่อ${thaiToolPurpose(name, definition.category)}ในหมวด ${category} ความพร้อมจริงยังขึ้นกับ dependency, input และสิทธิ์ของโปรไฟล์ปัจจุบัน`
-    : `${description || `${title} follows the lnwjud runtime contract.`} Category: ${category}. Availability still depends on runtime readiness, requirements, and the active permission profile.`;
+    : `${description || `${title} follows the lnwjing runtime contract.`} Category: ${category}. Availability still depends on runtime readiness, requirements, and the active permission profile.`;
 }
 
 const THAI_ACTIONS: Readonly<Record<string, string>> = Object.freeze({

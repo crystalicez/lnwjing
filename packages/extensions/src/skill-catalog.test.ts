@@ -26,7 +26,7 @@ description: >-
   });
 
   it('lists and reads skills under configured roots', async () => {
-    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-skills-'));
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-skills-'));
     temporaryRoots.push(home);
     const skillRoot = path.join(home, '.cursor', 'skills-cursor', 'demo-skill');
     await mkdir(skillRoot, { recursive: true });
@@ -70,15 +70,15 @@ Do the thing.
   });
 
   it('discovers and reads workspace .agents skills by source-qualified id', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-workspace-skills-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-workspace-skills-'));
     temporaryRoots.push(root);
     const home = path.join(root, 'home');
     const workspace = path.join(root, 'workspace');
-    const skillRoot = path.join(workspace, '.agents', 'skills', 'lnwjud-scheduled-continuation');
+    const skillRoot = path.join(workspace, '.agents', 'skills', 'lnwjing-scheduled-continuation');
     await mkdir(home, { recursive: true });
     await mkdir(skillRoot, { recursive: true });
     await writeFile(path.join(skillRoot, 'SKILL.md'), `---
-name: lnwjud-scheduled-continuation
+name: lnwjing-scheduled-continuation
 description: Continue a durable goal
 ---
 # Scheduled continuation
@@ -95,22 +95,22 @@ Use one native successor.
     if (!listed.ok) return;
     expect(listed.value.skills).toEqual([
       expect.objectContaining({
-        id: 'workspace-agents-skills/lnwjud-scheduled-continuation',
-        name: 'lnwjud-scheduled-continuation',
+        id: 'workspace-agents-skills/lnwjing-scheduled-continuation',
+        name: 'lnwjing-scheduled-continuation',
         source: 'workspace-agents-skills',
         trustTier: 'workspace',
         canonicalSkillPath: expect.any(String),
       }),
     ]);
 
-    const read = await catalog.read({ skillId: 'workspace-agents-skills/lnwjud-scheduled-continuation' });
+    const read = await catalog.read({ skillId: 'workspace-agents-skills/lnwjing-scheduled-continuation' });
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.value.content).toContain('Use one native successor.');
   });
 
   it('lists every standard global, plugin, and workspace skill root together with configured roots', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-all-skill-roots-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-all-skill-roots-'));
     temporaryRoots.push(root);
     const home = path.join(root, 'home');
     const workspace = path.join(root, 'workspace');
@@ -156,7 +156,7 @@ Use one native successor.
   });
 
   it('reads an unambiguous skill by bare or dollar-prefixed name', async () => {
-    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-skill-alias-'));
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-skill-alias-'));
     temporaryRoots.push(home);
     const skillRoot = path.join(home, '.agents', 'skills', 'demo-alias');
     await mkdir(skillRoot, { recursive: true });
@@ -180,7 +180,7 @@ Alias content.
   });
 
   it('keeps same-name skills from different nested plugin versions source-addressable', async () => {
-    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-plugin-skill-collisions-'));
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-plugin-skill-collisions-'));
     temporaryRoots.push(home);
     for (const [version, marker] of [['1.0.0', 'old'], ['2.0.0', 'new']] as const) {
       const skillRoot = path.join(home, '.codex', 'plugins', 'cache', 'vendor', 'demo', version, 'skills', 'shared');
@@ -200,7 +200,7 @@ Alias content.
   });
 
   it('keeps native Ponytail bound to the exact bundled source when a workspace skill uses the same name', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ponytail-collision-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ponytail-collision-'));
     temporaryRoots.push(root);
     const home = path.join(root, 'home');
     const workspace = path.join(root, 'workspace');
@@ -244,7 +244,7 @@ Alias content.
   });
 
   it('rejects ambiguous unqualified skill names with source-qualified candidates', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-ambiguous-skills-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-ambiguous-skills-'));
     temporaryRoots.push(root);
     const home = path.join(root, 'home');
     const workspace = path.join(root, 'workspace');

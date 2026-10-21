@@ -26,7 +26,7 @@ it('wires Developer ID CI signing secrets as an all-or-nothing pair', async () =
   expect(workflow).toContain('MACOS_CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}');
   expect(workflow).toContain('MACOS_CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}');
   expect(workflow).toContain('if [[ -z "$MACOS_CSC_LINK" || -z "$MACOS_CSC_KEY_PASSWORD" ]]; then');
-  expect(workflow).toContain('export LNWJUD_REQUIRE_CODESIGN=1');
+  expect(workflow).toContain('export LNWJING_REQUIRE_CODESIGN=1');
 });
 
 afterEach(async () => {
@@ -46,16 +46,16 @@ async function signingFixture(mode: SigningMode, overrides: {
   run: ReturnType<typeof vi.fn>;
   rootSha256: string;
 }> {
-  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'lnwjud-macos-policy-')));
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'lnwjing-macos-policy-')));
   temporaryRoots.push(root);
-  const app = path.join(root, 'lnwjud.app');
+  const app = path.join(root, 'lnwjing.app');
   const relativeCandidates: Array<Omit<Candidate, 'absolutePath'>> = [
     { relativePath: '.', kind: 'app', electronProcess: false },
-    { relativePath: 'Contents/MacOS/lnwjud', kind: 'executable', electronProcess: true },
+    { relativePath: 'Contents/MacOS/lnwjing', kind: 'executable', electronProcess: true },
     { relativePath: 'Contents/Frameworks/Electron Framework.framework', kind: 'framework', electronProcess: false },
     { relativePath: 'Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework', kind: 'executable', electronProcess: false },
-    { relativePath: 'Contents/Frameworks/lnwjud Helper.app', kind: 'app', electronProcess: false },
-    { relativePath: 'Contents/Frameworks/lnwjud Helper.app/Contents/MacOS/lnwjud Helper', kind: 'executable', electronProcess: true },
+    { relativePath: 'Contents/Frameworks/lnwjing Helper.app', kind: 'app', electronProcess: false },
+    { relativePath: 'Contents/Frameworks/lnwjing Helper.app/Contents/MacOS/lnwjing Helper', kind: 'executable', electronProcess: true },
     { relativePath: 'Contents/Frameworks/libEGL.dylib', kind: 'dylib', electronProcess: false },
     { relativePath: 'Contents/Resources/runtime-tools/ripgrep/rg', kind: 'executable', electronProcess: false },
   ];
@@ -71,7 +71,7 @@ async function signingFixture(mode: SigningMode, overrides: {
       await fs.writeFile(candidate.absolutePath, `${candidate.relativePath}\n`, 'utf8');
     }
   }
-  const mainExecutable = path.join(app, 'Contents', 'MacOS', 'lnwjud');
+  const mainExecutable = path.join(app, 'Contents', 'MacOS', 'lnwjing');
   const rootSha256 = createHash('sha256').update(await fs.readFile(mainExecutable)).digest('hex');
   const byAbsolutePath = new Map(candidates.map((candidate, index) => [candidate.absolutePath, { candidate, index }]));
   const run = vi.fn(async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
@@ -92,7 +92,7 @@ async function signingFixture(mode: SigningMode, overrides: {
     const team = overrides.teamByPath?.[target.candidate.relativePath] ?? 'ABCDE12345';
     const hardened = overrides.missingRuntime === target.candidate.relativePath ? '' : ',runtime';
     const timestamp = overrides.missingTimestamp === target.candidate.relativePath ? '' : '\nTimestamp=Sep 13, 2026';
-    const identifier = target.candidate.relativePath === '.' ? 'com.lnwjud.desktop' : `com.lnwjud.${target.index}`;
+    const identifier = target.candidate.relativePath === '.' ? 'com.lnwjing.desktop' : `com.lnwjing.${target.index}`;
     const cdHash = String(target.index + 1).repeat(40).slice(0, 40);
     return {
       stdout: '',
@@ -119,7 +119,7 @@ describe('macOS effective signing policy inspector', () => {
       schemaVersion: 1,
       mode: 'ad-hoc',
       arch: 'arm64',
-      rootIdentifier: 'com.lnwjud.desktop',
+      rootIdentifier: 'com.lnwjing.desktop',
       teamId: null,
       rootCdHash: '1'.repeat(40),
       rootExecutableSha256: fixture.rootSha256,
@@ -128,9 +128,9 @@ describe('macOS effective signing policy inspector', () => {
     expect(policy.code.map((entry: { relativePath: string }) => entry.relativePath))
       .toEqual(fixture.candidates.map((entry) => entry.relativePath));
     expect(policy.electronProcesses).toEqual([
-      expect.objectContaining({ relativePath: 'Contents/MacOS/lnwjud', hardenedRuntime: true,
+      expect.objectContaining({ relativePath: 'Contents/MacOS/lnwjing', hardenedRuntime: true,
         libraryValidationDisabled: true, secureTimestamp: false }),
-      expect.objectContaining({ relativePath: 'Contents/Frameworks/lnwjud Helper.app/Contents/MacOS/lnwjud Helper',
+      expect.objectContaining({ relativePath: 'Contents/Frameworks/lnwjing Helper.app/Contents/MacOS/lnwjing Helper',
         hardenedRuntime: true, libraryValidationDisabled: true, secureTimestamp: false }),
     ]);
     expect(JSON.stringify(policy)).not.toContain(fixture.app);
@@ -155,10 +155,10 @@ describe('macOS effective signing policy inspector', () => {
   });
 
   it.each([
-    ['ad-hoc process without bypass', 'ad-hoc', { missingBypass: 'Contents/MacOS/lnwjud' }, 'lacks disable-library-validation'],
-    ['certificate process with bypass', 'certificate', { unexpectedBypass: 'Contents/MacOS/lnwjud' }, 'must keep library validation enabled'],
-    ['certificate process without runtime', 'certificate', { missingRuntime: 'Contents/MacOS/lnwjud' }, 'lacks hardened runtime'],
-    ['certificate process without timestamp', 'certificate', { missingTimestamp: 'Contents/MacOS/lnwjud' }, 'lacks secure timestamp'],
+    ['ad-hoc process without bypass', 'ad-hoc', { missingBypass: 'Contents/MacOS/lnwjing' }, 'lacks disable-library-validation'],
+    ['certificate process with bypass', 'certificate', { unexpectedBypass: 'Contents/MacOS/lnwjing' }, 'must keep library validation enabled'],
+    ['certificate process without runtime', 'certificate', { missingRuntime: 'Contents/MacOS/lnwjing' }, 'lacks hardened runtime'],
+    ['certificate process without timestamp', 'certificate', { missingTimestamp: 'Contents/MacOS/lnwjing' }, 'lacks secure timestamp'],
     ['mixed certificate team', 'certificate', { teamByPath: { 'Contents/Frameworks/libEGL.dylib': 'OTHER12345' } }, 'TeamIdentifier mismatch'],
     ['certificate nested in ad-hoc app', 'ad-hoc', { certificateCandidate: 'Contents/Frameworks/libEGL.dylib' }, 'signature mode mismatch'],
   ] as const)('rejects %s', async (_label, mode, overrides, message) => {
@@ -194,7 +194,7 @@ describe('macOS effective signing policy inspector', () => {
     })).toThrow('Electron process evidence is incomplete');
     expect(() => validateMacosSigningPolicyEvidence({
       ...policy,
-      electronProcesses: policy.electronProcesses.map((entry: { relativePath: string }) => entry.relativePath === 'Contents/MacOS/lnwjud'
+      electronProcesses: policy.electronProcesses.map((entry: { relativePath: string }) => entry.relativePath === 'Contents/MacOS/lnwjing'
         ? { ...entry, cdHash: 'f'.repeat(40) }
         : entry),
     })).toThrow('Electron process entry is invalid');

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APP_VERSION, EMPTY_REMOTE_MCP_STATUS, ipcChannels, type TunnelStatus } from '@lnwjud/ipc-contracts';
+import { APP_VERSION, EMPTY_REMOTE_MCP_STATUS, ipcChannels, type TunnelStatus } from '@lnwjing/ipc-contracts';
 
 const electronHarness = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload?: unknown) => Promise<unknown>>(),
@@ -250,7 +250,7 @@ describe('production desktop IPC acceptance', () => {
   });
 
   it('exports an explicit identity marker instead of dropping a captured Live Log line that is unavailable', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-live-export-missing-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-export-missing-'));
     temporaryRoots.push(root);
     const filePath = path.join(root, 'live.txt');
     electronHarness.showSaveDialog.mockResolvedValue({ canceled: false, filePath });

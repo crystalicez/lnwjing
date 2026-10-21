@@ -2,7 +2,7 @@ import { ActionButton } from '../ui/UiPrimitives.js';
 import { DiagnosticCopyButton } from '../ui/DiagnosticCopyButton.js';
 import { SearchableSelect } from '../../components/ui/SearchableSelect.js';
 import { useEffect, useState, type ReactElement } from 'react';
-import type { DoctorGoalOption, ResourceSnapshot, UiLocale } from '@lnwjud/ipc-contracts';
+import type { DoctorGoalOption, ResourceSnapshot, UiLocale } from '@lnwjing/ipc-contracts';
 import { v580Strings } from '../../i18n/v580-copy.js';
 import { formatDateTime } from '../../date-time.js';
 
@@ -34,8 +34,8 @@ export function ResourcePanel(props: { readonly locale: UiLocale; readonly works
     if (props.workspaceId) {
       setLoading(true);
       void Promise.all([
-        window.lnwjud.getDoctorGoals({ workspaceId: props.workspaceId }),
-        window.lnwjud.getResourceSnapshot({ workspaceId: props.workspaceId }),
+        window.lnwjing.getDoctorGoals({ workspaceId: props.workspaceId }),
+        window.lnwjing.getResourceSnapshot({ workspaceId: props.workspaceId }),
       ]).then(([availableGoals, measured]) => {
         if (!active) return;
         setGoals(availableGoals); setSnapshot(measured);
@@ -56,7 +56,7 @@ export function ResourcePanel(props: { readonly locale: UiLocale; readonly works
     const timer = setInterval(() => {
       if (inFlight) return;
       inFlight = true;
-      void window.lnwjud.getResourceSnapshot({ workspaceId })
+      void window.lnwjing.getResourceSnapshot({ workspaceId })
         .then((next) => { if (active) setSnapshot(next); })
         .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); })
         .finally(() => { inFlight = false; });
@@ -81,8 +81,8 @@ export function ResourcePanel(props: { readonly locale: UiLocale; readonly works
     setLoading(true); setError(null);
     try {
       const [availableGoals, result] = await Promise.all([
-        window.lnwjud.getDoctorGoals({ workspaceId: props.workspaceId }),
-        window.lnwjud.getResourceSnapshot({ workspaceId: props.workspaceId }),
+        window.lnwjing.getDoctorGoals({ workspaceId: props.workspaceId }),
+        window.lnwjing.getResourceSnapshot({ workspaceId: props.workspaceId }),
       ]);
       setGoals(availableGoals);
       setSnapshot(result);
@@ -98,12 +98,12 @@ export function ResourcePanel(props: { readonly locale: UiLocale; readonly works
         && current.taskId === row.taskId && current.provider === row.provider && current.canCancel)) return;
     setCancelling(row.taskId); setError(null);
     try {
-      const outcome = await window.lnwjud.cancelOwnedGoalTask({
+      const outcome = await window.lnwjing.cancelOwnedGoalTask({
         workspaceId: props.workspaceId, goalId: row.goalId, taskId: row.taskId,
         provider: row.provider as 'process' | 'codex' | 'shell', userConfirmed: true,
       });
       if (outcome.status === 'failed') throw new Error(outcome.error ?? 'Provider could not verify cancellation');
-      setSnapshot(await window.lnwjud.getResourceSnapshot({ workspaceId: props.workspaceId }));
+      setSnapshot(await window.lnwjing.getResourceSnapshot({ workspaceId: props.workspaceId }));
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally { setCancelling(null); }

@@ -7,7 +7,7 @@ import { generateWorkflowReportMapping,inspectWorkflowFile,inspectWorkflowProjec
 
 const roots:string[]=[];
 async function makeRoot():Promise<string> {
-  const root=await mkdtemp(path.join(os.tmpdir(),'lnwjud-workflow-choices-'));
+  const root=await mkdtemp(path.join(os.tmpdir(),'lnwjing-workflow-choices-'));
   roots.push(root);return root;
 }
 afterEach(async()=>{await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})))});

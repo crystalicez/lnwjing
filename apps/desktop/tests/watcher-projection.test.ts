@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { GoalRecord } from '@lnwjud/domain';
-import type { McpServerListItem } from '@lnwjud/extensions';
+import type { GoalRecord } from '@lnwjing/domain';
+import type { McpServerListItem } from '@lnwjing/extensions';
 import { watcherGoalFromRecord, watcherPluginsFromServers } from '../src/main/watcher-projection.js';
 
 const goal = {

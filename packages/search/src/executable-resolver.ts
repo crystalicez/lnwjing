@@ -1,6 +1,6 @@
 import { access, constants, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { err, ok, type Result } from '@lnwjud/domain';
+import { err, ok, type Result } from '@lnwjing/domain';
 
 export interface ExecutableResolver {
   resolve(executable: string): Promise<Result<string>>;

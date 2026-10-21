@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { ok } from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
+import { ok } from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
 import { UpgradeRuntimeService } from './upgrade-runtime.js';
 import { UPGRADE_TOOL_CATALOG } from './upgrade-catalog.js';
 import { ToolRegistry } from './tool-registry.js';
@@ -292,7 +292,7 @@ describe('upgrade runtime', () => {
       });
     }
 
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-plugin-registry-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-plugin-registry-'));
     try {
       const persistent = new UpgradeRuntimeService({ runtimeStatePath: path.join(directory, 'runtime.json') }, actor);
       await expect(persistent.execute('plugin_install', { name: 'safe-plugin', source: 'local-test-registry', version: '1.2.3' })).resolves.toMatchObject({
@@ -342,7 +342,7 @@ describe('upgrade runtime', () => {
   });
 
   it('persists redacted session state and reports task execution unavailable truthfully', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-'));
     const statePath = path.join(directory, 'runtime.json');
     const first = new UpgradeRuntimeService({ runtimeStatePath: statePath }, actor);
     await first.execute('session_checkpoint', { summary: 'inspect logs', token: 'must-not-be-retained' });
@@ -507,9 +507,9 @@ describe('upgrade runtime', () => {
     const runtime = new UpgradeRuntimeService({
       file: {
         async readFile() {
-          return ok({ path: '.lnwjud/project-profile.json', content: persisted, startLine: 1, endLine: 1, encoding: 'utf8', byteLength: Buffer.byteLength(persisted) });
+          return ok({ path: '.lnwjing/project-profile.json', content: persisted, startLine: 1, endLine: 1, encoding: 'utf8', byteLength: Buffer.byteLength(persisted) });
         },
-        async writeFile(): Promise<ReturnType<typeof ok>> { return ok({ path: '.lnwjud/project-profile.json' }); },
+        async writeFile(): Promise<ReturnType<typeof ok>> { return ok({ path: '.lnwjing/project-profile.json' }); },
       } as McpApplicationServices['file'],
     }, actor);
 

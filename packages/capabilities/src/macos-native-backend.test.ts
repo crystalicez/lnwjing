@@ -28,8 +28,8 @@ describe('MacosNativeCapabilityBackend', () => {
     // Keep both temporary roots on the checkout's drive so Node can express
     // them as relative slash paths even when this deterministic macOS-profile
     // test is executed on Windows.
-    const root = await mkdtemp(path.join(process.cwd(), '.lnwjud-macos-native-'));
-    const outside = await mkdtemp(path.join(process.cwd(), '.lnwjud-macos-native-outside-'));
+    const root = await mkdtemp(path.join(process.cwd(), '.lnwjing-macos-native-'));
+    const outside = await mkdtemp(path.join(process.cwd(), '.lnwjing-macos-native-outside-'));
     try {
       await mkdir(path.join(root, 'media'));
       await writeFile(path.join(root, 'media', 'in.wav'), 'fixture');
@@ -60,7 +60,7 @@ describe('MacosNativeCapabilityBackend', () => {
   });
 
   it('rejects foreign Windows paths instead of resolving them as POSIX relatives', async (): Promise<void> => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-macos-native-foreign-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-macos-native-foreign-'));
     try {
       const backend = new MacosNativeCapabilityBackend('audio', { bridge: bridgeFor([]), allowedRootsProvider: async (): Promise<string[]> => [root] });
       await expect(backend.execute({ action: 'play', file_path: 'C:\\Users\\alice\\recording.wav', userConfirmed: true })).resolves.toMatchObject({

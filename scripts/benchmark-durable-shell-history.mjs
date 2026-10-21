@@ -32,7 +32,7 @@ process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 if (!report.accepted) process.exitCode = 1;
 
 async function benchmarkHistory(historySize) {
-  const root = await mkdtemp(path.join(os.tmpdir(), `lnwjud-durable-history-${historySize}-`));
+  const root = await mkdtemp(path.join(os.tmpdir(), `lnwjing-durable-history-${historySize}-`));
   let metadataReads = 0;
   try {
     await createDirectories(root, historySize);

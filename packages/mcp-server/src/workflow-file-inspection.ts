@@ -68,7 +68,7 @@ export async function generateWorkflowReportMapping(root: string, templatePath: 
   if ((sheet.model as unknown as {sheetProtection?:unknown}).sheetProtection) throw new Error('Cannot write to protected template sheet');
   const appendRow = Math.max(2, sheet.rowCount + 2);
   if (appendRow > 1_048_570) throw new Error('Not enough rows available in template');
-  const target = await safeOfficePath(root, `lnwjud-report-mapping-${randomUUID().slice(0,8)}.json`, true);
+  const target = await safeOfficePath(root, `lnwjing-report-mapping-${randomUUID().slice(0,8)}.json`, true);
   const mapping = {
     schemaVersion: 1,
     cells: [],

@@ -1,10 +1,10 @@
 import { createServer, type Socket } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { appError, err, ok, type GoalLeaseProof } from '@lnwjud/domain';
-import { WorkspaceInfoService, type FileActor } from '@lnwjud/application';
-import { permissionProfiles } from '@lnwjud/permissions';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, ok, type GoalLeaseProof } from '@lnwjing/domain';
+import { WorkspaceInfoService, type FileActor } from '@lnwjing/application';
+import { permissionProfiles } from '@lnwjing/permissions';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import { DapSessionService } from './dap-session-service.js';
 import { DapFrameDecoder, encodeDapMessage } from './dap-framing.js';
 import { ToolRegistry, type McpApplicationServices, type ToolRegistryOptions } from './tool-registry.js';

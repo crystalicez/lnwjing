@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { startMcpStdio } from '@lnwjud/mcp-server';
+import { startMcpStdio } from '@lnwjing/mcp-server';
 import {
   STDIO_ALLOWED_ROOTS_SETTING_KEY,
   STDIO_PERMISSION_PROFILE_SETTING_KEY,
@@ -11,10 +11,10 @@ import {
   parseAllowedRoots,
   parseBooleanSetting,
   parseStdioPermissionProfile,
-  resolveLnwjudDataPath,
-} from '@lnwjud/shared';
-import { applyPendingSqliteRestoreSync, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository } from '@lnwjud/storage';
-import { comparableHostPath, hostPathApi, isMachineRootPath, normalizeWorkspaceRoot, WorkspaceService, type Workspace } from '@lnwjud/workspace';
+  resolveLnwjingDataPath,
+} from '@lnwjing/shared';
+import { applyPendingSqliteRestoreSync, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository } from '@lnwjing/storage';
+import { comparableHostPath, hostPathApi, isMachineRootPath, normalizeWorkspaceRoot, WorkspaceService, type Workspace } from '@lnwjing/workspace';
 import { createStdioMcpRuntime, resolveStdioCheckpointKey, type PersistedStdioSecurityPolicy } from '../runtime/stdio-mcp-runtime.js';
 import { StrictWorkspaceRepository, canonicalizeAllowedRoots, requestedPathInsideAllowedRoot } from '../runtime/strict-workspace-repository.js';
 import { resolveRequestedWorkspacePath } from '../runtime/workspace-selection.js';
@@ -42,7 +42,7 @@ function hasFlag(flag: string): boolean {
 }
 
 function resolveDataPath(): string {
-  return resolveLnwjudDataPath(process.env);
+  return resolveLnwjingDataPath(process.env);
 }
 
 interface StdioSecurityPolicyOverrides {
@@ -98,7 +98,7 @@ function resolveEffectiveSecurityPolicy(
       : persisted.allowedRoots;
   const unrestrictedSetting = overrides.unrestrictedEnv === undefined
     ? persisted.unrestricted
-    : isUnrestricted({ LNWJUD_UNRESTRICTED: overrides.unrestrictedEnv }, undefined);
+    : isUnrestricted({ LNWJING_UNRESTRICTED: overrides.unrestrictedEnv }, undefined);
   return {
     profile,
     fullBypassAll,
@@ -130,20 +130,20 @@ async function main(): Promise<void> {
   // Electron STDIO supplies this through safeStorage instead; this entrypoint
   // deliberately accepts only an explicit development key.
   const checkpointEncryptionKey = resolveStdioCheckpointKey();
-  const restore = applyPendingSqliteRestoreSync(path.join(dataPath, 'lnwjud.sqlite'), path.join(dataPath, 'backups'), { platform: process.platform, arch: process.arch });
-  if (restore.error !== undefined) process.stderr.write(`lnwjud MCP stdio: scheduled restore failed: ${restore.error}\n`);
-  if (restore.applied) process.stderr.write(`lnwjud MCP stdio: restored database from ${restore.backupId ?? 'scheduled backup'}\n`);
+  const restore = applyPendingSqliteRestoreSync(path.join(dataPath, 'lnwjing.sqlite'), path.join(dataPath, 'backups'), { platform: process.platform, arch: process.arch });
+  if (restore.error !== undefined) process.stderr.write(`lnwjing MCP stdio: scheduled restore failed: ${restore.error}\n`);
+  if (restore.applied) process.stderr.write(`lnwjing MCP stdio: restored database from ${restore.backupId ?? 'scheduled backup'}\n`);
 
-  const database = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'), { backupDirectory: path.join(dataPath, 'backups'), platform: process.platform, arch: process.arch });
+  const database = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'), { backupDirectory: path.join(dataPath, 'backups'), platform: process.platform, arch: process.arch });
   const rawWorkspaceRepository = new SqliteWorkspaceRepository(database);
   const settingsRepository = new SqliteSettingsRepository(database);
 
-  const profileOverride = readArg('--profile') ?? process.env.LNWJUD_STDIO_PROFILE;
-  const fullBypassEnv = process.env.LNWJUD_STDIO_FULL_BYPASS_ALL;
-  const strictRootsEnv = process.env.LNWJUD_STRICT_ROOTS;
-  const unrestrictedEnv = process.env.LNWJUD_UNRESTRICTED;
+  const profileOverride = readArg('--profile') ?? process.env.LNWJING_STDIO_PROFILE;
+  const fullBypassEnv = process.env.LNWJING_STDIO_FULL_BYPASS_ALL;
+  const strictRootsEnv = process.env.LNWJING_STRICT_ROOTS;
+  const unrestrictedEnv = process.env.LNWJING_UNRESTRICTED;
   const cliAllowedRoots = readArgs('--allowed-root');
-  const envAllowedRoots = parseAllowedRoots(process.env.LNWJUD_ALLOWED_ROOTS);
+  const envAllowedRoots = parseAllowedRoots(process.env.LNWJING_ALLOWED_ROOTS);
   const securityPolicyOverrides: StdioSecurityPolicyOverrides = {
     fullBypassFlag: hasFlag('--full-bypass-all'),
     strictRootsFlag: hasFlag('--strict-roots'),
@@ -163,11 +163,11 @@ async function main(): Promise<void> {
 
   const rawWorkspaceService = new WorkspaceService(rawWorkspaceRepository);
   const reset = hasFlag('--reset-workspaces')
-    || process.env.LNWJUD_RESET_WORKSPACES === '1'
-    || process.env.LNWJUD_RESET_WORKSPACES === 'true';
+    || process.env.LNWJING_RESET_WORKSPACES === '1'
+    || process.env.LNWJING_RESET_WORKSPACES === 'true';
   if (reset) {
     const backupService = new SqliteBackupService(database, {
-      databaseFilename: path.join(dataPath, 'lnwjud.sqlite'),
+      databaseFilename: path.join(dataPath, 'lnwjing.sqlite'),
       backupDirectory: path.join(dataPath, 'backups'),
       platform: process.platform,
       arch: process.arch,
@@ -175,10 +175,10 @@ async function main(): Promise<void> {
     const result = await resetWorkspaceRegistrations(
       rawWorkspaceService,
       backupService,
-      readArg('--confirm-reset-workspaces') ?? process.env.LNWJUD_CONFIRM_RESET_WORKSPACES,
+      readArg('--confirm-reset-workspaces') ?? process.env.LNWJING_CONFIRM_RESET_WORKSPACES,
     );
     process.stderr.write(
-      `lnwjud MCP stdio: cleared ${result.deleted} previous workspace registration(s)`
+      `lnwjing MCP stdio: cleared ${result.deleted} previous workspace registration(s)`
       + `${result.backupId === null ? '' : ` after backup ${result.backupId}`}\n`,
     );
   }
@@ -189,7 +189,7 @@ async function main(): Promise<void> {
   const workspaceService = new WorkspaceService(workspaceRepository);
   const unrestricted = initialSecurityPolicy.unrestricted;
 
-  const requestedRaw = readArg('--workspace') ?? process.env.LNWJUD_WORKSPACE;
+  const requestedRaw = readArg('--workspace') ?? process.env.LNWJING_WORKSPACE;
   const registeredProjects = (await workspaceService.list())
     .filter((entry) => !isMachineRootPath(entry.realRootPath) && !isMachineRootPath(entry.rootPath));
   const requestedPath = resolveRequestedWorkspacePath({
@@ -198,11 +198,11 @@ async function main(): Promise<void> {
     registeredProjectPaths: registeredProjects.map((entry) => entry.realRootPath),
   });
   if (requestedPath === null) {
-    process.stderr.write('lnwjud MCP stdio: no project workspace is configured; pass --workspace <path>\n');
+    process.stderr.write('lnwjing MCP stdio: no project workspace is configured; pass --workspace <path>\n');
     process.exit(2);
   }
   if (!fs.existsSync(requestedPath)) {
-    process.stderr.write(`lnwjud MCP stdio: workspace path does not exist: ${requestedPath}\n`);
+    process.stderr.write(`lnwjing MCP stdio: workspace path does not exist: ${requestedPath}\n`);
     process.exit(2);
   }
 
@@ -211,7 +211,7 @@ async function main(): Promise<void> {
     // This environment variable is consumed by the host-native runtime. Use
     // the platform delimiter so POSIX roots remain independently addressable
     // while Windows drive-letter paths continue to use `;`.
-    process.env.LNWJUD_CAPABILITY_ROOTS = strictAllowedRoots.join(path.delimiter);
+    process.env.LNWJING_CAPABILITY_ROOTS = strictAllowedRoots.join(path.delimiter);
     for (const root of strictAllowedRoots) {
       const normalized = comparableWorkspaceRoot(root);
       const existing = normalized === null ? undefined : (await workspaceService.list()).find((entry) => comparableWorkspaceRoot(entry.realRootPath) === normalized);
@@ -225,7 +225,7 @@ async function main(): Promise<void> {
     if (selected === undefined) throw new Error(`Strict allowed root was not registered: ${selectedAllowedRoot}`);
     workspace = selected;
   } else {
-    process.env.LNWJUD_CAPABILITY_ROOTS = process.env.LNWJUD_CAPABILITY_ROOTS?.trim()
+    process.env.LNWJING_CAPABILITY_ROOTS = process.env.LNWJING_CAPABILITY_ROOTS?.trim()
       || requestedPath.replace(/\\/g, '/');
 
     const requestedNorm = comparableWorkspaceRoot(requestedPath);
@@ -240,7 +240,7 @@ async function main(): Promise<void> {
   }
 
   for (const entry of await workspaceService.list()) {
-    process.stderr.write(`lnwjud workspace id=${entry.id} root=${entry.realRootPath}\n`);
+    process.stderr.write(`lnwjing workspace id=${entry.id} root=${entry.realRootPath}\n`);
   }
   database.close();
 
@@ -258,7 +258,7 @@ async function main(): Promise<void> {
       : 'Direct STDIO security settings changed. Reconnect Direct STDIO before using tools so the new permissions apply safely.';
   };
   process.stderr.write(
-    `lnwjud MCP stdio ready primary=${workspace.id} root=${workspace.realRootPath} profile=${profileName}`
+    `lnwjing MCP stdio ready primary=${workspace.id} root=${workspace.realRootPath} profile=${profileName}`
       + `${stdioFullBypassAll ? ' full_bypass=1' : ''}${unrestricted ? ' unrestricted=1' : ''}${strictAllowedRoots === undefined ? '' : ` strict_roots=${strictAllowedRoots.length}`}\n`,
   );
 
@@ -287,11 +287,11 @@ async function main(): Promise<void> {
     toolAvailabilitySubscribe: (listener) => runtime.toolAvailabilityService.subscribe(listener),
     onError: (error): void => {
       if (/EPIPE|ECONNRESET|broken pipe/i.test(error.message)) {
-        process.stderr.write(`lnwjud MCP stdio: peer closed (${error.message})\n`);
+        process.stderr.write(`lnwjing MCP stdio: peer closed (${error.message})\n`);
         void shutdown();
         return;
       }
-      process.stderr.write(`lnwjud MCP stdio error: ${error.message}\n`);
+      process.stderr.write(`lnwjing MCP stdio error: ${error.message}\n`);
     },
   });
 
@@ -309,6 +309,6 @@ function comparableWorkspaceRoot(value: string): string | null {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`lnwjud MCP stdio failed: ${error instanceof Error ? error.message : 'unknown'}\n`);
+  process.stderr.write(`lnwjing MCP stdio failed: ${error instanceof Error ? error.message : 'unknown'}\n`);
   process.exit(1);
 });

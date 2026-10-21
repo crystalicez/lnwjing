@@ -1,4 +1,4 @@
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { toWindowsSpawnInvocation, type SpawnInvocation, type WindowsSpawnOptions } from './windows-spawn.js';
 
 export type { SpawnInvocation } from './windows-spawn.js';

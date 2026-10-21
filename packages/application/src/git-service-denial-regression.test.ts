@@ -2,8 +2,8 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { GitAdapter } from '@lnwjud/git';
-import type { Workspace, WorkspaceRepository } from '@lnwjud/workspace';
+import type { GitAdapter } from '@lnwjing/git';
+import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { GitService } from './git-service.js';
 
 const temporaryRoots: string[] = [];
@@ -18,7 +18,7 @@ describe('GitService destructive checkout/ref regression', () => {
     ['force branch rename', ['branch', '-M', 'old', 'existing']],
     ['force branch copy', ['branch', '-C', 'source', 'existing']],
   ] as const)('denies confirmed %s before adapter dispatch', async (_label, args) => {
-    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-git-denial-'));
+    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-git-denial-'));
     temporaryRoots.push(rawRoot);
     const root = await realpath(rawRoot);
     const workspace: Workspace = {

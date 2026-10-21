@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { ToolRegistry } from '../tool-registry.js';
-import type { ExtensionsService } from '@lnwjud/extensions';
+import type { ExtensionsService } from '@lnwjing/extensions';
 
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 

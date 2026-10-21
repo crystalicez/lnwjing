@@ -57,7 +57,7 @@ public sealed class RepositoryImportAnchor : IDisposable {
    if(!String.Equals(canonicalWorkspace.TrimEnd('\\'),absolute.TrimEnd('\\'),StringComparison.OrdinalIgnoreCase)) throw new IOException("IMPORT_WORKSPACE_IDENTITY_CHANGED");
    for(int i=0;i<segments.Length-1;i++) parent = KeepOpen(parent,segments[i]);
    parentPath = FinalPath(parent);
-   if(createGuard) guard = OpenRelative(parent,".lnwjud-import-guard-"+Guid.NewGuid().ToString("N"),true);
+   if(createGuard) guard = OpenRelative(parent,".lnwjing-import-guard-"+Guid.NewGuid().ToString("N"),true);
    CheckDirectory(parent);
   } catch { Dispose(); throw; }
  }
@@ -169,7 +169,7 @@ public sealed class RepositoryImportAnchor : IDisposable {
   foreach(char c in name)if(c<32)throw new IOException("IMPORT_INVALID_NAME");
   var stem=name.Split('.')[0].ToUpperInvariant();
   if(stem=="CON"||stem=="PRN"||stem=="AUX"||stem=="NUL"||stem=="CONIN$"||stem=="CONOUT$"||stem=="CLOCK$"||(stem.Length==4&&(stem.StartsWith("COM")||stem.StartsWith("LPT"))&&"123456789\u00b9\u00b2\u00b3".IndexOf(stem[3])>=0))throw new IOException("IMPORT_INVALID_NAME");
-  if(name.Equals(".git",StringComparison.OrdinalIgnoreCase)||name.StartsWith(".lnwjud",StringComparison.OrdinalIgnoreCase))throw new IOException("IMPORT_PROTECTED_DESTINATION");
+  if(name.Equals(".git",StringComparison.OrdinalIgnoreCase)||name.StartsWith(".lnwjing",StringComparison.OrdinalIgnoreCase))throw new IOException("IMPORT_PROTECTED_DESTINATION");
  }
 
  public void Dispose() {

@@ -77,7 +77,7 @@ export interface WatcherSnapshot {
     readonly task?: string;
     readonly workspaceId?: string;
     readonly workspaceName?: string;
-    readonly provider?: 'lnwjud' | 'codex';
+    readonly provider?: 'lnwjing' | 'codex';
     readonly toolName?: string;
     readonly startedAt?: string;
   }>;
@@ -162,17 +162,17 @@ function pairingPage(endpoint: string, token: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LNWJUD Watcher Pairing</title>
+<title>LNWJING Watcher Pairing</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#070b12;color:#f7f2e7}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 20% 0%,#51381333,transparent 30rem),linear-gradient(180deg,#0b1019,#070b12)}main{width:min(720px,100%);border:1px solid #344155;border-radius:24px;padding:28px;background:linear-gradient(180deg,#121924fa,#0b111afa);box-shadow:0 28px 80px #000a}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.mark{width:48px;height:48px;border:1px solid #765723;border-radius:15px;display:grid;place-items:center;color:#ffcf65;background:#21190c;font-size:24px}.brand strong{display:block;letter-spacing:.08em}.brand span{display:block;color:#f4b93f;font-size:.78rem;letter-spacing:.12em;margin-top:3px}.eyebrow{color:#f4b93f;font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}h1{font-size:clamp(1.8rem,5vw,2.7rem);margin:8px 0 10px;letter-spacing:-.03em}p{color:#a6b2c0;line-height:1.65}.notice{margin:20px 0;padding:13px 14px;border:1px solid #5f4720;border-radius:14px;background:#21190d;color:#e6c67b}.field{margin-top:16px}.label{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:7px;color:#cbd3dc;font-weight:700}.value{display:block;width:100%;padding:13px 14px;border:1px solid #2b3748;border-radius:13px;background:#080d14;color:#f3d487;font:500 .88rem ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;user-select:all}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}button,a.button{min-height:44px;border-radius:12px;padding:10px 15px;font:inherit;font-size:.92rem;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;border:1px solid #39475a;background:#121a25;color:#e7edf4}.primary{border-color:#e3a936!important;background:linear-gradient(180deg,#efb743,#bd8120)!important;color:#130d04!important}button:focus-visible,a:focus-visible{outline:2px solid #ffcf65;outline-offset:3px}.foot{margin-top:22px;padding-top:18px;border-top:1px solid #263244;color:#7f8c9b;font-size:.8rem;line-height:1.6}.copied{color:#4ed28b}@media(max-width:560px){main{padding:20px;border-radius:20px}.actions>*{width:100%}}
 </style>
 </head>
 <body>
 <main>
-  <div class="brand"><div class="mark" aria-hidden="true">◉</div><div><strong>LNWJUD</strong><span>WATCHER PAIRING</span></div></div>
+  <div class="brand"><div class="mark" aria-hidden="true">◉</div><div><strong>LNWJING</strong><span>WATCHER PAIRING</span></div></div>
   <div class="eyebrow">Local pairing · จับคู่บนเครื่องนี้เท่านั้น</div>
-  <h1>Connect LNWJUD Watcher</h1>
-  <p>คัดลอก <strong>Session token</strong> ไปใส่ใน LNWJUD Watcher. หน้านี้เปิดได้เฉพาะเครื่องที่รัน LNWJUD และไม่ควรถูกเผยแพร่ผ่าน tunnel.</p>
+  <h1>Connect LNWJING Watcher</h1>
+  <p>คัดลอก <strong>Session token</strong> ไปใส่ใน LNWJING Watcher. หน้านี้เปิดได้เฉพาะเครื่องที่รัน LNWJING และไม่ควรถูกเผยแพร่ผ่าน tunnel.</p>
   <div class="notice">🔒 ห้ามนำ port <strong>17891</strong> ออก Public Internet. หากต้องดูจากมือถือหรือเครื่องอื่น ให้ tunnel เฉพาะ Watcher API port <strong>17890</strong>.</div>
   <div class="field"><div class="label"><span>Session token</span><span id="token-status"></span></div><code class="value" id="token">${safeToken}</code></div>
   <div class="actions"><button class="primary" id="copy-token" type="button">Copy Session token · คัดลอก Token</button></div>

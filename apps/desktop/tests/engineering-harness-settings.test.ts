@@ -7,7 +7,7 @@ import { createDesktopRuntime } from '../src/main/desktop-services.js';
 const temporaryRoots: string[] = [];
 
 beforeEach(() => {
-  vi.stubEnv('LNWJUD_UNRESTRICTED', '1');
+  vi.stubEnv('LNWJING_UNRESTRICTED', '1');
 });
 
 afterEach(async () => {
@@ -19,8 +19,8 @@ afterEach(async () => {
 
 describe('Desktop Engineering Harness settings and status', () => {
   it('is default-off, enables for a detected coding workspace, and exposes durable task progress without writing project policy', async () => {
-    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-data-'));
-    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-workspace-'));
+    const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-data-'));
+    const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-workspace-'));
     temporaryRoots.push(rawDataRoot, rawWorkspaceRoot);
     const workspaceRoot = await realpath(rawWorkspaceRoot);
     await writeFile(path.join(workspaceRoot, 'package.json'), JSON.stringify({ name: 'fixture', scripts: { test: 'vitest run' } }), 'utf8');

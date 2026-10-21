@@ -426,7 +426,7 @@ export const PHASE_34_TO_46_TOOL_RUNTIME_FIXTURES = {
   docx_merge: service({ workspaceId, file_path: 'package.json', merge_paths: ['tsconfig.json'], target_path: 'runtime-contract-output.docx' }, 'workspaceInfo.info'),
   self_heal_plan: service({}, 'capabilities.shell'),
   self_heal_apply: service({}, 'capabilities.shell'),
-  skills_import: service({ workspaceId, source_path: '.agents/skills/lnwjud-scheduled-continuation/SKILL.md' }, 'file.readFile'),
+  skills_import: service({ workspaceId, source_path: '.agents/skills/lnwjing-scheduled-continuation/SKILL.md' }, 'file.readFile'),
   agent_swarm_run: service({ operation: 'list', workspaceId }, 'agentSwarm.list'),
 } as const satisfies Readonly<Record<string, ToolRuntimeFixture>>;
 
@@ -436,7 +436,7 @@ export const ECC_TOOL_RUNTIME_FIXTURES = {
   ecc_load: unavailable({ id: 'ecc:missing' }, 'needs_setup'),
   ecc_configure: unavailable({ enabled: true, mode: 'selective' }, 'needs_setup'),
   ecc_security_scan: unavailable({ workspaceId }, 'needs_setup'),
-  ecc_memory_save: service({ workspaceId: eccWorkspaceId, title: 'Runtime contract memory', body: 'runtime contract memory body', kind: 'note', sourceHarness: 'lnwjud-test' }, 'workspaceInfo.info'),
+  ecc_memory_save: service({ workspaceId: eccWorkspaceId, title: 'Runtime contract memory', body: 'runtime contract memory body', kind: 'note', sourceHarness: 'lnwjing-test' }, 'workspaceInfo.info'),
   ecc_memory_search: service({ workspaceId: eccWorkspaceId, query: 'runtime contract' }, 'workspaceInfo.info'),
   ecc_memory_read: service({ workspaceId: eccWorkspaceId, id: 'prepared-memory-id' }, 'workspaceInfo.info', 'ecc_memory_save'),
   ecc_memory_doctor: service({ workspaceId: eccWorkspaceId }, 'workspaceInfo.info'),

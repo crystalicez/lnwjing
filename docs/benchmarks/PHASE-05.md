@@ -1,11 +1,11 @@
-# lnwjud Phase 05–40 Foundation Compatibility Benchmark
+# lnwjing Phase 05–40 Foundation Compatibility Benchmark
 
 Generated: 2026-08-16T19:24:15.048Z
 Repository: `main` @ `087b240bc4a00a0e3829b9a5eb1eeecf50121de1`
 
 ## Scope
 
-This is the Phase 05–40 foundation compatibility snapshot. It starts the built lnwjud application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract benchmark, not a production-machine benchmark.
+This is the Phase 05–40 foundation compatibility snapshot. It starts the built lnwjing application runtime, registers a temporary fixture workspace, measures the loopback MCP HTTP transport, and deletes the fixture afterward. It is a repeatable local contract benchmark, not a production-machine benchmark.
 
 | Field | Value |
 | --- | --- |

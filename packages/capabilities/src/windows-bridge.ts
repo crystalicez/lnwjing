@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { appError, err, ok, type AppErrorCode, type Result } from '@lnwjud/domain';
-import { WindowsProcessTree, type ProcessTreeTerminator } from '@lnwjud/process';
+import { appError, err, ok, type AppErrorCode, type Result } from '@lnwjing/domain';
+import { WindowsProcessTree, type ProcessTreeTerminator } from '@lnwjing/process';
 import type { WindowsCapabilityBridge, WindowsCapabilityName } from './windows-native-backend.js';
 
 export interface PowerShellWindowsBridgeOptions {

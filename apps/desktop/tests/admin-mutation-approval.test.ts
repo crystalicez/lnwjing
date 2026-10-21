@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { HostMutationApprovalRequest } from '@lnwjud/mcp-server';
+import type { HostMutationApprovalRequest } from '@lnwjing/mcp-server';
 import { createDesktopRuntime } from '../src/main/desktop-services.js';
 
 const temporaryRoots: string[] = [];
@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('desktop destructive administrative approval', () => {
   it('requires native approval before deleting a workspace registration', async () => {
-    const dataRootRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-admin-approval-data-'));
+    const dataRootRaw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-admin-approval-data-'));
     temporaryRoots.push(dataRootRaw);
     const projectRootRaw = path.join(dataRootRaw, 'project');
     await mkdir(projectRootRaw, { recursive: true });

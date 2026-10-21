@@ -19,7 +19,7 @@ export interface WorkspaceResetResult {
 }
 
 /**
- * A workspace reset deletes only lnwjud registration rows, never project files.
+ * A workspace reset deletes only lnwjing registration rows, never project files.
  * It is still a broad persistent mutation, so it requires an exact phrase and a
  * restorable SQLite snapshot before the first row is removed.
  */

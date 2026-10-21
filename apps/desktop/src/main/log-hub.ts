@@ -2,9 +2,9 @@ import { closeSync, existsSync, fstatSync, openSync, readSync, statSync } from '
 import { createHash } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
 import { stripVTControlCharacters } from 'node:util';
-import type { AppErrorCode } from '@lnwjud/domain';
-import { decodeActivityTargetReference, type ActivityTargetReference } from '@lnwjud/audit';
-import { workspaceScopeMatches, type LogCorrelation, type LogLevel, type LogLine, type LogScopeRequest, type LogSnapshot, type LogSource, type TunnelLifecycleCategory, type WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import type { AppErrorCode } from '@lnwjing/domain';
+import { decodeActivityTargetReference, type ActivityTargetReference } from '@lnwjing/audit';
+import { workspaceScopeMatches, type LogCorrelation, type LogLevel, type LogLine, type LogScopeRequest, type LogSnapshot, type LogSource, type TunnelLifecycleCategory, type WorkspaceSummary } from '@lnwjing/ipc-contracts';
 
 const MAX_LINES_PER_SOURCE = 10_000;
 const MAX_SEEN_KEYS_PER_SOURCE = 20_000;

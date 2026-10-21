@@ -1,8 +1,8 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { readWindowsContainmentReceipt } from '@lnwjud/process';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
+import { readWindowsContainmentReceipt } from '@lnwjing/process';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 export type ActiveTaskInspection = 'active' | 'terminal' | 'missing' | 'unknown';
 
@@ -430,7 +430,7 @@ const RESERVATION_RECLAIM_GRACE_MS = 30_000;
 const MAX_PAGE_SIZE = 200;
 const JOURNAL_READ_CHUNK_BYTES = 64 * 1024;
 const MAX_JOURNAL_LINE_BYTES = 16 * 1024;
-const CURSOR_PREFIX = 'lnwjud-durable-shell-v1:';
+const CURSOR_PREFIX = 'lnwjing-durable-shell-v1:';
 
 class InvalidCursorError extends Error {}
 class CorruptJournalError extends Error {}

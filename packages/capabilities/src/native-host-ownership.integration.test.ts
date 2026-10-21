@@ -7,7 +7,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NativeHostProcessBridge } from './native-host-protocol.js';
 import type { CapabilityTaskOwner } from './task-ownership.js';
-import type { ProcessTreeTerminator } from '@lnwjud/process';
+import type { ProcessTreeTerminator } from '@lnwjing/process';
 
 const fixtureSource = `
 import readline from 'node:readline';
@@ -65,11 +65,11 @@ afterEach(async () => {
 });
 
 function owned(owner: CapabilityTaskOwner, input: Record<string, unknown>): Record<string, unknown> {
-  return { ...input, metadata: { 'lnwjud.taskOwner.v1': owner } };
+  return { ...input, metadata: { 'lnwjing.taskOwner.v1': owner } };
 }
 
 async function fixture(terminator: ProcessTreeTerminator = { stop: stopChild }, ownerIdleTtlMs?: number): Promise<typeof fixtures[number]> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-native-owner-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-native-owner-'));
   const helper = path.join(root, 'fixture.mjs');
   await writeFile(helper, fixtureSource, 'utf8');
   const canonicalHelper = await realpath(helper);
@@ -184,7 +184,7 @@ describe('native host process ownership', () => {
 
   it.each([{}, { clientId: 'only-client' }, { clientId: 'a', sessionId: 'b', workspaceId: 12 }, { clientId: 'a\0', sessionId: 'b' }])('rejects malformed reserved owner metadata before a helper starts', async (owner) => {
     const { bridge, children } = await fixture();
-    await expect(bridge.execute('audio', { action: 'record', metadata: { 'lnwjud.taskOwner.v1': owner } })).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
+    await expect(bridge.execute('audio', { action: 'record', metadata: { 'lnwjing.taskOwner.v1': owner } })).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
     expect(children).toHaveLength(0);
   });
 

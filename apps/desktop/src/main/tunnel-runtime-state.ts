@@ -1,4 +1,4 @@
-export const TUNNEL_RUNTIME_ALIAS = 'lnwjud';
+export const TUNNEL_RUNTIME_ALIAS = 'lnwjing';
 
 export type TunnelRuntimeMode = 'native-managed' | 'profile-child';
 export type TunnelFailureClass = 'none' | 'transient' | 'auth' | 'operator';

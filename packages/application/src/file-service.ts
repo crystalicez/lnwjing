@@ -12,7 +12,7 @@ import {
   type AppError,
   type InvocationAuthorization,
   type Result,
-} from '@lnwjud/domain';
+} from '@lnwjing/domain';
 import {
   AtomicFileWriter,
   MAX_FILE_WRITE_BYTES,
@@ -24,10 +24,10 @@ import {
   nodeErrorCode,
   type FilePatch,
   type LineRange,
-} from '@lnwjud/filesystem';
-import { DefaultPermissionEngine, permissionProfiles, type PermissionEngine, type PermissionProfile } from '@lnwjud/permissions';
-import { isProtectedCriticalPath } from '@lnwjud/shared';
-import { isFilesystemRoot, isWithin, WorkspacePathGuard, type ResolvedWorkspacePath, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+} from '@lnwjing/filesystem';
+import { DefaultPermissionEngine, permissionProfiles, type PermissionEngine, type PermissionProfile } from '@lnwjing/permissions';
+import { isProtectedCriticalPath } from '@lnwjing/shared';
+import { isFilesystemRoot, isWithin, WorkspacePathGuard, type ResolvedWorkspacePath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { CheckpointServicePort } from './checkpoint-service.js';
 import { createGuardedWriteValidator } from './guarded-write.js';
 import type { ManagedWriterAdmissionPort } from './writer-admission.js';

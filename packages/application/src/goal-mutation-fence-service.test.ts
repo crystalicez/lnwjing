@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { GoalStateError, type ScheduledContinuationRepository } from '@lnwjud/domain';
+import { GoalStateError, type ScheduledContinuationRepository } from '@lnwjing/domain';
 import { GoalMutationFenceService } from './goal-mutation-fence-service.js';
 
 const actor = { clientId: 'client-a', clientName: 'Client A', sessionId: 'shared-session' };

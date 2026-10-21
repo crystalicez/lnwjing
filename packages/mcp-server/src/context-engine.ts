@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
-import { err, ok, type AppErrorCode, type Result } from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
-import { classifyContextPath } from '@lnwjud/search';
+import { err, ok, type AppErrorCode, type Result } from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
+import { classifyContextPath } from '@lnwjing/search';
 import type { McpApplicationServices } from './tools/tool-types.js';
 import { ContextEconomyRuntime, type ContextEconomyStats, type ContextDeliveryKind } from './context-economy.js';
 import { ContinuationStore, scopedContinuationKey } from './continuation-store.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ToolRegistry } from '@lnwjud/mcp-server';
+import { ToolRegistry } from '@lnwjing/mcp-server';
 import { catalogDefinitions, KNOWN_TOOL_REQUIREMENT_IDS } from './catalog-definitions.js';
 import { resolveCatalogCopy } from './catalog-copy.js';
 

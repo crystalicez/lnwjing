@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { EngineeringHarnessSettings } from '@lnwjud/shared';
-import type { WorkspaceRepository } from '@lnwjud/workspace';
+import type { EngineeringHarnessSettings } from '@lnwjing/shared';
+import type { WorkspaceRepository } from '@lnwjing/workspace';
 import { EngineeringPreparationService } from './engineering-preparation-service.js';
 import type { EngineeringProjectAssessment } from './engineering-project-assessment.js';
 

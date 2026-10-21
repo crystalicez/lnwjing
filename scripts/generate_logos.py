@@ -10,7 +10,7 @@ DEFAULT_SOURCE_PATH = REPOSITORY_ROOT / "assets" / "logo" / "logo.png"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate lnwjud application and web icon assets.")
+    parser = argparse.ArgumentParser(description="Generate lnwjing application and web icon assets.")
     parser.add_argument(
         "--source",
         type=Path,
@@ -115,8 +115,8 @@ def generate(source_path: Path, workspace_root: Path) -> None:
     bg.save(assets_dir / "og-banner-1200x630.png", format="PNG", optimize=True)
 
     manifest_content = """{
-  "name": "lnwjud",
-  "short_name": "lnwjud",
+  "name": "lnwjing",
+  "short_name": "lnwjing",
   "icons": [
     {
       "src": "/favicon-16x16.png",

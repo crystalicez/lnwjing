@@ -32,8 +32,8 @@ const MINIMUM_COSIGN_VERSION = Object.freeze([3, 1, 3]);
 // The release checksum file is fetched for independent verification, while the
 // dependency manifest pins exact bytes for every supported OS/architecture.
 // Unknown or mismatched tuples fail closed instead of falling back to a foreign binary.
-const platform = process.env.LNWJUD_TUNNEL_TARGET ?? process.platform;
-const rawArch = process.env.LNWJUD_TUNNEL_ARCH ?? process.arch;
+const platform = process.env.LNWJING_TUNNEL_TARGET ?? process.platform;
+const rawArch = process.env.LNWJING_TUNNEL_ARCH ?? process.arch;
 const targetKey = `${platform}-${rawArch}`;
 const target = tunnelDependency.targets?.[targetKey];
 if (target === undefined) throw new Error(`Bundled tunnel-client does not support ${platform}/${rawArch}`);
@@ -97,7 +97,7 @@ await verifyProvenance(provenancePath, archivePath, archiveName, expectedArchive
 await writeAtomic(path.join(bundleRoot, 'SHA256SUMS.txt'), checksumsText);
 await writeAtomic(path.join(bundleRoot, 'BUNDLED_TUNNEL_CLIENT.json'), `${JSON.stringify({
   schemaVersion: 1,
-  product: 'lnwjud',
+  product: 'lnwjing',
   version: VERSION,
   platform,
   arch: rawArch,
@@ -247,7 +247,7 @@ async function verifyProvenance(provenancePath, archivePath, expectedSubjectName
 }
 
 async function verifyProvenanceWithCosign(provenancePath, archivePath) {
-  const cosignPath = process.env.LNWJUD_COSIGN_PATH?.trim() || 'cosign';
+  const cosignPath = process.env.LNWJING_COSIGN_PATH?.trim() || 'cosign';
   let versionOutput;
   try {
     const version = await execFileAsync(cosignPath, ['version'], { encoding: 'utf8', shell: false, env: sanitizedEnvironment(), windowsHide: true, timeout: 30_000, maxBuffer: 64 * 1024 });

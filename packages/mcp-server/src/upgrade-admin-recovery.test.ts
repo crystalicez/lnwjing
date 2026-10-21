@@ -2,15 +2,15 @@ import { mkdtemp, readFile, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ok } from '@lnwjud/domain';
-import type { FileActor } from '@lnwjud/application';
+import { ok } from '@lnwjing/domain';
+import type { FileActor } from '@lnwjing/application';
 import { UpgradeRuntimeService } from './upgrade-runtime.js';
 
 const actor: FileActor = { clientId: 'admin-recovery', clientName: 'admin-recovery-test', sessionId: 'session-a' };
 
 describe('upgrade administrative recovery snapshots', () => {
   it('keeps a recoverable plugin pre-image for persistent plugin removal', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-upgrade-admin-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-upgrade-admin-'));
     const runtimeStatePath = path.join(directory, 'runtime.json');
     const recoveryDirectory = path.join(directory, 'runtime.state-v2', 'recovery');
     const runtime = new UpgradeRuntimeService({ runtimeStatePath }, actor);
@@ -25,7 +25,7 @@ describe('upgrade administrative recovery snapshots', () => {
   });
 
   it('keeps a recoverable worktree-ledger pre-image when a ledger entry is removed', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-upgrade-admin-'));
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-upgrade-admin-'));
     const runtimeStatePath = path.join(directory, 'runtime.json');
     const recoveryDirectory = path.join(directory, 'runtime.state-v2', 'recovery');
     const calls: readonly string[][] = [];

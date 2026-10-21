@@ -1,4 +1,4 @@
-import type { ResolvedPonytailPolicy } from '@lnwjud/shared';
+import type { ResolvedPonytailPolicy } from '@lnwjing/shared';
 
 export const BUNDLED_PONYTAIL_SKILL_ID = 'bundled:agent-skills/ponytail';
 export const BUNDLED_PONYTAIL_REVIEW_SKILL_ID = 'bundled:agent-skills/ponytail-review';

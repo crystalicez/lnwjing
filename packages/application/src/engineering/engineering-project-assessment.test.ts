@@ -12,8 +12,8 @@ afterEach(async () => {
 
 describe('EngineeringProjectAssessmentService', () => {
   it('selects CodeGraph only when an index directory exists inside the project', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-codegraph-assessment-'));
-    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-codegraph-outside-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-codegraph-assessment-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-codegraph-outside-'));
     temporaryRoots.push(root, outside);
     await writeFile(path.join(root, 'package.json'), '{}', 'utf8');
     await writeFile(path.join(root, 'AGENTS.md'), 'Use CodeGraph when .codegraph exists.', 'utf8');
@@ -27,15 +27,15 @@ describe('EngineeringProjectAssessmentService', () => {
   });
 
   it('reads only applicable AGENTS scopes and the bounded project profile without writing the repository', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-assessment-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-assessment-'));
     temporaryRoots.push(root);
     await mkdir(path.join(root, 'src', 'feature'), { recursive: true });
-    await mkdir(path.join(root, '.lnwjud'), { recursive: true });
+    await mkdir(path.join(root, '.lnwjing'), { recursive: true });
     await writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'vitest run' } }), 'utf8');
     await writeFile(path.join(root, 'AGENTS.md'), 'root rules', 'utf8');
     await writeFile(path.join(root, 'src', 'AGENTS.md'), 'src rules', 'utf8');
     await writeFile(path.join(root, 'src', 'feature', 'AGENTS.md'), 'feature rules', 'utf8');
-    await writeFile(path.join(root, '.lnwjud', 'project-profile.json'), JSON.stringify({
+    await writeFile(path.join(root, '.lnwjing', 'project-profile.json'), JSON.stringify({
       ponytail: { mode: 'lite' },
       engineering: { mode: 'inherit', profile: 'strict', commands: { test: 'pnpm test' } },
     }), 'utf8');
@@ -54,12 +54,12 @@ describe('EngineeringProjectAssessmentService', () => {
   });
 
   it('surfaces truncated instructions and invalid profiles instead of treating them as complete policy', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-bounds-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-bounds-'));
     temporaryRoots.push(root);
-    await mkdir(path.join(root, '.lnwjud'), { recursive: true });
+    await mkdir(path.join(root, '.lnwjing'), { recursive: true });
     await writeFile(path.join(root, 'package.json'), '{}', 'utf8');
     await writeFile(path.join(root, 'AGENTS.md'), 'x'.repeat(64 * 1024 + 1), 'utf8');
-    await writeFile(path.join(root, '.lnwjud', 'project-profile.json'), JSON.stringify({ engineering: { mode: 'on' } }), 'utf8');
+    await writeFile(path.join(root, '.lnwjing', 'project-profile.json'), JSON.stringify({ engineering: { mode: 'on' } }), 'utf8');
 
     const result = await new EngineeringProjectAssessmentService().assess(root);
 
@@ -70,7 +70,7 @@ describe('EngineeringProjectAssessmentService', () => {
   });
 
   it('resolves AGENTS scopes from filesystem type and nearest existing ancestors for planned paths', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-scope-kind-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-scope-kind-'));
     temporaryRoots.push(root);
     await mkdir(path.join(root, 'src', 'feature.v2'), { recursive: true });
     await mkdir(path.join(root, '..config'), { recursive: true });
@@ -116,7 +116,7 @@ describe('EngineeringProjectAssessmentService', () => {
   });
 
   it('rejects a scoped path that escapes the registered project root', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-scope-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-scope-'));
     temporaryRoots.push(root);
     await writeFile(path.join(root, 'package.json'), '{}', 'utf8');
 
@@ -124,8 +124,8 @@ describe('EngineeringProjectAssessmentService', () => {
   });
 
   it('rejects an in-root scoped symlink that resolves outside the registered project root', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-symlink-root-'));
-    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-engineering-symlink-outside-'));
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-symlink-root-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-engineering-symlink-outside-'));
     temporaryRoots.push(root, outside);
     await writeFile(path.join(root, 'package.json'), '{}', 'utf8');
     await writeFile(path.join(outside, 'AGENTS.md'), 'outside rules', 'utf8');

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ok } from '@lnwjud/domain';
+import { ok } from '@lnwjing/domain';
 import { RepositoryImportService } from './repository-import-service.js';
 
 const accepted = {

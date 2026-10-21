@@ -90,11 +90,11 @@ import {
   type UserSettings,
   type UpdateStatus,
   type WorkspaceSummary,
-} from '@lnwjud/ipc-contracts';
-import { ripgrepAdmissionSnapshot } from '@lnwjud/search';
-import { readSharedActivitySnapshot, startMcpStdio, inspectWorkflowFile, inspectWorkflowProjectVersion, inspectWorkflowGitBranches, generateWorkflowReportMapping, type EccRuntimeOptions, type HostMutationApprovalRequest } from '@lnwjud/mcp-server';
-import { createExplicitKeySecretProtector, DEFAULT_DISPLAY_TIME_ZONE, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, formatDisplayDateTime, formatOffsetIsoTimestamp, normalizeMcpAllowedHostname, resolveLnwjudDataPath, type SecretProtector } from '@lnwjud/shared';
-import { applyPendingSqliteRestoreSync, CheckpointKeyStore, type CheckpointPayloadCipher } from '@lnwjud/storage';
+} from '@lnwjing/ipc-contracts';
+import { ripgrepAdmissionSnapshot } from '@lnwjing/search';
+import { readSharedActivitySnapshot, startMcpStdio, inspectWorkflowFile, inspectWorkflowProjectVersion, inspectWorkflowGitBranches, generateWorkflowReportMapping, type EccRuntimeOptions, type HostMutationApprovalRequest } from '@lnwjing/mcp-server';
+import { createExplicitKeySecretProtector, DEFAULT_DISPLAY_TIME_ZONE, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, formatDisplayDateTime, formatOffsetIsoTimestamp, normalizeMcpAllowedHostname, resolveLnwjingDataPath, type SecretProtector } from '@lnwjing/shared';
+import { applyPendingSqliteRestoreSync, CheckpointKeyStore, type CheckpointPayloadCipher } from '@lnwjing/storage';
 import { createDesktopRuntime, formatCompleteTargetDetail, formatIncompleteLegacyHistory, writeSerializedLogRows, type DesktopRuntime } from './desktop-services.js';
 import { resolveTunnelProfileDirectory, TUNNEL_SECRET_FILE_NAME } from './tunnel-controller.js';
 import { TunnelAliasRetirementJournal, tunnelAliasRecoveryDirectory } from './tunnel-runtime-alias-journal.js';
@@ -152,7 +152,7 @@ function resolveDesktopEccRuntimeOptions(): EccRuntimeOptions {
       : path.join(appRoot, 'node_modules', 'ecc-universal'),
     expectedVersion: ECC_UPSTREAM_VERSION,
     agentShieldBundlePath: app.isPackaged
-      ? path.join(process.resourcesPath, 'ecc-runtime', '.lnwjud-agentshield.cjs')
+      ? path.join(process.resourcesPath, 'ecc-runtime', '.lnwjing-agentshield.cjs')
       : path.join(appRoot, 'node_modules', 'ecc-agentshield', 'dist', 'index.js'),
   };
 }
@@ -487,7 +487,7 @@ export function registerIpcHandlers(
     choosePath: async (): Promise<string | null> => {
       const window = getMainWindow();
       if (window === null) return null;
-      const result = await dialog.showSaveDialog(window, { title: 'Capture lnwjud incident evidence', defaultPath: 'lnwjud-incident.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+      const result = await dialog.showSaveDialog(window, { title: 'Capture lnwjing incident evidence', defaultPath: 'lnwjing-incident.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
       return result.canceled || result.filePath === undefined || result.filePath.length === 0 ? null : result.filePath;
     },
     write: atomicWrite,
@@ -1185,8 +1185,8 @@ async function exportLogsToFile(
   const lineById = new Map(snapshot.lines.filter((line) => line.source === request.source).map((line) => [line.id, line] as const));
   const capturedRows = request.lines.map((reference) => ({ reference, line: lineById.get(reference.lineId) ?? null }));
   const result = await dialog.showSaveDialog(window, {
-    title: 'Export lnwjud logs',
-    defaultPath: `lnwjud-${request.source}-logs.log`,
+    title: 'Export lnwjing logs',
+    defaultPath: `lnwjing-${request.source}-logs.log`,
     filters: [{ name: 'Log file', extensions: ['log'] }, { name: 'Text file', extensions: ['txt'] }],
   });
   if (result.canceled || result.filePath === undefined || result.filePath.length === 0) {
@@ -1249,8 +1249,8 @@ async function exportWorkLogToFile(window: BrowserWindow | null, services: Deskt
   const locale = request.locale ?? desktopLocale;
   const messages = nativeMessages(locale);
   const result = await dialog.showSaveDialog(window, {
-    title: 'Export lnwjud work log',
-    defaultPath: 'lnwjud-work-log.log',
+    title: 'Export lnwjing work log',
+    defaultPath: 'lnwjing-work-log.log',
     filters: [{ name: 'Log file', extensions: ['log'] }, { name: 'Text file', extensions: ['txt'] }],
   });
   if (result.canceled || result.filePath === undefined || result.filePath.length === 0) return { exported: false };
@@ -1270,7 +1270,7 @@ function formatLogExportHeader(locale: UiLocale, title: string, source: string, 
   const messages = nativeMessages(locale);
   return [
     '============================================================',
-    `lnwjud - ${title}`,
+    `lnwjing - ${title}`,
     '============================================================',
     `${messages.logExported}: ${formatExportLogTimestamp(new Date().toISOString(), locale)}`,
     `${messages.logSource}: ${source}`,
@@ -1968,12 +1968,12 @@ function setDesktopLocale(locale: UiLocale): void {
 function createDesktopTray(): void {
   const iconPath = getTrayIconPath();
   if (iconPath === undefined) {
-    console.error('lnwjud tray icon was not found');
+    console.error('lnwjing tray icon was not found');
     return;
   }
   const sourceImage = nativeImage.createFromPath(iconPath);
   if (sourceImage.isEmpty()) {
-    console.error(`lnwjud tray icon could not be loaded: ${iconPath}`);
+    console.error(`lnwjing tray icon could not be loaded: ${iconPath}`);
     return;
   }
   const trayImage = process.platform === 'darwin'
@@ -2033,13 +2033,13 @@ function bootstrapMcpStdio(): void {
     });
     desktopRuntime = runtime;
     const workspacePath = readArgValue('--workspace')
-      ?? process.env.LNWJUD_WORKSPACE
+      ?? process.env.LNWJING_WORKSPACE
       ?? process.cwd();
     try {
       const workspaceId = await runtime.ensureDefaultWorkspace(workspacePath);
-      process.stderr.write(`lnwjud MCP stdio ready workspace=${workspaceId}\n`);
+      process.stderr.write(`lnwjing MCP stdio ready workspace=${workspaceId}\n`);
     } catch (error: unknown) {
-      process.stderr.write(`lnwjud MCP stdio workspace warning: ${error instanceof Error ? error.message : 'unknown'}\n`);
+      process.stderr.write(`lnwjing MCP stdio workspace warning: ${error instanceof Error ? error.message : 'unknown'}\n`);
     }
     startMcpStdio({
       services: runtime.mcpServices,
@@ -2060,11 +2060,11 @@ function bootstrapMcpStdio(): void {
       toolAvailabilitySubscribe: (listener) => runtime.toolAvailabilityService.subscribe(listener),
       onError: (error): void => {
         if (/EPIPE|ECONNRESET|broken pipe/i.test(error.message)) {
-          process.stderr.write(`lnwjud MCP stdio: peer closed (${error.message})\n`);
+          process.stderr.write(`lnwjing MCP stdio: peer closed (${error.message})\n`);
           void desktopRuntime?.close().finally(() => process.exit(0));
           return;
         }
-        process.stderr.write(`lnwjud MCP stdio error: ${error.message}\n`);
+        process.stderr.write(`lnwjing MCP stdio error: ${error.message}\n`);
       },
     });
     process.stdin.on('end', () => {
@@ -2079,7 +2079,7 @@ function bootstrapMcpStdio(): void {
       }
     });
   }).catch((error: unknown) => {
-    process.stderr.write(`lnwjud MCP stdio startup failed: ${error instanceof Error ? error.message : 'unknown error'}\n`);
+    process.stderr.write(`lnwjing MCP stdio startup failed: ${error instanceof Error ? error.message : 'unknown error'}\n`);
     app.quit();
   });
   app.on('window-all-closed', () => {
@@ -2151,7 +2151,7 @@ function initAutoUpdater(runtime: DesktopRuntime): void {
         try {
           if ((await runtime.services.getTunnelStatus()).state === 'running') return true;
           try {
-            await access(path.join(resolveTunnelProfileDirectory(), 'lnwjud.tunnel.lock'));
+            await access(path.join(resolveTunnelProfileDirectory(), 'lnwjing.tunnel.lock'));
             return true;
           } catch (error: unknown) {
             return typeof error === 'object' && error !== null && (error as NodeJS.ErrnoException).code === 'ENOENT' ? false : 'unverifiable';
@@ -2377,8 +2377,8 @@ async function resolveDesktopRuntimeSecrets(dataPath: string): Promise<{
     arch: process.arch,
     release: os.release(),
     isPackaged: app.isPackaged,
-    e2eFixture: process.env.LNWJUD_E2E_FIXTURE === '1',
-    ephemeralSecrets: process.env.LNWJUD_E2E_EPHEMERAL_SECRETS === '1',
+    e2eFixture: process.env.LNWJING_E2E_FIXTURE === '1',
+    ephemeralSecrets: process.env.LNWJING_E2E_EPHEMERAL_SECRETS === '1',
   });
   let secretProtector: SecretProtector;
   if (useMacos26E2eSecrets) {
@@ -2435,7 +2435,7 @@ async function migrateV3SafeStorageSecrets(dataPath: string, secretProtector: Se
   if (process.platform !== 'win32') return;
   const checkpointPath = path.join(dataPath, 'checkpoint-master.key');
   const checkpointEnvelope = await readTrustedSecretFile(checkpointPath);
-  if (checkpointEnvelope !== null && checkpointEnvelope.trim().startsWith('lnwjud-secret:v3:')) {
+  if (checkpointEnvelope !== null && checkpointEnvelope.trim().startsWith('lnwjing-secret:v3:')) {
     const key = decryptV3WindowsSafeStorageSecretIfPresent(checkpointEnvelope, safeStorage);
     if (key === undefined || key.byteLength !== 32) throw new Error('Legacy v3 checkpoint secret has an invalid key length');
     await atomicWrite(checkpointPath, await secretProtector.encrypt('checkpoint_master_key', key.toString('base64')));
@@ -2443,7 +2443,7 @@ async function migrateV3SafeStorageSecrets(dataPath: string, secretProtector: Se
 
   const tunnelPath = path.join(resolveTunnelProfileDirectory(), TUNNEL_SECRET_FILE_NAME);
   const tunnelEnvelope = await readTrustedSecretFile(tunnelPath);
-  if (tunnelEnvelope === null || !tunnelEnvelope.trim().startsWith('lnwjud-secret:v3:')) return;
+  if (tunnelEnvelope === null || !tunnelEnvelope.trim().startsWith('lnwjing-secret:v3:')) return;
   const secret = decryptV3WindowsSafeStorageSecretIfPresent(tunnelEnvelope, safeStorage);
   if (secret === undefined) return;
   await atomicWrite(tunnelPath, await secretProtector.encrypt('tunnel_api_key', secret.toString('utf8')));
@@ -2461,7 +2461,7 @@ async function readTrustedSecretFile(filePath: string): Promise<string | null> {
 }
 
 function defaultStdioCommand(profile: PermissionProfileName): string {
-  const launcher = process.platform === 'win32' ? 'lnwjud-mcp-stdio.cmd' : 'lnwjud-mcp-stdio';
+  const launcher = process.platform === 'win32' ? 'lnwjing-mcp-stdio.cmd' : 'lnwjing-mcp-stdio';
   return `${launcher} --profile ${profile}`;
 }
 
@@ -2791,7 +2791,7 @@ function bootstrapDesktop(configuredDataPath?: string): void {
   void app.whenReady().then(async () => {
     recordDesktopStartup('app-ready:resolved');
     assertSupportedPlatform();
-    app.setAppUserModelId('com.lnwjud.desktop');
+    app.setAppUserModelId('com.lnwjing.desktop');
     const session = platformCompatibility.linuxSession;
     console.log(
       `[PlatformCompatibility] family=${platformCompatibility.family} tier=${platformCompatibility.supportTier} generation=${platformCompatibility.generation} build=${platformCompatibility.build ?? 'unknown'} arch=${process.arch} gpu=${platformCompatibility.disableHardwareAcceleration ? 'software' : 'hardware'}${session === undefined ? '' : ` session=${session.sessionType} dbus=${session.dbusAvailable} portal=${session.portalAvailable} atspi=${session.atSpiAvailable} pipewire=${session.pipewireAvailable}`}; ${platformCompatibility.reason}`,
@@ -2849,7 +2849,7 @@ function bootstrapLogViewerOnly(configuredDataPath?: string): void {
   if (platformCompatibility.disableHardwareAcceleration) app.disableHardwareAcceleration();
   void app.whenReady().then(async () => {
     assertSupportedPlatform();
-    app.setAppUserModelId('com.lnwjud.desktop');
+    app.setAppUserModelId('com.lnwjing.desktop');
     prependBundledRuntimeToolsToPath();
     const runtime = await createNativeDesktopRuntime(dataPath);
     desktopRuntime = runtime;
@@ -2876,7 +2876,7 @@ function handleDesktopStartupFailure(scope: string, error: unknown): void {
   recordDesktopStartup(`${scope}:failed`, error);
   console.error('[Startup] ' + scope + ' failed: ' + message);
   try {
-    dialog.showErrorBox('lnwjud failed to start', scope + ' startup failed.\n\n' + message);
+    dialog.showErrorBox('lnwjing failed to start', scope + ' startup failed.\n\n' + message);
   } catch {
     // Console/crash diagnostics remain available if native dialogs cannot be shown.
   }
@@ -2885,7 +2885,7 @@ function handleDesktopStartupFailure(scope: string, error: unknown): void {
 
 function assertSupportedPlatform(): void {
   if (!platformCompatibility.supportedReleaseTarget) {
-    throw new Error(`Unsupported lnwjud host: ${platformCompatibility.reason}`);
+    throw new Error(`Unsupported lnwjing host: ${platformCompatibility.reason}`);
   }
 }
 
@@ -2916,8 +2916,8 @@ function configureDesktopShutdown(runtime: DesktopRuntime): void {
       });
       void dialog.showMessageBox({
         type: 'error',
-        title: 'lnwjud is still running',
-        message: 'The owned tunnel could not be confirmed stopped. lnwjud will remain open; retry Quit after checking the tunnel status.',
+        title: 'lnwjing is still running',
+        message: 'The owned tunnel could not be confirmed stopped. lnwjing will remain open; retry Quit after checking the tunnel status.',
         detail: boundedNativeDialogText(error.message),
         buttons: ['OK'],
       });
@@ -3081,7 +3081,7 @@ function recordDesktopStartup(reason: string, error?: unknown): void {
 
 function configureUserDataPath(): string {
   app.setName(APP_NAME);
-  const dataPath = resolveLnwjudDataPath(process.env, app.getPath('appData'), process.platform);
+  const dataPath = resolveLnwjingDataPath(process.env, app.getPath('appData'), process.platform);
   app.setPath('userData', dataPath);
   return dataPath;
 }
@@ -3091,7 +3091,7 @@ function configureDataPath(configuredDataPath?: string): string {
   configureCrashRecovery(dataPath);
   recordDesktopStartup('data-path:configured');
   recordDesktopStartup('restore:begin');
-  const restore = applyPendingSqliteRestoreSync(path.join(dataPath, 'lnwjud.sqlite'), path.join(dataPath, 'backups'), {
+  const restore = applyPendingSqliteRestoreSync(path.join(dataPath, 'lnwjing.sqlite'), path.join(dataPath, 'backups'), {
     platform: process.platform,
     arch: process.arch,
     hostBoundPaths: [
@@ -3107,7 +3107,7 @@ function configureDataPath(configuredDataPath?: string): string {
 
 const factoryResetApplyRequested = process.argv.includes(FACTORY_RESET_APPLY_ARG);
 if (factoryResetApplyRequested) {
-  const dataPath = resolveLnwjudDataPath(process.env, app.getPath('appData'), process.platform);
+  const dataPath = resolveLnwjingDataPath(process.env, app.getPath('appData'), process.platform);
   try {
     if (!applyPendingFactoryResetSync(dataPath, resolveTunnelProfileDirectory())) {
       throw new Error('Factory reset marker is missing');
@@ -3119,7 +3119,7 @@ if (factoryResetApplyRequested) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'unknown reset error';
     console.error(`Factory reset failed: ${message}`);
-    try { dialog.showErrorBox('lnwjud reset failed', message); } catch { /* stderr remains available if native dialogs fail. */ }
+    try { dialog.showErrorBox('lnwjing reset failed', message); } catch { /* stderr remains available if native dialogs fail. */ }
     app.exit(1);
   }
 } else {

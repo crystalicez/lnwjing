@@ -7,10 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { build } from 'esbuild';
-import { appError, err, ok, type Result } from '@lnwjud/domain';
-import { ToolRegistry, readSharedActivitySnapshot, sharedActivityLeaseDirectoryPath, type McpApplicationServices } from '@lnwjud/mcp-server';
-import { USER_SETTING_KEYS, serializeToolAvailabilitySnapshot } from '@lnwjud/shared';
-import { SqliteDatabase, SqliteSettingsRepository } from '@lnwjud/storage';
+import { appError, err, ok, type Result } from '@lnwjing/domain';
+import { ToolRegistry, readSharedActivitySnapshot, sharedActivityLeaseDirectoryPath, type McpApplicationServices } from '@lnwjing/mcp-server';
+import { USER_SETTING_KEYS, serializeToolAvailabilitySnapshot } from '@lnwjing/shared';
+import { SqliteDatabase, SqliteSettingsRepository } from '@lnwjing/storage';
 import { UpdateInstallCoordinator, type UpdateSharedActivitySnapshot } from '../src/main/update-install.js';
 import { atomicWrite, buildIncidentReport, exportIncidentReport } from '../src/main/incident-report.js';
 import { IncidentSaveCoordinator } from '../src/main/incident-save.js';
@@ -20,8 +20,8 @@ import { TunnelController } from '../src/main/tunnel-controller.js';
 import { isolateTunnelProfile } from './tunnel-profile-fixture.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..', '..', '..');
-const lockHelper = path.join(repositoryRoot, 'scripts', 'lib', 'lnwjud-tunnel-lock.ps1');
-const tunnelStarter = path.join(repositoryRoot, 'scripts', 'start-lnwjud-tunnel.ps1');
+const lockHelper = path.join(repositoryRoot, 'scripts', 'lib', 'lnwjing-tunnel-lock.ps1');
+const tunnelStarter = path.join(repositoryRoot, 'scripts', 'start-lnwjing-tunnel.ps1');
 const temporaryRoots: string[] = [];
 const fixtureProcesses = new Set<ChildProcess>();
 
@@ -43,7 +43,7 @@ describe('session resilience acceptance', () => {
     expect(path.parse(root).root.toUpperCase()).not.toBe('E:\\');
     const workspace = path.join(root, 'workspace');
     const dataPath = path.join(root, 'data');
-    const bundlePath = path.join(root, 'lnwjud-mcp-stdio.cjs');
+    const bundlePath = path.join(root, 'lnwjing-mcp-stdio.cjs');
     await mkdir(workspace, { recursive: true });
     await build({
       entryPoints: [path.join(repositoryRoot, 'apps', 'cli', 'src', 'bin', 'mcp-stdio.ts')],
@@ -60,17 +60,17 @@ describe('session resilience acceptance', () => {
       args: [bundlePath, '--workspace', workspace],
       env: {
         ...process.env,
-        LNWJUD_DATA_PATH: dataPath,
-        LNWJUD_RESET_WORKSPACES: '1',
-        LNWJUD_CONFIRM_RESET_WORKSPACES: 'DELETE-REGISTERED-WORKSPACES',
-        LNWJUD_UNRESTRICTED: '0',
+        LNWJING_DATA_PATH: dataPath,
+        LNWJING_RESET_WORKSPACES: '1',
+        LNWJING_CONFIRM_RESET_WORKSPACES: 'DELETE-REGISTERED-WORKSPACES',
+        LNWJING_UNRESTRICTED: '0',
       },
       stderr: 'pipe',
     });
     let diagnostics = '';
     transport.stderr?.on('data', (chunk: Buffer) => { diagnostics += chunk.toString('utf8'); });
     const client = new Client(
-      { name: 'lnwjud-production-stdio-acceptance', version: '1.0.0' },
+      { name: 'lnwjing-production-stdio-acceptance', version: '1.0.0' },
       { versionNegotiation: { mode: { pin: '2026-07-28' } } },
     );
     try {
@@ -80,7 +80,7 @@ describe('session resilience acceptance', () => {
       expect(tools.tools.some((tool) => tool.name.startsWith('codex_'))).toBe(false);
       expect(tools.tools.map((tool) => tool.name)).toContain('read_file');
 
-      const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjud.sqlite'));
+      const externalDatabase = new SqliteDatabase(path.join(dataPath, 'lnwjing.sqlite'));
       const externalSettings = new SqliteSettingsRepository(externalDatabase);
       try {
         externalSettings.set(USER_SETTING_KEYS.toolAvailability, serializeToolAvailabilitySnapshot({
@@ -102,7 +102,7 @@ describe('session resilience acceptance', () => {
       await expect(client.callTool({ name: 'definitely_not_a_real_tool', arguments: {} })).rejects.toThrow();
       const recovered = await client.callTool({ name: 'workspace_list', arguments: {} });
       expect(recovered.isError).not.toBe(true);
-      expect(diagnostics).toContain('lnwjud MCP stdio ready');
+      expect(diagnostics).toContain('lnwjing MCP stdio ready');
       expect(diagnostics).toContain(await realpath(workspace));
       expect(diagnostics).not.toContain('E:\\ drive is required');
     } finally {
@@ -116,7 +116,7 @@ describe('session resilience acceptance', () => {
     const sentinel = path.join(root, 'tunnel-client-invoked');
     const fakeClient = path.join(root, 'fake-tunnel-client.cmd');
     await mkdir(profileDirectory, { recursive: true });
-    await writeFile(path.join(profileDirectory, 'lnwjud.runtime.secret'), 'not-read-by-lock-loser', 'utf8');
+    await writeFile(path.join(profileDirectory, 'lnwjing.runtime.secret'), 'not-read-by-lock-loser', 'utf8');
     await writeFile(fakeClient, `@echo invoked>"${sentinel}"\r\n@exit /b 99\r\n`, 'utf8');
 
     const desktopOwner = await currentOwner();
@@ -152,7 +152,7 @@ describe('session resilience acceptance', () => {
     const profileDirectory = path.join(root, 'tunnel-client');
     await mkdir(profileDirectory, { recursive: true });
     const stale = { version: 1, pid: 9001, processStartedAt: '2026-08-20T00:00:00.000Z', acquiredAt: '2026-08-20T00:00:00.000Z' };
-    await writeFile(path.join(profileDirectory, 'lnwjud.tunnel.lock'), JSON.stringify(stale), 'utf8');
+    await writeFile(path.join(profileDirectory, 'lnwjing.tunnel.lock'), JSON.stringify(stale), 'utf8');
     const quarantined = deferred<void>();
     const allowPublish = deferred<void>();
     const winner: TunnelLockOwner = { pid: 9002, processStartedAt: '2026-08-20T00:01:00.000Z', acquiredAt: '2026-08-20T00:01:00.000Z' };
@@ -166,7 +166,7 @@ describe('session resilience acceptance', () => {
     let publisherSettled = false;
     const publisher = runPowerShell(`
       . '${quote(lockHelper)}'
-      $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(profileDirectory)}' -OwnerPid 9003 -OwnerStartedAt '2026-08-20T00:02:00.000Z' -ProcessStartProvider { param($id) if($id -eq 9002){[pscustomobject]@{state='live';processStartedAt='2026-08-20T00:01:00.000Z'}}else{[pscustomobject]@{state='gone'}} }
+      $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(profileDirectory)}' -OwnerPid 9003 -OwnerStartedAt '2026-08-20T00:02:00.000Z' -ProcessStartProvider { param($id) if($id -eq 9002){[pscustomobject]@{state='live';processStartedAt='2026-08-20T00:01:00.000Z'}}else{[pscustomobject]@{state='gone'}} }
       $claim | ConvertTo-Json -Compress
     `).finally(() => { publisherSettled = true; });
     await delay(150);
@@ -277,8 +277,8 @@ describe('session resilience acceptance', () => {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
     if (address === null || typeof address === 'string') throw new Error('ephemeral health server did not bind');
-    await writeFile(path.join(profile, 'lnwjud.yaml'), 'health:\n  listen_addr: "127.0.0.1:0"\n', 'utf8');
-    await writeFile(path.join(profile, 'lnwjud-tunnel.log'), `health server listening at 127.0.0.1:${address.port}\n`, 'utf8');
+    await writeFile(path.join(profile, 'lnwjing.yaml'), 'health:\n  listen_addr: "127.0.0.1:0"\n', 'utf8');
+    await writeFile(path.join(profile, 'lnwjing-tunnel.log'), `health server listening at 127.0.0.1:${address.port}\n`, 'utf8');
     try {
       const controller = new TunnelController({ getClientPath: (): null => null, setClientPath: (): void => undefined, getDataPath: (): string => root });
       await expect(controller.incidentHealth()).resolves.toMatchObject({ state: 'live' });
@@ -348,13 +348,13 @@ describe('session resilience acceptance', () => {
       ['listen_addr: "', 'localhost', ':', 4321, '"'].join(''),
     ])).toHaveLength(3);
     expect(findFixedListenerBindings(['server.listen(0)', 'http://$address/healthz', 'listen_addr: "127.0.0.1:0"'])).toEqual([]);
-    expect(operatorGuidance).toContain("$tc = if ($env:LNWJUD_TUNNEL_CLIENT_PATH)");
-    expect(operatorGuidance).toContain('& $tc doctor --profile lnwjud --profile-dir $profile --explain');
+    expect(operatorGuidance).toContain("$tc = if ($env:LNWJING_TUNNEL_CLIENT_PATH)");
+    expect(operatorGuidance).toContain('& $tc doctor --profile lnwjing --profile-dir $profile --explain');
   });
 });
 
 async function incidentReport(options: { resultCode: 'SUCCESS' | 'FAILED'; triggeredByUser: boolean; health: 'live' | 'unavailable'; tunnelLine?: string }): Promise<Awaited<ReturnType<typeof buildIncidentReport>> & { __lines: ReturnType<LogHub['snapshot']>['lines'] }> {
-  const hub = new LogHub({ tunnelLogPath: path.join(os.tmpdir(), 'lnwjud-acceptance-missing.log') });
+  const hub = new LogHub({ tunnelLogPath: path.join(os.tmpdir(), 'lnwjing-acceptance-missing.log') });
   hub.syncWorkLog([
     { id: 'started', timestamp: '2026-08-20T00:00:00.000Z', callId: 'call-1', kind: 'task', toolName: 'search_text', resultCode: 'STARTED', targetSummary: null },
     { id: 'finished', timestamp: '2026-08-20T00:00:01.000Z', callId: 'call-1', kind: options.resultCode === 'SUCCESS' ? 'result' : 'error', toolName: 'search_text', resultCode: options.resultCode, targetSummary: null },
@@ -380,7 +380,7 @@ async function nonEDriveTemporaryDirectory(): Promise<string> {
     const base = path.resolve(candidate);
     if (path.parse(base).root.toUpperCase() === 'E:\\') continue;
     try {
-      const root = await mkdtemp(path.join(base, 'lnwjud-session-resilience-'));
+      const root = await mkdtemp(path.join(base, 'lnwjing-session-resilience-'));
       temporaryRoots.push(root);
       return root;
     } catch {
@@ -391,13 +391,13 @@ async function nonEDriveTemporaryDirectory(): Promise<string> {
 }
 
 async function temporaryDirectory(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-session-resilience-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-session-resilience-'));
   temporaryRoots.push(root);
   return root;
 }
 
 async function currentOwner(): Promise<TunnelLockOwner> {
-  const result = await runPowerShell("$p = Get-CimInstance Win32_Process -Filter \"ProcessId = $env:LNWJUD_ACCEPTANCE_PID\"; $p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)", { LNWJUD_ACCEPTANCE_PID: String(process.pid) });
+  const result = await runPowerShell("$p = Get-CimInstance Win32_Process -Filter \"ProcessId = $env:LNWJING_ACCEPTANCE_PID\"; $p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)", { LNWJING_ACCEPTANCE_PID: String(process.pid) });
   const startedAt = result.stdout;
   return { pid: process.pid, processStartedAt: startedAt, acquiredAt: new Date().toISOString() };
 }
@@ -426,11 +426,11 @@ async function startPowerShellHolder(profileDirectory: string, releaseSignal: st
   const script = `
     . '${quote(lockHelper)}'
     $started = (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)
-    $claim = Enter-LnwjudTunnelLock -ProfileDir '${quote(profileDirectory)}' -OwnerPid $PID -OwnerStartedAt $started -ProcessStartProvider { param($id) try { $p=Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction Stop; if($null -eq $p){[pscustomobject]@{state='gone'}}else{[pscustomobject]@{state='live';processStartedAt=$p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',[Globalization.CultureInfo]::InvariantCulture)}} } catch {[pscustomobject]@{state='unverifiable';reason='process_probe_failed'}} }
+    $claim = Enter-LnwjingTunnelLock -ProfileDir '${quote(profileDirectory)}' -OwnerPid $PID -OwnerStartedAt $started -ProcessStartProvider { param($id) try { $p=Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction Stop; if($null -eq $p){[pscustomobject]@{state='gone'}}else{[pscustomobject]@{state='live';processStartedAt=$p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',[Globalization.CultureInfo]::InvariantCulture)}} } catch {[pscustomobject]@{state='unverifiable';reason='process_probe_failed'}} }
     Write-Output "READY:\${PID}:$($claim.acquired)"
     [Console]::Out.Flush()
     while(-not (Test-Path -LiteralPath '${quote(releaseSignal)}')) { Start-Sleep -Milliseconds 10 }
-    [void](Release-LnwjudTunnelLock -ProfileDir '${quote(profileDirectory)}' -Owner $claim.owner)
+    [void](Release-LnwjingTunnelLock -ProfileDir '${quote(profileDirectory)}' -Owner $claim.owner)
   `;
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');

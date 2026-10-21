@@ -10,7 +10,7 @@ export const DEFAULT_DISPLAY_TIME_ZONE = 'Asia/Bangkok';
 const EXACT_OFFSET_ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 /**
- * Format one absolute instant for human-facing lnwjud UI/export text.
+ * Format one absolute instant for human-facing lnwjing UI/export text.
  *
  * Storage, audit, protocol, deadline and ordering values must stay as their
  * canonical absolute timestamps. This function is presentation-only.

@@ -1,4 +1,4 @@
-import type { LogLine } from '@lnwjud/ipc-contracts';
+import type { LogLine } from '@lnwjing/ipc-contracts';
 
 const DEFAULT_MAX_RETAINED_BYTES = 24 * 1024 * 1024;
 const UTF8_ENCODER = new TextEncoder();

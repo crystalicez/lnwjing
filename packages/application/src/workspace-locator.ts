@@ -1,5 +1,5 @@
-import { appError, err, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjud/domain';
-import { isAbsoluteHostPath, isForeignAbsolutePath, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjud/workspace';
+import { appError, err, isFullBypassAuthorization, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
+import { isAbsoluteHostPath, isForeignAbsolutePath, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 
 export function isAbsoluteFsPath(inputPath: string, platform: NodeJS.Platform = process.platform): boolean {
   return isAbsoluteHostPath(inputPath, platform);

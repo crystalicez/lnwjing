@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AppError, Result } from '@lnwjud/domain';
+import type { AppError, Result } from '@lnwjing/domain';
 
 export interface McpTextContent {
   readonly type: 'text';

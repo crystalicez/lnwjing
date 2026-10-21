@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ok, type Result } from '@lnwjud/domain';
-import { permissionProfiles, type PermissionProfile } from '@lnwjud/permissions';
+import { ok, type Result } from '@lnwjing/domain';
+import { permissionProfiles, type PermissionProfile } from '@lnwjing/permissions';
 import { ToolRegistry, type HostMutationApprovalRequest, type McpApplicationServices } from './tool-registry.js';
 
 const actor = { clientId: 'approval-summary-test', clientName: 'approval-summary-test' };

@@ -6,7 +6,7 @@ import {
   Redactor,
   type ActivityTargetDetail,
   type ActivityTargetReference,
-} from '@lnwjud/audit';
+} from '@lnwjing/audit';
 
 export interface ActivitySinkEvent {
   readonly callId: string;
@@ -555,7 +555,7 @@ function firstString(input: Readonly<Record<string, unknown>>, keys: readonly st
 }
 
 function commandSummary(toolName: string, input: Readonly<Record<string, unknown>>): string | undefined {
-  const approved = isRecord(input.__lnwjudApprovedProjectCommand) ? input.__lnwjudApprovedProjectCommand : undefined;
+  const approved = isRecord(input.__lnwjingApprovedProjectCommand) ? input.__lnwjingApprovedProjectCommand : undefined;
   const executable = approved === undefined ? firstString(input, ['executable', 'command']) : firstString(approved, ['executable', 'command']);
   const args = approved === undefined
     ? readStringArray(input.arguments) ?? readStringArray(input.args)
