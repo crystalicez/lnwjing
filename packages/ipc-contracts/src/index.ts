@@ -84,6 +84,7 @@ export const ipcChannels = {
   openToolSetupTarget: 'lnwjud:open-tool-setup-target',
   copyToolCommand: 'lnwjud:copy-tool-command',
   getLogSnapshot: 'lnwjud:get-log-snapshot',
+  listLogSessions: 'lnwjud:list-log-sessions',
   loadLogSessionHistory: 'lnwjud:load-log-session-history',
   clearLogBuffer: 'lnwjud:clear-log-buffer',
   resolveActivityTargetDetail: 'lnwjud:resolve-activity-target-detail',
@@ -1329,6 +1330,7 @@ export interface IpcResponseMap {
   readonly [ipcChannels.openToolSetupTarget]: { readonly opened: true };
   readonly [ipcChannels.copyToolCommand]: { readonly copied: true };
   readonly [ipcChannels.getLogSnapshot]: LogSnapshot;
+  readonly [ipcChannels.listLogSessions]: { readonly sessions: readonly LogSessionSummary[]; readonly hasMore: boolean };
   readonly [ipcChannels.loadLogSessionHistory]: LoadLogSessionHistoryResult;
   readonly [ipcChannels.clearLogBuffer]: { readonly cleared: boolean };
   readonly [ipcChannels.resolveActivityTargetDetail]: ResolveActivityTargetDetailResult;
@@ -1418,6 +1420,7 @@ export interface LnwjudApi {
   openToolSetupTarget(request: OpenToolSetupTargetRequest): Promise<IpcResponseMap[typeof ipcChannels.openToolSetupTarget]>;
   copyToolCommand(request: CopyToolCommandRequest): Promise<IpcResponseMap[typeof ipcChannels.copyToolCommand]>;
   getLogSnapshot(): Promise<IpcResponseMap[typeof ipcChannels.getLogSnapshot]>;
+  listLogSessions(request: { readonly offset: number; readonly limit?: number }): Promise<IpcResponseMap[typeof ipcChannels.listLogSessions]>;
   loadLogSessionHistory(request: LoadLogSessionHistoryRequest): Promise<IpcResponseMap[typeof ipcChannels.loadLogSessionHistory]>;
   clearLogBuffer(request: ClearLogBufferRequest): Promise<IpcResponseMap[typeof ipcChannels.clearLogBuffer]>;
   resolveActivityTargetDetail(request: ResolveActivityTargetDetailRequest): Promise<IpcResponseMap[typeof ipcChannels.resolveActivityTargetDetail]>;

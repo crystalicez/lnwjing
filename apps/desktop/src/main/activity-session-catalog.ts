@@ -1,6 +1,8 @@
 import type { ActivitySessionSummary, AuditEventRepository } from '@lnwjud/audit';
 import type { LogSessionSummary } from '@lnwjud/ipc-contracts';
 
+const MAX_CACHED_SESSIONS = 500;
+
 interface SessionVisibility {
   isVisible(event: { readonly timestamp: string; readonly workspaceId?: string; readonly sessionId?: string }): boolean;
 }
@@ -42,10 +44,30 @@ export class ActivitySessionCatalog {
       }));
   }
 
+  /** Read older sessions on demand without expanding the resident session map. */
+  public async page(offset: number, limit = 100): Promise<{ readonly sessions: readonly LogSessionSummary[]; readonly hasMore: boolean }> {
+    const pageSize = Number.isInteger(limit) ? Math.min(100, Math.max(1, limit)) : 100;
+    const pageOffset = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+    const rows = await this.repository.listActivitySessions('mcp_tool:', pageSize + 1, pageOffset);
+    return {
+      sessions: rows.slice(0, pageSize).filter((session) => this.visibility.isVisible({
+        timestamp: session.lastActivityAt,
+        ...(session.workspaceId === undefined ? {} : { workspaceId: session.workspaceId }),
+        sessionId: session.sessionId,
+      })).map((session) => ({
+        sessionId: session.sessionId,
+        workspaceId: session.workspaceId ?? null,
+        startedAt: session.startedAt,
+        lastActivityAt: session.lastActivityAt,
+      })),
+      hasMore: rows.length > pageSize,
+    };
+  }
+
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
     if (this.loading !== null) return this.loading;
-    this.loading = this.repository.listActivitySessions('mcp_tool:').then((sessions) => {
+    this.loading = this.repository.listActivitySessions('mcp_tool:', MAX_CACHED_SESSIONS).then((sessions) => {
       for (const session of sessions) this.merge(session);
       this.loaded = true;
     }).finally(() => {
@@ -59,6 +81,7 @@ export class ActivitySessionCatalog {
     const existing = this.sessions.get(key);
     if (existing === undefined) {
       this.sessions.set(key, session);
+      this.trim();
       return;
     }
     this.sessions.set(key, {
@@ -67,5 +90,18 @@ export class ActivitySessionCatalog {
       startedAt: existing.startedAt <= session.startedAt ? existing.startedAt : session.startedAt,
       lastActivityAt: existing.lastActivityAt >= session.lastActivityAt ? existing.lastActivityAt : session.lastActivityAt,
     });
+  }
+
+  private trim(): void {
+    if (this.sessions.size <= MAX_CACHED_SESSIONS) return;
+    let oldestKey: string | null = null;
+    let oldestTimestamp = '';
+    for (const [key, session] of this.sessions) {
+      if (oldestKey === null || session.lastActivityAt < oldestTimestamp) {
+        oldestKey = key;
+        oldestTimestamp = session.lastActivityAt;
+      }
+    }
+    if (oldestKey !== null) this.sessions.delete(oldestKey);
   }
 }

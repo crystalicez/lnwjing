@@ -288,14 +288,16 @@ export class SqliteAuditRepository implements AuditEventRepository {
     }] : []);
   }
 
-  public async listActivitySessions(actionPrefix?: string): Promise<ActivitySessionSummary[]> {
+  public async listActivitySessions(actionPrefix?: string, limit = 500, offset = 0): Promise<ActivitySessionSummary[]> {
+    const pageSize = Number.isInteger(limit) ? Math.min(500, Math.max(1, limit)) : 500;
+    const pageOffset = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
     const rows = this.database.connection.prepare(
       `SELECT session_id, workspace_id, MIN(timestamp) AS started_at, MAX(timestamp) AS last_activity_at
        FROM audit_events
        WHERE session_id IS NOT NULL${actionPrefix === undefined ? '' : ' AND action LIKE ?'}
        GROUP BY session_id, workspace_id
-       ORDER BY last_activity_at DESC, session_id ASC`,
-    ).all(...(actionPrefix === undefined ? [] : [`${actionPrefix}%`]));
+       ORDER BY last_activity_at DESC, session_id ASC, workspace_id ASC LIMIT ? OFFSET ?`,
+    ).all(...(actionPrefix === undefined ? [] : [`${actionPrefix}%`]), pageSize, pageOffset);
     return rows.flatMap((row) => {
       if (!isRecord(row)
         || typeof row.session_id !== 'string'

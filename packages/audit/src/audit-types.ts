@@ -125,7 +125,7 @@ export interface AuditEventRepository {
   listByActionPrefix(prefix: string, limit?: number): Promise<AuditEvent[]>;
   listScoped(query: AuditEventQuery, limit?: number): Promise<AuditEvent[]>;
   listSummaries(limit?: number): Promise<AuditEventSummaryProjection[]>;
-  listActivitySessions(actionPrefix?: string): Promise<ActivitySessionSummary[]>;
+  listActivitySessions(actionPrefix?: string, limit?: number, offset?: number): Promise<ActivitySessionSummary[]>;
   listActivityScoped(query: AuditEventQuery, limit?: number): Promise<ActivityAuditEvent[]>;
   /** Resolves at most one started-event detail by exact event ID or call ID. */
   resolveActivityTargetDetail(idOrCallId: string): Promise<ActivityTargetDetail | null>;

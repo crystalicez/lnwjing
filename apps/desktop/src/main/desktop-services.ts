@@ -178,6 +178,7 @@ import {
   type LoadLogSessionHistoryRequest,
   type LoadLogSessionHistoryResult,
   type LogSnapshot,
+  type LogSessionSummary,
   type ManagedBrowserStatus,
   type PdfProviderInstallResult,
   type McpConnectionStatus,
@@ -2192,6 +2193,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       const sessions = await activitySessionCatalog.list();
       return { ...snapshot, sessions, tunnelAuth: await tunnelController.authStatus() };
     },
+    listLogSessions: (request: { readonly offset: number; readonly limit?: number }): Promise<{ readonly sessions: readonly LogSessionSummary[]; readonly hasMore: boolean }> => activitySessionCatalog.page(request.offset, request.limit),
     loadLogSessionHistory: async (request: LoadLogSessionHistoryRequest): Promise<LoadLogSessionHistoryResult> => {
       const workLog = await buildWorkLogHistory(auditRepository, workLogViewState, request);
       logHub.syncWorkLog(workLog, []);

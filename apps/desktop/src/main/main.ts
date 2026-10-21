@@ -220,6 +220,7 @@ export interface DesktopIpcServices {
   setToolAvailability(request: SetToolAvailabilityRequest): Promise<SetToolAvailabilityResult>;
   resetToolAvailability(request: ResetToolAvailabilityRequest): Promise<SetToolAvailabilityResult>;
   getLogSnapshot(): Promise<LogSnapshot>;
+  listLogSessions(request: { readonly offset: number; readonly limit?: number }): Promise<IpcResponseMap[typeof ipcChannels.listLogSessions]>;
   loadLogSessionHistory(request: LoadLogSessionHistoryRequest): Promise<LoadLogSessionHistoryResult>;
   clearLogBuffer(request: ClearLogBufferRequest): Promise<{ readonly cleared: boolean }>;
   resolveActivityTargetDetail(detailRef: string): Promise<{ readonly status: 'complete' | 'unavailable'; readonly detail: ActivityTargetDetail | null }>;
@@ -419,6 +420,7 @@ const defaultDesktopServices: DesktopIpcServices = {
     tunnelLogPath: null,
     tunnelLogExists: false,
   }),
+  listLogSessions: async (): Promise<IpcResponseMap[typeof ipcChannels.listLogSessions]> => ({ sessions: [], hasMore: false }),
   loadLogSessionHistory: async (): Promise<LoadLogSessionHistoryResult> => ({
     workLog: [],
     logSnapshot: { lines: [], tunnelLogPath: null, tunnelLogExists: false },
@@ -865,6 +867,14 @@ export function registerIpcHandlers(
     assertTrustedSender(event, getMainWindow());
     assertNoPayload(payload);
     return services.getLogSnapshot();
+  });
+  registerHandler(ipcChannels.listLogSessions, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    if (!isRecord(payload) || !Number.isSafeInteger(payload.offset) || typeof payload.offset !== 'number' || payload.offset < 0
+      || (payload.limit !== undefined && (typeof payload.limit !== 'number' || !Number.isInteger(payload.limit) || payload.limit < 1 || payload.limit > 100))) {
+      throw new Error('Invalid session page request');
+    }
+    return services.listLogSessions({ offset: payload.offset, ...(payload.limit === undefined ? {} : { limit: payload.limit as number }) });
   });
   registerHandler(ipcChannels.loadLogSessionHistory, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());

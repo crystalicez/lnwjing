@@ -15,6 +15,9 @@ export interface WorkspaceIndexQueueStatus {
   readonly completedEvents: number;
   readonly failedEvents: number;
   readonly droppedEvents: number;
+  readonly overflowRescans: number;
+  readonly completedRescans: number;
+  readonly lastRescanDurationMs: number;
 }
 
 export interface WorkspaceIndexQueueOptions {
@@ -25,10 +28,12 @@ export interface WorkspaceIndexQueueOptions {
 type EventWorker = (event: WorkspaceIndexEvent) => Promise<void>;
 type QueueErrorListener = (event: WorkspaceIndexEvent, error: unknown) => void;
 
+const MAX_PENDING_INDEX_EVENTS = 1_024;
+
 /**
  * A lossless event queue: only duplicate notifications for the same path are
- * coalesced. It never applies an ignore pattern and never drops a distinct
- * path, including hidden/generated/dependency paths.
+ * coalesced. When overloaded it replaces distinct events with a full rescan
+ * instead of silently losing coverage; path-discovery policy stays in the caller.
  */
 export class WorkspaceIndexQueue {
   private readonly pending = new Map<string, WorkspaceIndexEvent>();
@@ -42,6 +47,9 @@ export class WorkspaceIndexQueue {
   private coalescedEvents = 0;
   private completedEvents = 0;
   private failedEvents = 0;
+  private overflowRescans = 0;
+  private completedRescans = 0;
+  private lastRescanDurationMs = 0;
 
   public constructor(private readonly worker: EventWorker, options: WorkspaceIndexQueueOptions = {}) {
     this.debounceMs = Math.max(0, Math.floor(options.debounceMs ?? 50));
@@ -51,8 +59,23 @@ export class WorkspaceIndexQueue {
   public enqueue(event: WorkspaceIndexEvent): void {
     const key = event.relativePath.replaceAll('\\', '/').replace(/^\.\//, '');
     this.enqueuedEvents += 1;
-    if (this.pending.has(key)) this.coalescedEvents += 1;
-    this.pending.set(key, { relativePath: key, kind: event.kind });
+    if (event.kind === 'rescan') {
+      this.coalescedEvents += this.pending.size;
+      this.pending.clear();
+      this.pending.set('', { relativePath: '', kind: 'rescan' });
+    } else if (this.pending.has('')) {
+      // The queued full rescan already includes this path.
+      this.coalescedEvents += 1;
+    } else if (!this.pending.has(key) && this.pending.size >= MAX_PENDING_INDEX_EVENTS) {
+      // Replace the backlog with a complete rescan; never silently discard paths.
+      this.coalescedEvents += this.pending.size;
+      this.pending.clear();
+      this.pending.set('', { relativePath: '', kind: 'rescan' });
+      this.overflowRescans += 1;
+    } else {
+      if (this.pending.has(key)) this.coalescedEvents += 1;
+      this.pending.set(key, { relativePath: key, kind: event.kind });
+    }
     this.schedule();
   }
 
@@ -72,6 +95,9 @@ export class WorkspaceIndexQueue {
       completedEvents: this.completedEvents,
       failedEvents: this.failedEvents,
       droppedEvents: 0,
+      overflowRescans: this.overflowRescans,
+      completedRescans: this.completedRescans,
+      lastRescanDurationMs: this.lastRescanDurationMs,
     };
   }
 
@@ -116,6 +142,7 @@ export class WorkspaceIndexQueue {
   }
 
   private async run(event: WorkspaceIndexEvent): Promise<void> {
+    const startedAt = event.kind === 'rescan' ? Date.now() : null;
     try {
       await this.worker(event);
       this.completedEvents += 1;
@@ -123,6 +150,10 @@ export class WorkspaceIndexQueue {
       this.failedEvents += 1;
       for (const listener of this.listeners) listener(event, error);
     } finally {
+      if (startedAt !== null) {
+        this.completedRescans += 1;
+        this.lastRescanDurationMs = Date.now() - startedAt;
+      }
       this.activeWorkers -= 1;
     }
   }

@@ -1443,6 +1443,17 @@ function scopePayload(request: { readonly workspaceId?: string; readonly session
   return { ...(workspaceId === undefined ? {} : { workspaceId }), ...(sessionId === undefined ? {} : { sessionId }) };
 }
 
+function listLogSessions(request: { readonly offset: number; readonly limit?: number }): Promise<{ readonly sessions: readonly LogSessionSummary[]; readonly hasMore: boolean }> {
+  if (!Number.isSafeInteger(request.offset) || request.offset < 0
+    || (request.limit !== undefined && (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > 100))) {
+    return Promise.reject(new Error('Invalid IPC request'));
+  }
+  return invoke(ipcChannels.listLogSessions, request).then((value: unknown) => {
+    if (!isRecord(value)) throw new Error('Invalid IPC response');
+    return { sessions: logSessionSummaries(value.sessions), hasMore: booleanField(value, 'hasMore') };
+  });
+}
+
 function loadLogSessionHistory(request: LoadLogSessionHistoryRequest): Promise<LoadLogSessionHistoryResult> {
   if (!isRecord(request) || typeof request.sessionId !== 'string' || request.sessionId.trim().length === 0) return Promise.reject(new Error('Invalid IPC request'));
   if (request.limit !== undefined && (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > 500)) return Promise.reject(new Error('Invalid IPC request'));
@@ -1745,6 +1756,7 @@ const api: LnwjudApi = {
   openToolSetupTarget,
   copyToolCommand,
   getLogSnapshot: () => invoke(ipcChannels.getLogSnapshot).then(logSnapshot),
+  listLogSessions,
   loadLogSessionHistory,
   clearLogBuffer,
   resolveActivityTargetDetail,

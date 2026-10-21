@@ -60,6 +60,35 @@ describe('WorkspaceIndexQueue', () => {
     expect(queue.status().droppedEvents).toBe(0);
   });
 
+  it('promotes an excessive distinct-path backlog into one lossless rescan', async () => {
+    const seen: string[] = [];
+    const queue = new WorkspaceIndexQueue(async (event) => {
+      seen.push(`${event.kind}:${event.relativePath}`);
+    }, { debounceMs: 0, concurrency: 1 });
+    for (let index = 0; index < 1_200; index += 1) {
+      queue.enqueue({ relativePath: `generated/${index}.ts`, kind: 'change' });
+    }
+    expect(queue.status()).toMatchObject({
+      pendingEvents: 1, overflowRescans: 1, droppedEvents: 0,
+    });
+    await queue.drain();
+    expect(seen).toEqual(['rescan:']);
+    expect(queue.status()).toMatchObject({ completedRescans: 1, pendingEvents: 0 });
+  });
+
+  it('coalesces an explicit rescan with queued changes without dropping coverage', async () => {
+    const seen: string[] = [];
+    const queue = new WorkspaceIndexQueue(async (event) => {
+      seen.push(event.kind);
+    }, { debounceMs: 0, concurrency: 1 });
+    queue.enqueue({ relativePath: 'src/a.ts', kind: 'change' });
+    queue.enqueue({ relativePath: '', kind: 'rescan' });
+    queue.enqueue({ relativePath: 'src/b.ts', kind: 'change' });
+    expect(queue.status()).toMatchObject({ pendingEvents: 1, droppedEvents: 0 });
+    await queue.drain();
+    expect(seen).toEqual(['rescan']);
+  });
+
   it('limits active workers and reports failures without stopping siblings', async () => {
     let active = 0;
     let peak = 0;

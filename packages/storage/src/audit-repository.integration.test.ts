@@ -13,6 +13,29 @@ afterEach(async () => {
 });
 
 describe('SqliteAuditRepository', () => {
+  it('paginates grouped session history without reading every session into JS', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-audit-session-pages-'));
+    temporaryRoots.push(root);
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    const repository = new SqliteAuditRepository(database);
+    try {
+      for (let index = 0; index < 6; index += 1) {
+        await repository.insert({
+          id: `event-${index}`, timestamp: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+          actorId: 'client', actorName: 'test', sessionId: `session-${index}`,
+          action: 'mcp_tool:read_file', resultCode: 'SUCCESS', durationMs: 1, metadata: {},
+        });
+      }
+      const first = await repository.listActivitySessions('mcp_tool:', 2, 0);
+      const second = await repository.listActivitySessions('mcp_tool:', 2, 2);
+      expect(first.map((entry) => entry.sessionId)).toEqual(['session-5', 'session-4']);
+      expect(second.map((entry) => entry.sessionId)).toEqual(['session-3', 'session-2']);
+    } finally {
+      database.close();
+    }
+  });
+
+
   it('retains both phases of goal-linked, failed and recently completed calls during routine pruning', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-audit-retention-pairs-'));
     temporaryRoots.push(root);

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react';
-import { workspaceScopeMatches, type DashboardSnapshot, type UiLocale, type WorkLogEntry, type WorkspaceSummary } from '@lnwjud/ipc-contracts';
+import { workspaceScopeMatches, type DashboardSnapshot, type LogSessionSummary, type UiLocale, type WorkLogEntry, type WorkspaceSummary } from '@lnwjud/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { WorkLogPanel, type LogScopeSelection, type WorkLogFilter } from '../worklog/WorkLogPanel.js';
 
@@ -17,6 +17,26 @@ export function WorkLogPage(props: WorkLogPageProps): ReactElement {
   const [filter, setFilter] = useState<WorkLogFilter>('all');
   const [historicalEntries, setHistoricalEntries] = useState<readonly WorkLogEntry[]>([]);
   const sessionLoadGeneration = useRef(0);
+  const olderOffset = useRef(500);
+  const [olderSessions, setOlderSessions] = useState<readonly LogSessionSummary[]>([]);
+  const [hasOlderSessions, setHasOlderSessions] = useState(true);
+  const [olderSessionsBusy, setOlderSessionsBusy] = useState(false);
+  const [olderSessionsError, setOlderSessionsError] = useState<string | null>(null);
+  const loadOlderSessions = async (): Promise<void> => {
+    if (olderSessionsBusy || !hasOlderSessions) return;
+    setOlderSessionsBusy(true);
+    setOlderSessionsError(null);
+    try {
+      const page = await window.lnwjud.listLogSessions({ offset: olderOffset.current, limit: 100 });
+      olderOffset.current += 100;
+      setOlderSessions((current) => [...current, ...page.sessions]);
+      setHasOlderSessions(page.hasMore);
+    } catch (error: unknown) {
+      setOlderSessionsError(error instanceof Error ? error.message : 'Could not load session history');
+    } finally {
+      setOlderSessionsBusy(false);
+    }
+  };
   const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjud.resolveActivityTargetDetail({ detailRef })).detail, []);
   const searchTargetDetails = useCallback(async (
     query: string,
@@ -58,7 +78,7 @@ export function WorkLogPage(props: WorkLogPageProps): ReactElement {
         onSearchTargetDetails={searchTargetDetails}
         entries={entries}
         inFlight={props.dashboard.inFlight}
-        sessions={props.dashboard.workLogSessions ?? []}
+        sessions={[...(props.dashboard.workLogSessions ?? []), ...olderSessions]}
         onSessionChange={loadSession}
         workspaces={props.workspaces}
         defaultWorkspaceId={props.dashboard.selectedWorkspace?.id ?? null}
@@ -76,6 +96,12 @@ export function WorkLogPage(props: WorkLogPageProps): ReactElement {
         detailEmptyLabel={t('logDetail.empty')}
         legacyIncompleteLabel={t('logDetail.legacyIncomplete')}
       />
+      {(props.dashboard.workLogSessions?.length ?? 0) >= 500 && hasOlderSessions ? (
+        <button type="button" disabled={olderSessionsBusy} onClick={() => { void loadOlderSessions(); }}>
+          {t('workLog.loadOlderSessions')}
+        </button>
+      ) : null}
+      {olderSessionsError === null ? null : <p role="alert">{olderSessionsError}</p>}
     </div>
   );
 }
