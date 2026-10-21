@@ -100,17 +100,32 @@ export class SqliteAuditRepository implements AuditEventRepository {
     const boundedLimit = Number.isInteger(limit) && limit > 0 && limit <= 500 ? limit : 500;
     const result = this.database.connection.prepare(`
       DELETE FROM audit_events WHERE id IN (
-        SELECT id FROM audit_events WHERE timestamp < ?
-          AND action IN (
+        SELECT candidate.id FROM audit_events candidate WHERE candidate.timestamp < ?
+          AND candidate.action IN (
             'mcp_tool:read_file', 'mcp_tool:read_files',
             'mcp_tool:list_files', 'mcp_tool:list_directory', 'mcp_tool:search_files',
             'mcp_tool:workspace_index_status', 'mcp_tool:process_status', 'mcp_tool:process_logs'
           )
-          AND json_type(metadata_json, '$.goalId') IS NULL
-          AND json_type(metadata_json, '$.mutationReceipt') IS NULL
-        ORDER BY timestamp ASC, id ASC LIMIT ?
+          AND candidate.result_code IN ('STARTED', 'SUCCESS')
+          AND json_type(candidate.metadata_json, '$.goalId') IS NULL
+          AND json_type(candidate.metadata_json, '$.mutationReceipt') IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM audit_events related
+            WHERE json_type(candidate.metadata_json, '$.callId') = 'text'
+              AND related.action = candidate.action
+              AND related.workspace_id IS candidate.workspace_id
+              AND related.session_id IS candidate.session_id
+              AND json_extract(related.metadata_json, '$.callId') = json_extract(candidate.metadata_json, '$.callId')
+              AND (
+                related.timestamp >= ?
+                OR related.result_code NOT IN ('STARTED', 'SUCCESS')
+                OR json_type(related.metadata_json, '$.goalId') IS NOT NULL
+                OR json_type(related.metadata_json, '$.mutationReceipt') IS NOT NULL
+              )
+          )
+        ORDER BY candidate.timestamp ASC, candidate.id ASC LIMIT ?
       )
-    `).run(cutoffIso, boundedLimit);
+    `).run(cutoffIso, cutoffIso, boundedLimit);
     return Number(result.changes);
   }
 
