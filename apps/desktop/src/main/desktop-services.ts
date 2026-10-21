@@ -1161,10 +1161,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const recoveryRetentionSweepIntervalMs = 6 * 60 * 60 * 1000;
   let lastAuditRetentionSweepAt = 0;
   let auditRetentionSweep: Promise<void> | null = null;
+  let auditRetentionClosing = false;
 
   function sweepAuditRetention(): void {
     const now = Date.now();
-    if (auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
+    if (auditRetentionClosing || auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
     lastAuditRetentionSweepAt = now;
     const cutoffIso = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
     auditRetentionSweep = (async () => {
@@ -2296,6 +2297,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       await watcherHandle.close();
       watcherHandle = null;
     }
+    auditRetentionClosing = true;
     clearInterval(auditRetentionTimer);
     logHub.stop();
     await mcpLifecycle.close();
