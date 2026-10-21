@@ -34,7 +34,8 @@ const ACTIVITY_LOCK_TIMEOUT_MS = 10_000;
 
 /** SQLite's OS locks release on process exit; every writer must hold one across rotation and append. */
 export function createFileActivitySink(filePath: string, options: { readonly maxBytes?: number } = {}): ActivitySink {
-  const maxBytes = options.maxBytes === undefined ? MAX_ACTIVITY_LOG_BYTES : Math.max(256, Math.floor(options.maxBytes));
+  const maxBytes = options.maxBytes !== undefined && Number.isSafeInteger(options.maxBytes) && options.maxBytes >= 256
+    ? options.maxBytes : MAX_ACTIVITY_LOG_BYTES;
   return {
     async record(event: ActivitySinkEvent): Promise<void> {
       const line = formatActivityLogLine(event);
@@ -72,8 +73,11 @@ export function createFileActivitySink(filePath: string, options: { readonly max
         }
         appendFileSync(filePath, line, 'utf8');
       } finally {
-        if (locked) mutex.exec('ROLLBACK');
-        mutex.close();
+        try {
+          if (locked) mutex.exec('ROLLBACK');
+        } finally {
+          mutex.close();
+        }
       }
     },
   };
