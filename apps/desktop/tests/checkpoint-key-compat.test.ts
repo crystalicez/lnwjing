@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { decryptV3WindowsSafeStorageSecretIfPresent, loadV3CheckpointKeyIfPresent } from '../src/main/checkpoint-key-compat.js';
+import { decryptV3WindowsSafeStorageSecretIfPresent, isV3WindowsSafeStorageEnvelope, loadV3CheckpointKeyIfPresent } from '../src/main/checkpoint-key-compat.js';
 
 const roots: string[] = [];
 
@@ -23,6 +23,16 @@ describe('generic Windows v3 safeStorage compatibility', () => {
     const envelope = `lnwjing-secret:v3:windows-dpapi:${encrypted.toString('base64')}`;
     const decryptString = vi.fn(() => plain.toString('base64'));
 
+    expect(decryptV3WindowsSafeStorageSecretIfPresent(envelope, { decryptString })).toEqual(plain);
+    expect(decryptString).toHaveBeenCalledExactlyOnceWith(encrypted);
+  });
+
+  it('still decrypts pre-rename lnwjud Windows v3 envelopes', () => {
+    const plain = Buffer.from('old-secret', 'utf8');
+    const encrypted = Buffer.from('cipher-legacy');
+    const envelope = `lnwjud-secret:v3:windows-dpapi:${encrypted.toString('base64')}`;
+    const decryptString = vi.fn(() => plain.toString('base64'));
+    expect(isV3WindowsSafeStorageEnvelope(envelope)).toBe(true);
     expect(decryptV3WindowsSafeStorageSecretIfPresent(envelope, { decryptString })).toEqual(plain);
     expect(decryptString).toHaveBeenCalledExactlyOnceWith(encrypted);
   });

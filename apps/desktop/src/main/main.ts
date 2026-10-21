@@ -130,7 +130,7 @@ import { DesktopSessionDiagnostics } from './desktop-session-diagnostics.js';
 import { configureNativeCrashDiagnostics, pruneNativeCrashDumpsForDataPath } from './native-crash-diagnostics.js';
 import { RuntimeDiagnosticsHistoryRecorder, type RuntimeDiagnosticsSample } from './runtime-diagnostics-history.js';
 import { FACTORY_RESET_APPLY_ARG, applyPendingFactoryResetSync, clearFactoryResetBootstrapSync, clearFactoryResetStageSync, factoryResetBootstrapUserDataPath, stageFactoryResetSync } from './factory-reset.js';
-import { decryptV3WindowsSafeStorageSecretIfPresent } from './checkpoint-key-compat.js';
+import { decryptV3WindowsSafeStorageSecretIfPresent, isV3WindowsSafeStorageEnvelope } from './checkpoint-key-compat.js';
 import { mutationApprovalDialogOptions } from './mutation-approval.js';
 import { prependBundledRuntimeToolsToPath } from './runtime-tools.js';
 import { parseWorkflowWorkspace, parseWorkflowPrepare, parseCallHistory, parseDoctorGoalsRequest, parseWorkflowGoal, parseResourceSnapshot, parseRestoreTaskCheckpoint, parseCancelOwnedGoalTask } from './workflow-ipc-parser.js';
@@ -2435,7 +2435,7 @@ async function migrateV3SafeStorageSecrets(dataPath: string, secretProtector: Se
   if (process.platform !== 'win32') return;
   const checkpointPath = path.join(dataPath, 'checkpoint-master.key');
   const checkpointEnvelope = await readTrustedSecretFile(checkpointPath);
-  if (checkpointEnvelope !== null && checkpointEnvelope.trim().startsWith('lnwjing-secret:v3:')) {
+  if (checkpointEnvelope !== null && isV3WindowsSafeStorageEnvelope(checkpointEnvelope)) {
     const key = decryptV3WindowsSafeStorageSecretIfPresent(checkpointEnvelope, safeStorage);
     if (key === undefined || key.byteLength !== 32) throw new Error('Legacy v3 checkpoint secret has an invalid key length');
     await atomicWrite(checkpointPath, await secretProtector.encrypt('checkpoint_master_key', key.toString('base64')));
@@ -2443,7 +2443,7 @@ async function migrateV3SafeStorageSecrets(dataPath: string, secretProtector: Se
 
   const tunnelPath = path.join(resolveTunnelProfileDirectory(), TUNNEL_SECRET_FILE_NAME);
   const tunnelEnvelope = await readTrustedSecretFile(tunnelPath);
-  if (tunnelEnvelope === null || !tunnelEnvelope.trim().startsWith('lnwjing-secret:v3:')) return;
+  if (tunnelEnvelope === null || !isV3WindowsSafeStorageEnvelope(tunnelEnvelope)) return;
   const secret = decryptV3WindowsSafeStorageSecretIfPresent(tunnelEnvelope, safeStorage);
   if (secret === undefined) return;
   await atomicWrite(tunnelPath, await secretProtector.encrypt('tunnel_api_key', secret.toString('utf8')));

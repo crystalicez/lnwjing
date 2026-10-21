@@ -2,7 +2,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const V3_SECRET_PREFIX = 'lnwjing-secret:v3:';
+const LEGACY_V3_SECRET_PREFIX = 'lnwjud-secret:v3:';
 const WINDOWS_PROVIDER = ['windows', 'dpapi'].join('-');
+
+/** Both prefixes are legacy v3 envelopes; only newly generated values use current branding. */
+export function isV3WindowsSafeStorageEnvelope(raw: string): boolean {
+  const value = raw.trim();
+  return value.startsWith(V3_SECRET_PREFIX) || value.startsWith(LEGACY_V3_SECRET_PREFIX);
+}
 
 export interface SafeStorageDecryptor {
   decryptString(value: Buffer): string;
@@ -13,8 +20,9 @@ export function decryptV3WindowsSafeStorageSecretIfPresent(
   safeStorage: SafeStorageDecryptor,
 ): Buffer | undefined {
   const trimmed = raw.trim();
-  if (!trimmed.startsWith(V3_SECRET_PREFIX)) return undefined;
-  const body = trimmed.slice(V3_SECRET_PREFIX.length);
+  if (!isV3WindowsSafeStorageEnvelope(trimmed)) return undefined;
+  const prefix = trimmed.startsWith(V3_SECRET_PREFIX) ? V3_SECRET_PREFIX : LEGACY_V3_SECRET_PREFIX;
+  const body = trimmed.slice(prefix.length);
   const delimiter = body.indexOf(':');
   if (delimiter <= 0) throw new Error('Protected secret has an invalid v3 envelope');
   const providerId = body.slice(0, delimiter);

@@ -1,8 +1,10 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 const PREFIX = 'lnwjing:checkpoint:v1:';
+const LEGACY_PREFIX = 'lnwjud:checkpoint:v1:';
 const ALGORITHM = 'aes-256-gcm';
 const AAD = Buffer.from('lnwjing-checkpoint-v1', 'utf8');
+const LEGACY_AAD = Buffer.from('lnwjud-checkpoint-v1', 'utf8');
 
 export interface CheckpointPayloadCipher {
   encrypt(plainText: string): string;
@@ -29,7 +31,8 @@ export class AesGcmCheckpointCipher implements CheckpointPayloadCipher {
 
   public decrypt(payload: string): string {
     if (!this.isEncrypted(payload)) throw new Error('Checkpoint payload is not encrypted');
-    const encoded = payload.slice(PREFIX.length).split(':');
+    const legacy = payload.startsWith(LEGACY_PREFIX);
+    const encoded = payload.slice((legacy ? LEGACY_PREFIX : PREFIX).length).split(':');
     if (encoded.length !== 3) throw new Error('Checkpoint payload has an invalid envelope');
     const [ivText, tagText, cipherText] = encoded;
     if (ivText === undefined || tagText === undefined || cipherText === undefined) throw new Error('Checkpoint payload has an invalid envelope');
@@ -38,12 +41,12 @@ export class AesGcmCheckpointCipher implements CheckpointPayloadCipher {
     const encrypted = Buffer.from(cipherText, 'base64');
     if (iv.byteLength !== 12 || tag.byteLength !== 16) throw new Error('Checkpoint payload has invalid encryption metadata');
     const decipher = createDecipheriv(ALGORITHM, this.key, iv);
-    decipher.setAAD(AAD);
+    decipher.setAAD(legacy ? LEGACY_AAD : AAD);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
   }
 
   public isEncrypted(payload: string): boolean {
-    return payload.startsWith(PREFIX);
+    return payload.startsWith(PREFIX) || payload.startsWith(LEGACY_PREFIX);
   }
 }
