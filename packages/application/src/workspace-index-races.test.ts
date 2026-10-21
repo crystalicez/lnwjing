@@ -54,6 +54,38 @@ describe('workspace index races', () => {
     }
   });
 
+  it('reuses file content when metadata is unchanged but rehashes same-size rewrites', async () => {
+    const setup = await fixture();
+    const source = path.join(setup.root, 'source.ts');
+    const service = new WorkspaceIndexService(setup.repository, setup.store);
+    try {
+      await writeFile(source, 'export const before = 1;');
+      const first = await service.indexWorkspace(setup.workspace.id, { rebuild: true });
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+      vi.mocked(readFile).mockClear();
+      const again = await service.indexWorkspace(setup.workspace.id);
+      expect(again.ok).toBe(true);
+      expect(vi.mocked(readFile).mock.calls.filter(([file]) => file === source)).toHaveLength(0);
+      await writeFile(source, 'export const afterr = 1;');
+      vi.mocked(readFile).mockClear();
+      const updated = await service.indexWorkspace(setup.workspace.id);
+      expect(updated.ok).toBe(true);
+      if (updated.ok) {
+        expect(updated.value.entries.find((entry) => entry.relativePath === 'source.ts')?.symbols).toContain('afterr');
+        expect(updated.value.entries.find((entry) => entry.relativePath === 'source.ts')?.contentHash)
+          .not.toEqual(first.value.entries.find((entry) => entry.relativePath === 'source.ts')?.contentHash);
+      }
+      expect(vi.mocked(readFile).mock.calls.filter(([file]) => file === source).length).toBeGreaterThan(0);
+      vi.mocked(readFile).mockClear();
+      expect((await service.indexWorkspace(setup.workspace.id, { rebuild: true })).ok).toBe(true);
+      expect(vi.mocked(readFile).mock.calls.some(([file]) => file === source)).toBe(true);
+    } finally {
+      await service.close();
+      await rm(setup.directory, { recursive: true, force: true });
+    }
+  });
+
   it('quiesces filename-free notifications caused by its own snapshot publication', async () => {
     const setup = await fixture();
     let notify: ((event: 'change' | 'rename', filename: string | null) => void) | undefined;

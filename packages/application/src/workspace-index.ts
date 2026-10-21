@@ -34,6 +34,9 @@ export interface WorkspaceIndexEntry {
   readonly kind: 'file' | 'directory' | 'symlink';
   readonly size: number;
   readonly mtimeMs: number;
+  /** Extra metadata fences for safe reuse during a full scan (older snapshots omit them). */
+  readonly ctimeMs?: number;
+  readonly birthtimeMs?: number;
   readonly contentHash: string | null;
   readonly gitBlobSha: string | null;
   readonly language: string | null;
@@ -406,18 +409,22 @@ export class WorkspaceIndexService {
     if (rootPath === null) return err(appError('INVALID_INPUT', 'Workspace root uses a foreign host path syntax'));
     const watcher = this.watchers.get(workspace.id);
     const failureWatermark = watcher?.queue.status().failedEvents ?? 0;
-    await this.scanDirectory(rootPath, rootPath, entries, options.discovery ?? 'automatic', options.signal);
+    const discovery = options.discovery ?? 'automatic';
+    const previous = discovery === 'automatic' ? await store.load().catch(() => null) : null;
+    const reusable = options.rebuild !== true && previous !== null && previous.rootPath === workspace.realRootPath && this.isAutomaticallyObservable(previous)
+      ? new Map(previous.entries.map((entry) => [entry.relativePath, entry])) : undefined;
+    await this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable);
     const snapshot = this.snapshotValue(workspace, entries);
     options.signal?.throwIfAborted();
-    const previous = skipUnchangedPublication ? await store.load().catch(() => null) : null;
-    const unchanged = previous !== null && isDeepStrictEqual(previous.entries.map(indexEntryContent), snapshot.entries.map(indexEntryContent));
+    const comparison = skipUnchangedPublication ? (previous ?? await store.load().catch(() => null)) : null;
+    const unchanged = comparison !== null && isDeepStrictEqual(comparison.entries.map(indexEntryContent), snapshot.entries.map(indexEntryContent));
     options.signal?.throwIfAborted();
     if (!unchanged) await store.save(snapshot);
     if (watcher !== undefined && this.watchers.get(workspace.id) === watcher) {
       watcher.recoveredFailures = Math.max(watcher.recoveredFailures, failureWatermark);
       watcher.baselineVerified = true;
     }
-    return ok(unchanged ? previous : snapshot);
+    return ok(unchanged ? comparison : snapshot);
   }
 
   private async mutateSnapshot(
@@ -456,7 +463,7 @@ export class WorkspaceIndexService {
     return waitForIndexOperation(operation, signal, () => started);
   }
 
-  private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal): Promise<void> {
+  private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>): Promise<void> {
     signal?.throwIfAborted();
     if (discovery === 'automatic' && this.store.isInternalPath?.(directoryPath)) return;
     const api = hostPathApi(process.platform);
@@ -473,9 +480,9 @@ export class WorkspaceIndexService {
       if (!classifyContextPath(childRelativePath, discovery).discoverable) continue;
       const beforeChild = entries.length;
       try {
-        if (child.isDirectory()) await this.scanDirectory(rootPath, childPath, entries, discovery, signal);
+        if (child.isDirectory()) await this.scanDirectory(rootPath, childPath, entries, discovery, signal, reusable);
         else if (child.isSymbolicLink()) entries.push(await this.describePath(rootPath, childPath, await statOrLstat(childPath, true), signal));
-        else entries.push(await this.describePath(rootPath, childPath, await stat(childPath), signal));
+        else entries.push(await this.describePath(rootPath, childPath, await stat(childPath), signal, reusable));
       } catch (error: unknown) {
         if (!isNodeError(error, 'ENOENT')) throw error;
         entries.splice(beforeChild);
@@ -483,13 +490,19 @@ export class WorkspaceIndexService {
     }
   }
 
-  private async describePath(rootPath: string, absolutePath: string, metadata: Awaited<ReturnType<typeof stat>>, signal?: AbortSignal): Promise<WorkspaceIndexEntry> {
+  private async describePath(rootPath: string, absolutePath: string, metadata: Awaited<ReturnType<typeof stat>>, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>): Promise<WorkspaceIndexEntry> {
     const relativePath = normalizeRelativePath(hostPathApi(process.platform).relative(rootPath, absolutePath));
+    const previous = reusable?.get(relativePath);
+    if (metadata.isFile() && previous?.kind === 'file'
+      && previous.size === metadata.size && previous.mtimeMs === metadata.mtimeMs
+      && previous.ctimeMs !== undefined && previous.ctimeMs === metadata.ctimeMs
+      && previous.birthtimeMs !== undefined && previous.birthtimeMs === metadata.birthtimeMs) return previous;
     const indexedAt = new Date().toISOString();
     if (metadata.isDirectory()) return { relativePath, kind: 'directory', size: 0, mtimeMs: Number(metadata.mtimeMs), contentHash: null, gitBlobSha: null, language: null, isTest: false, symbols: [], imports: [], exports: [], functions: [], classes: [], interfaces: [], indexedAt };
     if (metadata.isSymbolicLink()) return { relativePath, kind: 'symlink', size: Number(metadata.size), mtimeMs: Number(metadata.mtimeMs), contentHash: null, gitBlobSha: null, language: languageFor(relativePath), isTest: isTestPath(relativePath), symbols: [], imports: [], exports: [], functions: [], classes: [], interfaces: [], indexedAt };
     if (metadata.size > MAX_INDEX_FILE_BYTES) return {
       relativePath, kind: 'file', size: Number(metadata.size), mtimeMs: Number(metadata.mtimeMs),
+      ctimeMs: Number(metadata.ctimeMs), birthtimeMs: Number(metadata.birthtimeMs),
       contentHash: null, gitBlobSha: null, language: languageFor(relativePath), isTest: isTestPath(relativePath),
       symbols: [], imports: [], exports: [], functions: [], classes: [], interfaces: [], indexedAt,
     };
@@ -509,6 +522,7 @@ export class WorkspaceIndexService {
       kind: 'file',
       size: Number(metadata.size),
       mtimeMs: Number(metadata.mtimeMs),
+      ctimeMs: Number(metadata.ctimeMs), birthtimeMs: Number(metadata.birthtimeMs),
       contentHash,
       gitBlobSha,
       language: languageFor(relativePath),
