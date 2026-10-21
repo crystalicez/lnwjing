@@ -94,6 +94,26 @@ export class SqliteAuditRepository implements AuditEventRepository {
     );
   }
 
+  /** Drop only expired routine reads. Mutations, goal evidence and receipts stay durable. */
+  public async purgeExpiredRoutineReads(cutoffIso: string, limit = 500): Promise<number> {
+    if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Invalid audit retention cutoff');
+    const boundedLimit = Number.isInteger(limit) && limit > 0 && limit <= 500 ? limit : 500;
+    const result = this.database.connection.prepare(`
+      DELETE FROM audit_events WHERE id IN (
+        SELECT id FROM audit_events WHERE timestamp < ?
+          AND action IN (
+            'mcp_tool:read_file', 'mcp_tool:read_files',
+            'mcp_tool:list_files', 'mcp_tool:list_directory', 'mcp_tool:search_files',
+            'mcp_tool:workspace_index_status', 'mcp_tool:process_status', 'mcp_tool:process_logs'
+          )
+          AND json_type(metadata_json, '$.goalId') IS NULL
+          AND json_type(metadata_json, '$.mutationReceipt') IS NULL
+        ORDER BY timestamp ASC, id ASC LIMIT ?
+      )
+    `).run(cutoffIso, boundedLimit);
+    return Number(result.changes);
+  }
+
   public list(limit = 100): Promise<AuditEvent[]> {
     return this.listScoped({}, limit);
   }
