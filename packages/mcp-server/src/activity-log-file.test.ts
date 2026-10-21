@@ -42,6 +42,37 @@ describe('mcp activity log file', () => {
     })).toContain('"toolName":"write_file"');
   });
 
+  it('retains a bounded set of complete NDJSON segments with concurrent activity writers', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-rotation-'));
+    temporaryRoots.push(root);
+    const filePath = mcpActivityLogPath(root);
+    const first = createFileActivitySink(filePath, { maxBytes: 512 });
+    const second = createFileActivitySink(filePath, { maxBytes: 512 });
+    const event = (callId: string): ActivitySinkEvent => ({
+      callId, toolName: 'read_file', phase: 'completed', resultCode: 'SUCCESS',
+      durationMs: 1, timestamp: '2026-10-21T00:00:00.000Z',
+    });
+    await Promise.all(Array.from({ length: 24 }, (_, index) =>
+      (index % 2 === 0 ? first : second).record(event(`call-${index}`))));
+
+    const { readdir, stat } = await import('node:fs/promises');
+    const names = (await readdir(root)).filter((name) => name === 'mcp-activity.log' || /^mcp-activity\.log\.[1-3]$/.test(name));
+    expect(names.sort()).toEqual(['mcp-activity.log', 'mcp-activity.log.1', 'mcp-activity.log.2', 'mcp-activity.log.3']);
+    const retained = new Set<string>();
+    for (const name of names) {
+      const segment = path.join(root, name);
+      expect((await stat(segment)).size).toBeLessThanOrEqual(512);
+      for (const row of (await readFile(segment, 'utf8')).trim().split('\n')) {
+        const parsed = JSON.parse(row) as { callId: string; phase: string };
+        expect(parsed.phase).toBe('completed');
+        expect(retained.has(parsed.callId)).toBe(false);
+        retained.add(parsed.callId);
+      }
+    }
+    expect(retained.has('call-23')).toBe(true);
+    expect(retained.size).toBeLessThan(24);
+  });
+
   it('still records to later sinks when an earlier activity sink fails', async () => {
     const recorded: ActivitySinkEvent[] = [];
     const sink = composeActivitySinks([
