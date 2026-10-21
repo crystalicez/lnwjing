@@ -30,6 +30,7 @@ function sample(sequence: number): Omit<RuntimeDiagnosticsSample, 'schemaVersion
     cpu: { userMicros: sequence * 10, systemMicros: sequence * 5 },
     eventLoop: { idleMs: sequence, activeMs: sequence / 2, utilization: 0.25 },
     activeResources: { Timeout: 2, TCPSocketWrap: 1 },
+    search: { active: 1, queued: 2, peakActive: 2, started: sequence, finished: sequence, rejected: 0, cancelled: 0, totalExecutionMs: sequence * 5 },
     logs: {
       totalLines: 3,
       totalRetainedBytes: 300,
@@ -84,5 +85,6 @@ describe('RuntimeDiagnosticsHistoryRecorder', () => {
     expect(history?.samples.at(-1)?.mcp.toolAvailabilityListeners).toBe(4);
     expect(history?.samples.at(-1)?.activeResources).toEqual({ Timeout: 2, TCPSocketWrap: 1 });
     expect(history?.samples.at(-1)?.logs.totalRetainedBytes).toBe(300);
+    expect(history?.samples.at(-1)?.search?.started).toBe(4);
   });
 });

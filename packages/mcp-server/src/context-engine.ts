@@ -319,14 +319,14 @@ export class ContextEngine {
     this.economy.beginRequest();
     const workspaceIds = await this.resolveWorkspaceIds(request.workspaceId);
     if (!workspaceIds.ok) return workspaceIds;
-    if (request.includeIgnored === false && request.glob === undefined && request.workspaceId !== undefined && this.services.workspaceIndex !== undefined) {
+    if (request.includeIgnored !== true && request.glob === undefined && request.workspaceId !== undefined && this.services.workspaceIndex !== undefined) {
       const indexed = await this.fullScanFromIndex(request.workspaceId, request.path, request.pageSize);
       if (indexed !== null) return indexed;
     }
     const maxResults = 500;
     const results = await Promise.all(workspaceIds.value.map(async (workspaceId) => ({
       workspaceId,
-      result: await this.safeSearchFiles(workspaceId, { query: '*', includeIgnored: request.includeIgnored !== false, ...(request.path === undefined ? {} : { path: request.path }) }, maxResults, request.glob),
+      result: await this.safeSearchFiles(workspaceId, { query: '*', includeIgnored: request.includeIgnored === true, ...(request.path === undefined ? {} : { path: request.path }) }, maxResults, request.glob),
     })));
     const files: Array<{ readonly workspaceId: string; readonly path: string }> = [];
     let searchTruncated = false;

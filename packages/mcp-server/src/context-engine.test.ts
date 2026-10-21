@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { err, ok } from '@lnwjud/domain';
 import type { McpApplicationServices } from './tools/tool-types.js';
 import { ContextEngine, type WorkspaceContextRequest } from './context-engine.js';
+import { workspaceFullScanSchema } from './tools/schemas.js';
 
 const actor = { clientId: 'context-test', clientName: 'context-test' };
 
@@ -56,6 +57,17 @@ function services(): McpApplicationServices {
 }
 
 describe('context engine', () => {
+  it('defaults full scans to automatic filtering and preserves explicit opt-in', async () => {
+    expect(workspaceFullScanSchema.parse({}).includeIgnored).toBe(false);
+    const searchFiles = vi.fn().mockResolvedValue(ok({ paths: ['src/index.ts'], truncated: false }));
+    const engine = new ContextEngine({ search: { searchFiles } }, actor);
+    expect((await engine.fullScan({ workspaceId: 'workspace-1' })).ok).toBe(true);
+    expect(searchFiles).toHaveBeenLastCalledWith(actor, 'workspace-1', expect.objectContaining({ discovery: 'automatic' }));
+    expect((await engine.fullScan({ workspaceId: 'workspace-1', includeIgnored: true })).ok).toBe(true);
+    expect(searchFiles).toHaveBeenLastCalledWith(actor, 'workspace-1', expect.objectContaining({ discovery: 'explicit' }));
+  });
+
+
   it('deduplicates Windows dot and separator aliases while retaining the original path and text', async () => {
     const base = services();
     const readFile = vi.fn().mockImplementation(async (_actor, _workspaceId, request) => ok({ path: request.path, content: '  ไทย 😀\tneedle  \n', startLine: 1, endLine: 2, encoding: 'utf8' }));

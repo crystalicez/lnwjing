@@ -35,6 +35,17 @@ export interface RuntimeDiagnosticsSample {
     readonly utilization: number;
   };
   readonly activeResources: Readonly<Record<string, number>>;
+  /** Aggregate in-process rg admission metrics. No paths, queries or credentials are retained. */
+  readonly search?: {
+    readonly active: number;
+    readonly queued: number;
+    readonly peakActive: number;
+    readonly started: number;
+    readonly finished: number;
+    readonly rejected: number;
+    readonly cancelled: number;
+    readonly totalExecutionMs: number;
+  };
   readonly logs: {
     readonly totalLines: number;
     readonly totalRetainedBytes: number;

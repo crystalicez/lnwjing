@@ -91,6 +91,7 @@ import {
   type UpdateStatus,
   type WorkspaceSummary,
 } from '@lnwjud/ipc-contracts';
+import { ripgrepAdmissionSnapshot } from '@lnwjud/search';
 import { readSharedActivitySnapshot, startMcpStdio, inspectWorkflowFile, inspectWorkflowProjectVersion, inspectWorkflowGitBranches, generateWorkflowReportMapping, type EccRuntimeOptions, type HostMutationApprovalRequest } from '@lnwjud/mcp-server';
 import { createExplicitKeySecretProtector, DEFAULT_DISPLAY_TIME_ZONE, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, formatDisplayDateTime, formatOffsetIsoTimestamp, normalizeMcpAllowedHostname, resolveLnwjudDataPath, type SecretProtector } from '@lnwjud/shared';
 import { applyPendingSqliteRestoreSync, CheckpointKeyStore, type CheckpointPayloadCipher } from '@lnwjud/storage';
@@ -2547,6 +2548,7 @@ function collectRuntimeDiagnosticsSample(runtime: DesktopRuntime): Omit<RuntimeD
       utilization: eventLoop.utilization,
     },
     activeResources,
+    search: ripgrepAdmissionSnapshot(),
     logs: runtime.logHub.telemetrySnapshot(),
     mcp: {
       toolAvailabilityListeners: runtime.toolAvailabilityService.listenerCount(),
