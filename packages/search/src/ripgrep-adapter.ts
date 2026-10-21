@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import { DEFAULT_SEARCH_RESULTS, err, MAX_PROCESS_LOG_BYTES, MAX_SEARCH_RESULTS, ok, type AppError, type Result } from '@lnwjud/domain';
 import { createProcessTreeTerminator, createSpawnInvocationFactory, PathExecutableResolver, type ExecutableResolver, type ProcessTreeTerminator, type SpawnInvocationFactory } from '@lnwjud/process';
 import {
@@ -6,6 +7,7 @@ import {
   DEFAULT_CONTEXT_IGNORE_GLOBS,
   type ContextDiscoveryMode,
 } from './context-economy.js';
+import { acquireRipgrep, recordRipgrepExecution } from './ripgrep-admission.js';
 
 export interface ProcessRunResult {
   readonly exitCode: number;
@@ -208,10 +210,16 @@ export class RipgrepAdapter {
     if (request.query.length === 0 || !Number.isInteger(maxResults) || maxResults < 1 || maxResults > MAX_SEARCH_RESULTS) {
       return err({ code: 'INVALID_INPUT', message: 'Search query or result limit is invalid', recoverable: false });
     }
+    const admission = await acquireRipgrep(request.rootPath, request.signal);
+    if (admission.status !== 'granted') return searchAdmissionError(admission.status);
+    const startedAt = performance.now();
+    try {
     const executable = await this.resolver.resolve('rg');
     if (!executable.ok) return executable;
     const discovery = request.discovery ?? 'automatic';
-    const args = ['--json', '--no-heading', '--color', 'never', '--hidden', '--no-ignore'];
+    const args = ['--json', '--no-heading', '--color', 'never', '--hidden', '--threads', '2'];
+    if (discovery === 'explicit') args.push('--no-ignore');
+    else args.push('--max-filesize', '8M');
     if (request.regex !== true) args.push('--fixed-strings');
     if (discovery === 'automatic') this.appendDefaultGlobs(args);
     if (request.glob !== undefined) args.push('--glob', request.glob);
@@ -244,6 +252,10 @@ export class RipgrepAdapter {
       matches.push(match);
     }
     return ok({ matches, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || hasAdditionalMatch });
+    } finally {
+      recordRipgrepExecution(performance.now() - startedAt);
+      admission.release();
+    }
   }
 
   public async searchFiles(request: SearchFilesRequest): Promise<Result<SearchFilesResult>> {
@@ -251,10 +263,15 @@ export class RipgrepAdapter {
     if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > MAX_SEARCH_RESULTS) {
       return err({ code: 'INVALID_INPUT', message: 'Search result limit is invalid', recoverable: false });
     }
+    const admission = await acquireRipgrep(request.rootPath, request.signal);
+    if (admission.status !== 'granted') return searchAdmissionError(admission.status);
+    const startedAt = performance.now();
+    try {
     const executable = await this.resolver.resolve('rg');
     if (!executable.ok) return executable;
     const discovery = request.discovery ?? 'automatic';
-    const args = ['--files', '--hidden', '--no-ignore'];
+    const args = ['--files', '--hidden'];
+    if (discovery === 'explicit') args.push('--no-ignore');
     if (discovery === 'automatic') this.appendDefaultGlobs(args);
     if (request.glob !== undefined) args.push('--glob', request.glob);
     args.push('--');
@@ -278,6 +295,10 @@ export class RipgrepAdapter {
       .filter((entry) => discovery === 'explicit' || classifyContextPath(entry, discovery).discoverable);
     const paths = discoveredPaths.slice(0, maxResults);
     return ok({ paths, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || discoveredPaths.length > maxResults });
+    } finally {
+      recordRipgrepExecution(performance.now() - startedAt);
+      admission.release();
+    }
   }
 
   private parseMatch(line: string): SearchMatch | null {
@@ -302,6 +323,14 @@ export class RipgrepAdapter {
     if (typeof data.line_number !== 'number' || typeof data.lines !== 'object' || data.lines === null || !('text' in data.lines) || typeof data.lines.text !== 'string') return false;
     return true;
   }
+}
+
+function searchAdmissionError(status: 'aborted' | 'busy'): Result<never> {
+  return err({
+    code: status === 'aborted' ? 'PROCESS_TIMEOUT' : 'CONFLICT',
+    message: status === 'aborted' ? 'Search cancelled while awaiting capacity' : 'Search capacity is busy; retry shortly',
+    recoverable: true,
+  });
 }
 
 function classifySearchError(exitCode: number, stderr: string): AppError {

@@ -132,7 +132,9 @@ describe('RipgrepAdapter', () => {
 
     expect(result).toEqual({ ok: true, value: { matches: [], truncated: false } });
     expect(executable).toBe('rg.exe');
-    expect(receivedArgs).toContain('--no-ignore');
+    expect(receivedArgs).not.toContain('--no-ignore');
+    expect(receivedArgs).toContain('--max-filesize');
+    expect(receivedArgs).toContain('--threads');
     expect(receivedArgs).toContain('--hidden');
     expect(receivedArgs).toContain('--fixed-strings');
     expect(receivedArgs).toContain(query);
@@ -305,6 +307,7 @@ describe('RipgrepAdapter', () => {
     expect(receivedArgs).not.toContain('--binary-files');
 
     const explicit = await adapter.searchFiles({ rootPath: 'C:\\workspace', discovery: 'explicit' });
+    expect(receivedArgs).toContain('--no-ignore');
     expect(explicit).toEqual({
       ok: true,
       value: { paths: ['src/app.ts', '.env', 'node_modules/pkg/index.js', 'dist/app.js'], truncated: false },
