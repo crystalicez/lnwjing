@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -41,6 +41,25 @@ describe('mcp activity log file', () => {
       timestamp: '2026-01-01T00:00:00.000Z',
       resultMessage: 'missing',
     })).toContain('"toolName":"write_file"');
+  });
+
+  it('trims a pre-existing oversized log to complete NDJSON rows on its first rotation', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-legacy-'));
+    temporaryRoots.push(root);
+    const filePath = mcpActivityLogPath(root);
+    const event = (callId: string): ActivitySinkEvent => ({
+      callId, toolName: 'read_file', phase: 'completed', resultCode: 'SUCCESS',
+      durationMs: 1, timestamp: '2026-10-21T00:00:00.000Z',
+    });
+    await writeFile(filePath, Array.from({ length: 32 }, (_, i) => formatActivityLogLine(event(`old-${i}`))).join(''));
+    await createFileActivitySink(filePath, { maxBytes: 512 }).record(event('new'));
+
+    const archive = `${filePath}.1`;
+    expect((await stat(archive)).size).toBeLessThanOrEqual(512);
+    const rows = (await readFile(archive, 'utf8')).trim().split('\n').map((line) => JSON.parse(line) as { callId: string });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.at(-1)?.callId).toBe('old-31');
+    expect(await readFile(filePath, 'utf8')).toContain('"callId":"new"');
   });
 
   it('retains a bounded set of complete NDJSON segments with concurrent activity writers', async () => {

@@ -1,4 +1,5 @@
-import { appendFileSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { appendFileSync, closeSync, mkdirSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
@@ -63,15 +64,23 @@ export function createFileActivitySink(filePath: string, options: { readonly max
           if (!isMissingFile(error)) throw error;
         }
         if (size > 0 && size + Buffer.byteLength(line) > maxBytes) {
-          rmSync(`${filePath}.${ROTATED_ACTIVITY_LOGS}`, { force: true });
-          for (let index = ROTATED_ACTIVITY_LOGS - 1; index >= 1; index -= 1) {
-            try {
-              renameSync(`${filePath}.${index}`, `${filePath}.${index + 1}`);
-            } catch (error: unknown) {
-              if (!isMissingFile(error)) throw error;
+          // Trim oversized legacy logs to complete NDJSON records before archiving.
+          const temporaryTail = size > maxBytes ? `${filePath}.${randomUUID()}.tail.tmp` : null;
+          try {
+            if (temporaryTail !== null) writeFileSync(temporaryTail, readArchiveTail(filePath, size, maxBytes), { flag: 'wx' });
+            rmSync(`${filePath}.${ROTATED_ACTIVITY_LOGS}`, { force: true });
+            for (let index = ROTATED_ACTIVITY_LOGS - 1; index >= 1; index -= 1) {
+              try {
+                renameSync(`${filePath}.${index}`, `${filePath}.${index + 1}`);
+              } catch (error: unknown) {
+                if (!isMissingFile(error)) throw error;
+              }
             }
+            renameSync(filePath, `${filePath}.1`);
+            if (temporaryTail !== null) renameSync(temporaryTail, `${filePath}.1`);
+          } finally {
+            if (temporaryTail !== null) rmSync(temporaryTail, { force: true });
           }
-          renameSync(filePath, `${filePath}.1`);
         }
         appendFileSync(filePath, line, 'utf8');
       } finally {
@@ -83,6 +92,26 @@ export function createFileActivitySink(filePath: string, options: { readonly max
       }
     },
   };
+}
+
+function readArchiveTail(filePath: string, size: number, maxBytes: number): Buffer {
+  const bytes = Buffer.allocUnsafe(maxBytes);
+  const fd = openSync(filePath, 'r');
+  let total = 0;
+  try {
+    while (total < bytes.length) {
+      const count = readSync(fd, bytes, total, bytes.length - total, size - maxBytes + total);
+      if (count === 0) break;
+      total += count;
+    }
+  } finally {
+    closeSync(fd);
+  }
+  const tail = bytes.subarray(0, total);
+  const firstNewline = tail.indexOf(10);
+  const lastNewline = tail.lastIndexOf(10);
+  return firstNewline < 0 || lastNewline <= firstNewline
+    ? Buffer.alloc(0) : tail.subarray(firstNewline + 1, lastNewline + 1);
 }
 
 function isMissingFile(error: unknown): boolean {
