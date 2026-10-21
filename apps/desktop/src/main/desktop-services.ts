@@ -497,7 +497,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   }
   const checkpointRepository = new SqliteCheckpointRepository(database, checkpointCipher);
   const backupService = new SqliteBackupService(database, { backupDirectory, databaseFilename, platform: process.platform, arch: process.arch });
-  const startupBackup = backupService.ensureRecent().catch((error: unknown) => {
+  const startupBackup = (readUserSettings(settingsRepository, process.env).autoBackupEnabled === true
+    ? backupService.ensureRecent() : Promise.resolve(null)).catch((error: unknown) => {
     console.error(`Automatic database backup failed: ${error instanceof Error ? error.message : 'unknown error'}`);
   });
   const workspaceService = new WorkspaceService(workspaceRepository);
@@ -1165,11 +1166,12 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
 
   function sweepAuditRetention(): void {
     const now = Date.now();
-    if (auditRetentionClosing || auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
+    if (auditRetentionClosing || readSettings().autoBackupEnabled !== true || auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
     lastAuditRetentionSweepAt = now;
     const cutoffIso = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
-    auditRetentionSweep = (async () => {
+    auditRetentionSweep = (async (): Promise<void> => {
       // Fail closed: pruning must not run without a recent, available daily backup.
+      if (readSettings().autoBackupEnabled !== true) return;
       const created = await backupService.ensureRecent();
       if (created === null) {
         const backups = await backupService.list();
@@ -1180,6 +1182,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       }
       let totalDeleted = 0;
       for (let batch = 0; batch < 20; batch += 1) {
+        if (readSettings().autoBackupEnabled !== true) break;
         const deleted = await auditRepository.purgeExpiredRoutineReads(cutoffIso);
         totalDeleted += deleted;
         if (deleted < 500) break;
@@ -1950,6 +1953,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (reconciledMcp?.ok) {
         const unverified = reconciledMcp.value.servers.filter((server) => server.lifecycle === 'termination_unverified');
         if (unverified.length > 0) logHub.feed('mcp', 'warn', `[MCP] termination_unverified: ${unverified.map((server) => server.name).join(', ')}`);
+      }
+      if (previous.autoBackupEnabled !== true && next.autoBackupEnabled === true) {
+        lastAuditRetentionSweepAt = 0;
+        sweepAuditRetention();
       }
       if (previous.recoveryRetentionDays !== next.recoveryRetentionDays) {
         lastRecoveryRetentionSweepAt = 0;
@@ -3004,6 +3011,7 @@ function readUserSettings(settingsRepository: SqliteSettingsRepository, env: Nod
     tunnelAutoReconnect: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.tunnelAutoReconnect), false),
     tunnelMaxAutoRestarts: parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.tunnelMaxAutoRestarts), DEFAULT_TUNNEL_MAX_AUTO_RESTARTS, 0, 50),
     recoveryRetentionDays: parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.recoveryRetentionDays) ?? undefined, DEFAULT_RECOVERY_RETENTION_DAYS, 0, 3650),
+    autoBackupEnabled: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.autoBackupEnabled), false),
     extensions: toIpcExtensionsSettings(extensions),
   };
 }
@@ -3041,6 +3049,7 @@ function persistUserSettings(settingsRepository: SqliteSettingsRepository, setti
   settingsRepository.set(USER_SETTING_KEYS.tunnelAutoReconnect, settings.tunnelAutoReconnect ? 'true' : 'false');
   settingsRepository.set(USER_SETTING_KEYS.tunnelMaxAutoRestarts, String(settings.tunnelMaxAutoRestarts));
   settingsRepository.set(USER_SETTING_KEYS.recoveryRetentionDays, String(settings.recoveryRetentionDays));
+  settingsRepository.set(USER_SETTING_KEYS.autoBackupEnabled, settings.autoBackupEnabled === true ? 'true' : 'false');
   const extraMcpServers = Object.fromEntries(settings.extensions.extraMcpServers.map((server) => [server.name, {
     command: server.command,
     ...(server.args.length === 0 ? {} : { args: [...server.args] }),

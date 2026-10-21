@@ -74,6 +74,8 @@ describe('Backup settings UI', () => {
     expect(markup).toContain('Application Database Backup');
     expect(markup).toContain('Backup Now');
     expect(markup).toContain('SQLite consistent snapshots');
+    expect(markup).toContain('Automatic database backups');
+    expect(markup).toMatch(/role="switch"[^>]*aria-checked="false"/);
     expect(markup).toContain('Restore</button>');
   });
 

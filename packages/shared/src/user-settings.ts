@@ -29,6 +29,7 @@ export const USER_SETTING_KEYS = Object.freeze({
   tunnelAutoReconnect: 'tunnel_auto_reconnect',
   tunnelMaxAutoRestarts: 'tunnel_max_auto_restarts',
   recoveryRetentionDays: 'recovery_retention_days',
+  autoBackupEnabled: 'auto_backup_enabled',
   engineeringHarnessSettings: 'engineering_harness_settings_v1',
   engineeringHarnessWorkspaceOverrides: 'engineering_harness_workspace_overrides_v1',
 });

@@ -408,6 +408,7 @@ function userSettings(value: unknown): UserSettings {
     tunnelAutoReconnect: booleanField(value, 'tunnelAutoReconnect'),
     tunnelMaxAutoRestarts: integerField(value, 'tunnelMaxAutoRestarts'),
     recoveryRetentionDays: integerField(value, 'recoveryRetentionDays'),
+    autoBackupEnabled: value.autoBackupEnabled === undefined ? false : booleanField(value, 'autoBackupEnabled'),
     extensions: {
       mode,
       disabledServers: stringList(extensions.disabledServers),

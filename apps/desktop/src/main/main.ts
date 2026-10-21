@@ -276,6 +276,7 @@ const defaultUserSettings: UserSettings = {
   tunnelAutoReconnect: false,
   tunnelMaxAutoRestarts: 5,
   recoveryRetentionDays: 30,
+  autoBackupEnabled: false,
   extensions: { mode: 'enable_all', disabledServers: [], enabledServers: [], disabledSkillRoots: [], extraSkillRoots: [], extraMcpServers: [] },
 };
 
@@ -1426,6 +1427,7 @@ function parseUserSettings(record: Record<string, unknown>): UserSettings {
     tunnelAutoReconnect: booleanField(record.tunnelAutoReconnect, 'tunnelAutoReconnect'),
     tunnelMaxAutoRestarts: boundedInteger(record.tunnelMaxAutoRestarts, 'tunnelMaxAutoRestarts', 0, 50),
     recoveryRetentionDays: boundedInteger(record.recoveryRetentionDays, 'recoveryRetentionDays', 0, 3650),
+    autoBackupEnabled: record.autoBackupEnabled === undefined ? false : booleanField(record.autoBackupEnabled, 'autoBackupEnabled'),
     extensions: {
       mode: extensions.mode === 'allowlist' || extensions.mode === 'enable_all' ? extensions.mode : invalidField('extensions.mode'),
       disabledServers: stringArray(extensions.disabledServers, 'extensions.disabledServers', 256),

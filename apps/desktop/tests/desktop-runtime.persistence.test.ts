@@ -10,6 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-services.js';
 
 const temporaryRoots: string[] = [];
+
+function enableAutomaticBackups(root: string): void {
+  const database = new SqliteDatabase(path.join(root, 'lnwjud.sqlite'));
+  try {
+    new SqliteSettingsRepository(database).set(USER_SETTING_KEYS.autoBackupEnabled, 'true');
+  } finally {
+    database.close();
+  }
+}
 const isWindowsGitHubActions = process.platform === 'win32' && process.env.GITHUB_ACTIONS === 'true';
 const FAST_RUNTIME_TEST_TIMEOUT_MS = isWindowsGitHubActions ? 60_000 : 15_000;
 const RUNTIME_TEST_TIMEOUT_MS = isWindowsGitHubActions ? 90_000 : 30_000;
@@ -174,9 +183,57 @@ describe('DesktopRuntime persistence', () => {
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
 
+  it('defaults automatic database backups to off without affecting manual backups', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-backup-disabled-'));
+    temporaryRoots.push(root);
+    const backupSpy = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent');
+    const runtime = createDesktopRuntime(await realpath(root));
+    try {
+      expect(runtime.getUserSettings().autoBackupEnabled).toBe(false);
+      expect(backupSpy).not.toHaveBeenCalled();
+      await runtime.services.createBackup();
+      expect((await runtime.services.getDashboard()).backups).toEqual(expect.arrayContaining([
+        expect.objectContaining({ reason: 'manual' }),
+      ]));
+      expect(backupSpy).not.toHaveBeenCalled();
+    } finally {
+      await runtime.close();
+      backupSpy.mockRestore();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
+  it('persists the auto-backup switch and starts daily snapshots after opting in', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-backup-opt-in-'));
+    temporaryRoots.push(root);
+    const dataRoot = await realpath(root);
+    const runtime = createDesktopRuntime(dataRoot);
+    try {
+      await runtime.services.setUserSettings({
+        settings: { ...runtime.getUserSettings(), autoBackupEnabled: true },
+      });
+      expect(runtime.getUserSettings().autoBackupEnabled).toBe(true);
+    } finally {
+      await runtime.close();
+    }
+    const restarted = createDesktopRuntime(dataRoot);
+    try {
+      expect(restarted.getUserSettings().autoBackupEnabled).toBe(true);
+      expect((await restarted.services.getDashboard()).backups).toEqual(expect.arrayContaining([
+        expect.objectContaining({ reason: 'daily' }),
+      ]));
+      await restarted.services.setUserSettings({
+        settings: { ...restarted.getUserSettings(), autoBackupEnabled: false },
+      });
+      expect(restarted.getUserSettings().autoBackupEnabled).toBe(false);
+    } finally {
+      await restarted.close();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
   it('finishes the startup database backup before an immediate shutdown closes SQLite', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-backup-close-'));
     temporaryRoots.push(root);
+    enableAutomaticBackups(root);
     const runtime = createDesktopRuntime(await realpath(root));
     await runtime.close();
     const directory = path.join(root, 'backups');
@@ -189,6 +246,7 @@ describe('DesktopRuntime persistence', () => {
   it('does not delete audit records after repeated startup backup failures', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-retention-backup-fail-'));
     temporaryRoots.push(root);
+    enableAutomaticBackups(root);
     const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockRejectedValue(new Error('backup unavailable'));
     const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -211,6 +269,7 @@ describe('DesktopRuntime persistence', () => {
   it('does not delete audit records when a concurrent backup has no recent snapshot', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-runtime-retention-no-backup-'));
     temporaryRoots.push(root);
+    enableAutomaticBackups(root);
     const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockResolvedValue(null);
     const list = vi.spyOn(SqliteBackupService.prototype, 'list').mockResolvedValue([]);
     const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');

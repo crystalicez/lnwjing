@@ -105,6 +105,7 @@ export function SettingsPage(props: SettingsPageProps): ReactElement {
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [autoBackupBusy, setAutoBackupBusy] = useState(false);
   const [recoveryBusyId, setRecoveryBusyId] = useState<string | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -394,6 +395,19 @@ export function SettingsPage(props: SettingsPageProps): ReactElement {
       else setRecoveryError(message);
     } finally {
       setPurgeBusyCategory(null);
+    }
+  }
+
+  async function setAutoBackupEnabled(enabled: boolean): Promise<void> {
+    setAutoBackupBusy(true);
+    setBackupError(null);
+    try {
+      await props.onUserSettingsChange({ ...props.dashboard.settings, autoBackupEnabled: enabled });
+      setBackupMessage(t(enabled ? 'settingsPage.autoBackupEnabled' : 'settingsPage.autoBackupDisabled'));
+    } catch (cause: unknown) {
+      setBackupError(cause instanceof Error ? cause.message : t('settingsPage.autoBackupSaveFailed'));
+    } finally {
+      setAutoBackupBusy(false);
     }
   }
 
@@ -1049,6 +1063,7 @@ export function SettingsPage(props: SettingsPageProps): ReactElement {
                   </div>
                 ) : null}
                 <SettingsCardHeading icon="▣" title={t('settingsPage.databaseBackup')} subtitle={t('settingsPage.sqliteSnapshots')} action={<div className="inline-actions"><ActionButton type="button" className="btn-save-gold" disabled={backupBusy || purgeBusyCategory !== null} onClick={() => { void createBackupNow(); }}>{backupBusy ? t('settingsPage.working') : t('settingsPage.backupNow')}</ActionButton><ActionButton type="button" disabled={backupBusy || purgeBusyCategory !== null} onClick={() => { void purgeRecoveryData('backups'); }}>{purgeBusyCategory === 'backups' ? t('settingsPage.deleting') : t('settingsPage.deleteAllBackups')}</ActionButton></div>} />
+                <SettingSwitch checked={props.dashboard.settings.autoBackupEnabled === true} disabled={autoBackupBusy || backupBusy} label={t('settingsPage.autoBackupLabel')} description={t('settingsPage.autoBackupHint')} onChange={(enabled) => { void setAutoBackupEnabled(enabled); }} />
                 {props.dashboard.backups.length === 0 ? <EmptyState>{t('settingsPage.noBackups')}</EmptyState> : (
                   <div className="backup-list settings-backup-list recovery-scroll-list" onScroll={(event) => { if (nearScrollEnd(event)) setBackupVisibleCount((current) => Math.min(props.dashboard.backups.length, current + RECOVERY_PAGE_SIZE)); }}>{props.dashboard.backups.slice(0, backupVisibleCount).map((backup) => (
                     <div key={backup.id} className="backup-item"><div><strong>{formatDateTime(backup.createdAt, '—', props.locale)}</strong><p className="hint">{backup.reason} · {formatBytes(backup.sizeBytes)}{backup.hostCompatibility === 'cross_host' ? ` · ${t('backup.crossHostLabel')}` : ''}</p></div><ActionButton type="button" disabled={backupBusy || props.dashboard.tunnel.state === 'running' || props.dashboard.mcp.running} onClick={() => { void scheduleRestore(backup.id); }}>{t('settingsPage.restoreBackup')}</ActionButton></div>

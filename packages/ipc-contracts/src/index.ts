@@ -380,6 +380,8 @@ export interface UserSettings {
   readonly tunnelMaxAutoRestarts: number;
   /** 0 keeps Recovery Trash/checkpoints forever; otherwise purge items older than this many days. */
   readonly recoveryRetentionDays: number;
+  /** Optional for older clients. Defaults to false; controls automatic SQLite database snapshots only. */
+  readonly autoBackupEnabled?: boolean;
   readonly extensions: {
     readonly mode: ExtensionMode;
     readonly disabledServers: readonly string[];
