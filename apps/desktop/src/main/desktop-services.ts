@@ -1159,6 +1159,24 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   let gitSummaryWorkspaceId: string | null = null;
   let lastRecoveryRetentionSweepAt = 0;
   const recoveryRetentionSweepIntervalMs = 6 * 60 * 60 * 1000;
+  let lastAuditRetentionSweepAt = 0;
+  let auditRetentionSweep: Promise<void> | null = null;
+
+  function sweepAuditRetention(): void {
+    const now = Date.now();
+    if (auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
+    lastAuditRetentionSweepAt = now;
+    const cutoffIso = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
+    auditRetentionSweep = (async () => {
+      for (let batch = 0; batch < 20; batch += 1) {
+        const deleted = await auditRepository.purgeExpiredRoutineReads(cutoffIso);
+        if (deleted < 500) break;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    })().catch((error: unknown) => {
+      console.error(`Audit retention sweep failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }).finally(() => { auditRetentionSweep = null; });
+  }
 
   async function sweepRecoveryRetention(force = false): Promise<void> {
     const retentionDays = readSettings().recoveryRetentionDays;
@@ -1657,6 +1675,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       return { deleted: true, workspaceId: workspace.id, rootPath: workspace.realRootPath, backupId: backup.id };
     },
     getDashboard: async (): Promise<DashboardSnapshot> => {
+      sweepAuditRetention();
       await sweepRecoveryRetention().catch((error: unknown) => {
         console.error(`Recovery retention sweep failed: ${error instanceof Error ? error.message : 'unknown error'}`);
       });
@@ -2268,6 +2287,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     await extensionsService.close().catch(() => undefined);
     await workspaceIndex.close().catch(() => undefined);
     await startupBackup;
+    if (auditRetentionSweep !== null) await auditRetentionSweep;
     database.close();
   });
 
