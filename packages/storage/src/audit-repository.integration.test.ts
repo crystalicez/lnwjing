@@ -13,6 +13,39 @@ afterEach(async () => {
 });
 
 describe('SqliteAuditRepository', () => {
+  it('prunes expired routine reads in batches but preserves goal, mutation and recent evidence', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-audit-retention-'));
+    temporaryRoots.push(root);
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    const repository = new SqliteAuditRepository(database);
+    const before = '2026-07-01T00:00:00.000Z';
+    const after = '2026-10-20T00:00:00.000Z';
+    const write = (id: string, action: string, timestamp: string, metadata: AuditEvent['metadata'] = {}): Promise<void> =>
+      repository.insert({
+        id, timestamp, actorId: 'client', actorName: 'test', action,
+        resultCode: 'SUCCESS', durationMs: 1, metadata,
+      });
+    try {
+      await write('read-1', 'mcp_tool:read_file', before);
+      await write('read-2', 'mcp_tool:read_file', before);
+      await write('read-3', 'mcp_tool:search_files', before);
+      await write('recent', 'mcp_tool:read_file', after);
+      await write('goal', 'mcp_tool:read_file', before, { goalId: 'important' });
+      await write('receipt', 'mcp_tool:read_file', before, { mutationReceipt: { path: 'a.ts', action: 'edit_file' } });
+      await write('mutation', 'mcp_tool:edit_file', before);
+      await write('external', 'codex_run', before);
+
+      expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z', 2)).toBe(2);
+      expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z', 2)).toBe(1);
+      expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z', 2)).toBe(0);
+      expect((await repository.list(50)).map((entry) => entry.id).sort())
+        .toEqual(['recent', 'goal', 'receipt', 'mutation', 'external'].sort());
+      await expect(repository.purgeExpiredRoutineReads('not a date')).rejects.toThrow('Invalid audit retention cutoff');
+    } finally {
+      database.close();
+    }
+  });
+
   it('pairs started/completed calls by workspace and session with goal attribution, missing timings and stable keyset pages', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-call-history-'));
     temporaryRoots.push(root);
