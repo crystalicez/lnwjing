@@ -43,6 +43,20 @@ describe('mcp activity log file', () => {
     })).toContain('"toolName":"write_file"');
   });
 
+  it('flushes a large burst in order with no lost events across batch boundaries', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-burst-'));
+    temporaryRoots.push(root);
+    const filePath = mcpActivityLogPath(root);
+    const sink = createFileActivitySink(filePath);
+    await Promise.all(Array.from({ length: 300 }, (_, index) => sink.record({
+      callId: `burst-${index}`, toolName: 'read_file', phase: 'completed',
+      resultCode: 'SUCCESS', durationMs: 1, timestamp: '2026-10-21T00:00:00.000Z',
+    })));
+    const ids = (await readFile(filePath, 'utf8')).trim().split('\n')
+      .map((line) => (JSON.parse(line) as { callId: string }).callId);
+    expect(ids).toEqual(Array.from({ length: 300 }, (_, index) => `burst-${index}`));
+  });
+
   it('trims a pre-existing oversized log to complete NDJSON rows on its first rotation', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjud-activity-legacy-'));
     temporaryRoots.push(root);
