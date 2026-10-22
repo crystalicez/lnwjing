@@ -12,6 +12,8 @@ describe('one-click Windows x64 portable build', () => {
     expect(cmd).toContain('if not "%EXIT_CODE%"=="0"');
     expect(script).toContain('lnwjing-Portable-$($package.version).exe');
     expect(script).toContain("'--win', 'portable', '--x64', '--publish', 'never'");
+    expect(script).toContain("$env:CI = 'true'");
+    expect(script).toContain('$env:CI = $previousCI');
     expect(script).toContain('Get-FileHash');
     expect(script).toContain("'8.0'");
     expect(script).toContain('dotnet-install.ps1');
@@ -19,5 +21,13 @@ describe('one-click Windows x64 portable build', () => {
     expect(script).not.toContain('.local-artifacts\\dotnet-sdk-8');
     expect(await readFile(path.join(root, '.gitignore'), 'utf8')).toContain('apps/desktop/build/dotnet-sdk/');
     expect(script).not.toContain("'--win', 'nsis'");
+    // Runtime tools already stages the tunnel client; avoid redundant downloads
+    // and extraction in a one-click build on disk-constrained Windows hosts.
+    expect(script).not.toContain("Invoke-Step 'Stage tunnel client'");
+    const runtimeTools = await readFile(path.join(root, 'apps', 'desktop', 'scripts', 'prepare-runtime-tools.mjs'), 'utf8');
+    expect(runtimeTools).toContain('await runTunnelStager(platform, rawArch)');
+    // Looking up Cosign must not recursively enumerate unrelated WinGet packages.
+    expect(script).toContain("-Directory -Filter 'Sigstore.Cosign_*'");
+    expect(script).not.toContain("$installedRoot -Recurse -File");
   });
 });

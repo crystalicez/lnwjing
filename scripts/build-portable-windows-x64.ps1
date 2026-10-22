@@ -38,7 +38,15 @@ function Invoke-Step {
 
 try {
     if (-not $SkipInstall) {
-        Invoke-Step 'Install dependencies (frozen lockfile)' $repositoryRoot 'corepack' @('pnpm@10.15.0', 'install', '--frozen-lockfile', '--prefer-offline')
+        # A double-click build must never block on pnpm's purge/reinstall question.
+        # Scope CI=true to installation so packaging keeps its normal local behavior.
+        $previousCI = $env:CI
+        try {
+            $env:CI = 'true'
+            Invoke-Step 'Install dependencies (frozen lockfile)' $repositoryRoot 'corepack' @('pnpm@10.15.0', 'install', '--frozen-lockfile', '--prefer-offline')
+        } finally {
+            $env:CI = $previousCI
+        }
     }
     Invoke-Step 'Install Electron runtime' $repositoryRoot 'corepack' @('pnpm@10.15.0', '--filter', '@lnwjing/desktop', 'electron:install')
     # Use an isolated .NET 8 SDK under the ignored build tree, without altering the system installation.
@@ -67,13 +75,17 @@ try {
         # WinGet names its official portable binary cosign-windows-amd64.exe. Provide a
         # temporary hardlink on PATH, keeping the Sigstore verification mandatory.
         $installedRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
-        $installedCosign = Get-ChildItem -LiteralPath $installedRoot -Recurse -File -Filter 'cosign-windows-amd64.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+        $installedCosign = Get-ChildItem -LiteralPath $installedRoot -Directory -Filter 'Sigstore.Cosign_*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter 'cosign-windows-amd64.exe' -ErrorAction SilentlyContinue } |
+            Select-Object -First 1
         if ($null -eq $installedCosign) {
             if ($null -eq (Get-Command winget -ErrorAction SilentlyContinue)) {
                 throw 'Cosign >= 3.1.3 is required. Install Sigstore.Cosign through WinGet.'
             }
             Invoke-Step 'Install Sigstore cosign for tunnel verification' $repositoryRoot 'winget' @('install', '--id', 'Sigstore.Cosign', '--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements')
-            $installedCosign = Get-ChildItem -LiteralPath $installedRoot -Recurse -File -Filter 'cosign-windows-amd64.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+            $installedCosign = Get-ChildItem -LiteralPath $installedRoot -Directory -Filter 'Sigstore.Cosign_*' -ErrorAction SilentlyContinue |
+                ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter 'cosign-windows-amd64.exe' -ErrorAction SilentlyContinue } |
+                Select-Object -First 1
         }
         if ($null -eq $installedCosign) { throw 'Cosign installation was not found. Check WinGet and retry.' }
         $cosignShim = Join-Path $env:TEMP ("lnwjing-cosign-" + [guid]::NewGuid().ToString('N'))
@@ -84,8 +96,9 @@ try {
             throw 'Cosign installed but its temporary executable alias is unavailable.'
         }
     }
-    Invoke-Step 'Stage tunnel client' $desktopDirectory 'node' @('scripts/prepare-tunnel-client.mjs')
-    Invoke-Step 'Stage Windows runtime tools' $desktopDirectory 'node' @('scripts/prepare-runtime-tools.mjs')
+    # The runtime-tools stager also invokes the tunnel-client stager.
+    # Do not stage it twice: each pass re-extracts and verifies the archive.
+    Invoke-Step 'Stage Windows runtime tools (including tunnel client)' $desktopDirectory 'node' @('scripts/prepare-runtime-tools.mjs')
     Invoke-Step 'Stage ECC runtime' $desktopDirectory 'node' @('scripts/prepare-ecc-runtime.mjs')
     Invoke-Step 'Prepare native Windows OCR' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/prepare-windows-ocr.ps1')
     Invoke-Step 'Build native secret migrator' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/build-windows-secret-migrator.ps1')
