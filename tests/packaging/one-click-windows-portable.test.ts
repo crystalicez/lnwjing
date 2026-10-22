@@ -29,5 +29,10 @@ describe('one-click Windows x64 portable build', () => {
     // Looking up Cosign must not recursively enumerate unrelated WinGet packages.
     expect(script).toContain("-Directory -Filter 'Sigstore.Cosign_*'");
     expect(script).not.toContain("$installedRoot -Recurse -File");
+    expect(script).toContain('$env:LNWJING_COSIGN_PATH = $installedCosign.FullName');
+    expect(script).toContain('$env:LNWJING_COSIGN_PATH = $previousCosignPath');
+    expect(script).not.toContain('ItemType HardLink');
+    const tunnelStager = await readFile(path.join(root, 'apps', 'desktop', 'scripts', 'prepare-tunnel-client.mjs'), 'utf8');
+    expect(tunnelStager).toContain('process.env.LNWJING_COSIGN_PATH?.trim()');
   });
 });

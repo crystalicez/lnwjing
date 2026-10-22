@@ -22,7 +22,7 @@ $env:LNWJING_RUNTIME_ARCH = 'x64'
 $env:LNWJING_TUNNEL_ARCH = 'x64'
 $previousPath = $env:PATH
 $previousDotnetRoot = $env:DOTNET_ROOT
-$cosignShim = $null
+$previousCosignPath = $env:LNWJING_COSIGN_PATH
 
 function Invoke-Step {
     param([string]$Label, [string]$Directory, [string]$Executable, [string[]]$Arguments)
@@ -71,9 +71,9 @@ try {
         $sdkAvailable = @(& $sdkExe --list-sdks | Where-Object { $_ -match '^8\.' }).Count -gt 0
         if (-not $sdkAvailable) { throw 'Local .NET SDK does not provide version 8' }
     }
-    if ($null -eq (Get-Command cosign -ErrorAction SilentlyContinue)) {
-        # WinGet names its official portable binary cosign-windows-amd64.exe. Provide a
-        # temporary hardlink on PATH, keeping the Sigstore verification mandatory.
+    if ([string]::IsNullOrWhiteSpace($env:LNWJING_COSIGN_PATH) -and $null -eq (Get-Command cosign -ErrorAction SilentlyContinue)) {
+        # The tunnel stager supports LNWJING_COSIGN_PATH directly. Use WinGet's
+        # executable without a temporary hardlink or full package-tree scan.
         $installedRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
         $installedCosign = Get-ChildItem -LiteralPath $installedRoot -Directory -Filter 'Sigstore.Cosign_*' -ErrorAction SilentlyContinue |
             ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter 'cosign-windows-amd64.exe' -ErrorAction SilentlyContinue } |
@@ -88,13 +88,7 @@ try {
                 Select-Object -First 1
         }
         if ($null -eq $installedCosign) { throw 'Cosign installation was not found. Check WinGet and retry.' }
-        $cosignShim = Join-Path $env:TEMP ("lnwjing-cosign-" + [guid]::NewGuid().ToString('N'))
-        New-Item -ItemType Directory -Path $cosignShim -Force | Out-Null
-        New-Item -ItemType HardLink -Path (Join-Path $cosignShim 'cosign.exe') -Target $installedCosign.FullName | Out-Null
-        $env:PATH = "$cosignShim;$env:PATH"
-        if ($null -eq (Get-Command cosign -ErrorAction SilentlyContinue)) {
-            throw 'Cosign installed but its temporary executable alias is unavailable.'
-        }
+        $env:LNWJING_COSIGN_PATH = $installedCosign.FullName
     }
     # The runtime-tools stager also invokes the tunnel-client stager.
     # Do not stage it twice: each pass re-extracts and verifies the archive.
@@ -121,5 +115,5 @@ try {
     $env:LNWJING_TUNNEL_ARCH = $previousTunnelArch
     $env:PATH = $previousPath
     $env:DOTNET_ROOT = $previousDotnetRoot
-    if ($null -ne $cosignShim) { Remove-Item -LiteralPath $cosignShim -Recurse -Force -ErrorAction SilentlyContinue }
+    $env:LNWJING_COSIGN_PATH = $previousCosignPath
 }
