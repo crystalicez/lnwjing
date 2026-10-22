@@ -23,6 +23,8 @@ export interface WorkspaceIndexQueueStatus {
 export interface WorkspaceIndexQueueOptions {
   readonly debounceMs?: number;
   readonly concurrency?: number;
+  /** Optional single-transaction batch handler for bursty filesystem events. */
+  readonly batchWorker?: (events: readonly WorkspaceIndexEvent[]) => Promise<void>;
 }
 
 type EventWorker = (event: WorkspaceIndexEvent) => Promise<void>;
@@ -40,6 +42,7 @@ export class WorkspaceIndexQueue {
   private readonly debounceMs: number;
   private readonly concurrency: number;
   private readonly listeners = new Set<QueueErrorListener>();
+  private readonly batchWorker: ((events: readonly WorkspaceIndexEvent[]) => Promise<void>) | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly idleWaiters = new Set<() => void>();
   private activeWorkers = 0;
@@ -53,7 +56,8 @@ export class WorkspaceIndexQueue {
 
   public constructor(private readonly worker: EventWorker, options: WorkspaceIndexQueueOptions = {}) {
     this.debounceMs = Math.max(0, Math.floor(options.debounceMs ?? 50));
-    this.concurrency = Math.max(1, Math.floor(options.concurrency ?? 2));
+    this.batchWorker = options.batchWorker;
+    this.concurrency = this.batchWorker === undefined ? Math.max(1, Math.floor(options.concurrency ?? 2)) : 1;
   }
 
   public enqueue(event: WorkspaceIndexEvent): void {
@@ -125,7 +129,13 @@ export class WorkspaceIndexQueue {
 
   private async flush(): Promise<void> {
     const workers: Promise<void>[] = [];
-    while (this.activeWorkers < this.concurrency && this.pending.size > 0) {
+    if (this.batchWorker !== undefined && this.activeWorkers === 0 && this.pending.size > 0) {
+      const events = [...this.pending.values()];
+      this.pending.clear();
+      this.activeWorkers += 1;
+      workers.push(this.runBatch(events, this.batchWorker));
+    }
+    while (this.batchWorker === undefined && this.activeWorkers < this.concurrency && this.pending.size > 0) {
       const next = this.pending.entries().next().value as [string, WorkspaceIndexEvent] | undefined;
       if (next === undefined) break;
       this.pending.delete(next[0]);
@@ -138,6 +148,28 @@ export class WorkspaceIndexQueue {
       const waiters = [...this.idleWaiters];
       this.idleWaiters.clear();
       for (const resolve of waiters) resolve();
+    }
+  }
+
+  private async runBatch(
+    events: readonly WorkspaceIndexEvent[],
+    worker: (events: readonly WorkspaceIndexEvent[]) => Promise<void>,
+  ): Promise<void> {
+    const startedAt = events.some((event) => event.kind === 'rescan') ? Date.now() : null;
+    try {
+      await worker(events);
+      this.completedEvents += events.length;
+    } catch (error: unknown) {
+      this.failedEvents += events.length;
+      for (const event of events) {
+        for (const listener of this.listeners) listener(event, error);
+      }
+    } finally {
+      if (startedAt !== null) {
+        this.completedRescans += 1;
+        this.lastRescanDurationMs = Date.now() - startedAt;
+      }
+      this.activeWorkers -= 1;
     }
   }
 

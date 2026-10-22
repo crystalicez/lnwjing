@@ -23,6 +23,8 @@ export interface ContextTextSummary {
 const DEFAULT_IGNORED_DIRECTORIES = new Set([
   'node_modules',
   '.git',
+  'portable', // Root-level generated Windows Portable EXE and extracted runtime.
+  '.audit', // Local diagnostics reports must never be scanned automatically.
   'dist',
   'build',
   'artifacts',
@@ -53,7 +55,7 @@ const DEFAULT_IGNORED_FILES = new Set(['.ds_store']);
 const BINARY_EXTENSIONS = new Set([
   '.7z', '.avi', '.bin', '.class', '.db', '.dll', '.dmg', '.exe', '.gif', '.gz', '.ico', '.jpeg', '.jpg', '.png',
   '.m4a', '.mkv', '.mov', '.mp3', '.mp4', '.pdf', '.pyc', '.rar', '.sqlite', '.sqlite3', '.tar', '.ttf',
-  '.wasm', '.webp', '.woff', '.woff2', '.zip',
+  '.wasm', '.webp', '.woff', '.woff2', '.zip', '.asar', '.pak',
 ]);
 
 const METADATA_FILES = new Set([
@@ -70,6 +72,11 @@ const METADATA_FILES = new Set([
 export const DEFAULT_CONTEXT_IGNORE_GLOBS: readonly string[] = [
   '!**/node_modules/**',
   '!**/.git/**',
+  '!**/portable/**',
+  '!**/.audit/**',
+  '!**/lnwjing-runtime-v*/**',
+  '!**/*.asar',
+  '!**/*.pak',
   '!**/dist/**',
   '!**/build/**',
   '!**/artifacts/**',
@@ -131,7 +138,7 @@ export function classifyContextPath(filePath: string, mode: ContextDiscoveryMode
   const segments = lowerPath.split('/').filter(Boolean);
   const basename = segments.at(-1) ?? lowerPath;
   const extension = basename.includes('.') ? `.${basename.split('.').at(-1)}` : '';
-  const ignoredDirectory = segments.find((segment) => DEFAULT_IGNORED_DIRECTORIES.has(segment));
+  const ignoredDirectory = segments.find((segment) => DEFAULT_IGNORED_DIRECTORIES.has(segment) || /^lnwjing-runtime-v[\w.-]+$/i.test(segment));
   const ignoredFile = DEFAULT_IGNORED_FILES.has(basename) || /\.log(?:\..*)?$|\.(?:sqlite|db)-(?:wal|shm)$/.test(basename);
   const isBinary = BINARY_EXTENSIONS.has(extension);
   const isGenerated = GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(basename)) || lowerPath.includes('/generated/');

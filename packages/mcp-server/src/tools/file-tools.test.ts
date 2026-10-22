@@ -48,6 +48,21 @@ describe('fileTools cancellation', () => {
     expect(observedSignals).toEqual([signal, signal, signal, signal, signal, signal, signal]);
   });
 
+  it('returns structured paths when the underlying file move succeeds with void', async () => {
+    const context = {
+      actor: { clientId: 'test', clientName: 'test' },
+      contextEconomy: new ContextEconomyRuntime(),
+      services: { file: { async moveFile() { return ok(undefined); } } },
+    } as unknown as McpToolContext;
+    const tool = fileTools(context).find((entry) => entry.name === 'move_file');
+    if (tool === undefined) throw new Error('Missing move_file');
+    const result = await tool.execute({
+      workspaceId: 'workspace-1', sourcePath: 'old.bin', destinationPath: 'new.bin', userConfirmed: true,
+    }, new AbortController().signal);
+    expect(result).toEqual({ ok: true, value: { sourcePath: 'old.bin', destinationPath: 'new.bin' } });
+    if (result.ok) expect(tool.outputSchema?.safeParse(result.value).success).toBe(true);
+  });
+
   it('requires confirmation again inside the checkpoint restore handler', async () => {
     let restores = 0;
     const context = {

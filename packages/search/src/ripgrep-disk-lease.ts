@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { open, mkdir, readFile, stat, unlink } from 'node:fs/promises';
+import { open, mkdir, readFile, lstat, realpath, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -48,7 +48,10 @@ export async function acquireDiskScanLease(
     process.platform === 'win32' ? (process.env.LOCALAPPDATA || os.tmpdir()) : os.tmpdir(),
     LOCK_PREFIX,
   );
-  const canonicalRoot = path.resolve(workspacePath).replaceAll('\\', '/').toLowerCase().replace(/\/$/, '');
+  // Resolve aliases before taking the root slot: symlink/junction aliases must
+  // not escape the one-scan-per-physical-root budget.
+  const resolvedRoot = await realpath(workspacePath).catch(() => path.resolve(workspacePath));
+  const canonicalRoot = resolvedRoot.replaceAll('\\', '/').toLowerCase().replace(/\/$/, '');
   const rootKey = createHash('sha256').update(canonicalRoot).digest('hex').slice(0, 24);
   const rootFile = path.join(directory, `root-${rootKey}.lock`);
   const deadline = Date.now() + (options.waitMs ?? WAIT_MS);
@@ -119,7 +122,9 @@ async function tryCreateLock(filePath: string): Promise<(() => Promise<void>) | 
 
 async function removeDeadLock(filePath: string): Promise<void> {
   try {
-    const details = await stat(filePath);
+    // A lock must be an actual owned regular file, not a symlink to a target
+    // outside the coordination directory.
+    const details = await lstat(filePath);
     if (!details.isFile() || Date.now() - details.mtimeMs < STALE_GRACE_MS) return;
     const owner = JSON.parse(await readFile(filePath, 'utf8')) as LockOwner;
     if (!Number.isSafeInteger(owner.pid) || owner.pid <= 0 || typeof owner.token !== 'string') return;
@@ -129,7 +134,12 @@ async function removeDeadLock(filePath: string): Promise<void> {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ESRCH') return;
     }
-    // Only reclaim a dead owner's old lock; live, recent and unknown files remain untouched.
+    // Recheck the same file identity after probing process liveness. This
+    // narrows the replacement race without pretending unlink is atomic CAS.
+    const latest = await lstat(filePath);
+    if (latest.dev !== details.dev || latest.ino !== details.ino || latest.mtimeMs !== details.mtimeMs) return;
+    const stillOwner = JSON.parse(await readFile(filePath, 'utf8')) as LockOwner;
+    if (stillOwner.pid !== owner.pid || stillOwner.token !== owner.token) return;
     await unlink(filePath);
   } catch { /* Inaccessible locks are treated as occupied (fail closed). */ }
 }

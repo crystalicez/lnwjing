@@ -2,6 +2,37 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceIndexQueue } from './workspace-index-queue.js';
 
 describe('WorkspaceIndexQueue', () => {
+  it('batches distinct changes, preserves follow-up events and reports failed batch coverage', async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const batches: string[][] = [];
+    const errors: string[] = [];
+    const queue = new WorkspaceIndexQueue(async () => { throw new Error('single-file worker should not run'); }, {
+      debounceMs: 0,
+      batchWorker: async (events): Promise<void> => {
+        batches.push(events.map((event) => event.relativePath));
+        if (batches.length === 1) {
+          entered.resolve();
+          await release.promise;
+          return;
+        }
+        throw new Error('simulated batch failure');
+      },
+    });
+    queue.onError((event) => errors.push(event.relativePath));
+    queue.enqueue({ relativePath: 'a.ts', kind: 'change' });
+    queue.enqueue({ relativePath: 'b.ts', kind: 'change' });
+    const first = queue.drain();
+    await entered.promise;
+    queue.enqueue({ relativePath: 'c.ts', kind: 'change' });
+    queue.enqueue({ relativePath: 'd.ts', kind: 'change' });
+    release.resolve();
+    await Promise.all([first, queue.drain()]);
+    expect(batches).toEqual([['a.ts', 'b.ts'], ['c.ts', 'd.ts']]);
+    expect(errors).toEqual(['c.ts', 'd.ts']);
+    expect(queue.status()).toMatchObject({ completedEvents: 2, failedEvents: 2, pendingEvents: 0, activeWorkers: 0 });
+  });
+
   it('resolves every concurrent drain after a blocked worker finishes', async () => {
     const started = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();

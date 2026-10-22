@@ -110,6 +110,7 @@ import { confirmTunnelStopForUpdate, UpdateInstallCoordinator, updateInstallNeed
 import { UpdateCheckScheduler } from './update-check-scheduler.js';
 import {
   configureUpdaterForDistribution,
+  confirmPortableUpdateLaunch,
   configureUpdaterForPlatform,
   createLinuxAppImageRollback,
   restoreLinuxAppImageIfMissing,
@@ -1680,6 +1681,13 @@ function openLogViewerWindow(): BrowserWindow | null {
 
 function createDesktopWindow(forceShow = false): void {
   mainWindow = createMainWindow(forceShow || !desktopUserSettings.startMinimized);
+  if (windowsDistribution === 'portable' && process.env.LNWJING_PORTABLE_UPDATE_TOKEN) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      void confirmPortableUpdateLaunch().catch((error: unknown) => {
+        console.error(`Portable update startup acknowledgement failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+      });
+    });
+  }
   mainWindow.on('close', (event) => {
     const hideToTray = shouldHideMainWindowOnClose(quitRequested, desktopUserSettings.closeBehavior);
     crashDiagnostics?.record({

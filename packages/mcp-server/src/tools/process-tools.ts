@@ -1,4 +1,4 @@
-import type { CommandSpec } from '@lnwjing/domain';
+import { ok, type CommandSpec } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import { processHandleSchema, processLogsSchema, processStartSchema, processStopSchema, projectCommandSchema } from './schemas.js';
 
@@ -61,9 +61,11 @@ export function processTools(context: McpToolContext): McpToolDefinition[] {
       permission: 'EXECUTE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: processStopSchema,
-      handler: async (input, _signal, authorization) => context.services.process === undefined
-        ? missingService()
-        : context.services.process.stop(context.actor, input.workspaceId, input.processId, input.userConfirmed === true, authorization),
+      handler: async (input, _signal, authorization) => {
+        if (context.services.process === undefined) return missingService();
+        const stopped = await context.services.process.stop(context.actor, input.workspaceId, input.processId, input.userConfirmed === true, authorization);
+        return stopped.ok ? ok({ stopped: true, processId: input.processId }) : stopped;
+      },
     }),
     ...projectCommandTools(context),
   ];

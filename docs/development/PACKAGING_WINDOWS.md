@@ -72,7 +72,7 @@ The WinRT OCR helper (`native/windows-ocr`) needs a signed sparse package for pa
 
 The `makeappx.exe`/`signtool.exe` steps need the Windows SDK. No certificate or private key belongs in this repository.
 
-The root-level `BUILD-LNWJING-PORTABLE-X64.cmd` is a developer convenience: it runs the Portable-only builder, then **moves** the resulting EXE and `portable.yml` to `portable/` under the repository root. The generated `portable/` folder is Git-ignored. The standard `package:windows` release command still keeps Setup, Portable, update manifests and evidence together in `apps/desktop/dist/installers/` as required by release checks.
+The root-level `BUILD-LNWJING-PORTABLE-X64.cmd` is a developer convenience: it runs the Portable-only builder, then **moves** the resulting EXE and `portable.yml` to `portable/` under the repository root. The generated `portable/` folder is Git-ignored. Successful one-click builds now reclaim the temporary `win-unpacked` staging tree (approximately 700 MiB); add `-KeepIntermediates` to the PowerShell script for debugging. The cleanup refuses redirected directories or nested symlinks and never removes a running staging executable. The standard `package:windows` release command still keeps Setup, Portable, update manifests and evidence together in `apps/desktop/dist/installers/` as required by release checks.
 
 ## Expected Windows outputs
 
@@ -94,6 +94,12 @@ Generic patterns:
 lnwjing-Setup-<version>.exe
 lnwjing-Portable-<version>.exe
 ```
+
+**Promoting a manually built Portable:** after a successful `electron-builder --win portable --x64 --publish never` and `node apps/desktop/scripts/write-portable-update-manifest.mjs`, run `powershell -NoProfile -File scripts/promote-portable-build.ps1` from the repository root. This validates the staged manifest/hash and atomically renames artifacts while retaining the prior build until verification succeeds; it refuses to replace a running Portable or an existing rollback backup.
+
+**Portable runtime maintenance:** `powershell -NoProfile -File scripts/portable-runtime-maintenance.ps1` reports eligible old side-by-side runtimes without changing files. Use `-Apply` to clean only verified old, unreferenced runtime directories older than 7 days while no Portable processes run; keep the latest generation by default. Use `-IncludePartial` only when deliberately removing stale interrupted extraction folders. It refuses symlink/junction targets and leaves the stable MCP launcher, outer EXE, manifests and AppData untouched.
+
+**Portable updater health check:** the updater retains the old outer EXE until the restarted Electron main process has initialized its runtime, IPC and renderer, acknowledged a unique local startup marker and survived a short stability check. If it fails, the helper attempts to stop its newly spawned process tree and restore the backup. Unexpected power loss, locked files or native process termination can still leave a `.lnwjing-update-backup` for manual recovery; never delete such a backup blindly. This requires Windows fault-injection validation prior to a production guarantee.
 
 The NSIS installer produces its blockmap plus `latest.yml`. Portable has its own `portable.yml` and is an auto-updater target through the dedicated Portable channel; it is never installed through NSIS during a Portable update.
 

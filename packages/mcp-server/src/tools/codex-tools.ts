@@ -1,3 +1,4 @@
+import { ok } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import { codexRunSchema, codexStatusSchema, codexStopSchema, codexTaskHandleSchema, codexTaskLogsSchema } from './schemas.js';
 
@@ -69,9 +70,11 @@ export function codexTools(context: McpToolContext): McpToolDefinition[] {
       permission: 'EXECUTE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: codexStopSchema,
-      handler: async (input, _signal, authorization) => context.services.codex === undefined
-        ? missingService()
-        : context.services.codex.stop(context.actor, input.workspaceId, input.codexTaskId, input.userConfirmed === true, authorization),
+      handler: async (input, _signal, authorization) => {
+        if (context.services.codex === undefined) return missingService();
+        const stopped = await context.services.codex.stop(context.actor, input.workspaceId, input.codexTaskId, input.userConfirmed === true, authorization);
+        return stopped.ok ? ok({ stopped: true, codexTaskId: input.codexTaskId }) : stopped;
+      },
     }),
   ];
 }

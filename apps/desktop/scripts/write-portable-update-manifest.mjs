@@ -16,8 +16,13 @@ const fileName = `lnwjing-Portable-${version}.exe`;
 const artifactPath = path.join(installerDirectory, fileName);
 const metadata = await assertRegularCanonicalFile(artifactPath);
 const digest = createHash('sha512');
-for await (const chunk of createReadStream(artifactPath)) digest.update(chunk);
+const sha256Digest = createHash('sha256');
+for await (const chunk of createReadStream(artifactPath)) {
+  digest.update(chunk);
+  sha256Digest.update(chunk);
+}
 const sha512 = digest.digest('base64');
+const sha256 = sha256Digest.digest('hex').toUpperCase();
 const releaseDate = new Date().toISOString();
 const manifest = [
   `version: ${version}`,
@@ -32,7 +37,7 @@ const manifest = [
 ].join('\n');
 
 await writeFile(path.join(installerDirectory, 'portable.yml'), manifest, 'utf8');
-process.stdout.write(`Wrote portable update manifest for ${fileName}\n`);
+process.stdout.write(`Wrote portable update manifest for ${fileName}; SHA256: ${sha256}\n`);
 
 async function assertRegularCanonicalFile(filePath) {
   const metadata = await lstat(filePath);

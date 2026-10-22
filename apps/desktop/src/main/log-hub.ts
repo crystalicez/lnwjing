@@ -57,7 +57,9 @@ export class LogHub {
   private onLine: ((line: LogLine) => void) | undefined;
   private readonly tunnelFile: TailedFile = { fd: null, offset: 0, initialOffset: null, pending: '', decoder: new StringDecoder('utf8') };
   private readonly mcpFile: TailedFile = { fd: null, offset: 0, initialOffset: null, pending: '', decoder: new StringDecoder('utf8') };
-  private tailTimer: ReturnType<typeof setInterval> | null = null;
+  private tailTimer: ReturnType<typeof setTimeout> | null = null;
+  private idleTailPolls = 0;
+  private tailActive = false;
 
   public constructor(options: LogHubOptions) {
     this.tunnelLogPath = options.tunnelLogPath;
@@ -75,27 +77,25 @@ export class LogHub {
   }
 
   public start(options: { readonly skipExisting?: boolean } = {}): void {
-    if (this.tailTimer !== null) return;
+    if (this.tailActive) return;
+    this.tailActive = true;
     if (options.skipExisting === true) {
       this.tunnelFile.initialOffset = existingFileSize(this.tunnelLogPath);
       if (this.mcpActivityLogPath !== undefined) this.mcpFile.initialOffset = existingFileSize(this.mcpActivityLogPath);
     }
-    this.syncTunnelFile();
-    this.syncMcpActivityFile();
-    this.tailTimer = setInterval(() => {
-      this.syncTunnelFile();
-      this.syncMcpActivityFile();
-    }, 500);
-    this.tailTimer.unref?.();
+    this.pollTailFiles();
+    this.scheduleTailPoll();
   }
 
   public stop(): void {
+    this.tailActive = false;
     if (this.tailTimer !== null) {
-      clearInterval(this.tailTimer);
+      clearTimeout(this.tailTimer);
       this.tailTimer = null;
     }
     this.closeFd(this.tunnelFile);
     this.closeFd(this.mcpFile);
+    this.idleTailPolls = 0;
   }
 
   public feed(source: LogSource, level: LogLevel, text: string, correlation?: LogCorrelation, timestamp?: string, scope?: LogScope, targetDetail?: ActivityTargetReference): void {
@@ -274,6 +274,34 @@ export class LogHub {
     this.lines.set(source, buffer);
     this.retainedBytes.set(source, retainedBytes);
     this.onLine?.(line);
+  }
+
+  /**
+   * Keep interactive log responsiveness after real activity, but do not stat
+   * two unchanged files twice per second forever when Desktop is idle.
+   * This is a single unref'ed timer, with no filesystem watcher thread.
+   */
+  private scheduleTailPoll(): void {
+    if (!this.tailActive || this.tailTimer !== null) return;
+    const delayMs = this.idleTailPolls >= 6 ? 2_000 : 500;
+    this.tailTimer = setTimeout(() => {
+      this.tailTimer = null;
+      this.pollTailFiles();
+      this.scheduleTailPoll();
+    }, delayMs);
+    this.tailTimer.unref?.();
+  }
+
+  private pollTailFiles(): void {
+    const tunnelFd = this.tunnelFile.fd;
+    const tunnelOffset = this.tunnelFile.offset;
+    const mcpFd = this.mcpFile.fd;
+    const mcpOffset = this.mcpFile.offset;
+    this.syncTunnelFile();
+    this.syncMcpActivityFile();
+    const changed = tunnelFd !== this.tunnelFile.fd || tunnelOffset !== this.tunnelFile.offset
+      || mcpFd !== this.mcpFile.fd || mcpOffset !== this.mcpFile.offset;
+    this.idleTailPolls = changed ? 0 : Math.min(6, this.idleTailPolls + 1);
   }
 
   private syncTunnelFile(): void {

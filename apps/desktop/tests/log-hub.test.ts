@@ -25,6 +25,38 @@ describe('LogHub', () => {
     expect(vi.getTimerCount()).toBe(before);
   });
 
+  it('does not restart the tail loop if an activity callback stops it synchronously', async () => {
+    vi.useFakeTimers();
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-stop-'));
+    temporaryRoots.push(root);
+    const logPath = path.join(root, 'tunnel.log');
+    await writeFile(logPath, 'stop-on-line\n', 'utf8');
+    const hub = new LogHub({ tunnelLogPath: logPath, onLine: (): void => hub.stop() });
+    hub.start();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('backs off idle log polling without disabling live tailing when new data arrives', async () => {
+    vi.useFakeTimers();
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-loghub-idle-'));
+    temporaryRoots.push(root);
+    const logPath = path.join(root, 'tunnel.log');
+    await writeFile(logPath, 'boot\n', 'utf8');
+    const hub = new LogHub({ tunnelLogPath: logPath });
+    try {
+      hub.start();
+      expect(hub.snapshot().lines.some((row) => row.text.includes('boot'))).toBe(true);
+      await vi.advanceTimersByTimeAsync(3_500);
+      await appendFile(logPath, 'after-idle\n', 'utf8');
+      await vi.advanceTimersByTimeAsync(1_100);
+      expect(hub.snapshot().lines.some((row) => row.text.includes('after-idle'))).toBe(false);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(hub.snapshot().lines.some((row) => row.text.includes('after-idle'))).toBe(true);
+    } finally {
+      hub.stop();
+    }
+  });
+
   it('includes filesystem error messages in work-log lines', () => {
     const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
     hub.syncWorkLog([{

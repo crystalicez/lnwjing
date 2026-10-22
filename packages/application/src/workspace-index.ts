@@ -210,32 +210,57 @@ export class WorkspaceIndexService {
   }
 
   public async indexPath(workspaceId: string, relativePath: string, options: WorkspaceIndexOptions = {}): Promise<Result<WorkspaceIndexSnapshot>> {
-    const normalized = normalizeRelativePath(relativePath);
-    if (normalized === '') return this.indexWorkspace(workspaceId, options);
+    return this.indexPaths(workspaceId, [relativePath], options);
+  }
+
+  /**
+   * Process a burst of native filesystem changes inside ONE mutation and one
+   * snapshot publication, rather than serializing the full JSON index per path.
+   * All paths are validated before publishing any result.
+   */
+  private async indexPaths(workspaceId: string, relativePaths: readonly string[], options: WorkspaceIndexOptions = {}): Promise<Result<WorkspaceIndexSnapshot>> {
+    const paths = [...new Set(relativePaths.map(normalizeRelativePath))];
+    if (paths.includes('') || paths.length === 0) return this.indexWorkspace(workspaceId, options);
     return this.mutateSnapshot(workspaceId, async (workspace, store) => {
       const rootPath = resolveHostPath(workspace.realRootPath);
-      const absolutePath = rootPath === null ? null : resolveHostPath(hostPathApi(process.platform).join(rootPath, normalized));
-      if (rootPath === null || absolutePath === null) return err(appError('INVALID_INPUT', 'Index path uses a foreign host path syntax'));
-      if (!isHostPathWithin(rootPath, absolutePath)) return err(appError('PATH_OUTSIDE_WORKSPACE', 'Index path is outside workspace'));
+      if (rootPath === null) return err(appError('INVALID_INPUT', 'Index path uses a foreign host path syntax'));
+      // Validate ALL paths before an index-missing rebuild, and before any
+      // publication: a rejected path must not turn into an implicit full scan.
+      const validatedPaths: Array<readonly [string, string]> = [];
+      for (const normalized of paths) {
+        options.signal?.throwIfAborted();
+        const absolutePath = resolveHostPath(hostPathApi(process.platform).join(rootPath, normalized));
+        if (absolutePath === null) return err(appError('INVALID_INPUT', 'Index path uses a foreign host path syntax'));
+        if (!isHostPathWithin(rootPath, absolutePath)) return err(appError('PATH_OUTSIDE_WORKSPACE', 'Index path is outside workspace'));
+        validatedPaths.push([normalized, absolutePath]);
+      }
       const current = await store.load();
       if (current === null) return this.rebuildSnapshot(workspace, store, options);
       const discovery = options.discovery ?? 'automatic';
-      if (!classifyContextPath(normalized, discovery).discoverable || (discovery === 'automatic' && this.store.isInternalPath?.(absolutePath))) return ok(current);
-      const affected = (entry: WorkspaceIndexEntry): boolean => entry.relativePath === normalized || entry.relativePath.startsWith(`${normalized}/`);
-      const previous = current.entries.filter(affected);
-      const remaining = current.entries.filter((entry) => !affected(entry));
-      const additions: WorkspaceIndexEntry[] = [];
-      try {
-        const metadata = await stat(absolutePath);
-        if (metadata.isDirectory()) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal);
-        else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal));
-      } catch (error: unknown) {
-        if (!isNodeError(error, 'ENOENT')) throw error;
-        additions.length = 0;
+      let entries = [...current.entries];
+      let changed = false;
+      for (const [normalized, absolutePath] of validatedPaths) {
+        options.signal?.throwIfAborted();
+        if (!classifyContextPath(normalized, discovery).discoverable || (discovery === 'automatic' && this.store.isInternalPath?.(absolutePath))) continue;
+        const affected = (entry: WorkspaceIndexEntry): boolean => entry.relativePath === normalized || entry.relativePath.startsWith(`${normalized}/`);
+        const previous = entries.filter(affected);
+        const remaining = entries.filter((entry) => !affected(entry));
+        const additions: WorkspaceIndexEntry[] = [];
+        try {
+          const metadata = await stat(absolutePath);
+          if (metadata.isDirectory()) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal);
+          else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal));
+        } catch (error: unknown) {
+          if (!isNodeError(error, 'ENOENT')) throw error;
+          additions.length = 0;
+        }
+        additions.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+        if (isDeepStrictEqual(previous.map(indexEntryContent), additions.map(indexEntryContent))) continue;
+        entries = [...remaining, ...additions];
+        changed = true;
       }
-      additions.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-      if (isDeepStrictEqual(previous.map(indexEntryContent), additions.map(indexEntryContent))) return ok(current);
-      const snapshot = this.snapshotValue(workspace, [...remaining, ...additions]);
+      if (!changed) return ok(current);
+      const snapshot = this.snapshotValue(workspace, entries);
       await store.save(snapshot);
       return ok(snapshot);
     }, options.signal);
@@ -320,7 +345,16 @@ export class WorkspaceIndexService {
         ? await this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
         : await this.indexPath(workspaceId, event.relativePath, mutationOptions);
       if (!result.ok) throw new Error(result.error.message, { cause: result.error });
-    }, options);
+    }, {
+      ...options,
+      batchWorker: async (events): Promise<void> => {
+        const mutationOptions = bootstrapping && options.signal !== undefined ? { signal: options.signal } : {};
+        const result = events.some((event) => event.kind === 'rescan')
+          ? await this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
+          : await this.indexPaths(workspaceId, events.map((event) => event.relativePath), mutationOptions);
+        if (!result.ok) throw new Error(result.error.message, { cause: result.error });
+      },
+    });
     let fileWatcher: FSWatcher;
     try {
       fileWatcher = watch(workspace.value.realRootPath, { recursive: true }, (_eventType, filename) => {
@@ -346,7 +380,9 @@ export class WorkspaceIndexService {
     let completed = false;
     try {
       options.signal?.throwIfAborted();
-      const indexed = await this.indexWorkspace(workspaceId, { rebuild: true, ...(options.signal === undefined ? {} : { signal: options.signal }) });
+      // Scan metadata to reconcile offline changes, but reuse content fingerprints
+      // for unchanged files; forcing rebuild reread every source file at each watch start.
+      const indexed = await this.indexWorkspace(workspaceId, { ...(options.signal === undefined ? {} : { signal: options.signal }) });
       if (!indexed.ok) return indexed;
       await waitForIndexOperation(queue.drain(), options.signal);
       const status = await this.status(workspaceId);
@@ -416,7 +452,9 @@ export class WorkspaceIndexService {
     await this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable);
     const snapshot = this.snapshotValue(workspace, entries);
     options.signal?.throwIfAborted();
-    const comparison = skipUnchangedPublication ? (previous ?? await store.load().catch(() => null)) : null;
+    // Avoid serializing and rewriting a whole index when its contents did not
+    // change. This also covers manual index requests and watch bootstrap.
+    const comparison = previous ?? (skipUnchangedPublication ? await store.load().catch(() => null) : null);
     const unchanged = comparison !== null && isDeepStrictEqual(comparison.entries.map(indexEntryContent), snapshot.entries.map(indexEntryContent));
     options.signal?.throwIfAborted();
     if (!unchanged) await store.save(snapshot);

@@ -1,4 +1,4 @@
-import { appError, err } from '@lnwjing/domain';
+import { appError, err, ok } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import {
   applyPatchSchema,
@@ -98,13 +98,19 @@ export function fileTools(context: McpToolContext): McpToolDefinition[] {
       permission: 'WRITE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: moveFileSchema,
-      handler: async (input, signal, authorization) => context.services.file === undefined
-        ? missingService()
-        : context.services.file.moveFile(context.actor, input.workspaceId, {
+      handler: async (input, signal, authorization) => {
+        if (context.services.file === undefined) return missingService();
+        const moved = await context.services.file.moveFile(context.actor, input.workspaceId, {
           sourcePath: input.sourcePath,
           destinationPath: input.destinationPath,
           ...(input.userConfirmed === undefined ? {} : { userConfirmed: input.userConfirmed }),
-        }, signal, authorization),
+        }, signal, authorization);
+        // FileService.moveFile returns Result<void>. A successful MCP call MUST
+        // emit an object because move_file advertises an outputSchema. Returning
+        // undefined after a completed rename makes clients report an error even
+        // though the source is already gone (dangerous retry/rollback ambiguity).
+        return moved.ok ? ok({ sourcePath: input.sourcePath, destinationPath: input.destinationPath }) : moved;
+      },
     }),
     defineTool({
       name: 'copy_file',

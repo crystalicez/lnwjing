@@ -7,6 +7,8 @@ import {
   PORTABLE_UPDATE_FEED_URL,
   ensurePortableMcpStdioLauncher,
   configureUpdaterForDistribution,
+  confirmPortableUpdateLaunch,
+  portableUpdateConfirmationPath,
   configureUpdaterForPlatform,
   createLinuxAppImageRollback,
   restoreLinuxAppImageIfMissing,
@@ -153,6 +155,25 @@ describe('Windows distribution-aware auto updater', () => {
     }
   });
 
+  it('acknowledges updated app readiness only through a one-time marker scoped to the outer EXE', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-portable-confirm-'));
+    try {
+      const outer = path.join(directory, 'renamed.exe');
+      const token = '0123456789abcdef0123456789abcdef';
+      const environment = { PORTABLE_EXECUTABLE_FILE: outer, LNWJING_PORTABLE_UPDATE_TOKEN: token };
+      const marker = `${outer}.lnwjing-update-ok-${token}`;
+      expect(portableUpdateConfirmationPath(environment)).toBe(marker);
+      expect(await confirmPortableUpdateLaunch(environment)).toBe(true);
+      expect(await readFile(marker, 'utf8')).toBe('ready\n');
+      await expect(confirmPortableUpdateLaunch(environment)).rejects.toMatchObject({ code: 'EEXIST' });
+      expect(portableUpdateConfirmationPath({ ...environment, LNWJING_PORTABLE_UPDATE_TOKEN: '../../escape' })).toBeNull();
+      expect(portableUpdateConfirmationPath({ ...environment, PORTABLE_EXECUTABLE_FILE: 'relative.exe' })).toBeNull();
+      expect(await confirmPortableUpdateLaunch({})).toBe(false);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('uses a wait, rollback backup, in-place replacement, restart, and script self-cleanup for portable installs', () => {
     const script = portableReplacementScript();
     expect(script).toContain('Get-Process -Id $CurrentPid');
@@ -161,9 +182,15 @@ describe('Windows distribution-aware auto updater', () => {
     expect(script).toContain('Portable update backup already exists');
     expect(script).toContain('$attempt -lt 40');
     expect(script).toContain('Move-Item -LiteralPath $Source -Destination $Target -Force');
-    expect(script).toContain('Move-Item -LiteralPath $backup -Destination $Target -Force');
+    expect(script).toContain('Move-Item -LiteralPath $backup -Destination $Target -ErrorAction Stop');
     expect(script).toContain('Start-Process -FilePath $Target');
     expect(script).toContain('Updated Portable launcher exited immediately');
+    expect(script).toContain('LNWJING_PORTABLE_UPDATE_TOKEN');
+    expect(script).toContain('Updated Portable did not confirm healthy renderer startup');
+    expect(script).toContain('$healthDeadline');
+    expect(script).toContain('Updated Portable exited during the post-startup stability check.');
+    expect(script).toContain('taskkill.exe');
+    expect(script).toContain('$Target.lnwjing-update-ok-$token');
     expect(script).toContain('lnwjing-update-failures.log');
     expect(script).toContain('Remove-Item -LiteralPath $PSCommandPath');
   });

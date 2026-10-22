@@ -33,6 +33,44 @@ function memoryStore(beforeCommit?: () => Promise<void>): WorkspaceIndexStore {
 }
 
 describe('WorkspaceIndexService', () => {
+  it('denies an out-of-root path even when the index snapshot is missing', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-containment-'));
+    const workspace: Workspace = { id: 'no-outside', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    let saves = 0;
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore(async () => { saves += 1; }));
+    try {
+      const result = await service.indexPath(workspace.id, '../outside-secret.txt');
+      expect(result).toMatchObject({ ok: false, error: { code: 'PATH_OUTSIDE_WORKSPACE' } });
+      expect(saves).toBe(0);
+    } finally {
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('never walks root-level Portable runtime content during automatic indexing', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-portable-'));
+    const workspace: Workspace = { id: 'portable-excluded', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
+    try {
+      const runtimeDir = path.join(root, 'portable', 'lnwjing-runtime-v5.8.7-demo', 'resources');
+      await mkdir(runtimeDir, { recursive: true });
+      await writeFile(path.join(runtimeDir, 'config.json'), '{"private":"generated"}');
+      await writeFile(path.join(runtimeDir, 'app.asar'), 'fake Electron artifact');
+      await writeFile(path.join(root, 'main.ts'), 'export const realSource = 1;');
+      const automatic = await service.indexWorkspace(workspace.id);
+      expect(automatic.ok).toBe(true);
+      if (!automatic.ok) return;
+      expect(automatic.value.entries.map((entry) => entry.relativePath)).toEqual(['main.ts']);
+      const explicit = await service.indexWorkspace(workspace.id, { discovery: 'explicit' });
+      expect(explicit.ok).toBe(true);
+      if (explicit.ok) expect(explicit.value.entries.some((entry) => entry.relativePath.includes('config.json'))).toBe(true);
+    } finally {
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('retains metadata without reading oversized files and indexes them once they shrink', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-large-file-'));
     const workspace: Workspace = { id: 'large', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };

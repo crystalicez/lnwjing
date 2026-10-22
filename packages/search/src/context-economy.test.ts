@@ -37,6 +37,11 @@ describe('context economy policy', () => {
       '.worktrees/review/src.ts',
       'playwright-report/index.html',
       'test-results/run/trace.zip',
+      'portable/lnwjing-runtime-v5.8.7-build/resources/app.asar',
+      'portable/lnwjing-runtime-v5.8.7-build/resources/config.json',
+      'portable/portable.yml',
+      'downloads/lnwjing-runtime-v5.8.7-test/resources/resources.pak',
+      '.audit/private-report.md',
     ]) {
       expect(classifyContextPath(generatedWorkspacePath, 'automatic'), generatedWorkspacePath).toMatchObject({
         discoverable: false,
@@ -70,6 +75,10 @@ describe('context economy policy', () => {
       discoverable: false,
       kind: 'binary',
     });
+    for (const file of ['resources/app.asar', 'resources/resources.pak']) {
+      expect(classifyContextPath(file, 'automatic'), file).toMatchObject({ kind: 'binary', discoverable: false });
+      expect(classifyContextPath(file, 'explicit'), file).toMatchObject({ discoverable: true });
+    }
     expect(classifyContextPath('src/client.generated.ts', 'automatic')).toMatchObject({
       discoverable: false,
       kind: 'generated',
@@ -86,6 +95,9 @@ describe('context economy policy', () => {
       expect.arrayContaining([
         '!**/node_modules/**',
         '!**/.git/**',
+        '!**/portable/**',
+        '!**/lnwjing-runtime-v*/**',
+        '!**/*.asar',
         '!**/dist/**',
         '!**/build/**',
         '!**/artifacts/**',

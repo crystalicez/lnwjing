@@ -20,7 +20,12 @@ describe('one-click Windows x64 portable build', () => {
     expect(script).toContain("'--win', 'portable', '--x64', '--publish', 'never'");
     expect(script).toContain("$env:CI = 'true'");
     expect(script).toContain('$env:CI = $previousCI');
-    expect(script).toContain('Get-FileHash');
+    expect(script).toContain('$manifestOutput = Invoke-Step');
+    expect(script).toContain('[switch]$KeepIntermediates');
+    expect(script).toContain('Cleaned temporary win-unpacked staging tree.');
+    expect(script).toContain('Refusing builder cleanup with nested symlink/junctions.');
+    expect(script).toContain('$artifactSha256 = $Matches[1].ToUpperInvariant()');
+    expect(script).not.toContain('Get-FileHash -LiteralPath $artifact');
     expect(script).toContain("'8.0'");
     expect(script).toContain('dotnet-install.ps1');
     expect(script.match(/Invoke-WebRequest -Uri 'https:\/\/dot\.net\/v1\/dotnet-install\.ps1'/g)).toHaveLength(1);
@@ -31,6 +36,7 @@ describe('one-click Windows x64 portable build', () => {
     expect(desktopPkg).not.toContain('prepare-tunnel-client.mjs && node scripts/prepare-runtime-tools.mjs');
     const manifestScript = await readFile(path.join(root, 'apps', 'desktop', 'scripts', 'write-portable-update-manifest.mjs'), 'utf8');
     expect(manifestScript).toContain('for await (const chunk of createReadStream(artifactPath))');
+    expect(manifestScript).toContain('sha256Digest.update(chunk)');
     expect(manifestScript).not.toContain('const content = await readFile(artifactPath)');
     // Runtime tools already stages the tunnel client; avoid redundant downloads
     // and extraction in a one-click build on disk-constrained Windows hosts.
@@ -45,6 +51,31 @@ describe('one-click Windows x64 portable build', () => {
     expect(script).not.toContain('ItemType HardLink');
     const tunnelStager = await readFile(path.join(root, 'apps', 'desktop', 'scripts', 'prepare-tunnel-client.mjs'), 'utf8');
     expect(tunnelStager).toContain('process.env.LNWJING_COSIGN_PATH?.trim()');
+  });
+
+  it('provides a verified, rollback-safe promotion helper for local Portable builds', async () => {
+    const script = await readFile(path.join(root, 'scripts', 'promote-portable-build.ps1'), 'utf8');
+    expect(script).toContain('PORTABLE_VERIFIED:');
+    expect(script).toContain("A previous build rollback already exists");
+    expect(script).toContain('Get-CimInstance Win32_Process');
+    expect(script).toContain('[Security.Cryptography.SHA512]::Create()');
+    expect(script).toContain('Portable update manifest SHA-512 mismatch.');
+    expect(script).toContain('Move-Item -LiteralPath $backupExe -Destination $destinationExe');
+    expect(script).toContain('ReparsePoint');
+    expect(script).not.toContain('Copy-Item -LiteralPath $stagedExe');
+  });
+
+  it('offers dry-run-first cleanup only for old, unreferenced portable runtime folders', async () => {
+    const maintenance = await readFile(path.join(root, 'scripts', 'portable-runtime-maintenance.ps1'), 'utf8');
+    expect(maintenance).toContain('[switch]$Apply');
+    expect(maintenance).toContain('[int]$MinimumAgeDays = 7');
+    expect(maintenance).toContain("[switch]$IncludePartial");
+    expect(maintenance).toContain('if (-not $Apply)');
+    expect(maintenance).toContain('lnwjing-mcp-stdio.cmd');
+    expect(maintenance).toContain('Get-CimInstance Win32_Process');
+    expect(maintenance).toContain('ReparsePoint');
+    expect(maintenance).toContain('lnwjing-ready');
+    expect(maintenance).not.toContain('Remove-Item -LiteralPath $root.FullName -Recurse');
   });
 
   it('ships a persistent side-by-side runtime instead of unpacking to TEMP', async () => {

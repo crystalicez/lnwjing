@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$KeepIntermediates
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -104,7 +105,12 @@ try {
     Invoke-Step 'Build native secret migrator' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/build-windows-secret-migrator.ps1')
     Invoke-Step 'Compile desktop and workspace packages' $repositoryRoot 'corepack' @('pnpm@10.15.0', '--filter', '@lnwjing/desktop...', 'build')
     Invoke-Step 'Package Portable x64 only (no installer / no publishing)' $desktopDirectory 'corepack' @('pnpm@10.15.0', 'exec', 'electron-builder', '--config', 'electron-builder.yml', '--win', 'portable', '--x64', '--publish', 'never')
-    Invoke-Step 'Create portable update manifest' $desktopDirectory 'node' @('scripts/write-portable-update-manifest.mjs')
+    # Manifest generation computes SHA512 and SHA256 in ONE streaming read of the EXE.
+    # Do not reread ~270 MiB with PowerShell Get-FileHash after the move.
+    $manifestOutput = Invoke-Step 'Create portable update manifest' $desktopDirectory 'node' @('scripts/write-portable-update-manifest.mjs')
+    $manifestText = $manifestOutput -join "`n"
+    if ($manifestText -notmatch 'SHA256:\s*([A-Fa-f0-9]{64})') { throw 'Portable checksum was not produced by manifest generation.' }
+    $artifactSha256 = $Matches[1].ToUpperInvariant()
 
     if (-not (Test-Path -LiteralPath $stagedArtifact -PathType Leaf)) {
         throw "Portable executable was not produced: $stagedArtifact"
@@ -135,11 +141,38 @@ try {
 
     $file = Get-Item -LiteralPath $artifact
     if ($file.Length -ne $stagedFile.Length) { throw 'Portable artifact size changed while moving it.' }
-    $hash = Get-FileHash -LiteralPath $artifact -Algorithm SHA256
+    # Same-volume Move-Item preserves bytes; size is verified above and the
+    # SHA256 was derived from the streaming manifest staging pass (unsigned local build).
     Write-Host ''
     Write-Host "SUCCESS: $($file.FullName)" -ForegroundColor Green
     Write-Host "Size: $([math]::Round($file.Length / 1MB, 1)) MiB"
-    Write-Host "SHA256: $($hash.Hash)"
+    Write-Host "SHA256: $artifactSha256"
+
+    # win-unpacked is a temporary electron-builder staging tree (~700 MiB),
+    # not the installed Portable runtime. Reclaim it only AFTER the final
+    # artifact is safely published. Preserve it on request for diagnostics.
+    if (-not $KeepIntermediates) {
+        $stagingDirectory = Join-Path $desktopDirectory 'dist\installers\win-unpacked'
+        if (Test-Path -LiteralPath $stagingDirectory -PathType Container) {
+            try {
+                $stagingItem = Get-Item -LiteralPath $stagingDirectory -Force
+                if (($stagingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                    throw 'Refusing to remove a redirected builder staging directory.'
+                }
+                $redirected = Get-ChildItem -LiteralPath $stagingDirectory -Force -Recurse -Attributes ReparsePoint -ErrorAction Stop | Select-Object -First 1
+                if ($null -ne $redirected) { throw 'Refusing builder cleanup with nested symlink/junctions.' }
+                $prefix = [IO.Path]::GetFullPath($stagingDirectory).TrimEnd('\') + '\'
+                $running = @(Get-CimInstance Win32_Process | Where-Object {
+                    $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+                })
+                if ($running.Count -gt 0) { throw 'Builder staging executable is still running.' }
+                Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction Stop
+                Write-Host 'Cleaned temporary win-unpacked staging tree.'
+            } catch {
+                Write-Warning ('Builder staging cleanup skipped: ' + $_.Exception.Message)
+            }
+        }
+    }
 } finally {
     $env:LNWJING_RUNTIME_ARCH = $previousRuntimeArch
     $env:LNWJING_TUNNEL_ARCH = $previousTunnelArch

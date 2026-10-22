@@ -86,6 +86,66 @@ describe('workspace index races', () => {
     }
   });
 
+  it('restarts a watcher without rereading unchanged sources or rewriting its index snapshot', async () => {
+    const setup = await fixture();
+    const service = new WorkspaceIndexService(setup.repository, setup.store);
+    try {
+      const source = path.join(setup.root, 'source.ts');
+      await writeFile(source, 'export const unchanged = 1;');
+      expect((await service.indexWorkspace(setup.workspace.id)).ok).toBe(true);
+      const indexFile = path.join(setup.directory, 'index', 'shared.json');
+      const before = await import('node:fs/promises').then(({ stat }) => stat(indexFile));
+      vi.mocked(readFile).mockClear();
+
+      expect((await service.startWatch(setup.workspace.id)).ok).toBe(true);
+      const after = await import('node:fs/promises').then(({ stat }) => stat(indexFile));
+      expect(vi.mocked(readFile).mock.calls.filter(([file]) => file === source)).toHaveLength(0);
+      expect(after.mtimeMs).toBe(before.mtimeMs);
+    } finally {
+      await service.close();
+      await rm(setup.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('persists a burst of distinct file changes in one snapshot write', async () => {
+    const setup = await fixture();
+    let notify: ((event: 'change' | 'rename', filename: string | null) => void) | undefined;
+    const watcher = new EventEmitter() as FSWatcher;
+    watcher.close = (): void => { watcher.emit('close'); };
+    vi.mocked(watch).mockImplementation((_root, _options, callback) => { notify = callback; return watcher; });
+    let saves = 0;
+    const store: WorkspaceIndexStore = {
+      load: (workspaceId) => setup.store.load(workspaceId),
+      withMutation: (workspaceId, mutation, signal) => setup.store.withMutation(workspaceId, (scope) => mutation({
+        ...scope,
+        async save(snapshot) { saves += 1; await scope.save(snapshot); },
+      }), signal),
+    };
+    const service = new WorkspaceIndexService(setup.repository, store);
+    try {
+      await writeFile(path.join(setup.root, 'a.ts'), 'export const oldA = 1;');
+      await writeFile(path.join(setup.root, 'b.ts'), 'export const oldB = 1;');
+      expect((await service.startWatch(setup.workspace.id, { debounceMs: 50 })).ok).toBe(true);
+      expect(saves).toBe(1);
+
+      await writeFile(path.join(setup.root, 'a.ts'), 'export const newA = 2;');
+      await writeFile(path.join(setup.root, 'b.ts'), 'export const newB = 2;');
+      notify?.('change', 'a.ts');
+      notify?.('change', 'b.ts');
+      await vi.waitFor(async () => {
+        const status = await service.status(setup.workspace.id);
+        expect(status.ok && status.value.snapshot?.entries.find((entry) => entry.relativePath === 'a.ts')?.symbols).toContain('newA');
+        expect(status.ok && status.value.snapshot?.entries.find((entry) => entry.relativePath === 'b.ts')?.symbols).toContain('newB');
+        expect(status).toMatchObject({ ok: true, value: { freshness: 'watching_clean', watcher: { pendingEvents: 0, failedEvents: 0 } } });
+      }, { timeout: 3_000 });
+      expect(saves).toBe(2);
+    } finally {
+      await service.close();
+      vi.mocked(watch).mockReset();
+      await rm(setup.directory, { recursive: true, force: true });
+    }
+  });
+
   it('quiesces filename-free notifications caused by its own snapshot publication', async () => {
     const setup = await fixture();
     let notify: ((event: 'change' | 'rename', filename: string | null) => void) | undefined;

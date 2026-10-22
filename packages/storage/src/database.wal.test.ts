@@ -114,7 +114,11 @@ describe('SqliteDatabase WAL', () => {
     expect(database.connection.prepare("SELECT value FROM settings WHERE key = 'sentinel'").get()).toEqual({ value: 'replacement' });
     database.close();
     expect(await exit).toBe(0);
-    expect(stderr).toBe('');
+    // Node 24 emits a harmless SQLite experimental notice to child stderr.
+    const actionableStderr = stderr
+      .replace(/\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature and might change at any time\r?\n/g, '')
+      .replace(/\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\r?\n/g, '');
+    expect(actionableStderr.trim()).toBe('');
   }, 20_000);
 
   it('waits for the lifecycle lock before reopening a live canonical connection', async () => {

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -80,6 +81,32 @@ describe('same-user cross-process ripgrep disk budget', () => {
     await first.release();
     const next = await grant('E:\\busy', directory);
     await next.release();
+  });
+
+  it('reclaims an old orphaned file lock only after verifying its dead owner', async () => {
+    const directory = await testDirectory();
+    const root = await testDirectory();
+    const rootKey = createHash('sha256').update(root.replaceAll('\\', '/').toLowerCase()).digest('hex').slice(0, 24);
+    const rootLock = path.join(directory, `root-${rootKey}.lock`);
+    await writeFile(rootLock, JSON.stringify({ pid: 99999999, token: 'abandoned' }), 'utf8');
+    const old = new Date(Date.now() - 180_000);
+    await utimes(rootLock, old, old);
+    const recovered = await acquireDiskScanLease(root, undefined, { directory, waitMs: 900 });
+    expect(recovered.status).toBe('granted');
+    if (recovered.status === 'granted') await recovered.release();
+  });
+
+  it('uses the physical root when different directory aliases request a scan', async () => {
+    const directory = await testDirectory();
+    const physical = await testDirectory();
+    const alias = path.join(directory, 'alias-root');
+    await symlink(physical, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const current = await grant(physical, directory);
+    try {
+      expect(await acquireDiskScanLease(alias, undefined, { directory, waitMs: 30 })).toEqual({ status: 'busy' });
+    } finally {
+      await current.release();
+    }
   });
 
   it('rejects pre-aborted scans without touching the coordination directory', async () => {
