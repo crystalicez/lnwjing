@@ -484,7 +484,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   migrateLegacyMcpHttpPort(settingsRepository, process.env);
   const toolAvailabilityService = new ToolAvailabilityService(settingsRepository);
   const stopToolAvailabilityWatch = options.watchToolAvailability === true
-    ? toolAvailabilityService.watch(250, () => readUserSettings(settingsRepository, process.env).codexToolsEnabled)
+    ? toolAvailabilityService.watch(1_000, () => readUserSettings(settingsRepository, process.env).codexToolsEnabled)
     : (): void => {};
   const workLogViewState = new WorkLogViewState(settingsRepository);
   if (options.previousLogSessionStartedAt !== undefined) workLogViewState.migrateAutomaticStartupClear(options.previousLogSessionStartedAt);
@@ -2962,9 +2962,12 @@ function buildConnectionModes(input: {
   const isWindows = process.platform === 'win32';
   const launcherName = isWindows ? 'lnwjing-mcp-stdio.cmd' : 'lnwjing-mcp-stdio';
   const executableName = isWindows ? path.win32.basename(process.execPath).toLowerCase() : path.basename(process.execPath);
-  const launcher = executableName === (isWindows ? 'lnwjing.exe' : 'lnwjing')
-    ? path.join(path.dirname(process.execPath), ...(process.platform === 'darwin' ? ['..', 'Resources'] : []), launcherName)
-    : launcherName;
+  const managedPortableLauncher = isWindows ? process.env.LNWJING_PORTABLE_STDIO_LAUNCHER : undefined;
+  const launcher = managedPortableLauncher && existsSync(managedPortableLauncher)
+    ? managedPortableLauncher
+    : executableName === (isWindows ? 'lnwjing.exe' : 'lnwjing')
+      ? path.join(path.dirname(process.execPath), ...(process.platform === 'darwin' ? ['..', 'Resources'] : []), launcherName)
+      : launcherName;
   const args = [quoteCommandArgument(launcher)];
   if (input.workspaceRoot !== undefined) args.push('--workspace', quoteCommandArgument(input.workspaceRoot));
   args.push('--profile', input.profile);

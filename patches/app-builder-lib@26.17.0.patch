@@ -1,14 +1,15 @@
 diff --git a/templates/nsis/portable.nsi b/templates/nsis/portable.nsi
-index e5436bb0f810058b52e15ce65b3d256f86dabc6f..ff98185f9394b66a780b988cb9b8f13cc669e682 100644
+index e5436bb0f810058b52e15ce65b3d256f86dabc6f..07414bed1b05d55faa2c7429bfce106989a2cc00 100644
 --- a/templates/nsis/portable.nsi
 +++ b/templates/nsis/portable.nsi
-@@ -1,43 +1,56 @@
+@@ -1,43 +1,64 @@
  !include "common.nsh"
  !include "extractAppPackage.nsh"
++!include "${BUILD_RESOURCES_DIR}\portable-integrity.nsh"
  
 -# https://github.com/electron-userland/electron-builder/issues/3972#issuecomment-505171582
-+# lnwjing: persistent per-build runtime next to the outer portable executable.
-+# No archive or application payload is expanded into %TEMP%.
++# lnwjing persistent Portable: only first extraction writes payload; later
++# launches hash-check executable code against digests embedded in this EXE.
  CRCCheck off
  WindowIcon Off
  AutoCloseWindow True
@@ -37,17 +38,14 @@ index e5436bb0f810058b52e15ce65b3d256f86dabc6f..ff98185f9394b66a780b988cb9b8f13c
 -  !ifdef SPLASH_IMAGE
 -    HideWindow
 -  !endif
-+  # electron-builder generates a different UNPACK_DIR_NAME for each packaging
-+  # operation. Multiple executions of the same executable reuse this location;
-+  # a new build never overwrites a running previous build.
 +  StrCpy $INSTDIR "$EXEDIR\lnwjing-runtime-v${VERSION}-${UNPACK_DIR_NAME}"
  
 -  StrCpy $INSTDIR "$PLUGINSDIR\app"
 -  !ifdef UNPACK_DIR_NAME
 -    StrCpy $INSTDIR "$TEMP\${UNPACK_DIR_NAME}"
 -  !endif
-+  # Serialize first-time extraction when launched twice concurrently.
-+  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Local\lnwjing-portable-${UNPACK_DIR_NAME}") p.r9'
++  # Cross-session mutex protects shared folders from concurrent extraction.
++  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\lnwjing-portable-${UNPACK_DIR_NAME}") p.r9'
 +  ${If} $9 == 0
 +    SetErrorLevel 1
 +    Abort
@@ -59,31 +57,41 @@ index e5436bb0f810058b52e15ce65b3d256f86dabc6f..ff98185f9394b66a780b988cb9b8f13c
 +    SetErrorLevel 1
 +    Abort
 +  ${EndIf}
-+
-+  # Only trust a runtime whose completion marker AND key files are present.
-+  # Never delete an existing sibling directory; an interrupted or modified
-+  # extraction must be repaired explicitly, not wiped without consent.
-+  IfFileExists "$INSTDIR\.lnwjing-ready" 0 ExtractFresh
-+  IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 ExtractFailed
-+  IfFileExists "$INSTDIR\resources\app.asar" 0 ExtractFailed
-+  IfFileExists "$INSTDIR\resources\runtime-tools\ripgrep\rg.exe" 0 ExtractFailed
-+  Goto RunApp
  
 -  RMDir /r $INSTDIR
 -  SetOutPath $INSTDIR
-+ExtractFresh:
-+  IfFileExists "$INSTDIR\*.*" ExtractFailed
-+  CreateDirectory "$INSTDIR"
-+  IfErrors ExtractFailed
-+  SetOutPath "$INSTDIR"
-+  IfErrors ExtractFailed
++  # Do not operate inside an existing junction/symlink or any unknown folder.
++  System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR") i.r4'
++  ${If} $4 != -1
++    IntOp $5 $4 & 0x400
++    ${If} $5 != 0
++      Goto ExtractFailed
++    ${EndIf}
++    IfFileExists "$INSTDIR\.lnwjing-ready" 0 ExtractFailed
++    StrCpy $R4 "$INSTDIR"
++    Call VerifyCriticalFiles
++    IfErrors ExtractFailed
++    Goto RunApp
++  ${EndIf}
  
-+  # useZip=true embeds each packaged file directly in the outer NSIS EXE.
-+  # There is no $PLUGINSDIR .7z archive or %TEMP% 7z-out intermediate.
++  # Each interrupted attempt leaves only a uniquely named *.partial-PID
++  # folder. Never erase an unknown folder or overwrite a live runtime.
++  System::Call 'kernel32::GetCurrentProcessId() i.r7'
++  StrCpy $R6 "$INSTDIR.partial-$7"
++  System::Call 'kernel32::GetFileAttributesW(w "$R6") i.r4'
++  ${If} $4 != -1
++    Goto ExtractFailed
++  ${EndIf}
++  CreateDirectory "$R6"
++  IfErrors ExtractFailed
++  SetOutPath "$R6"
++  IfErrors ExtractFailed
++
++  # useZip=true embeds the files directly in the launcher (no 7z in %TEMP%).
    !ifdef APP_DIR_64
      !ifdef APP_DIR_ARM64
        !ifdef APP_DIR_32
-@@ -53,7 +66,7 @@ Section
+@@ -53,7 +74,7 @@ Section
            File /r "${APP_DIR_ARM64}\*.*"
          ${else}
            File /r "${APP_DIR_64}\*.*"
@@ -92,30 +100,34 @@ index e5436bb0f810058b52e15ce65b3d256f86dabc6f..ff98185f9394b66a780b988cb9b8f13c
        !endif
      !else
        !ifdef APP_DIR_32
-@@ -74,18 +87,34 @@ Section
+@@ -73,19 +94,67 @@ Section
+       !insertmacro extractEmbeddedAppPackage
      !endif
    !endif
- 
 +  IfErrors ExtractFailed
-+  IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 ExtractFailed
-+  IfFileExists "$INSTDIR\resources\app.asar" 0 ExtractFailed
-+  IfFileExists "$INSTDIR\resources\runtime-tools\ripgrep\rg.exe" 0 ExtractFailed
-+  FileOpen $R7 "$INSTDIR\.lnwjing-ready" w
+ 
++  StrCpy $R4 "$R6"
++  Call VerifyCriticalFiles
++  IfErrors ExtractFailed
++  FileOpen $R7 "$R6\.lnwjing-ready" w
 +  IfErrors ExtractFailed
 +  FileWrite $R7 "lnwjing-v${VERSION}-${UNPACK_DIR_NAME}"
 +  FileClose $R7
 +  IfErrors ExtractFailed
++  SetOutPath "$EXEDIR"
++  Rename "$R6" "$INSTDIR"
++  IfErrors ExtractFailed
 +
 +RunApp:
-+  # Give other launches access to the completed runtime before waiting for
-+  # the Electron child to exit. Keep electron-builder's updater env contract.
++  # Always launch from the runtime directory, even when it was reused.
++  SetOutPath "$INSTDIR"
 +  System::Call 'kernel32::ReleaseMutex(p r9)'
 +  System::Call 'kernel32::CloseHandle(p r9)'
    System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_DIR", "$EXEDIR").r0'
    System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_FILE", "$EXEPATH").r0'
    System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_APP_FILENAME", "${APP_FILENAME}").r0'
    ${StdUtils.GetAllParameters} $R0 0
- 
+-
 -  !ifdef SPLASH_IMAGE
 -    BgImage::Destroy
 -  !endif
@@ -128,9 +140,39 @@ index e5436bb0f810058b52e15ce65b3d256f86dabc6f..ff98185f9394b66a780b988cb9b8f13c
 -  SetOutPath $EXEDIR
 -	RMDir /r $INSTDIR
 +ExtractFailed:
++  SetOutPath "$EXEDIR"
 +  System::Call 'kernel32::ReleaseMutex(p r9)'
 +  System::Call 'kernel32::CloseHandle(p r9)'
-+  MessageBox MB_OK|MB_ICONSTOP "Cannot prepare lnwjing beside the Portable EXE. Ensure the folder is writable. If a previous extraction was interrupted, close lnwjing and manually remove the incomplete lnwjing-runtime folder beside this EXE." /SD IDOK
++  MessageBox MB_OK|MB_ICONSTOP "lnwjing Portable runtime is incomplete or failed its integrity check. Close lnwjing, then remove only the affected lnwjing-runtime-v* or *.partial-* folder beside this EXE before retrying. Files have not been overwritten." /SD IDOK
 +  SetErrorLevel 1
 +  Quit
  SectionEnd
++
++# Hash all critical execution entry points against the build-time signed input.
++# This incurs bounded reads at launch but prevents reusing modified executables.
++Function VerifyCriticalFiles
++  ClearErrors
++  IfFileExists "$R4\${APP_EXECUTABLE_FILENAME}" 0 VerifyFailed
++  IfFileExists "$R4\resources\app.asar" 0 VerifyFailed
++  IfFileExists "$R4\resources\runtime-tools\ripgrep\rg.exe" 0 VerifyFailed
++  IfFileExists "$R4\resources\tunnel-client\tunnel-client.exe" 0 VerifyFailed
++  ${StdUtils.HashFile} $6 "SHA2-256" "$R4\${APP_EXECUTABLE_FILENAME}"
++  ${If} $6 != "${LNWJING_HASH_EXECUTABLE}"
++    Goto VerifyFailed
++  ${EndIf}
++  ${StdUtils.HashFile} $6 "SHA2-256" "$R4\resources\app.asar"
++  ${If} $6 != "${LNWJING_HASH_APP_ASAR}"
++    Goto VerifyFailed
++  ${EndIf}
++  ${StdUtils.HashFile} $6 "SHA2-256" "$R4\resources\runtime-tools\ripgrep\rg.exe"
++  ${If} $6 != "${LNWJING_HASH_RIPGREP}"
++    Goto VerifyFailed
++  ${EndIf}
++  ${StdUtils.HashFile} $6 "SHA2-256" "$R4\resources\tunnel-client\tunnel-client.exe"
++  ${If} $6 != "${LNWJING_HASH_TUNNEL}"
++    Goto VerifyFailed
++  ${EndIf}
++  Return
++VerifyFailed:
++  SetErrors
++FunctionEnd

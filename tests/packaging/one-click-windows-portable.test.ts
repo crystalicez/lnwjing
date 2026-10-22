@@ -21,6 +21,11 @@ describe('one-click Windows x64 portable build', () => {
     expect(script).not.toContain('.local-artifacts\\dotnet-sdk-8');
     expect(await readFile(path.join(root, '.gitignore'), 'utf8')).toContain('apps/desktop/build/dotnet-sdk/');
     expect(script).not.toContain("'--win', 'nsis'");
+    const desktopPkg = await readFile(path.join(root, 'apps', 'desktop', 'package.json'), 'utf8');
+    expect(desktopPkg).not.toContain('prepare-tunnel-client.mjs && node scripts/prepare-runtime-tools.mjs');
+    const manifestScript = await readFile(path.join(root, 'apps', 'desktop', 'scripts', 'write-portable-update-manifest.mjs'), 'utf8');
+    expect(manifestScript).toContain('for await (const chunk of createReadStream(artifactPath))');
+    expect(manifestScript).not.toContain('const content = await readFile(artifactPath)');
     // Runtime tools already stages the tunnel client; avoid redundant downloads
     // and extraction in a one-click build on disk-constrained Windows hosts.
     expect(script).not.toContain("Invoke-Step 'Stage tunnel client'");
@@ -47,7 +52,19 @@ describe('one-click Windows x64 portable build', () => {
     expect(patch).toContain('CreateMutexW');
     expect(patch).toContain('WaitForSingleObject');
     expect(patch).toContain('IfFileExists "$INSTDIR\\.lnwjing-ready"');
-    expect(patch).toContain('FileOpen $R7 "$INSTDIR\\.lnwjing-ready" w');
+    expect(patch).toContain('FileOpen $R7 "$R6\\.lnwjing-ready" w');
+    expect(patch).toContain('Rename "$R6" "$INSTDIR"');
+    expect(patch).toContain('GetFileAttributesW');
+    expect(patch).toContain('Global\\lnwjing-portable-');
+    expect(patch).toContain('StdUtils.HashFile');
+    expect(patch).toContain('LNWJING_HASH_EXECUTABLE');
+    expect(patch).toContain('LNWJING_HASH_APP_ASAR');
+    expect(patch).toContain('LNWJING_HASH_RIPGREP');
+    expect(patch).toContain('LNWJING_HASH_TUNNEL');
+    expect(patch).toContain('!include "${BUILD_RESOURCES_DIR}\\portable-integrity.nsh"');
+    const evidenceScript = await readFile(path.join(root, 'apps', 'desktop', 'scripts', 'capture-packaged-runtime-evidence.mjs'), 'utf8');
+    expect(evidenceScript).toContain('writePortableRuntimeIntegrityInclude');
+    expect(evidenceScript).toContain('sha256File(filePath)');
     expect(patch).toContain('PORTABLE_EXECUTABLE_FILE');
     expect(patch).toContain('ExecWait');
     expect(patch).not.toContain('+  RMDir /r $INSTDIR');

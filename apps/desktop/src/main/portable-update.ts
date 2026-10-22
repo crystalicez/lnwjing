@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { access, link, lstat, mkdir, rename, writeFile } from 'node:fs/promises';
+import { access, link, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -81,6 +81,56 @@ export function currentPortableExecutablePath(
   return portableExecutable === undefined || portableExecutable.length === 0
     ? fallbackExecutablePath
     : portableExecutable;
+}
+
+/** Keep MCP STDIO client configuration stable across versioned extraction folders. */
+export async function ensurePortableMcpStdioLauncher(
+  outerPath: string = currentPortableExecutablePath(),
+  innerPath: string = process.execPath,
+): Promise<string | null> {
+  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE?.trim()) return null;
+  const outerDirectory = path.dirname(path.resolve(outerPath));
+  const relativeInner = path.relative(outerDirectory, path.resolve(innerPath)).replaceAll('/', '\\');
+  if (!/^lnwjing-runtime-v[0-9A-Za-z._-]+\\lnwjing\.exe$/i.test(relativeInner)) return null;
+  const launcherPath = path.join(outerDirectory, 'lnwjing-mcp-stdio.cmd');
+  const signature = 'REM lnwjing-managed-portable-stdio-v1';
+  const contents = [
+    '@echo off',
+    signature,
+    'setlocal',
+    `set "APP=%~dp0${relativeInner}"`,
+    'if not exist "%APP%" (',
+    '  echo lnwjing portable MCP runtime is missing. Launch the Portable EXE first. 1>&2',
+    '  exit /b 1',
+    ')',
+    '"%APP%" --mcp-stdio %*',
+    'exit /b %ERRORLEVEL%',
+    '',
+  ].join('\r\n');
+  try {
+    const current = await lstat(launcherPath).catch((error: unknown): null => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
+    });
+    if (current !== null) {
+      if (!current.isFile() || current.isSymbolicLink()) return null;
+      const previous = await readFile(launcherPath, 'utf8');
+      if (!previous.startsWith(`@echo off\r\n${signature}\r\n`)) return null;
+      if (previous === contents) return launcherPath;
+      const temporaryPath = `${launcherPath}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporaryPath, contents, { encoding: 'utf8', flag: 'wx' });
+        await rename(temporaryPath, launcherPath);
+      } finally {
+        await rm(temporaryPath, { force: true }).catch(() => undefined);
+      }
+    } else {
+      await writeFile(launcherPath, contents, { encoding: 'utf8', flag: 'wx' });
+    }
+    return launcherPath;
+  } catch {
+    return null;
+  }
 }
 
 export function configureUpdaterForDistribution(
@@ -219,8 +269,19 @@ try {
   }
   if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { throw 'Downloaded portable update is missing.' }
   if (-not (Test-Path -LiteralPath $Target -PathType Leaf)) { throw 'Current portable executable is missing.' }
-  Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
-  Move-Item -LiteralPath $Target -Destination $backup -Force
+  # Never discard a surviving rollback from a previous interrupted update.
+  if (Test-Path -LiteralPath $backup) { throw 'Portable update backup already exists; refusing to overwrite it.' }
+  # The outer NSIS wrapper may still be releasing its handle after Electron exits.
+  # Retry transient sharing violations without deleting the old executable.
+  for ($attempt = 0; $attempt -lt 40; $attempt++) {
+    try {
+      Move-Item -LiteralPath $Target -Destination $backup -Force
+      break
+    } catch {
+      if ($attempt -eq 39) { throw }
+      Start-Sleep -Milliseconds 250
+    }
+  }
   try {
     Move-Item -LiteralPath $Source -Destination $Target -Force
     Start-Process -FilePath $Target | Out-Null

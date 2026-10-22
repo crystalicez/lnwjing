@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm, unlink, writeFile, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, unlink, writeFile, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
   PORTABLE_UPDATE_CHANNEL,
   PORTABLE_UPDATE_FEED_URL,
+  ensurePortableMcpStdioLauncher,
   configureUpdaterForDistribution,
   configureUpdaterForPlatform,
   createLinuxAppImageRollback,
@@ -101,6 +102,31 @@ describe('Windows distribution-aware auto updater', () => {
     }
   });
 
+  it.skipIf(process.platform !== 'win32')('maintains a stable managed STDIO launcher without overwriting custom files', async () => {
+    const tmpRoot = path.resolve(import.meta.dirname, '..', '..', '..', '.local-artifacts');
+    await mkdir(tmpRoot, { recursive: true });
+    const directory = await mkdtemp(path.join(tmpRoot, 'portable-stdio-'));
+    const prior = process.env.PORTABLE_EXECUTABLE_FILE;
+    try {
+      const outer = path.join(directory, 'lnwjing-Portable.exe');
+      process.env.PORTABLE_EXECUTABLE_FILE = outer;
+      const firstExe = path.join(directory, 'lnwjing-runtime-v5.8.7-first', 'lnwjing.exe');
+      const secondExe = path.join(directory, 'lnwjing-runtime-v5.8.8-second', 'lnwjing.exe');
+      const launcher = path.join(directory, 'lnwjing-mcp-stdio.cmd');
+      expect(await ensurePortableMcpStdioLauncher(outer, firstExe)).toBe(launcher);
+      expect(await readFile(launcher, 'utf8')).toContain('lnwjing-runtime-v5.8.7-first');
+      expect(await ensurePortableMcpStdioLauncher(outer, secondExe)).toBe(launcher);
+      expect(await readFile(launcher, 'utf8')).toContain('lnwjing-runtime-v5.8.8-second');
+      await writeFile(launcher, '@echo off\r\necho custom user script\r\n');
+      expect(await ensurePortableMcpStdioLauncher(outer, firstExe)).toBeNull();
+      expect(await readFile(launcher, 'utf8')).toContain('custom user script');
+    } finally {
+      if (prior === undefined) delete process.env.PORTABLE_EXECUTABLE_FILE;
+      else process.env.PORTABLE_EXECUTABLE_FILE = prior;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('replaces the outer portable executable path rather than Electron temporary extraction path', () => {
     expect(currentPortableExecutablePath({ PORTABLE_EXECUTABLE_FILE: 'D:\\Apps\\lnwjing-portable.exe' }, 'C:\\Temp\\lnwjing.exe')).toBe('D:\\Apps\\lnwjing-portable.exe');
     expect(currentPortableExecutablePath({}, 'C:\\Program Files\\lnwjing\\lnwjing.exe')).toBe('C:\\Program Files\\lnwjing\\lnwjing.exe');
@@ -111,6 +137,8 @@ describe('Windows distribution-aware auto updater', () => {
     expect(script).toContain('Get-Process -Id $CurrentPid');
     expect(script).toContain('$Target.lnwjing-update-backup');
     expect(script).toContain('Move-Item -LiteralPath $Target -Destination $backup -Force');
+    expect(script).toContain('Portable update backup already exists');
+    expect(script).toContain('$attempt -lt 40');
     expect(script).toContain('Move-Item -LiteralPath $Source -Destination $Target -Force');
     expect(script).toContain('Move-Item -LiteralPath $backup -Destination $Target -Force');
     expect(script).toContain('Start-Process -FilePath $Target');

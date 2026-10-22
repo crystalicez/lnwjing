@@ -202,7 +202,10 @@ describe('cross-platform desktop packaging', () => {
     expect(config).toContain('to: native-host/linux');
     await access(path.join(repositoryRoot, '.agents', 'skills', 'lnwjing-scheduled-continuation', 'SKILL.md'));
     expect(desktopPackage.scripts?.['package:windows']).toContain('prepare-runtime-tools.mjs');
-    expect(desktopPackage.scripts?.['package:windows']).toContain('prepare-tunnel-client.mjs');
+    // Windows runtime-tools stages the tunnel itself; do not stage a second time.
+    expect(desktopPackage.scripts?.['package:windows']).not.toContain('prepare-tunnel-client.mjs');
+    const windowsRuntimeStager = await readFile(path.join(desktopRoot, 'scripts', 'prepare-runtime-tools.mjs'), 'utf8');
+    expect(windowsRuntimeStager).toContain('await runTunnelStager(platform, rawArch)');
     expect(desktopPackage.scripts?.['package:macos']).toContain('package-native.mjs macos');
     expect(desktopPackage.scripts?.['package:linux']).toContain('package-native.mjs linux');
     const nativePackagingScript = await readFile(path.join(desktopRoot, 'scripts', 'package-native.mjs'), 'utf8');

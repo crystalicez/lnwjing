@@ -116,6 +116,7 @@ import {
   currentPortableExecutablePath,
   detectWindowsDistribution,
   detectUpdaterDistribution,
+  ensurePortableMcpStdioLauncher,
   launchPortableReplacement,
   preparePortableReplacement,
   usesElectronUpdaterInstall,
@@ -2096,7 +2097,10 @@ function applyDesktopUserSettings(settings: UserSettings): void {
     try {
       app.setLoginItemSettings({
         openAtLogin: settings.launchAtStartup,
-        path: process.execPath,
+        // Always register the outer Portable launcher, never a versioned unpacked Electron binary.
+        path: process.platform === 'win32' && windowsDistribution === 'portable'
+          ? currentPortableExecutablePath()
+          : process.execPath,
         ...(process.platform === 'darwin' ? { openAsHidden: settings.startMinimized } : {}),
       });
     } catch (error: unknown) {
@@ -2798,6 +2802,13 @@ function bootstrapDesktop(configuredDataPath?: string): void {
     );
 
     prependBundledRuntimeToolsToPath();
+    // Generate/refresh a managed, stable MCP launcher beside the outer EXE.
+    // Never point client configurations at a versioned runtime directory.
+    if (windowsDistribution === 'portable') {
+      const launcher = await ensurePortableMcpStdioLauncher();
+      if (launcher !== null) process.env.LNWJING_PORTABLE_STDIO_LAUNCHER = launcher;
+      else delete process.env.LNWJING_PORTABLE_STDIO_LAUNCHER;
+    }
     recordDesktopStartup('runtime:begin');
     const runtime = await createNativeDesktopRuntime(dataPath);
     recordDesktopStartup('runtime:end');

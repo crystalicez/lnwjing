@@ -61,10 +61,30 @@ export default async function capturePackagedRuntimeEvidence(context) {
   if (evidence === undefined) return;
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  if (evidence.platform === 'win32') await writePortableRuntimeIntegrityInclude(context.appOutDir);
 }
 
 // A signing or notarization failure must not leave pre-sign evidence usable by
 // write-release-evidence. Only the successful afterSign hook replaces this marker.
+// The values are embedded into the NSIS launcher at build time, not stored in
+// the user-writable extracted runtime. Reused files must match their build.
+async function writePortableRuntimeIntegrityInclude(appOutDir) {
+  const critical = [
+    ['EXECUTABLE', 'lnwjing.exe'],
+    ['APP_ASAR', 'resources/app.asar'],
+    ['RIPGREP', 'resources/runtime-tools/ripgrep/rg.exe'],
+    ['TUNNEL', 'resources/tunnel-client/tunnel-client.exe'],
+  ];
+  const lines = ['; Generated from the signed/packaged Windows x64 runtime. Do not edit.'];
+  for (const [name, relativePath] of critical) {
+    const filePath = path.join(appOutDir, relativePath);
+    await assertRegularCanonicalFile(filePath, `Portable integrity input: ${relativePath}`);
+    const digest = await sha256File(filePath);
+    lines.push(`!define LNWJING_HASH_${name} "${digest.toUpperCase()}"`);
+  }
+  await writeFile(path.join(desktopRoot, 'build', 'portable-integrity.nsh'), `${lines.join('\n')}\n`, 'utf8');
+}
+
 export async function invalidatePackagedRuntimeEvidence() {
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify({ schemaVersion: 0, signing: 'incomplete' })}\n`, 'utf8');

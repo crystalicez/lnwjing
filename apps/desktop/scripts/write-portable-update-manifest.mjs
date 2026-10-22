@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { lstat, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -14,8 +15,9 @@ const installerDirectory = path.join(desktopDirectory, 'dist', 'installers');
 const fileName = `lnwjing-Portable-${version}.exe`;
 const artifactPath = path.join(installerDirectory, fileName);
 const metadata = await assertRegularCanonicalFile(artifactPath);
-const content = await readFile(artifactPath);
-const sha512 = createHash('sha512').update(content).digest('base64');
+const digest = createHash('sha512');
+for await (const chunk of createReadStream(artifactPath)) digest.update(chunk);
+const sha512 = digest.digest('base64');
 const releaseDate = new Date().toISOString();
 const manifest = [
   `version: ${version}`,
