@@ -10,6 +10,12 @@ describe('one-click Windows x64 portable build', () => {
     const script = await readFile(path.join(root, 'scripts', 'build-portable-windows-x64.ps1'), 'utf8');
     expect(cmd).toContain('build-portable-windows-x64.ps1');
     expect(cmd).toContain('if not "%EXIT_CODE%"=="0"');
+    expect(cmd).toContain('explorer "%~dp0portable"');
+    expect(script).toContain("$portableDirectory = Join-Path $repositoryRoot 'portable'");
+    expect(script).toContain('Move-Item -LiteralPath $stagedArtifact -Destination $artifact -Force');
+    expect(script).toContain("Move-Item -LiteralPath $stagedManifest -Destination (Join-Path $portableDirectory 'portable.yml') -Force");
+    expect(script).not.toContain('Copy-Item -LiteralPath $stagedArtifact');
+    expect(await readFile(path.join(root, '.gitignore'), 'utf8')).toMatch(/^portable\/$/m);
     expect(script).toContain('lnwjing-Portable-$($package.version).exe');
     expect(script).toContain("'--win', 'portable', '--x64', '--publish', 'never'");
     expect(script).toContain("$env:CI = 'true'");

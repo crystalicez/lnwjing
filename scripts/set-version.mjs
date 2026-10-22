@@ -121,6 +121,7 @@ async function syncAllVersions() {
       .replace(/current v[0-9.]+ source line/g, `current v${version} source line`)
       .replace(/apps\/desktop\/dist\/installers\/lnwjing-Setup-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjing-Setup-${version}.exe`)
       .replace(/apps\/desktop\/dist\/installers\/lnwjing-Portable-[0-9.]+\.exe/g, `apps/desktop/dist/installers/lnwjing-Portable-${version}.exe`)
+      .replace(/portable\/lnwjing-Portable-[0-9.]+\.exe/g, `portable/lnwjing-Portable-${version}.exe`)
       .replace(/current v[0-9.]+ `ToolRegistry`/g, 'current v' + version + ' `ToolRegistry`');
     await writeFile(readmePath, readmeContent, 'utf8');
     console.log(`Updated ${path.basename(readmePath)} -> v${version}`);

@@ -11,7 +11,13 @@ $env:DOTNET_NOLOGO = '1'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $desktopDirectory = Join-Path $repositoryRoot 'apps\desktop'
 $package = Get-Content -LiteralPath (Join-Path $repositoryRoot 'package.json') -Raw | ConvertFrom-Json
-$artifact = Join-Path $desktopDirectory "dist\installers\lnwjing-Portable-$($package.version).exe"
+# electron-builder stages all Windows targets in dist/installers. The one-click
+# Portable build MOVES its final artifact into a small root-level output folder
+# so old unpacked runtimes and intermediate builder files never clutter it.
+$stagedArtifact = Join-Path $desktopDirectory "dist\installers\lnwjing-Portable-$($package.version).exe"
+$stagedManifest = Join-Path $desktopDirectory 'dist\installers\portable.yml'
+$portableDirectory = Join-Path $repositoryRoot 'portable'
+$artifact = Join-Path $portableDirectory "lnwjing-Portable-$($package.version).exe"
 
 if (-not [Environment]::Is64BitOperatingSystem -or [Environment]::OSVersion.Platform -ne 'Win32NT') {
     throw 'This script requires Windows x64.'
@@ -100,11 +106,35 @@ try {
     Invoke-Step 'Package Portable x64 only (no installer / no publishing)' $desktopDirectory 'corepack' @('pnpm@10.15.0', 'exec', 'electron-builder', '--config', 'electron-builder.yml', '--win', 'portable', '--x64', '--publish', 'never')
     Invoke-Step 'Create portable update manifest' $desktopDirectory 'node' @('scripts/write-portable-update-manifest.mjs')
 
-    if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
-        throw "Portable executable was not produced: $artifact"
+    if (-not (Test-Path -LiteralPath $stagedArtifact -PathType Leaf)) {
+        throw "Portable executable was not produced: $stagedArtifact"
     }
+    if (-not (Test-Path -LiteralPath $stagedManifest -PathType Leaf)) {
+        throw "Portable update manifest was not produced: $stagedManifest"
+    }
+    $stagedFile = Get-Item -LiteralPath $stagedArtifact
+    if ($stagedFile.Length -le 0) { throw 'Portable executable has zero bytes.' }
+
+    # Rename on the same volume instead of copying ~270 MiB. This output folder
+    # is generated/ignored; do not touch runtime directories from prior launches.
+    New-Item -ItemType Directory -Path $portableDirectory -Force | Out-Null
+    $outputFolder = Get-Item -LiteralPath $portableDirectory -Force
+    if (($outputFolder.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw 'Portable output directory must not be a symlink or junction.'
+    }
+    foreach ($destination in @($artifact, (Join-Path $portableDirectory 'portable.yml'))) {
+        if (Test-Path -LiteralPath $destination) {
+            $existing = Get-Item -LiteralPath $destination -Force
+            if ($existing.PSIsContainer -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Refusing to overwrite a non-file or redirected Portable output: $destination"
+            }
+        }
+    }
+    Move-Item -LiteralPath $stagedArtifact -Destination $artifact -Force
+    Move-Item -LiteralPath $stagedManifest -Destination (Join-Path $portableDirectory 'portable.yml') -Force
+
     $file = Get-Item -LiteralPath $artifact
-    if ($file.Length -le 0) { throw 'Portable executable has zero bytes.' }
+    if ($file.Length -ne $stagedFile.Length) { throw 'Portable artifact size changed while moving it.' }
     $hash = Get-FileHash -LiteralPath $artifact -Algorithm SHA256
     Write-Host ''
     Write-Host "SUCCESS: $($file.FullName)" -ForegroundColor Green

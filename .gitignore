@@ -5,6 +5,8 @@ node_modules/
 
 # Build & Compilation
 dist/
+# Local one-click Windows Portable output; never publish binary or runtime caches in git.
+portable/
 build/
 !apps/desktop/build/
 !apps/desktop/build/**

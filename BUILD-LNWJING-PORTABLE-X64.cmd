@@ -10,7 +10,7 @@ if not "%EXIT_CODE%"=="0" (
   exit /b %EXIT_CODE%
 )
 echo.
-echo [OK] The portable EXE is in apps\desktop\dist\installers
-explorer "%~dp0apps\desktop\dist\installers"
+echo [OK] The portable EXE is in portable
+explorer "%~dp0portable"
 pause
 exit /b 0

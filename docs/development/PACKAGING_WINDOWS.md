@@ -72,6 +72,8 @@ The WinRT OCR helper (`native/windows-ocr`) needs a signed sparse package for pa
 
 The `makeappx.exe`/`signtool.exe` steps need the Windows SDK. No certificate or private key belongs in this repository.
 
+The root-level `BUILD-LNWJING-PORTABLE-X64.cmd` is a developer convenience: it runs the Portable-only builder, then **moves** the resulting EXE and `portable.yml` to `portable/` under the repository root. The generated `portable/` folder is Git-ignored. The standard `package:windows` release command still keeps Setup, Portable, update manifests and evidence together in `apps/desktop/dist/installers/` as required by release checks.
+
 ## Expected Windows outputs
 
 For v5.8.7:
