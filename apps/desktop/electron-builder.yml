@@ -142,4 +142,6 @@ nsis:
   include: build/installer.nsh
 portable:
   artifactName: lnwjing-Portable-${version}.${ext}
-  splashImage: build/portable-splash.bmp
+  # Embed unpacked files directly into NSIS; never stage a 7z archive in %TEMP%.
+  # The patched portable.nsi extracts beside the outer EXE and reuses the result.
+  useZip: true

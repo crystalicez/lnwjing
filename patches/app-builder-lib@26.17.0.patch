@@ -1,0 +1,136 @@
+diff --git a/templates/nsis/portable.nsi b/templates/nsis/portable.nsi
+index e5436bb0f810058b52e15ce65b3d256f86dabc6f..ff98185f9394b66a780b988cb9b8f13cc669e682 100644
+--- a/templates/nsis/portable.nsi
++++ b/templates/nsis/portable.nsi
+@@ -1,43 +1,56 @@
+ !include "common.nsh"
+ !include "extractAppPackage.nsh"
+ 
+-# https://github.com/electron-userland/electron-builder/issues/3972#issuecomment-505171582
++# lnwjing: persistent per-build runtime next to the outer portable executable.
++# No archive or application payload is expanded into %TEMP%.
+ CRCCheck off
+ WindowIcon Off
+ AutoCloseWindow True
+ RequestExecutionLevel ${REQUEST_EXECUTION_LEVEL}
+ 
+ Function .onInit
+-  !ifndef SPLASH_IMAGE
+-    SetSilent silent
+-  !endif
+-
++  SetSilent silent
+   !insertmacro check64BitAndSetRegView
+ FunctionEnd
+ 
+-Function .onGUIInit
+-  InitPluginsDir
+-
+-  !ifdef SPLASH_IMAGE
+-    File /oname=$PLUGINSDIR\splash.bmp "${SPLASH_IMAGE}"
+-    BgImage::SetBg $PLUGINSDIR\splash.bmp
+-    BgImage::Redraw
+-  !endif
+-FunctionEnd
+-
+ Section
+-  !ifdef SPLASH_IMAGE
+-    HideWindow
+-  !endif
++  # electron-builder generates a different UNPACK_DIR_NAME for each packaging
++  # operation. Multiple executions of the same executable reuse this location;
++  # a new build never overwrites a running previous build.
++  StrCpy $INSTDIR "$EXEDIR\lnwjing-runtime-v${VERSION}-${UNPACK_DIR_NAME}"
+ 
+-  StrCpy $INSTDIR "$PLUGINSDIR\app"
+-  !ifdef UNPACK_DIR_NAME
+-    StrCpy $INSTDIR "$TEMP\${UNPACK_DIR_NAME}"
+-  !endif
++  # Serialize first-time extraction when launched twice concurrently.
++  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Local\lnwjing-portable-${UNPACK_DIR_NAME}") p.r9'
++  ${If} $9 == 0
++    SetErrorLevel 1
++    Abort
++  ${EndIf}
++  System::Call 'kernel32::WaitForSingleObject(p r9, i 0xFFFFFFFF) i.r8'
++  ${If} $8 != 0
++  ${AndIf} $8 != 128
++    System::Call 'kernel32::CloseHandle(p r9)'
++    SetErrorLevel 1
++    Abort
++  ${EndIf}
++
++  # Only trust a runtime whose completion marker AND key files are present.
++  # Never delete an existing sibling directory; an interrupted or modified
++  # extraction must be repaired explicitly, not wiped without consent.
++  IfFileExists "$INSTDIR\.lnwjing-ready" 0 ExtractFresh
++  IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 ExtractFailed
++  IfFileExists "$INSTDIR\resources\app.asar" 0 ExtractFailed
++  IfFileExists "$INSTDIR\resources\runtime-tools\ripgrep\rg.exe" 0 ExtractFailed
++  Goto RunApp
+ 
+-  RMDir /r $INSTDIR
+-  SetOutPath $INSTDIR
++ExtractFresh:
++  IfFileExists "$INSTDIR\*.*" ExtractFailed
++  CreateDirectory "$INSTDIR"
++  IfErrors ExtractFailed
++  SetOutPath "$INSTDIR"
++  IfErrors ExtractFailed
+ 
++  # useZip=true embeds each packaged file directly in the outer NSIS EXE.
++  # There is no $PLUGINSDIR .7z archive or %TEMP% 7z-out intermediate.
+   !ifdef APP_DIR_64
+     !ifdef APP_DIR_ARM64
+       !ifdef APP_DIR_32
+@@ -53,7 +66,7 @@ Section
+           File /r "${APP_DIR_ARM64}\*.*"
+         ${else}
+           File /r "${APP_DIR_64}\*.*"
+-        {endIf}
++        ${endIf}
+       !endif
+     !else
+       !ifdef APP_DIR_32
+@@ -74,18 +87,34 @@ Section
+     !endif
+   !endif
+ 
++  IfErrors ExtractFailed
++  IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 ExtractFailed
++  IfFileExists "$INSTDIR\resources\app.asar" 0 ExtractFailed
++  IfFileExists "$INSTDIR\resources\runtime-tools\ripgrep\rg.exe" 0 ExtractFailed
++  FileOpen $R7 "$INSTDIR\.lnwjing-ready" w
++  IfErrors ExtractFailed
++  FileWrite $R7 "lnwjing-v${VERSION}-${UNPACK_DIR_NAME}"
++  FileClose $R7
++  IfErrors ExtractFailed
++
++RunApp:
++  # Give other launches access to the completed runtime before waiting for
++  # the Electron child to exit. Keep electron-builder's updater env contract.
++  System::Call 'kernel32::ReleaseMutex(p r9)'
++  System::Call 'kernel32::CloseHandle(p r9)'
+   System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_DIR", "$EXEDIR").r0'
+   System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_FILE", "$EXEPATH").r0'
+   System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_APP_FILENAME", "${APP_FILENAME}").r0'
+   ${StdUtils.GetAllParameters} $R0 0
+ 
+-  !ifdef SPLASH_IMAGE
+-    BgImage::Destroy
+-  !endif
+-
+-	ExecWait "$INSTDIR\${APP_EXECUTABLE_FILENAME} $R0" $0
++  ExecWait '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" $R0' $0
+   SetErrorLevel $0
++  Quit
+ 
+-  SetOutPath $EXEDIR
+-	RMDir /r $INSTDIR
++ExtractFailed:
++  System::Call 'kernel32::ReleaseMutex(p r9)'
++  System::Call 'kernel32::CloseHandle(p r9)'
++  MessageBox MB_OK|MB_ICONSTOP "Cannot prepare lnwjing beside the Portable EXE. Ensure the folder is writable. If a previous extraction was interrupted, close lnwjing and manually remove the incomplete lnwjing-runtime folder beside this EXE." /SD IDOK
++  SetErrorLevel 1
++  Quit
+ SectionEnd

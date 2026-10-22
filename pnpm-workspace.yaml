@@ -9,3 +9,6 @@ overrides:
 onlyBuiltDependencies:
   - electron
   - esbuild
+
+patchedDependencies:
+  app-builder-lib@26.17.0: patches/app-builder-lib@26.17.0.patch

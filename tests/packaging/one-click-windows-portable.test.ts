@@ -35,4 +35,22 @@ describe('one-click Windows x64 portable build', () => {
     const tunnelStager = await readFile(path.join(root, 'apps', 'desktop', 'scripts', 'prepare-tunnel-client.mjs'), 'utf8');
     expect(tunnelStager).toContain('process.env.LNWJING_COSIGN_PATH?.trim()');
   });
+
+  it('ships a persistent side-by-side runtime instead of unpacking to TEMP', async () => {
+    const config = await readFile(path.join(root, 'apps', 'desktop', 'electron-builder.yml'), 'utf8');
+    const workspace = await readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    const patch = await readFile(path.join(root, 'patches', 'app-builder-lib@26.17.0.patch'), 'utf8');
+
+    expect(config).toMatch(/portable:\s+artifactName:[^\r\n]+\s+#.*\s+#.*\s+useZip: true/);
+    expect(workspace).toContain('app-builder-lib@26.17.0: patches/app-builder-lib@26.17.0.patch');
+    expect(patch).toContain('StrCpy $INSTDIR "$EXEDIR\\lnwjing-runtime-v${VERSION}-${UNPACK_DIR_NAME}"');
+    expect(patch).toContain('CreateMutexW');
+    expect(patch).toContain('WaitForSingleObject');
+    expect(patch).toContain('IfFileExists "$INSTDIR\\.lnwjing-ready"');
+    expect(patch).toContain('FileOpen $R7 "$INSTDIR\\.lnwjing-ready" w');
+    expect(patch).toContain('PORTABLE_EXECUTABLE_FILE');
+    expect(patch).toContain('ExecWait');
+    expect(patch).not.toContain('+  RMDir /r $INSTDIR');
+    expect(patch).not.toContain('+  StrCpy $INSTDIR "$TEMP');
+  });
 });
