@@ -484,7 +484,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   migrateLegacyMcpHttpPort(settingsRepository, process.env);
   const toolAvailabilityService = new ToolAvailabilityService(settingsRepository);
   const stopToolAvailabilityWatch = options.watchToolAvailability === true
-    ? toolAvailabilityService.watch(1_000, () => readUserSettings(settingsRepository, process.env).codexToolsEnabled)
+    // Local changes notify eligibility immediately; poll only to catch external MCP/DB writes.
+    // Read one SQLite setting instead of rebuilding the entire user-settings snapshot.
+    ? toolAvailabilityService.watch(10_000, () => parseBooleanSetting(
+      settingsRepository.get(USER_SETTING_KEYS.codexToolsEnabled), DEFAULT_CODEX_TOOLS_ENABLED,
+    ))
     : (): void => {};
   const workLogViewState = new WorkLogViewState(settingsRepository);
   if (options.previousLogSessionStartedAt !== undefined) workLogViewState.migrateAutomaticStartupClear(options.previousLogSessionStartedAt);

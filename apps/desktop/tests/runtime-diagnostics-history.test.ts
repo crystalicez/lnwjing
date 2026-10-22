@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readRuntimeDiagnosticsHistory, RuntimeDiagnosticsHistoryRecorder, type RuntimeDiagnosticsSample } from '../src/main/runtime-diagnostics-history.js';
 
 const roots: string[] = [];
@@ -86,5 +86,26 @@ describe('RuntimeDiagnosticsHistoryRecorder', () => {
     expect(history?.samples.at(-1)?.activeResources).toEqual({ Timeout: 2, TCPSocketWrap: 1 });
     expect(history?.samples.at(-1)?.logs.totalRetainedBytes).toBe(300);
     expect(history?.samples.at(-1)?.search?.started).toBe(4);
+  });
+
+  it('batches periodic disk writes but retains each sample and flushes on stop', () => {
+    vi.useFakeTimers();
+    try {
+      const root = tempRoot();
+      let sequence = 0;
+      const recorder = new RuntimeDiagnosticsHistoryRecorder(root, () => sample(++sequence), { intervalMs: 5_000 });
+      recorder.start();
+      expect(readRuntimeDiagnosticsHistory(root)?.samples).toHaveLength(1);
+      vi.advanceTimersByTime(20_000);
+      expect(recorder.snapshot().samples).toHaveLength(5);
+      expect(readRuntimeDiagnosticsHistory(root)?.samples).toHaveLength(1);
+      vi.advanceTimersByTime(5_000);
+      expect(readRuntimeDiagnosticsHistory(root)?.samples).toHaveLength(6);
+      vi.advanceTimersByTime(5_000);
+      recorder.stop();
+      expect(readRuntimeDiagnosticsHistory(root)?.samples).toHaveLength(7);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

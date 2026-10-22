@@ -81,6 +81,9 @@ export interface RuntimeDiagnosticsRecorderOptions {
 }
 
 const DEFAULT_INTERVAL_MS = 60_000;
+// Persist 5 minutes of periodic samples per disk write while keeping all
+// 1-minute readings in memory. Explicit incident captures persist immediately.
+const PERIODIC_PERSIST_EVERY = 5;
 const DEFAULT_MAX_SAMPLES = 360;
 const HISTORY_FILE = 'runtime-history.json';
 
@@ -91,6 +94,7 @@ export class RuntimeDiagnosticsHistoryRecorder {
   private readonly now: () => Date;
   private samples: RuntimeDiagnosticsSample[];
   private timer: ReturnType<typeof setInterval> | null = null;
+  private unflushedSamples = 0;
 
   public constructor(
     dataPath: string,
@@ -107,7 +111,7 @@ export class RuntimeDiagnosticsHistoryRecorder {
   public start(): void {
     if (this.timer !== null) return;
     this.captureNow();
-    this.timer = setInterval(() => { this.captureNow(); }, this.intervalMs);
+    this.timer = setInterval(() => { this.captureNow(false); }, this.intervalMs);
     this.timer.unref?.();
   }
 
@@ -115,9 +119,12 @@ export class RuntimeDiagnosticsHistoryRecorder {
     if (this.timer === null) return;
     clearInterval(this.timer);
     this.timer = null;
+    if (this.unflushedSamples > 0) {
+      try { this.persist(); this.unflushedSamples = 0; } catch { /* Diagnostics must not block shutdown. */ }
+    }
   }
 
-  public captureNow(): boolean {
+  public captureNow(persistImmediately: boolean = true): boolean {
     try {
       const sample: RuntimeDiagnosticsSample = {
         schemaVersion: 1,
@@ -126,7 +133,11 @@ export class RuntimeDiagnosticsHistoryRecorder {
       };
       this.samples.push(sample);
       if (this.samples.length > this.maxSamples) this.samples.splice(0, this.samples.length - this.maxSamples);
-      this.persist();
+      this.unflushedSamples += 1;
+      if (persistImmediately || this.unflushedSamples >= PERIODIC_PERSIST_EVERY) {
+        this.persist();
+        this.unflushedSamples = 0;
+      }
       return true;
     } catch {
       return false;

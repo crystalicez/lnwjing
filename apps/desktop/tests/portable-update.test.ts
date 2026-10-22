@@ -14,6 +14,7 @@ import {
   detectWindowsDistribution,
   detectUpdaterDistribution,
   portableReplacementScript,
+  preparePortableReplacement,
   usesElectronUpdaterInstall,
   waitsForNativeInstallAcceptance,
 } from '../src/main/portable-update.js';
@@ -132,6 +133,26 @@ describe('Windows distribution-aware auto updater', () => {
     expect(currentPortableExecutablePath({}, 'C:\\Program Files\\lnwjing\\lnwjing.exe')).toBe('C:\\Program Files\\lnwjing\\lnwjing.exe');
   });
 
+  it.skipIf(process.platform !== 'win32')('rejects redirected and missing portable replacement inputs before launching helper', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-portable-input-'));
+    const target = path.join(directory, 'lnwjing-Portable.exe');
+    const source = path.join(directory, 'downloaded.exe');
+    try {
+      await writeFile(target, 'prior-exe');
+      await expect(preparePortableReplacement({ downloadedFile: source, currentExecutablePath: target })).rejects.toThrow();
+      await writeFile(source, 'next-exe');
+      const prepared = await preparePortableReplacement({ downloadedFile: source, currentExecutablePath: target, tempDirectory: directory });
+      expect(prepared.targetPath).toBe(target);
+      expect(prepared.sourcePath).toBe(source);
+      expect(await readFile(prepared.scriptPath, 'utf8')).toContain('Portable update failed');
+      await unlink(source);
+      await mkdir(source);
+      await expect(preparePortableReplacement({ downloadedFile: source, currentExecutablePath: target })).rejects.toThrow('regular executable');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('uses a wait, rollback backup, in-place replacement, restart, and script self-cleanup for portable installs', () => {
     const script = portableReplacementScript();
     expect(script).toContain('Get-Process -Id $CurrentPid');
@@ -142,6 +163,8 @@ describe('Windows distribution-aware auto updater', () => {
     expect(script).toContain('Move-Item -LiteralPath $Source -Destination $Target -Force');
     expect(script).toContain('Move-Item -LiteralPath $backup -Destination $Target -Force');
     expect(script).toContain('Start-Process -FilePath $Target');
+    expect(script).toContain('Updated Portable launcher exited immediately');
+    expect(script).toContain('lnwjing-update-failures.log');
     expect(script).toContain('Remove-Item -LiteralPath $PSCommandPath');
   });
 });

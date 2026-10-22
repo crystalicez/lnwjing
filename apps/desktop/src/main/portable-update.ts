@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { access, link, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, link, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -208,7 +208,17 @@ export async function preparePortableReplacement(
   if (sourcePath.toLowerCase() === targetPath.toLowerCase()) {
     throw new Error('Portable update source must be staged separately from the running executable');
   }
-  await access(sourcePath);
+  const [sourceMetadata, targetMetadata, sourceRealPath, targetRealPath] = await Promise.all([
+    lstat(sourcePath), lstat(targetPath), realpath(sourcePath), realpath(targetPath),
+  ]);
+  // Do not let a reparse-point/alias target redirect the update outside the
+  // downloaded file and existing outer Portable executable we just checked.
+  if (!sourceMetadata.isFile() || sourceMetadata.isSymbolicLink() ||
+      !targetMetadata.isFile() || targetMetadata.isSymbolicLink() ||
+      sourceRealPath.toLowerCase() !== sourcePath.toLowerCase() ||
+      targetRealPath.toLowerCase() !== targetPath.toLowerCase()) {
+    throw new Error('Portable update requires canonical regular executable files (no symlinks or junctions)');
+  }
 
   const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
   if (systemRoot === undefined || systemRoot.trim().length === 0) {
@@ -258,6 +268,7 @@ export function portableReplacementScript(): string {
 )
 $ErrorActionPreference = 'Stop'
 $backup = "$Target.lnwjing-update-backup"
+$errorLog = "$Target.lnwjing-update-failures.log"
 try {
   $deadline = [DateTime]::UtcNow.AddMinutes(2)
   while ([DateTime]::UtcNow -lt $deadline) {
@@ -284,7 +295,11 @@ try {
   }
   try {
     Move-Item -LiteralPath $Source -Destination $Target -Force
-    Start-Process -FilePath $Target | Out-Null
+    # The NSIS outer launcher stays alive while its Electron child runs.
+    # Detect immediate bootstrap/crash failures before discarding rollback.
+    $launched = Start-Process -FilePath $Target -PassThru
+    Start-Sleep -Seconds 2
+    if ($launched.HasExited) { throw 'Updated Portable launcher exited immediately after restart.' }
     Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
   }
   catch {
@@ -295,6 +310,12 @@ try {
     }
     throw
   }
+}
+catch {
+  # Hidden detached helpers otherwise discard all error details. Keep only a
+  # short local failure message; diagnostic text may contain paths and stays local.
+  try { Add-Content -LiteralPath $errorLog -Value ("$(Get-Date -Format o) Portable update failed: " + $_.Exception.Message) -ErrorAction Stop } catch {}
+  throw
 }
 finally {
   Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue

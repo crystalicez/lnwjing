@@ -8,6 +8,7 @@ import {
   type ContextDiscoveryMode,
 } from './context-economy.js';
 import { acquireRipgrep, recordRipgrepExecution } from './ripgrep-admission.js';
+import { acquireDiskScanLease } from './ripgrep-disk-lease.js';
 
 export interface ProcessRunResult {
   readonly exitCode: number;
@@ -212,6 +213,11 @@ export class RipgrepAdapter {
     }
     const admission = await acquireRipgrep(request.rootPath, request.signal);
     if (admission.status !== 'granted') return searchAdmissionError(admission.status);
+    const diskLease = await acquireDiskScanLease(request.rootPath, request.signal);
+    if (diskLease.status !== 'granted') {
+      admission.release();
+      return searchAdmissionError(diskLease.status);
+    }
     const startedAt = performance.now();
     try {
     const executable = await this.resolver.resolve('rg');
@@ -254,7 +260,7 @@ export class RipgrepAdapter {
     return ok({ matches, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || hasAdditionalMatch });
     } finally {
       recordRipgrepExecution(performance.now() - startedAt);
-      admission.release();
+      try { await diskLease.release(); } finally { admission.release(); }
     }
   }
 
@@ -265,6 +271,11 @@ export class RipgrepAdapter {
     }
     const admission = await acquireRipgrep(request.rootPath, request.signal);
     if (admission.status !== 'granted') return searchAdmissionError(admission.status);
+    const diskLease = await acquireDiskScanLease(request.rootPath, request.signal);
+    if (diskLease.status !== 'granted') {
+      admission.release();
+      return searchAdmissionError(diskLease.status);
+    }
     const startedAt = performance.now();
     try {
     const executable = await this.resolver.resolve('rg');
@@ -297,7 +308,7 @@ export class RipgrepAdapter {
     return ok({ paths, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || discoveredPaths.length > maxResults });
     } finally {
       recordRipgrepExecution(performance.now() - startedAt);
-      admission.release();
+      try { await diskLease.release(); } finally { admission.release(); }
     }
   }
 
