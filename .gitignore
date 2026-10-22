@@ -127,3 +127,4 @@ apps/desktop/build/vendor/
 # Local .NET SDK cache for the one-click Windows x64 portable build (never commit SDK binaries).
 apps/desktop/build/dotnet-sdk/
 .tmp
+HANDOFF-NEXT-SESSION.md
