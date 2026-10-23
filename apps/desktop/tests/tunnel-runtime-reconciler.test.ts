@@ -212,4 +212,32 @@ describe('TunnelRuntimeReconciler', () => {
     expect(result.action).toBe('fallback-required');
     expect(runtimeAdapter.status).not.toHaveBeenCalled();
   });
+  it('never reports a running runtime with unknown readiness as healthy or stops it', async () => {
+    const runtimeAdapter = adapter(runtime({ healthy: null, ready: null, pollHealthy: null }));
+    const reconciler = new TunnelRuntimeReconciler({ adapter: runtimeAdapter, desiredState: (): TunnelRuntimeDesiredState => desired });
+    const result = await reconciler.reconcile();
+    expect(result.action).toBe('retry-required');
+    expect(result.snapshot.lastErrorCode).toBe('RUNTIME_HEALTH_UNVERIFIED');
+    expect(runtimeAdapter.stop).not.toHaveBeenCalled();
+    expect(runtimeAdapter.connect).not.toHaveBeenCalled();
+  });
+
+  it('throttles full process inventories on stable PIDs but rechecks after PID changes', async () => {
+    let now = 0;
+    let live = runtime();
+    const runtimeAdapter = adapter(live);
+    vi.mocked(runtimeAdapter.status).mockImplementation(async (): Promise<NativeTunnelRuntimeStatus> => live);
+    runtimeAdapter.ensureSingleProcess = vi.fn(async (): Promise<void> => undefined);
+    const reconciler = new TunnelRuntimeReconciler({ adapter: runtimeAdapter, desiredState: (): TunnelRuntimeDesiredState => desired,
+      now: (): Date => new Date(now), processGuardIntervalMs: 120_000 });
+    for (const offset of [0, 30_000, 60_000, 90_000, 120_000]) {
+      now = offset;
+      expect((await reconciler.reconcile()).action).toBe('healthy');
+    }
+    expect(runtimeAdapter.ensureSingleProcess).toHaveBeenCalledTimes(2);
+    live = runtime({ pid: 4567 });
+    now += 100;
+    expect((await reconciler.reconcile()).action).toBe('healthy');
+    expect(runtimeAdapter.ensureSingleProcess).toHaveBeenCalledTimes(3);
+  });
 });

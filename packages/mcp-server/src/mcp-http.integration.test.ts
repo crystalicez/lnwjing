@@ -1,4 +1,4 @@
-import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport, CLIENT_CAPABILITIES_META_KEY, CLIENT_INFO_META_KEY, PROTOCOL_VERSION_META_KEY } from '@modelcontextprotocol/client';
 import { ok } from '@lnwjing/domain';
 import type { ToolAvailabilitySnapshot } from '@lnwjing/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -516,6 +516,58 @@ describe('MCP localhost HTTP transport', () => {
       controller.abort();
     }
   });
+
+  it('cancels a modern HTTP tool when its client disconnects without killing unrelated work', async () => {
+    let release!: () => void;
+    const block = new Promise<void>((resolve) => { release = resolve; });
+    workspaceListImpl = async (): Promise<ReturnType<typeof ok<readonly { id: string; kind: string }[]>>> => {
+      await block;
+      return ok([{ id: 'workspace-1', kind: 'project' }]);
+    };
+    const controller = new AbortController();
+    const request = fetch(handle.endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': '2026-07-28',
+        'mcp-method': 'tools/call',
+        'mcp-name': 'workspace_list',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 91,
+        method: 'tools/call',
+        params: {
+          name: 'workspace_list', arguments: {},
+          _meta: {
+            [PROTOCOL_VERSION_META_KEY]: '2026-07-28',
+            [CLIENT_INFO_META_KEY]: { name: 'abort-test', version: '0.1.0' },
+            [CLIENT_CAPABILITIES_META_KEY]: {},
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+    try {
+      await vi.waitFor(() => expect(workspaceListCalls).toBe(1), { timeout: 3_000 });
+      controller.abort();
+      await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+      // Undici rejects locally before the server socket emits close; allow
+      // transport disconnect to propagate before unblocking the fake tool.
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      release();
+      await vi.waitFor(() => {
+        const state = activityTracker.telemetrySnapshot();
+        expect(state.active).toBe(0);
+        expect(state.byTool.workspace_list?.cancellations).toBe(1);
+      }, { timeout: 3_000 });
+    } finally {
+      controller.abort();
+      release();
+      await request.catch(() => undefined);
+    }
+  }, 10_000);
 
   it('keeps concurrent calls isolated and activity accounting balanced', async () => {
     let concurrentStarts = 0;

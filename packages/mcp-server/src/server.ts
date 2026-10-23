@@ -11,6 +11,7 @@ import { registerTasksProtocol } from './tasks-protocol.js';
 import { MODERN_TASKS_EXTENSION_ID } from './modern-tasks-protocol.js';
 import { registerModernTasksProtocol } from './modern-tasks-wire.js';
 import { ToolRegistry, type ActiveProjectScope, type AuthorizationMode, type HostMutationApprovalRequest, type McpApplicationServices, type McpContinuationState, type WorkspaceScope } from './tool-registry.js';
+import type { ToolWorkloadAdmission } from './tool-workload-admission.js';
 import type { SetOfMarksObservationStore } from './set-of-marks-service.js';
 import { BUNDLED_PONYTAIL_SKILL_ID, PonytailActivationLedger } from './ponytail-runtime.js';
 import { actorForRequestScope, type McpRequestScope } from './request-scope.js';
@@ -38,6 +39,10 @@ export interface McpServerOptions {
   readonly services: McpApplicationServices;
   readonly actor: FileActor;
   readonly requestScope?: McpRequestScope;
+  /** Modern HTTP request cancellation; never shared across protocol sessions. */
+  readonly requestAbortSignal?: AbortSignal;
+  /** Endpoint-scoped admission shared by the modern request factories. */
+  readonly workloadAdmission?: ToolWorkloadAdmission;
   readonly diagnostic?: DiagnosticLogger;
   readonly activity?: ActivitySink;
   readonly activityTracker?: ActivityTracker;
@@ -114,6 +119,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     ...(options.setOfMarksStore === undefined ? {} : { setOfMarksStore: options.setOfMarksStore }),
     ...(options.continuationState === undefined ? {} : { continuationState: options.continuationState }),
     ...(options.contextEconomy === undefined ? {} : { contextEconomy: options.contextEconomy }),
+    ...(options.workloadAdmission === undefined ? {} : { workloadAdmission: options.workloadAdmission }),
   });
   const runBudgetGuard = options.runBudgetGuard ?? new RunBudgetGuard();
   let configuredPonytailMode = DEFAULT_PONYTAIL_MODE;
@@ -153,8 +159,15 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
       annotations: tool.annotations,
     }, async (input: unknown, context): Promise<CallToolResult> => {
-      const dispatchContext = context as ProgressNotifyContext & RunBudgetContext;
+      const dispatchContext = context as ProgressNotifyContext & RunBudgetContext & { mcpReq: { signal?: AbortSignal } };
       runBudgetGuard.begin(dispatchContext);
+      // SDK cancellation is request-scoped even for legacy sessions; combine it
+      // with the HTTP socket abort for modern per-request transports. Never use
+      // a session-initialization signal for later legacy calls.
+      const sdkSignal = dispatchContext.mcpReq.signal;
+      const parentSignal = options.requestAbortSignal === undefined ? sdkSignal
+        : sdkSignal === undefined ? options.requestAbortSignal
+          : AbortSignal.any([sdkSignal, options.requestAbortSignal]);
       const sdkTrace = readTraceContext(context);
       const requestScope = options.requestScope;
       const traceContext = {
@@ -166,7 +179,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         ...(sdkTrace.baggage !== undefined || requestScope?.baggage === undefined ? {} : { baggage: requestScope.baggage }),
       };
       const result = await withProgressHeartbeat(dispatchContext, tool.name, async () => (
-        registry.invoke(tool.name, input, traceContext) as unknown as Promise<CallToolResult>
+        registry.invoke(tool.name, input, traceContext, parentSignal) as unknown as Promise<CallToolResult>
       ));
       const finished = runBudgetGuard.finish(dispatchContext, result);
       return finished;

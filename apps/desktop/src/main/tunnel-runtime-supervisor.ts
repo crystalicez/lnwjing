@@ -32,6 +32,7 @@ export class TunnelRuntimeSupervisor {
   private running = false;
   private disposed = false;
   private reconcileInFlight: Promise<TunnelReconcileResult | null> | null = null;
+  private unexpectedFailureCount = 0;
   private nextReconnectAt: string | null = null;
   private restartAttemptCount = 0;
   private restartSuccessCount = 0;
@@ -115,6 +116,7 @@ export class TunnelRuntimeSupervisor {
     }
     const operation = this.options.reconciler.reconcile()
       .then((result) => {
+        this.unexpectedFailureCount = 0;
         if (restartAttempt) {
           const succeeded = result.action === 'healthy' || result.action === 'connected' || result.action === 'reconnected';
           this.lastRestartCompletedAt = new Date(this.nowMs()).toISOString();
@@ -131,12 +133,23 @@ export class TunnelRuntimeSupervisor {
         return result;
       })
       .catch((error: unknown) => {
+        this.unexpectedFailureCount += 1;
+        // A failed status/capabilities call must not permanently stop monitoring.
+        // Back off even if it was a normal healthy poll rather than a retry.
+        if (this.running && !this.disposed && this.options.enabled()) {
+          const index = Math.min(this.unexpectedFailureCount - 1, TRANSIENT_BACKOFF_MS.length - 1);
+          const base = TRANSIENT_BACKOFF_MS[index]!;
+          const jittered = this.options.jitter?.(base) ?? defaultJitter(base);
+          this.schedule(Math.max(250, Math.min(90_000, Math.round(jittered))), true);
+        }
         if (restartAttempt) {
           this.restartFailureCount += 1;
           this.lastRestartCompletedAt = new Date(this.nowMs()).toISOString();
           this.lastRestartResult = 'failure';
-          this.lastRestartError = (error instanceof Error ? error.message : String(error)).slice(0, 512);
         }
+        // Keep the diagnostic visible even when schedule() clears the previous
+        // failure while installing a new retry timer.
+        this.lastRestartError = (error instanceof Error ? error.message : String(error)).slice(0, 512);
         throw error;
       })
       .finally(() => {
@@ -189,7 +202,9 @@ export class TunnelRuntimeSupervisor {
       this.nextReconnectAt = null;
       const wasRestart = reconnect;
       if (wasRestart) this.restartScheduled = false;
-      void this.runOnce(wasRestart);
+      // Errors are already recorded and rescheduled by runOnce. Always observe
+      // the promise so a timer tick cannot emit an unhandled rejection.
+      void this.runOnce(wasRestart).catch(() => undefined);
     }, delayMs);
     this.timer.unref?.();
   }

@@ -53,16 +53,25 @@ export async function withProgressHeartbeat<T>(
 
   const startedAt = Date.now();
   let interval: ReturnType<typeof setInterval> | undefined;
+  let progressInFlight = false;
+  let completed = false;
+  const tick = (): void => {
+    // A blocked transport must not accumulate unbounded pending notifications.
+    if (completed || progressInFlight) return;
+    progressInFlight = true;
+    void sendProgress(context, toolName, startedAt).finally(() => { progressInFlight = false; });
+  };
   const first = setTimeout(() => {
-    void sendProgress(context, toolName, startedAt);
-    interval = setInterval(() => {
-      void sendProgress(context, toolName, startedAt);
-    }, HEARTBEAT_INTERVAL_MS);
+    tick();
+    interval = setInterval(tick, HEARTBEAT_INTERVAL_MS);
+    interval.unref?.();
   }, HEARTBEAT_FIRST_MS);
+  first.unref?.();
 
   try {
     return await run();
   } finally {
+    completed = true;
     clearTimeout(first);
     if (interval !== undefined) clearInterval(interval);
   }

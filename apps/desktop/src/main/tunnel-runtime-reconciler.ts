@@ -32,6 +32,8 @@ export interface TunnelRuntimeReconcilerOptions {
   /** Manual Start may replace the dedicated lnwjing alias only after the prior runtime is confirmed stopped. */
   readonly allowStoppedTunnelIdReplacement?: boolean;
   readonly now?: () => Date;
+  /** Periodic full duplicate-process inventory; reconnects and PID changes always recheck. */
+  readonly processGuardIntervalMs?: number;
 }
 
 export interface TunnelReconcileResult {
@@ -47,6 +49,9 @@ export class TunnelRuntimeReconciler {
   private lastKnownPid: number | null = null;
   private readinessSinceMs: number | null = null;
   private readinessPid: number | null = null;
+  private lastGuardPid: number | null = null;
+  private lastGuardAtMs: number | null = null;
+  private lastGuardBinding: string | null = null;
   private lastSnapshot: TunnelRuntimeSnapshot | null = null;
 
   public constructor(private readonly options: TunnelRuntimeReconcilerOptions) {}
@@ -99,10 +104,31 @@ export class TunnelRuntimeReconciler {
       }
     }
 
-    try {
-      await this.options.adapter.ensureSingleProcess?.(desired.tunnelId, current);
-    } catch (error: unknown) {
-      return this.failure(desired, capabilities, error);
+    // Full WMI/PowerShell duplicate inventory is relatively expensive on
+    // Windows. Retain periodic checks, but skip repeated identical, confirmed
+    // healthy PID/binding inventories within a bounded 120-second window.
+    const nowMs = (this.options.now?.() ?? new Date()).getTime();
+    const guardInterval = Math.max(30_000, Math.min(300_000, this.options.processGuardIntervalMs ?? 120_000));
+    const previouslyVerified = current.running && current.pid !== null
+      && current.mcpServerUrl !== null && sameMcpUrl(current.mcpServerUrl, desired.mcpServerUrl)
+      && this.lastGuardPid === current.pid && this.lastGuardBinding === desired.mcpServerUrl
+      && this.lastGuardAtMs !== null && nowMs >= this.lastGuardAtMs && nowMs - this.lastGuardAtMs < guardInterval;
+    if (!previouslyVerified) {
+      try {
+        await this.options.adapter.ensureSingleProcess?.(desired.tunnelId, current);
+        if (this.options.adapter.ensureSingleProcess !== undefined
+          && current.running && current.pid !== null && current.mcpServerUrl !== null
+          && sameMcpUrl(current.mcpServerUrl, desired.mcpServerUrl)) {
+          this.lastGuardAtMs = nowMs;
+          this.lastGuardPid = current.pid;
+          this.lastGuardBinding = desired.mcpServerUrl;
+        } else {
+          this.lastGuardAtMs = null;
+        }
+      } catch (error: unknown) {
+        this.lastGuardAtMs = null;
+        return this.failure(desired, capabilities, error);
+      }
     }
 
     const bindingStale = current.mcpServerUrl !== null && !sameMcpUrl(current.mcpServerUrl, desired.mcpServerUrl);
@@ -115,6 +141,12 @@ export class TunnelRuntimeReconciler {
       }
       // Retry by elapsed startup time, not by count: the supervisor polls with
       // exponential backoff and three polls can pass in only seven seconds.
+      // Never stop/replace an existing running runtime solely because the
+      // health probe is unavailable. Unknown differs from an explicit failure.
+      if (current.healthy === null || current.ready === null || current.pollHealthy === null) {
+        return this.publishFailure(desired, capabilities, 'transient', 'RUNTIME_HEALTH_UNVERIFIED',
+          current.message ?? 'Managed runtime health is not verifiable; preserving the live process and retrying checks', current);
+      }
       if (nowMs - this.readinessSinceMs < 45_000) {
         return this.publishFailure(desired, capabilities, 'transient', 'RUNTIME_NOT_READY',
           current.message ?? 'Managed tunnel runtime is starting; waiting for readiness before reconnecting', current);
@@ -143,12 +175,18 @@ export class TunnelRuntimeReconciler {
     try {
       this.readinessSinceMs = null;
       this.readinessPid = null;
+      // A health failure may follow a delayed orphan/duplicate process.
+      // Re-verify ownership immediately before any replacement, regardless
+      // of the steady-state inventory throttle.
+      if (current.running && !healthy && !bindingStale) {
+        await this.options.adapter.ensureSingleProcess?.(desired.tunnelId, current);
+      }
       if (current.running && bindingStale) await this.options.adapter.stop(desired.tunnelId);
       const connected = await this.options.adapter.connect({ tunnelId: desired.tunnelId, mcpServerUrl: desired.mcpServerUrl });
       if (connected.tunnelId !== null && connected.tunnelId !== desired.tunnelId) {
         return this.publishFailure(desired, capabilities, 'operator', 'TUNNEL_ID_MISMATCH', 'Managed runtime returned a different tunnel ID; automatic continuation is refused', connected);
       }
-      if (!connected.running || connected.healthy === false || connected.ready === false || connected.pollHealthy === false) {
+      if (!runtimeAcceptable(connected)) {
         const detail = connected.message ?? 'Managed tunnel runtime did not become fully ready';
         return this.publishFailure(desired, capabilities, 'transient', 'RUNTIME_NOT_READY', detail, connected);
       }
@@ -292,7 +330,8 @@ function normalizeDesired(desired: TunnelRuntimeDesiredState): TunnelRuntimeDesi
 }
 
 function runtimeAcceptable(status: NativeTunnelRuntimeStatus): boolean {
-  return status.running && status.healthy !== false && status.ready !== false && status.pollHealthy !== false;
+  // Missing telemetry is NOT an affirmative connection/readiness proof.
+  return status.running && status.healthy === true && status.ready === true && status.pollHealthy === true;
 }
 
 function sameMcpUrl(left: string, right: string): boolean {

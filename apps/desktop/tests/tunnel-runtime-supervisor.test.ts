@@ -117,4 +117,29 @@ describe('TunnelRuntimeSupervisor', () => {
       vi.useRealTimers();
     }
   });
+  it('recovers from a rejected timer reconciliation without unhandled rejection or tight loop', async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const reconciler = {
+        reconcile: vi.fn(async () => {
+          calls += 1;
+          if (calls === 2) throw new Error('temporary health probe error');
+          return result('healthy');
+        }),
+        stop: vi.fn(async () => result('disabled', { state: 'stopped' })),
+        snapshot: vi.fn(() => snapshot()),
+      };
+      const supervisor = new TunnelRuntimeSupervisor({ reconciler, enabled: (): boolean => true,
+        jitter: (delay: number): number => delay, healthyIntervalMs: 30_000 });
+      await supervisor.start();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(reconciler.reconcile).toHaveBeenCalledTimes(2);
+      expect(supervisor.diagnostics().lastError).toContain('temporary health probe error');
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(reconciler.reconcile).toHaveBeenCalledTimes(3);
+      expect(supervisor.diagnostics().lastResult).toBe('success');
+      supervisor.dispose();
+    } finally { vi.useRealTimers(); }
+  });
 });

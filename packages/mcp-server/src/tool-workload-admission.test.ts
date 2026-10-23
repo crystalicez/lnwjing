@@ -1,0 +1,72 @@
+import { describe, expect, it } from 'vitest';
+import { ToolWorkloadAdmission } from './tool-workload-admission.js';
+
+describe('ToolWorkloadAdmission', () => {
+  it('limits searches across simultaneous callers, releasing queued work fairly', async () => {
+    const admission = new ToolWorkloadAdmission({ search: 1 });
+    const first = await admission.acquire('search_text', new AbortController().signal);
+    let granted = false;
+    const waiting = admission.acquire('search_files', new AbortController().signal).then(release => {
+      granted = true;
+      return release;
+    });
+    await Promise.resolve();
+    expect(granted).toBe(false);
+    expect(admission.snapshot().queued.search).toBe(1);
+    first();
+    const second = await waiting;
+    expect(granted).toBe(true);
+    expect(admission.snapshot().active.search).toBe(1);
+    second();
+    second();
+    expect(admission.snapshot().active.search).toBe(0);
+  });
+
+  it('bounds pending searches and fails closed rather than queuing without limit', async () => {
+    const admission = new ToolWorkloadAdmission({ search: 1 });
+    const hold = await admission.acquire('search_text', new AbortController().signal);
+    const controllers = Array.from({ length: 64 }, () => new AbortController());
+    const pending = controllers.map(controller => admission.acquire('search_files', controller.signal));
+    await expect(admission.acquire('search_text', new AbortController().signal))
+      .rejects.toThrow('queue is full');
+    for (const controller of controllers) controller.abort();
+    await Promise.all(pending.map(call => expect(call).rejects.toThrow('cancelled')));
+    hold();
+    expect(admission.snapshot()).toMatchObject({ active: { search: 0 }, queued: { search: 0 } });
+  });
+
+  it('cancels queued requests before work can start', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1 });
+    const first = await admission.acquire('workspace_index', new AbortController().signal);
+    const aborted = new AbortController();
+    const blocked = admission.acquire('workspace_index_rebuild', aborted.signal);
+    aborted.abort();
+    await expect(blocked).rejects.toThrow('cancelled');
+    expect(admission.snapshot().queued.index).toBe(0);
+    first();
+    expect(admission.snapshot().active.index).toBe(0);
+  });
+
+  it('never queues status/stop/watch controls behind expensive index work', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1 });
+    const hold = await admission.acquire('workspace_index', new AbortController().signal);
+    const releases = await Promise.all(['workspace_index_status', 'workspace_index_stop', 'workspace_index_watch'].map(
+      name => admission.acquire(name, new AbortController().signal)));
+    expect(admission.snapshot().active.index).toBe(1);
+    expect(admission.snapshot().queued.index).toBe(0);
+    for (const release of releases) release();
+    hold();
+  });
+
+  it('throttles expensive scans and builds while allowing light file commands', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1, process: 1 });
+    const search = await admission.acquire('workspace_full_scan', new AbortController().signal);
+    const build = await admission.acquire('project_build', new AbortController().signal);
+    expect(admission.snapshot().active).toMatchObject({ index: 1, process: 1 });
+    const read = await admission.acquire('read_file_page', new AbortController().signal);
+    read();
+    search();
+    build();
+    expect(admission.snapshot().active).toMatchObject({ index: 0, process: 0 });
+  });
+});

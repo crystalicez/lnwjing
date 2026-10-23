@@ -21,6 +21,7 @@ import { ModernTasksProtocol } from './modern-tasks-protocol.js';
 import { maybeHandleModernTasksWireRequest, maybeTransformModernTasksWireResponse } from './modern-tasks-wire.js';
 import { IncrementalVerifier } from './incremental-verifier.js';
 import { ContextEconomyRuntime } from './context-economy.js';
+import { ToolWorkloadAdmission } from './tool-workload-admission.js';
 import { RunBudgetGuard } from './run-budget.js';
 import { PonytailActivationLedger } from './ponytail-runtime.js';
 import { createOriginPolicy, type OriginPolicy } from './origin-policy.js';
@@ -74,17 +75,25 @@ async function readBody(request: IncomingMessage, maxBytes: number): Promise<Bod
   let size = 0;
   const chunks: Buffer[] = [];
 
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (!tooLarge && size <= maxBytes) chunks.push(buffer);
-    if (size > maxBytes) tooLarge = true;
+  // Bound slow/stalled inbound uploads only. The timeout is removed before the
+  // Tool starts so long-running MCP requests retain their own cancellation and
+  // durable-task lifecycle; no global execution timeout is introduced.
+  request.setTimeout(30_000, () => request.destroy(new Error('MCP HTTP request body stalled')));
+  try {
+    for await (const chunk of request) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (!tooLarge && size <= maxBytes) chunks.push(buffer);
+      if (size > maxBytes) tooLarge = true;
+    }
+  } finally {
+    request.setTimeout(0);
   }
 
   return { tooLarge, body: Buffer.concat(chunks) };
 }
 
-function toFetchRequest(request: IncomingMessage, body: Buffer): Request {
+function toFetchRequest(request: IncomingMessage, body: Buffer, signal: AbortSignal): Request {
   const headers = new Headers();
   for (const [name, value] of Object.entries(request.headers)) {
     if (Array.isArray(value)) headers.set(name, value.join(', '));
@@ -92,7 +101,7 @@ function toFetchRequest(request: IncomingMessage, body: Buffer): Request {
   }
 
   const requestedPath = new URL(request.url ?? '/', 'http://127.0.0.1');
-  const init: RequestInit = { method: request.method ?? 'GET', headers };
+  const init: RequestInit = { method: request.method ?? 'GET', headers, signal };
   if (init.method !== 'GET' && init.method !== 'HEAD' && body.length > 0) {
     init.body = new Uint8Array(body);
   }
@@ -269,6 +278,7 @@ function createSessionfulMcpHandler(options: McpHttpServerOptions): McpHttpHandl
   const ponytailActivationLedger = options.ponytailActivationLedger ?? new PonytailActivationLedger();
   const continuationState = options.continuationState ?? createMcpContinuationState();
   const modernContextEconomy = options.contextEconomy ?? new ContextEconomyRuntime();
+  const workloadAdmission = options.workloadAdmission ?? new ToolWorkloadAdmission();
   const endpointFallbackSessionId = randomUUID();
   const modernServersByRequest = new WeakMap<Request, McpServer>();
   const activeModernServers = new Set<McpServer>();
@@ -284,8 +294,10 @@ function createSessionfulMcpHandler(options: McpHttpServerOptions): McpHttpHandl
       ponytailActivationLedger,
       continuationState,
       contextEconomy: modernContextEconomy,
+      workloadAdmission,
       legacyTasksProtocol: false,
       requestScope: createHttpRequestScope({ ...(request === undefined ? {} : { request }), fallbackSessionId: endpointFallbackSessionId }),
+      ...(request === undefined ? {} : { requestAbortSignal: request.signal }),
     });
     if (request !== undefined) {
       modernServersByRequest.set(request, server);
@@ -341,6 +353,7 @@ function createSessionfulMcpHandler(options: McpHttpServerOptions): McpHttpHandl
       ponytailActivationLedger,
       continuationState,
       legacyTasksProtocol: true,
+      workloadAdmission,
       requestScope: createProtocolHttpRequestScope(protocolSessionId),
     });
     let registeredSessionId: string | undefined;
@@ -436,6 +449,7 @@ async function handleRequest(
   originPolicy: OriginPolicy,
   allowedHostnames: string[],
   maxBodyBytes: number,
+  requestAbortSignal: AbortSignal,
 ): Promise<void> {
   const requestedPath = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
   if (
@@ -454,7 +468,7 @@ async function handleRequest(
     return;
   }
 
-  const fetchRequest = toFetchRequest(request, read.body);
+  const fetchRequest = toFetchRequest(request, read.body, requestAbortSignal);
   const rejected = hostHeaderValidationResponse(fetchRequest, allowedHostnames)
     ?? originPolicy.validate(fetchRequest);
   if (rejected !== undefined) {
@@ -577,11 +591,27 @@ export async function startMcpHttp(options: McpHttpServerOptions): Promise<McpHt
   const originPolicy = options.originPolicy ?? createOriginPolicy();
   const allowedHostnames = [...new Set([...localhostAllowedHostnames(), ...(options.allowedHostnames ?? [])])];
   const listener: RequestListener = (request, response) => {
-    void handleRequest(request, response, handler, originPolicy, allowedHostnames, maxBodyBytes).catch((error: unknown) => {
-      writeDiagnostic(error instanceof Error ? error : new Error('Unhandled MCP HTTP request error'));
-      if (!response.headersSent) sendStatus(response, 500, 'Internal server error');
-      else response.destroy();
-    });
+    const controller = new AbortController();
+    const onDisconnect = (): void => { if (!response.writableEnded) controller.abort(); };
+    request.once('aborted', onDisconnect);
+    response.once('close', onDisconnect);
+    // A client may terminate the TCP connection before ServerResponse emits
+    // close (notably with undici on Windows). Observe the owned socket too.
+    const socket = response.socket;
+    socket?.once('close', onDisconnect);
+    // Never reuse this signal across requests: a dropped SSE listener must not
+    // cancel a later request from the same MCP session or a durable task.
+    void handleRequest(request, response, handler, originPolicy, allowedHostnames, maxBodyBytes, controller.signal)
+      .catch((error: unknown) => {
+        writeDiagnostic(error instanceof Error ? error : new Error('Unhandled MCP HTTP request error'));
+        if (!response.headersSent) sendStatus(response, 500, 'Internal server error');
+        else response.destroy();
+      })
+      .finally(() => {
+        request.off('aborted', onDisconnect);
+        response.off('close', onDisconnect);
+        socket?.off('close', onDisconnect);
+      });
   };
   const servers = await bindLoopbackServers(listener, options.port);
   const address: McpHttpServerAddress = { host: '127.0.0.1', port: servers.port };

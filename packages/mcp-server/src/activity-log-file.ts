@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, closeSync, mkdirSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFile, mkdir } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
@@ -37,11 +38,16 @@ const ACTIVITY_LOCK_TIMEOUT_MS = 10_000;
 
 /** SQLite's OS locks release on process exit; every writer must hold one across rotation and append. */
 const MAX_ACTIVITY_BATCH_EVENTS = 128;
+const MAX_ACTIVITY_PENDING_EVENTS = 2_048;
+// Preserve same-process arrival order across multiple activity sinks for one
+// file even when the actual append uses asynchronous filesystem I/O.
+const inProcessLogWrites = new Map<string, Promise<void>>();
 
 export function createFileActivitySink(filePath: string, options: { readonly maxBytes?: number } = {}): ActivitySink {
   const maxBytes = options.maxBytes !== undefined && Number.isSafeInteger(options.maxBytes) && options.maxBytes >= 256
     ? options.maxBytes : MAX_ACTIVITY_LOG_BYTES;
   const pending: Array<{ readonly line: string; readonly resolve: () => void; readonly reject: (reason: unknown) => void }> = [];
+  const waitingForRoom: Array<() => void> = [];
   let scheduled = false;
   let draining = false;
 
@@ -56,6 +62,9 @@ export function createFileActivitySink(filePath: string, options: { readonly max
     try {
       while (pending.length > 0) {
         const batch = pending.splice(0, MAX_ACTIVITY_BATCH_EVENTS);
+        // Admit waiting callers only after a batch moves into durable flushing.
+        // Never discard an audit record to reduce load.
+        for (let n = 0; n < batch.length && waitingForRoom.length > 0; n += 1) waitingForRoom.shift()!();
         try {
           await appendActivityBatch(filePath, maxBytes, batch.map((item) => item.line));
           for (const item of batch) item.resolve();
@@ -70,9 +79,12 @@ export function createFileActivitySink(filePath: string, options: { readonly max
     }
   };
   return {
-    record(event: ActivitySinkEvent): Promise<void> {
-      let line: string;
-      try { line = formatActivityLogLine(event); } catch (error: unknown) { return Promise.reject(error); }
+    async record(event: ActivitySinkEvent): Promise<void> {
+      const line = formatActivityLogLine(event);
+      while (pending.length >= MAX_ACTIVITY_PENDING_EVENTS) {
+        await new Promise<void>((resolve) => waitingForRoom.push(resolve));
+      }
+      // Backpressure delays the caller instead of losing audit records.
       return new Promise<void>((resolve, reject) => {
         pending.push({ line, resolve, reject });
         schedule();
@@ -82,7 +94,18 @@ export function createFileActivitySink(filePath: string, options: { readonly max
 }
 
 async function appendActivityBatch(filePath: string, maxBytes: number, lines: readonly string[]): Promise<void> {
-  mkdirSync(path.dirname(filePath), { recursive: true });
+  const previous = inProcessLogWrites.get(filePath) ?? Promise.resolve();
+  const operation = previous.catch(() => undefined).then(() => appendActivityBatchUnderLock(filePath, maxBytes, lines));
+  inProcessLogWrites.set(filePath, operation);
+  try {
+    await operation;
+  } finally {
+    if (inProcessLogWrites.get(filePath) === operation) inProcessLogWrites.delete(filePath);
+  }
+}
+
+async function appendActivityBatchUnderLock(filePath: string, maxBytes: number, lines: readonly string[]): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
   const mutex = new DatabaseSync(`${filePath}.lock.sqlite`, { timeout: 0 });
   let locked = false;
   try {
@@ -102,15 +125,18 @@ async function appendActivityBatch(filePath: string, maxBytes: number, lines: re
       if (!isMissingFile(error)) throw error;
     }
     let chunk: string[] = [];
-    const flush = (): void => {
+    const flush = async (): Promise<void> => {
       if (chunk.length === 0) return;
-      appendFileSync(filePath, chunk.join(''), 'utf8');
+      const bytes = chunk.join('');
       chunk = [];
+      // Holding the SQLite inter-process mutex retains ordering, while async
+      // append keeps the Electron event loop responsive to incoming MCP calls.
+      await appendFile(filePath, bytes, 'utf8');
     };
     for (const line of lines) {
       const bytes = Buffer.byteLength(line);
       if (size > 0 && size + bytes > maxBytes) {
-        flush();
+        await flush();
         // Trim oversized legacy logs to complete NDJSON records before archiving.
         const temporaryTail = size > maxBytes ? `${filePath}.${randomUUID()}.tail.tmp` : null;
         try {
@@ -133,7 +159,7 @@ async function appendActivityBatch(filePath: string, maxBytes: number, lines: re
       chunk.push(line);
       size += bytes;
     }
-    flush();
+    await flush();
   } finally {
     try {
       if (locked) mutex.exec('ROLLBACK');

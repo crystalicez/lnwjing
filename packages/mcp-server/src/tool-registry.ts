@@ -63,6 +63,7 @@ import { filePageTools } from './tools/file-page-tools.js';
 import { workspaceIndexTools } from './tools/workspace-index-tools.js';
 import { upgradeTools } from './tools/upgrade-tools.js';
 import { ToolSchemaRegistry } from './tool-schema-registry.js';
+import { ToolWorkloadAdmission } from './tool-workload-admission.js';
 import { isAdvertisedDeliveryState } from './tool-delivery-contract.js';
 import { upgradeCatalogEntry } from './upgrade-catalog.js';
 import { OFFICE_SEMANTIC_TOOL_NAMES } from './office-tool-contracts.js';
@@ -173,6 +174,8 @@ export interface ToolRegistryOptions {
   /** Shared by transport-scoped server factories so context-economy ledger state survives per-request server recreation. */
   readonly contextEconomy?: ContextEconomyRuntime;
   readonly maxToolDurationMs?: number;
+  /** Shared across request-scoped HTTP servers; prevents disk-heavy fan-out. */
+  readonly workloadAdmission?: ToolWorkloadAdmission;
 }
 
 export interface HostMutationApprovalRequest {
@@ -223,6 +226,7 @@ interface InvocationPolicyAssessment {
 
 export class ToolRegistry {
   private readonly allTools: readonly McpToolDefinition[];
+  private readonly toolsByName: ReadonlyMap<string, McpToolDefinition>;
   private readonly systemEligibleToolNames: ReadonlySet<string>;
   private readonly defaultExposedToolNames: ReadonlySet<string>;
   private readonly toolAvailabilitySnapshotProvider: () => ToolAvailabilitySnapshot;
@@ -250,6 +254,7 @@ export class ToolRegistry {
   private readonly processTargets = new Map<string, string>();
   private readonly codexTaskTargets = new Map<string, string>();
   private readonly maxToolDurationMs: number | null;
+  private readonly workloadAdmission: ToolWorkloadAdmission;
 
   public constructor(services: McpApplicationServices, actor: FileActor, options: ToolRegistryOptions = {}) {
     this.services = services;
@@ -269,6 +274,7 @@ export class ToolRegistry {
     this.hostMutationApprovalProvider = options.hostMutationApprovalProvider;
     this.activityWorkspaceResolver = normalizeActivityWorkspaceResolver(services, actor);
     this.maxToolDurationMs = normalizeToolResponseBudget(options.maxToolDurationMs);
+    this.workloadAdmission = options.workloadAdmission ?? new ToolWorkloadAdmission();
     this.codexToolsEnabledProvider = options.codexToolsEnabledProvider ?? ((): boolean => options.codexToolsEnabled === true);
     const contextEconomy = options.contextEconomy ?? new ContextEconomyRuntime();
     const automation = services.automation ?? services.automationFactory?.create(
@@ -284,7 +290,7 @@ export class ToolRegistry {
         profile: () => this.permissionProfile(),
         preview: (name, input, envelope) => this.previewPermission(name, this.withCheckedEnvelope(name, input, envelope)),
         validate: (name, input) => {
-          const tool = this.allTools.find((candidate) => candidate.name === name);
+          const tool = this.toolsByName.get(name);
           return tool === undefined ? err(appError('INVALID_INPUT', 'Unknown MCP tool')) : tool.parse(input);
         },
         invoke: (name, input, signal, envelope) => this.invoke(name, this.withCheckedEnvelope(name, input, envelope), undefined, signal),
@@ -340,6 +346,14 @@ export class ToolRegistry {
     }).map((tool) => withToolEnvelopes(tool));
     const exposedAutomationTools = automationTools(context).map((tool) => withToolEnvelopes(tool));
     this.allTools = [...exposedAllBaseTools, ...exposedBatchTools, ...exposedAutomationTools];
+    // Modern HTTP creates request-scoped registries: avoid a linear catalog
+    // walk on every tool invocation, input validation and nested batch call.
+    const toolsByName = new Map<string, McpToolDefinition>();
+    for (const tool of this.allTools) {
+      // Preserve the original Array.find(first match) behavior for aliases.
+      if (!toolsByName.has(tool.name)) toolsByName.set(tool.name, tool);
+    }
+    this.toolsByName = toolsByName;
     this.systemEligibleToolNames = new Set([...systemEligibleBaseTools, ...exposedBatchTools, ...exposedAutomationTools].map((tool) => tool.name));
     this.defaultExposedToolNames = new Set([...defaultExposedBaseTools, ...exposedBatchTools, ...exposedAutomationTools].map((tool) => tool.name));
     this.toolAvailabilitySnapshotProvider = options.toolAvailabilitySnapshotProvider ?? ((): ToolAvailabilitySnapshot => DEFAULT_TOOL_AVAILABILITY_SNAPSHOT);
@@ -478,7 +492,7 @@ export class ToolRegistry {
         await this.activity.end(callId, 'CONFLICT', Date.now() - started, invocationGuardMessage);
         return response;
       }
-      const tool = this.allTools.find((candidate) => candidate.name === name);
+      const tool = this.toolsByName.get(name);
       if (tool === undefined || !this.isEffectivelyExposed(name)) {
         const response = mapError(appError('INVALID_INPUT', 'Unknown MCP tool'));
         await this.activity.end(callId, 'INVALID_INPUT', Date.now() - started, 'Unknown MCP tool');
@@ -1065,7 +1079,7 @@ export class ToolRegistry {
     } satisfies Omit<RegistryPermissionPreview, 'decision' | 'reason'>;
     const denied = (reason: string): RegistryPermissionPreview => ({ ...base, decision: 'deny', reason });
     if (invocationGuardMessage !== null) return denied(invocationGuardMessage);
-    const tool = this.allTools.find((candidate) => candidate.name === name);
+    const tool = this.toolsByName.get(name);
     if (tool === undefined || !this.isEffectivelyExposed(name)) return denied('Unknown or disabled MCP tool');
     const parsed = tool.parse(input);
     if (!parsed.ok) return denied(parsed.error.message);
@@ -1205,9 +1219,18 @@ export class ToolRegistry {
           }, responseBudgetMs);
         }
         try {
-          operation = tool.execute(input, controller.signal, authorization, tool.name === 'recipe_run'
-            ? { ...internal, recipeCancellation: { register(snapshot): void { recipeCancellationSnapshot = snapshot; } } }
-            : internal).then(mapResult);
+          operation = (async (): Promise<McpToolResponse> => {
+            const release = await this.workloadAdmission.acquire(tool.name, controller.signal);
+            try {
+              if (controller.signal.aborted) throw new Error('Tool request cancelled before dispatch');
+              const result = await tool.execute(input, controller.signal, authorization, tool.name === 'recipe_run'
+                ? { ...internal, recipeCancellation: { register(snapshot): void { recipeCancellationSnapshot = snapshot; } } }
+                : internal);
+              return mapResult(result);
+            } finally {
+              release();
+            }
+          })();
         } catch (error: unknown) {
           releaseRegistration();
           reject(error);
