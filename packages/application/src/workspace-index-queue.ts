@@ -42,7 +42,7 @@ const OVERFLOW_RESCAN_QUIET_MS = 2_000;
  */
 export class WorkspaceIndexQueue {
   private readonly pending = new Map<string, WorkspaceIndexEvent>();
-  private readonly debounceMs: number;
+  private debounceMs: number;
   private readonly concurrency: number;
   private readonly listeners = new Set<QueueErrorListener>();
   private readonly batchWorker: ((events: readonly WorkspaceIndexEvent[]) => Promise<void>) | undefined;
@@ -62,6 +62,19 @@ export class WorkspaceIndexQueue {
     this.debounceMs = Math.max(0, Math.floor(options.debounceMs ?? 50));
     this.batchWorker = options.batchWorker;
     this.concurrency = this.batchWorker === undefined ? Math.max(1, Math.floor(options.concurrency ?? 2)) : 1;
+  }
+
+  /**
+   * Update an existing watcher without replacing its fs.watch handle,
+   * discarding queued paths, or scanning the workspace again.
+   */
+  public setDebounceMs(value: number): void {
+    if (!Number.isInteger(value) || value < 0 || value > 60_000) {
+      throw new RangeError('Watcher debounceMs must be an integer from 0 to 60000');
+    }
+    if (this.debounceMs === value) return;
+    this.debounceMs = value;
+    if (this.timer !== undefined) this.schedule();
   }
 
   public enqueue(event: WorkspaceIndexEvent): void {

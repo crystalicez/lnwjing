@@ -5,13 +5,14 @@ import { ActionButton, FormInput } from '../ui/UiPrimitives.js';
 interface WorkspaceWatcherControlsProps {
   readonly workspaceId: string;
   readonly locale: UiLocale;
+  readonly active: boolean;
 }
 
 /**
  * Explicit, project-scoped control: no automatic watcher activation and no
  * background status polling across many registered 20 GiB+ projects.
  */
-export function WorkspaceWatcherControls({ workspaceId, locale }: WorkspaceWatcherControlsProps): ReactElement {
+export function WorkspaceWatcherControls({ workspaceId, locale, active }: WorkspaceWatcherControlsProps): ReactElement {
   const thai = locale === 'th';
   const [status, setStatus] = useState<WorkspaceIndexWatchSummary | null>(null);
   const [debounceMs, setDebounceMs] = useState(1000);
@@ -20,6 +21,7 @@ export function WorkspaceWatcherControls({ workspaceId, locale }: WorkspaceWatch
 
   const configured = Number.isInteger(debounceMs) && debounceMs >= 0 && debounceMs <= 60_000;
   const changedSettings = status?.watching === true && status.debounceMs !== debounceMs;
+  const degraded = status?.freshness === 'watching_degraded';
 
   async function run(action: () => Promise<WorkspaceIndexWatchSummary>): Promise<void> {
     setBusy(true);
@@ -41,7 +43,7 @@ export function WorkspaceWatcherControls({ workspaceId, locale }: WorkspaceWatch
       <div className="project-watcher-heading">
         <strong>Index Watcher</strong>
         <span className="project-watcher-hint">
-          {thai ? 'เปิดเฉพาะโปรเจกต์ที่กำลังทำงาน · ไม่มีการตรวจซ้ำอัตโนมัติ' : 'Enable for the project in use · No background polling'}
+          {thai ? 'ปิด Active Project จะหยุด Watcher · ไม่ตรวจซ้ำอัตโนมัติ' : 'Deactivating this project stops its watcher · No background polling'}
         </span>
       </div>
       <div className="project-watcher-actions">
@@ -62,19 +64,19 @@ export function WorkspaceWatcherControls({ workspaceId, locale }: WorkspaceWatch
           {thai ? 'ดูสถานะ' : 'Refresh status'}
         </ActionButton>
         <ActionButton type="button" variant="primary"
-          disabled={busy || status === null || !configured || (status.watching && !changedSettings)}
+          disabled={busy || !active || status === null || !configured || (status.watching && !changedSettings && !degraded)}
           onClick={() => { void run(() => window.lnwjing.startWorkspaceIndexWatch({ workspaceId, debounceMs })); }}>
-          {status?.watching ? (thai ? 'ใช้ค่าใหม่' : 'Apply') : (thai ? 'เปิด Watcher' : 'Start watcher')}
+          {degraded ? (thai ? 'เริ่ม Watcher ใหม่' : 'Restart watcher') : status?.watching ? (thai ? 'ใช้ค่าใหม่' : 'Apply') : (thai ? 'เปิด Watcher' : 'Start watcher')}
         </ActionButton>
         <ActionButton type="button" disabled={busy || !status?.watching}
           onClick={() => { void run(() => window.lnwjing.stopWorkspaceIndexWatch({ workspaceId })); }}>
           {thai ? 'ปิด Watcher' : 'Stop watcher'}
         </ActionButton>
       </div>
-      {status === null ? <p className="project-watcher-meta">{thai ? 'กดดูสถานะก่อนเปิด watcher เพื่อหลีกเลี่ยงการสแกนโดยไม่จำเป็น' : 'Refresh status before starting to avoid unnecessary rescans.'}</p> : (
+      {status === null ? <p className="project-watcher-meta">{active ? (thai ? 'กดดูสถานะก่อนเปิด watcher เพื่อหลีกเลี่ยงการสแกนโดยไม่จำเป็น' : 'Refresh status before starting to avoid unnecessary rescans.') : (thai ? 'ต้องเปิด Active Project ก่อนจึงจะเริ่ม Watcher ได้' : 'Activate this project before starting its watcher.')}</p> : (
         <p className="project-watcher-meta" role="status">
-          {status.watching ? (thai ? 'กำลังเฝ้าดู' : 'Watching') : (thai ? 'ปิดอยู่' : 'Stopped')}
-          {' · '}{thai ? 'ไฟล์ใน Index' : 'Indexed entries'}: {status.entryCount.toLocaleString()}
+          {degraded ? (thai ? 'Watcher ขัดข้อง' : 'Watcher degraded') : active && status.watching ? (thai ? 'กำลังเฝ้าดู' : 'Watching') : (thai ? 'ปิดอยู่' : 'Stopped')}
+          {' · '}{thai ? 'รายการใน Index' : 'Indexed entries'}: {status.entryCount.toLocaleString()}
           {' · '}{thai ? 'สถานะ' : 'Freshness'}: {status.freshness}
           {' · '}{thai ? 'ค้าง' : 'Pending'}: {status.pendingEvents}
           {' · '}{thai ? 'ผิดพลาด' : 'Failures'}: {status.failedEvents}
@@ -82,6 +84,7 @@ export function WorkspaceWatcherControls({ workspaceId, locale }: WorkspaceWatch
           {status.error === null ? null : ` · ${status.error}`}
         </p>
       )}
+      {configured && debounceMs < 250 ? <p className="project-watcher-error" role="status">{thai ? 'ค่าต่ำกว่า 250 ms อาจเพิ่ม Disk I/O เมื่อมีไฟล์เปลี่ยนจำนวนมาก' : 'Below 250 ms may increase disk I/O during large bursts.'}</p> : null}
       {!configured ? <p role="alert" className="project-watcher-error">{thai ? 'ตั้งค่าได้ตั้งแต่ 0 ถึง 60,000 ms' : 'Enter a value from 0 to 60,000 ms.'}</p> : null}
       {error === null ? null : <p role="alert" className="project-watcher-error">{error}</p>}
       <p className="project-watcher-note">

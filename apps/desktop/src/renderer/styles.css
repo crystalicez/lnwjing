@@ -712,10 +712,15 @@ button.titlebar-whats-new {
 }
 .agent-prism-art {
   width:100%; height:100%; display:block; overflow:visible;
-  filter:drop-shadow(0 0 10px var(--prism-core)) drop-shadow(0 9px 10px rgba(0,0,0,.5));
-  animation:prismBreathe 4s ease-in-out infinite;
+  /* Poteto: idle/ready is a static scene, not a continuously repainted GPU filter. */
+  filter:drop-shadow(0 0 5px var(--prism-core));
 }
-.agent-prism-orbits { transform-origin:60px 60px; animation:prismOrbit 19s linear infinite; }
+.agent-prism-orbits { transform-origin:60px 60px; }
+.agent-prism.busy .agent-prism-art { animation:prismBreathe 4s ease-in-out infinite; }
+.agent-prism.busy .agent-prism-orbits { animation:prismOrbit 19s linear infinite; }
+@media (prefers-reduced-motion:reduce) {
+  .agent-prism.busy .agent-prism-art, .agent-prism.busy .agent-prism-orbits { animation:none; }
+}
 .agent-prism.busy {
   --prism-highlight:#dbf6ff;
   --prism-edge:#51adff;

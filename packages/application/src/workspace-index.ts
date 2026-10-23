@@ -6,7 +6,7 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { appError, err, ok, type Result } from '@lnwjing/domain';
-import { classifyContextPath, type ContextDiscoveryMode } from '@lnwjing/search';
+import { acquireDiskScanLease, classifyContextPath, type ContextDiscoveryMode } from '@lnwjing/search';
 import { hostPathApi, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import { WorkspaceIndexQueue, type WorkspaceIndexQueueOptions, type WorkspaceIndexQueueStatus } from './workspace-index-queue.js';
 import { WorkspaceIndexBusyError, withWorkspaceIndexMutex } from './workspace-index-mutex.js';
@@ -66,6 +66,18 @@ export interface WorkspaceIndexSnapshot {
   readonly entries: readonly WorkspaceIndexEntry[];
 }
 
+/** Small persisted status sidecar, bound to the precise snapshot file identity. */
+export interface WorkspaceIndexMetadata {
+  readonly version: 1;
+  readonly identity: string;
+  readonly workspaceId: string;
+  readonly rootPath: string;
+  readonly indexedAt: string;
+  readonly entryCount: number;
+  readonly generation: string;
+  readonly automaticCoverage: boolean;
+}
+
 export interface WorkspaceIndexMutation {
   load(): Promise<WorkspaceIndexSnapshot | null>;
   save(snapshot: WorkspaceIndexSnapshot): Promise<void>;
@@ -74,6 +86,7 @@ export interface WorkspaceIndexMutation {
 
 export interface WorkspaceIndexStore {
   load(workspaceId: string): Promise<WorkspaceIndexSnapshot | null>;
+  loadMetadata?(workspaceId: string): Promise<WorkspaceIndexMetadata | null>;
   withMutation<T>(workspaceId: string, mutation: (store: WorkspaceIndexMutation) => Promise<T>, signal?: AbortSignal): Promise<T>;
   isInternalPath?(absolutePath: string): boolean;
 }
@@ -110,6 +123,51 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
     }
   }
 
+  /**
+   * Stat the snapshot (one metadata syscall) then read a bounded sidecar.
+   * Missing/stale sidecars are rebuilt only after checking the snapshot identity.
+   * No sidecar is ever treated as valid for an atomically replaced index.
+   */
+  public async loadMetadata(workspaceId: string, retry = 0): Promise<WorkspaceIndexMetadata | null> {
+    const filePath = this.filePath(workspaceId);
+    let identity: string;
+    try {
+      identity = indexFileIdentity(await stat(filePath, { bigint: true }));
+    } catch (error: unknown) {
+      if (isNodeError(error, 'ENOENT')) return null;
+      throw error;
+    }
+    try {
+      const parsed: unknown = JSON.parse(await readFile(`${filePath}.meta.json`, 'utf8'));
+      if (isIndexMetadata(parsed, workspaceId, identity)
+        && indexFileIdentity(await stat(filePath, { bigint: true })) === identity) return parsed;
+    } catch {
+      // A missing/stale sidecar must never change an index's authoritative content.
+    }
+    const snapshot = await this.load(workspaceId);
+    if (snapshot === null) return null;
+    // Prevent publishing metadata about a file replaced while it was parsed.
+    const afterIdentity = indexFileIdentity(await stat(filePath, { bigint: true }));
+    if (afterIdentity !== identity) {
+      if (retry >= 2) throw new WorkspaceIndexBusyError();
+      return this.loadMetadata(workspaceId, retry + 1);
+    }
+    const metadata = snapshotMetadata(snapshot, identity, (entry) => !this.isInternalPath(path.resolve(snapshot.rootPath, entry.relativePath)));
+    await this.writeMetadata(metadata).catch(() => undefined);
+    return metadata;
+  }
+
+  private async writeMetadata(metadata: WorkspaceIndexMetadata): Promise<void> {
+    const target = `${this.filePath(metadata.workspaceId)}.meta.json`;
+    const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, JSON.stringify(metadata), { encoding: 'utf8', flag: 'wx' });
+      await rename(temporary, target);
+    } finally {
+      await rm(temporary, { force: true }).catch(() => undefined);
+    }
+  }
+
   public withMutation<T>(workspaceId: string, mutation: (store: WorkspaceIndexMutation) => Promise<T>, signal?: AbortSignal): Promise<T> {
     return withWorkspaceIndexMutex(this.directory, workspaceId, () => mutation({
       load: () => this.load(workspaceId),
@@ -119,6 +177,7 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
       },
       delete: async () => {
         await rm(this.filePath(workspaceId), { force: true });
+        await rm(`${this.filePath(workspaceId)}.meta.json`, { force: true });
         if (this.cached?.workspaceId === workspaceId) this.cached = null;
       },
     }), { ...(signal === undefined ? {} : { signal }) });
@@ -133,6 +192,12 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
       signal?.throwIfAborted();
       await rename(temporaryPath, this.filePath(snapshot.workspaceId));
       this.cached = null;
+      // Sidecar is a disposable cache; a failure may not invalidate a committed index.
+      try {
+        const identity = indexFileIdentity(await stat(this.filePath(snapshot.workspaceId), { bigint: true }));
+        await this.writeMetadata(snapshotMetadata(snapshot, identity, (entry) =>
+          !this.isInternalPath(path.resolve(snapshot.rootPath, entry.relativePath))));
+      } catch { /* A later compact read reconstructs the missing sidecar. */ }
     } finally {
       await rm(temporaryPath, { force: true }).catch(() => undefined);
     }
@@ -153,6 +218,12 @@ export interface WorkspaceIndexOptions {
   readonly discovery?: ContextDiscoveryMode;
   readonly rebuild?: boolean;
   readonly signal?: AbortSignal;
+}
+
+export interface WorkspaceIndexCompactStatus extends Omit<WorkspaceIndexStatus, 'snapshot'> {
+  readonly snapshot: Omit<WorkspaceIndexSnapshot, 'entries'> & { readonly entries: readonly [] } | null;
+  readonly snapshotEntryCount: number;
+  readonly snapshotEntriesOmitted: boolean;
 }
 
 export interface WorkspaceIndexStatus {
@@ -257,7 +328,7 @@ export class WorkspaceIndexService {
         try {
           const metadata = await stat(absolutePath);
           isDirectory = metadata.isDirectory();
-          if (isDirectory) await withIndexScanBudget(() => this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal), options.signal);
+          if (isDirectory) await this.scanWithBudget(rootPath, () => this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal), options.signal);
           else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal));
         } catch (error: unknown) {
           if (!isNodeError(error, 'ENOENT')) throw error;
@@ -319,6 +390,47 @@ export class WorkspaceIndexService {
       snapshot: snapshot.value,
       watcher,
       generation: snapshot.value === null ? null : this.generationFor(snapshot.value),
+      freshness: freshness.state,
+      stale: freshness.stale,
+      watcherError: watchState?.error ?? null,
+    });
+  }
+
+  /** Compact status reads a sidecar instead of materializing 30k+ entries. */
+  public async compactStatus(workspaceId: string): Promise<Result<WorkspaceIndexCompactStatus>> {
+    const workspace = await this.resolve(workspaceId);
+    if (!workspace.ok) return workspace;
+    let metadata: WorkspaceIndexMetadata | null;
+    try {
+      if (this.store.loadMetadata !== undefined) {
+        metadata = await this.store.loadMetadata(workspace.value.id);
+      } else {
+        // Custom/legacy storage retains compatible full-status behavior.
+        const snapshot = await this.store.load(workspace.value.id);
+        metadata = snapshot === null ? null
+          : snapshotMetadata(snapshot, '', (entry) => !this.store.isInternalPath?.(path.resolve(snapshot.rootPath, entry.relativePath)));
+      }
+    } catch {
+      return err(appError('INTERNAL_ERROR', 'Workspace index metadata could not be read'));
+    }
+    const watchState = this.watchers.get(workspaceId);
+    const watcher = watchState?.queue.status() ?? null;
+    const compactSnapshot: WorkspaceIndexCompactStatus['snapshot'] = metadata === null ? null : {
+      version: 1,
+      discoveryPolicyRevision: 1,
+      workspaceId: metadata.workspaceId,
+      rootPath: metadata.rootPath,
+      indexedAt: metadata.indexedAt,
+      entries: [],
+    };
+    const freshness = indexFreshness(compactSnapshot, watcher, watchState, metadata?.automaticCoverage ?? true);
+    return ok({
+      indexed: metadata !== null,
+      snapshot: compactSnapshot,
+      snapshotEntryCount: metadata?.entryCount ?? 0,
+      snapshotEntriesOmitted: metadata !== null,
+      watcher,
+      generation: metadata?.generation ?? null,
       freshness: freshness.state,
       stale: freshness.stale,
       watcherError: watchState?.error ?? null,
@@ -421,6 +533,20 @@ export class WorkspaceIndexService {
     }
   }
 
+  /** Reconfigure an active native watcher in-place; never walks the file tree. */
+  public updateWatchDebounce(workspaceId: string, debounceMs: number): Promise<Result<WorkspaceIndexCompactStatus>> {
+    if (!Number.isInteger(debounceMs) || debounceMs < 0 || debounceMs > 60_000) {
+      return Promise.resolve(err(appError('INVALID_INPUT', 'Watcher debounceMs must be between 0 and 60000')));
+    }
+    return this.serialize(this.watchLifecycles, workspaceId, async () => {
+      const watcher = this.watchers.get(workspaceId);
+      if (watcher === undefined) return err(appError('CONFLICT', 'Workspace watcher is not active'));
+      if (watcher.error !== null) return err(appError('CONFLICT', 'Workspace watcher has failed; restart it to recover'));
+      watcher.queue.setDebounceMs(debounceMs);
+      return this.compactStatus(workspaceId);
+    });
+  }
+
   public stopWatch(workspaceId: string): Promise<Result<{ readonly stopped: boolean }>> {
     return this.serialize(this.watchLifecycles, workspaceId, () => this.stopWatchNow(workspaceId));
   }
@@ -484,7 +610,7 @@ export class WorkspaceIndexService {
       ? new Map(previous.entries.map((entry) => [entry.relativePath, entry])) : undefined;
     // One heavy full-workspace walk at a time across active projects in this
     // process; incremental file updates remain independent of this budget.
-    await withIndexScanBudget(() => this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable), options.signal);
+    await this.scanWithBudget(rootPath, () => this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable), options.signal);
     const snapshot = this.snapshotValue(workspace, entries);
     options.signal?.throwIfAborted();
     // Avoid serializing and rewriting a whole index when its contents did not
@@ -534,6 +660,19 @@ export class WorkspaceIndexService {
       if (operations.get(workspaceId) === settled) operations.delete(workspaceId);
     });
     return waitForIndexOperation(operation, signal, () => started);
+  }
+
+  /** Full and incremental directory scans share the same one-slot disk budget as rg.exe. */
+  private scanWithBudget<T>(rootPath: string, scan: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return withIndexScanBudget(async () => {
+      const lease = await acquireDiskScanLease(rootPath, signal);
+      if (lease.status !== 'granted') throw new WorkspaceIndexBusyError();
+      try {
+        return await scan();
+      } finally {
+        await lease.release();
+      }
+    }, signal);
   }
 
   private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>, progress: { visited: number } = { visited: 0 }): Promise<void> {
@@ -620,6 +759,29 @@ export class WorkspaceIndexService {
   private snapshotValue(workspace: Workspace, entries: readonly WorkspaceIndexEntry[]): WorkspaceIndexSnapshot {
     return { version: 1, discoveryPolicyRevision: WORKSPACE_INDEX_DISCOVERY_POLICY_REVISION, workspaceId: workspace.id, rootPath: workspace.realRootPath, indexedAt: new Date().toISOString(), entries: [...entries].sort((left, right) => left.relativePath.localeCompare(right.relativePath)) };
   }
+}
+
+function snapshotMetadata(
+  snapshot: WorkspaceIndexSnapshot,
+  identity: string,
+  accepted: (entry: WorkspaceIndexEntry) => boolean,
+): WorkspaceIndexMetadata {
+  return {
+    version: 1, identity, workspaceId: snapshot.workspaceId, rootPath: snapshot.rootPath,
+    indexedAt: snapshot.indexedAt, entryCount: snapshot.entries.length,
+    generation: snapshotGeneration(snapshot),
+    automaticCoverage: snapshot.entries.every((entry) =>
+      classifyContextPath(entry.relativePath, 'automatic').discoverable && accepted(entry)),
+  };
+}
+
+function isIndexMetadata(value: unknown, workspaceId: string, identity: string): value is WorkspaceIndexMetadata {
+  if (!isRecord(value)) return false;
+  return value.version === 1 && value.workspaceId === workspaceId && value.identity === identity
+    && typeof value.rootPath === 'string' && typeof value.indexedAt === 'string'
+    && Number.isSafeInteger(value.entryCount) && typeof value.entryCount === 'number' && value.entryCount >= 0
+    && typeof value.generation === 'string' && /^[a-f0-9]{64}$/.test(value.generation)
+    && typeof value.automaticCoverage === 'boolean';
 }
 
 function snapshotGeneration(snapshot: WorkspaceIndexSnapshot): string {

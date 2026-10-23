@@ -136,7 +136,8 @@ export interface McpApplicationServices {
   readonly scheduledContinuations?: Pick<ScheduledContinuationService, 'prepareScheduledContinuation' | 'recordScheduledContinuationReceipt' | 'cancelScheduledContinuation' | 'claimScheduledContinuation' | 'getScheduledContinuation' | 'expediteScheduledContinuation'>;
   readonly goalMutationFence?: Pick<GoalMutationFenceService, 'inspectWorkspaceFence' | 'begin' | 'heartbeat' | 'end' | 'observe'>;
   readonly search?: Pick<SearchService, 'searchFiles' | 'searchText'>;
-  readonly workspaceIndex?: Pick<WorkspaceIndexService, 'indexWorkspace' | 'status' | 'startWatch' | 'stopWatch'>;
+  readonly workspaceIndex?: Pick<WorkspaceIndexService, 'indexWorkspace' | 'status' | 'startWatch' | 'stopWatch'>
+    & Partial<Pick<WorkspaceIndexService, 'compactStatus'>>;
   readonly git?: Pick<GitService, 'status' | 'diff' | 'log' | 'run'>;
   readonly repositoryImport?: Pick<RepositoryImportService, 'start' | 'status' | 'cancel'>;
   readonly process?: Pick<ProcessService, 'start' | 'list' | 'status' | 'logs' | 'stop' | 'previewProjectCommand' | 'startProjectCommand'>;

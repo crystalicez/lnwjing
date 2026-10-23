@@ -6,13 +6,14 @@ import path from 'node:path';
 /**
  * Same-user, cross-process disk-scan budget for Desktop and MCP STDIO.
  * No daemon, background timer or periodic disk scan: lock I/O happens only
- * when a request actually needs ripgrep.
+ * when an index or ripgrep request needs a heavy disk scan.
  *
  * The lock directory is shared through LOCALAPPDATA on Windows, where
  * Desktop and its MCP child processes normally run under the same account.
  * Other Windows users are intentionally NOT claimed to share this budget.
  */
-const SLOT_COUNT = 2;
+// Poteto: one same-user heavy disk scan at a time across Desktop, STDIO and rg.
+const SLOT_COUNT = 1;
 const WAIT_MS = 12_000;
 const RETRY_MS = 250;
 const STALE_GRACE_MS = 120_000;

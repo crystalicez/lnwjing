@@ -201,6 +201,35 @@ describe('WorkspaceIndexQueue', () => {
     expect(queue.status().failedEvents).toBe(1);
   });
 
+  it('changes debounce in-place without discarding the pending event or its overflow quiet window', async () => {
+    vi.useFakeTimers();
+    try {
+      const worker = vi.fn(async () => undefined);
+      const queue = new WorkspaceIndexQueue(worker, { debounceMs: 1_000 });
+      queue.enqueue({ relativePath: 'src/one.ts', kind: 'change' });
+      await vi.advanceTimersByTimeAsync(100);
+      queue.setDebounceMs(2_000);
+      expect(queue.status()).toMatchObject({ debounceMs: 2_000, pendingEvents: 1 });
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(worker).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(worker).toHaveBeenCalledTimes(1);
+      for (let i = 0; i < 1_100; i++) queue.enqueue({ relativePath: `generated/${i}.ts`, kind: 'change' });
+      queue.setDebounceMs(250);
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(worker).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(worker).toHaveBeenCalledTimes(2);
+      expect(worker).toHaveBeenLastCalledWith({ kind: 'rescan', relativePath: '' });
+      await queue.drain();
+      expect(() => queue.setDebounceMs(-1)).toThrow(RangeError);
+      expect(() => queue.setDebounceMs(60_001)).toThrow(RangeError);
+      expect(() => queue.setDebounceMs(NaN)).toThrow(RangeError);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('waits for the configured debounce window before processing', async () => {
     vi.useFakeTimers();
     try {

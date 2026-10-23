@@ -7,7 +7,16 @@ import { ToolRegistry } from '@lnwjing/mcp-server';
 import { USER_SETTING_KEYS } from '@lnwjing/shared';
 import { SqliteAuditRepository, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository } from '@lnwjing/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-services.js';
+import { createDesktopRuntime as createNativeDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-services.js';
+
+/** Production requires a protected key; every disposable integration profile gets a test-only key. */
+function createDesktopRuntime(...args: Parameters<typeof createNativeDesktopRuntime>): DesktopRuntime {
+  const [dataRoot, options] = args;
+  return createNativeDesktopRuntime(dataRoot, {
+    ...options,
+    checkpointEncryptionKey: options?.checkpointEncryptionKey ?? Buffer.alloc(32, 0x42),
+  });
+}
 
 const temporaryRoots: string[] = [];
 
@@ -538,14 +547,15 @@ describe('DesktopRuntime persistence', () => {
 
         const externalSettings = new SqliteSettingsRepository(externalDatabase);
         externalSettings.set(USER_SETTING_KEYS.codexToolsEnabled, 'true');
+        // External processes use a sparse 10s poteto-mode setting watcher.
         await vi.waitFor(async () => {
           expect((await client.listTools()).tools.map((tool) => tool.name)).toContain('agent_swarm_run');
-        });
+        }, { timeout: 12_000, interval: 250 });
 
         externalSettings.set(USER_SETTING_KEYS.codexToolsEnabled, 'false');
         await vi.waitFor(async () => {
           expect((await client.listTools()).tools.map((tool) => tool.name)).not.toContain('agent_swarm_run');
-        });
+        }, { timeout: 12_000, interval: 250 });
       } finally {
         await client.close().catch(() => undefined);
       }

@@ -1276,11 +1276,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
 
   async function compactWorkspaceIndexStatus(workspaceId: string): Promise<WorkspaceIndexWatchSummary> {
     const workspace = await resolveManageableWorkspace(workspaceId);
-    const result = unwrap(await workspaceIndex.status(workspace.id), 'Could not read workspace index status');
+    const result = unwrap(await workspaceIndex.compactStatus(workspace.id), 'Could not read workspace index status');
     return {
       workspaceId: workspace.id,
       indexed: result.indexed,
-      entryCount: result.snapshot?.entries.length ?? 0,
+      entryCount: result.snapshotEntryCount,
       watching: result.watcher !== null,
       freshness: result.freshness,
       stale: result.stale,
@@ -1329,6 +1329,9 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     if (!active.some((workspace) => workspace.id === workspaceId)) return;
     if (active.length <= 1) throw new Error('At least one Active Project is required');
     const nextIds = active.filter((workspace) => workspace.id !== workspaceId).map((workspace) => workspace.id);
+    // Inactive projects must not retain expensive recursive desktop watchers.
+    // A failed drain leaves the registration unchanged instead of claiming success.
+    unwrap(await workspaceIndex.stopWatch(workspaceId), 'Could not stop the inactive project watcher');
     persistStoredWorkspaceIds(settingsRepository, activeWorkspaceIdsSettingKey, nextIds);
     if (settingsRepository.get(selectedWorkspaceSettingKey) === workspaceId) settingsRepository.set(selectedWorkspaceSettingKey, nextIds[0]!);
   }
@@ -1681,8 +1684,17 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     startWorkspaceIndexWatch: async (request: StartWorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> => {
       const workspace = await resolveManageableWorkspace(request.workspaceId);
       if (workspace.archivedAt !== undefined && workspace.archivedAt !== null) throw new Error('Archived project cannot start an index watcher');
+      if (!(await resolveActiveProjectWorkspaces()).some((active) => active.id === workspace.id)) {
+        throw new Error('Activate this project before starting its index watcher');
+      }
       if (!Number.isInteger(request.debounceMs) || request.debounceMs < 0 || request.debounceMs > 60_000) throw new Error('Invalid debounce interval');
-      unwrap(await workspaceIndex.startWatch(workspace.id, { debounceMs: request.debounceMs }), 'Could not start index watcher');
+      const existing = unwrap(await workspaceIndex.compactStatus(workspace.id), 'Could not inspect index watcher');
+      // Apply debounce without replacing the native watcher or rescanning 30k+ paths.
+      if (existing.watcher !== null && existing.watcherError === null) {
+        unwrap(await workspaceIndex.updateWatchDebounce(workspace.id, request.debounceMs), 'Could not update watcher debounce');
+      } else {
+        unwrap(await workspaceIndex.startWatch(workspace.id, { debounceMs: request.debounceMs }), 'Could not start index watcher');
+      }
       return compactWorkspaceIndexStatus(workspace.id);
     },
     stopWorkspaceIndexWatch: async (request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> => {

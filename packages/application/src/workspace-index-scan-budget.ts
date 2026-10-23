@@ -1,11 +1,12 @@
 /**
  * Poteto-mode: serialize heavy full-workspace directory walks across every
- * WorkspaceIndexService instance in this Node process. Incremental mutations
- * do not acquire this gate, so file edits remain responsive while another
- * project is being scanned. The gate never touches disk.
+ * WorkspaceIndexService instance in this Node process. Full workspace walks
+ * and incremental directory-subtree walks acquire it; direct single-file edits
+ * stay independent. The gate itself never touches disk.
  *
- * Other app processes are independently bounded by ripgrep admission. A
- * process-wide scheduler is not a cross-process disk guarantee.
+ * This process-local queue is supplemented by the cross-process disk lease
+ * when the caller starts a full workspace walk. The queue alone is not a
+ * cross-process disk guarantee.
  */
 interface ScanWaiter {
   readonly resolve: () => void;

@@ -26,6 +26,9 @@ export function workspaceIndexTools(context: McpToolContext): McpToolDefinition[
       inputSchema: workspaceIndexStatusSchema,
       handler: async (input) => {
         if (context.services.workspaceIndex === undefined) return missingService();
+        if (input.summaryOnly && typeof context.services.workspaceIndex.compactStatus === 'function') {
+          return context.services.workspaceIndex.compactStatus(input.workspaceId);
+        }
         const result = await context.services.workspaceIndex.status(input.workspaceId);
         if (!result.ok || !input.summaryOnly) return result;
         const snapshot = result.value.snapshot;

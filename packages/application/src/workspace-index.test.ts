@@ -257,7 +257,7 @@ describe('WorkspaceIndexService', () => {
         store.withMutation(snapshot.workspaceId, (mutation) => mutation.save(second)),
       ]);
       expect([first, second]).toContainEqual(await store.load(snapshot.workspaceId));
-      expect((await readdir(root)).sort()).toEqual(['.locks', 'atomic.json']);
+      expect((await readdir(root)).sort()).toEqual(['.locks', 'atomic.json', 'atomic.json.meta.json']);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

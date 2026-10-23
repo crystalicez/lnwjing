@@ -24,15 +24,14 @@ afterEach(async () => {
 });
 
 describe('same-user cross-process ripgrep disk budget', () => {
-  it('admits at most two different roots and releases capacity without a daemon', async () => {
+  it('admits one heavy disk scan across roots in poteto-mode', async () => {
     const directory = await testDirectory();
     const first = await grant('E:\\project-a', directory);
-    const second = await grant('E:\\project-b', directory);
     try {
+      expect(await acquireDiskScanLease('E:\\project-b', undefined, { directory, waitMs: 25 })).toEqual({ status: 'busy' });
       expect(await acquireDiskScanLease('E:\\project-c', undefined, { directory, waitMs: 25 })).toEqual({ status: 'busy' });
     } finally {
       await first.release();
-      await second.release();
     }
     const third = await grant('E:\\project-c', directory);
     await third.release();
@@ -42,8 +41,8 @@ describe('same-user cross-process ripgrep disk budget', () => {
   it('coordinates capacity with a separately launched Node/MCP process', async () => {
     const directory = await testDirectory();
     const first = await grant('E:\\external-a', directory);
-    const second = await grant('E:\\external-b', directory);
     try {
+      expect(await acquireDiskScanLease('E:\\external-b', undefined, { directory, waitMs: 25 })).toEqual({ status: 'busy' });
       const moduleUri = pathToFileURL(path.join(import.meta.dirname, 'ripgrep-disk-lease.ts')).href;
       const script = `import { acquireDiskScanLease } from ${JSON.stringify(moduleUri)};
         const result = await acquireDiskScanLease('E:/external-c', undefined, { directory: process.argv[1], waitMs: 30 });
@@ -55,7 +54,6 @@ describe('same-user cross-process ripgrep disk budget', () => {
       expect(result).toBe('busy');
     } finally {
       await first.release();
-      await second.release();
     }
   });
 

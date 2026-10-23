@@ -24,7 +24,7 @@ describe('native crash diagnostics', () => {
     const old = path.join(directory, 'old.dmp'); writeFileSync(old, 'old');
     const oldDate = new Date(now - 31 * 24 * 60 * 60 * 1000); utimesSync(old, oldDate, oldDate);
     pruneNativeCrashDumps(directory, now);
-    const metadata = readNativeCrashDumpMetadata(root);
+    const metadata = readNativeCrashDumpMetadata(root, now);
     expect(metadata.count).toBe(20);
     expect(metadata).not.toHaveProperty('directory');
     expect(metadata.dumps.some((dump) => dump.fileName === 'old.dmp')).toBe(false);

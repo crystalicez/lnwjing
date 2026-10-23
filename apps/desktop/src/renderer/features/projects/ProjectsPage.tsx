@@ -57,7 +57,7 @@ export function ProjectsPage(props: ProjectsPageProps): ReactElement {
           </div>
           <p>{workspace.realRootPath}</p>
           {confirmingDelete ? <p className="project-delete-hint">{t('project.deleteHint')}</p> : null}
-          {archived ? null : <WorkspaceWatcherControls workspaceId={workspace.id} locale={props.locale} />}
+          {archived ? null : <WorkspaceWatcherControls key={`${workspace.id}:${active ? 'active' : 'inactive'}`} workspaceId={workspace.id} locale={props.locale} active={active} />}
         </div>
         <div className="project-actions">
           {archived ? (

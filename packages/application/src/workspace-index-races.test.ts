@@ -26,6 +26,37 @@ async function fixture(): Promise<{ directory: string; root: string; workspace: 
 }
 
 describe('workspace index races', () => {
+  it('serves compact status via identity-bound metadata without parsing the JSON snapshot on each request', async () => {
+    const setup = await fixture();
+    const service = new WorkspaceIndexService(setup.repository, setup.store);
+    try {
+      await writeFile(path.join(setup.root, 'source.ts'), 'export const metadata = true;');
+      expect((await service.indexWorkspace(setup.workspace.id)).ok).toBe(true);
+      const filePath = path.join(setup.directory, 'index', 'shared.json');
+      const sidecar = await readFile(`${filePath}.meta.json`, 'utf8');
+      expect(JSON.parse(sidecar)).toMatchObject({ workspaceId: setup.workspace.id, entryCount: 1 });
+      vi.mocked(readFile).mockClear();
+      const first = await service.compactStatus(setup.workspace.id);
+      const second = await service.compactStatus(setup.workspace.id);
+      expect(first).toMatchObject({ ok: true, value: { snapshotEntryCount: 1, snapshotEntriesOmitted: true, snapshot: { entries: [] } } });
+      expect(second).toEqual(first);
+      expect(vi.mocked(readFile).mock.calls.filter(([filename]) => filename === filePath)).toHaveLength(0);
+
+      // Another runtime atomically replaces the index: stale sidecar may not masquerade as fresh.
+      await setup.store.withMutation(setup.workspace.id, async (mutation) => {
+        const previous = await mutation.load();
+        if (previous === null) throw new Error('Missing index');
+        await mutation.save({ ...previous, indexedAt: '2030-01-01T00:00:00.000Z' });
+      });
+      expect((await service.compactStatus(setup.workspace.id))).toMatchObject({
+        ok: true, value: { snapshot: { indexedAt: '2030-01-01T00:00:00.000Z' } },
+      });
+    } finally {
+      await service.close();
+      await rm(setup.directory, { recursive: true, force: true });
+    }
+  });
+
   it('reuses unchanged JSON snapshots but observes atomic replacements from another runtime', async () => {
     const setup = await fixture();
     const service = new WorkspaceIndexService(setup.repository, setup.store);
@@ -82,6 +113,36 @@ describe('workspace index races', () => {
       expect(vi.mocked(readFile).mock.calls.some(([file]) => file === source)).toBe(true);
     } finally {
       await service.close();
+      await rm(setup.directory, { recursive: true, force: true });
+    }
+  });
+
+  it('updates live watcher debounce without reopening fs.watch, rescanning files or rewriting snapshot', async () => {
+    const setup = await fixture();
+    const service = new WorkspaceIndexService(setup.repository, setup.store);
+    try {
+      await writeFile(path.join(setup.root, 'source.ts'), 'export const watched = true;');
+      vi.mocked(watch).mockClear();
+      const initial = await service.startWatch(setup.workspace.id, { debounceMs: 1000 });
+      expect(initial.ok).toBe(true);
+      const calls = vi.mocked(watch).mock.calls.length;
+      expect(calls).toBe(1);
+      const indexPath = path.join(setup.directory, 'index', 'shared.json');
+      const before = await import('node:fs/promises').then(({ stat }) => stat(indexPath));
+      vi.mocked(readFile).mockClear();
+
+      const updated = await service.updateWatchDebounce(setup.workspace.id, 2_000);
+      expect(updated).toMatchObject({ ok: true, value: { watcher: { debounceMs: 2_000 } } });
+      expect(vi.mocked(watch).mock.calls.length).toBe(calls);
+      expect(vi.mocked(readFile).mock.calls.some(([file]) => file === path.join(setup.root, 'source.ts'))).toBe(false);
+      const after = await import('node:fs/promises').then(({ stat }) => stat(indexPath));
+      expect(after.mtimeMs).toBe(before.mtimeMs);
+      await service.stopWatch(setup.workspace.id);
+      const stoppedUpdate = await service.updateWatchDebounce(setup.workspace.id, 1_000);
+      expect(stoppedUpdate).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    } finally {
+      await service.close();
+      vi.mocked(watch).mockReset();
       await rm(setup.directory, { recursive: true, force: true });
     }
   });
