@@ -242,6 +242,9 @@ describe('cross-platform desktop packaging', () => {
     const stdioLauncher = await readFile(path.join(desktopRoot, 'build', 'lnwjing-mcp-stdio.cmd'), 'utf8');
     expect(stdioLauncher).toContain('set "APP=%BASE%lnwjing.exe"');
     expect(stdioLauncher).toContain('--mcp-stdio');
+    expect(stdioLauncher).toContain('lnwjing-mcp-stdio-bridge.exe');
+    expect(stdioLauncher).toContain('"%BRIDGE%" "%APP%" --mcp-stdio %*');
+    expect(desktopPackage.scripts?.['package:windows']).toContain('build-windows-stdio-bridge.ps1');
     expect(stdioLauncher).not.toContain('lnwjing-node.exe');
     const posixLauncher = await readFile(path.join(desktopRoot, 'build', 'lnwjing-mcp-stdio.sh'), 'utf8');
     expect(posixLauncher).toContain('exec "$APP" --mcp-stdio "$@"');

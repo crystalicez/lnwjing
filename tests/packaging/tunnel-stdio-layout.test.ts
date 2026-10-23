@@ -37,7 +37,8 @@ describe('target-native Secure Tunnel packaged stdio layout', () => {
     const launcher = await readFile(path.join(desktopRoot, 'build', 'lnwjing-mcp-stdio.cmd'), 'utf8');
     expect(launcher).toContain('set "BASE=%~dp0"');
     expect(launcher).toContain('set "APP=%BASE%lnwjing.exe"');
-    expect(launcher).toContain('"%APP%" --mcp-stdio %*');
+    expect(launcher).toContain('set "BRIDGE=%BASE%lnwjing-mcp-stdio-bridge.exe"');
+    expect(launcher).toContain('"%BRIDGE%" "%APP%" --mcp-stdio %*');
     expect(launcher).not.toContain('NODE_EXE');
     expect(launcher).not.toContain('lnwjing-mcp-stdio.cjs');
     expect(launcher).not.toContain('powershell');

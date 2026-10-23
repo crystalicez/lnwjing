@@ -103,6 +103,7 @@ try {
     Invoke-Step 'Stage ECC runtime' $desktopDirectory 'node' @('scripts/prepare-ecc-runtime.mjs')
     Invoke-Step 'Prepare native Windows OCR' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/prepare-windows-ocr.ps1')
     Invoke-Step 'Build native secret migrator' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/build-windows-secret-migrator.ps1')
+    Invoke-Step 'Build native Windows MCP STDIO bridge' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/build-windows-stdio-bridge.ps1')
     Invoke-Step 'Compile desktop and workspace packages' $repositoryRoot 'corepack' @('pnpm@10.15.0', '--filter', '@lnwjing/desktop...', 'build')
     Invoke-Step 'Package Portable x64 only (no installer / no publishing)' $desktopDirectory 'corepack' @('pnpm@10.15.0', 'exec', 'electron-builder', '--config', 'electron-builder.yml', '--win', 'portable', '--x64', '--publish', 'never')
     # Manifest generation computes SHA512 and SHA256 in ONE streaming read of the EXE.

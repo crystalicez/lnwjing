@@ -1,4 +1,5 @@
 import { serveStdio, StdioServerTransport, type StdioServerHandle } from '@modelcontextprotocol/server/stdio';
+import type { Readable, Writable } from 'node:stream';
 import { createMcpServer, type McpServerOptions } from './server.js';
 import { createMcpContinuationState } from './tool-registry.js';
 import { ModernTasksProtocol } from './modern-tasks-protocol.js';
@@ -11,6 +12,9 @@ import { createStdioRequestScope } from './request-scope.js';
 
 export interface McpStdioOptions extends McpServerOptions {
   readonly onError?: (error: Error) => void;
+  /** Optional duplex carrier for GUI-subsystem processes without usable stdin/stdout. */
+  readonly stdioInput?: Readable;
+  readonly stdioOutput?: Writable;
 }
 
 export function isBenignStdioPipeError(error: Error): boolean {
@@ -33,7 +37,7 @@ export function startMcpStdio(options: McpStdioOptions): StdioServerHandle {
   const continuationState = options.continuationState ?? createMcpContinuationState();
   const requestScope = options.requestScope ?? createStdioRequestScope();
   const modernTasks = new ModernTasksProtocol(options.services, { actor: options.actor });
-  const transport = createModernTasksTransport(new StdioServerTransport(), modernTasks);
+  const transport = createModernTasksTransport(new StdioServerTransport(options.stdioInput, options.stdioOutput), modernTasks);
   return serveStdio(
     () => createMcpServer({ ...options, runBudgetGuard, incrementalVerifier, setOfMarksStore, ponytailActivationLedger, continuationState, legacyTasksProtocol: false, requestScope }),
     { legacy: 'reject', onerror: options.onError ?? writeStdioDiagnostic, transport },

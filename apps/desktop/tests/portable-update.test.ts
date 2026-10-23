@@ -118,6 +118,8 @@ describe('Windows distribution-aware auto updater', () => {
       const launcher = path.join(directory, 'lnwjing-mcp-stdio.cmd');
       expect(await ensurePortableMcpStdioLauncher(outer, firstExe)).toBe(launcher);
       expect(await readFile(launcher, 'utf8')).toContain('lnwjing-runtime-v5.8.7-first');
+      expect(await readFile(launcher, 'utf8')).toContain('lnwjing-mcp-stdio-bridge.exe');
+      expect(await readFile(launcher, 'utf8')).toContain('"%BRIDGE%" "%APP%" --mcp-stdio %*');
       expect(await ensurePortableMcpStdioLauncher(outer, secondExe)).toBe(launcher);
       expect(await readFile(launcher, 'utf8')).toContain('lnwjing-runtime-v5.8.8-second');
       await writeFile(launcher, '@echo off\r\necho custom user script\r\n');

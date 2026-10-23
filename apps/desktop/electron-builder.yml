@@ -61,6 +61,8 @@ win:
   extraFiles:
     - from: build/lnwjing-mcp-stdio.cmd
       to: lnwjing-mcp-stdio.cmd
+    - from: build/lnwjing-mcp-stdio-bridge.exe
+      to: lnwjing-mcp-stdio-bridge.exe
   extraResources:
     - from: build/capability-bridge/windows-capability-bridge.ps1
       to: windows-capability-bridge.ps1

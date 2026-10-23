@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, ClipboardItem, crashReporter, desktopCap
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
+import { createConnection, type Socket } from 'node:net';
 import { performance } from 'node:perf_hooks';
 import { access, lstat, readFile } from 'node:fs/promises';
 import { autoUpdater } from 'electron-updater';
@@ -2046,6 +2047,29 @@ function readArgValue(flag: string): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
+async function acceptWindowsStdioBridge(portText: string, token: string): Promise<Socket> {
+  const port = Number(portText);
+  if (process.platform !== 'win32' || !Number.isInteger(port) || port < 1 || port > 65535 || !/^[0-9a-f]{32}$/.test(token)) {
+    throw new Error('Invalid Windows MCP loopback bridge identity');
+  }
+  return await new Promise<Socket>((resolve, reject) => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('Windows MCP loopback bridge connection timed out'));
+    }, 30_000);
+    socket.once('connect', () => {
+      // Authenticate before exposing the MCP stream to the native relay.
+      socket.write(Buffer.from(token, 'hex'), (error) => {
+        clearTimeout(timer);
+        if (error) { socket.destroy(); reject(error); return; }
+        resolve(socket);
+      });
+    });
+    socket.once('error', (error) => { clearTimeout(timer); reject(error); });
+  });
+}
+
 function redirectConsoleToStderr(): void {
   const write = (stream: NodeJS.WriteStream, args: unknown[]): void => {
     stream.write(`${args.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' ')}\n`);
@@ -2083,7 +2107,14 @@ function bootstrapMcpStdio(): void {
     } catch (error: unknown) {
       process.stderr.write(`lnwjing MCP stdio workspace warning: ${error instanceof Error ? error.message : 'unknown'}\n`);
     }
+    const stdioBridgePort = readArgValue('--stdio-bridge-port');
+    const stdioBridgeToken = process.env.LNWJING_MCP_STDIO_BRIDGE_SECRET;
+    delete process.env.LNWJING_MCP_STDIO_BRIDGE_SECRET;
+    if ((stdioBridgePort === undefined) !== (stdioBridgeToken === undefined)) throw new Error('Incomplete Windows MCP STDIO bridge identity');
+    const bridgedWire = stdioBridgePort === undefined || stdioBridgeToken === undefined
+      ? undefined : await acceptWindowsStdioBridge(stdioBridgePort, stdioBridgeToken);
     startMcpStdio({
+      ...(bridgedWire === undefined ? {} : { stdioInput: bridgedWire, stdioOutput: bridgedWire }),
       services: runtime.mcpServices,
       actor: runtime.mcpActor,
       activityTracker: runtime.activityTracker,
@@ -2109,12 +2140,26 @@ function bootstrapMcpStdio(): void {
         process.stderr.write(`lnwjing MCP stdio error: ${error.message}\n`);
       },
     });
-    process.stdin.on('end', () => {
-      void desktopRuntime?.close().finally(() => process.exit(0));
-    });
-    process.stdin.on('close', () => {
-      void desktopRuntime?.close().finally(() => process.exit(0));
-    });
+    if (bridgedWire !== undefined) {
+      // The Windows GUI host has no dependable inherited stdin; the Console bridge
+      // supplies an authenticated loopback stream and exits on client disconnect.
+      bridgedWire.once('close', () => {
+        void desktopRuntime?.close().finally(() => process.exit(0));
+      });
+      bridgedWire.on('error', (error) => {
+        process.stderr.write(`lnwjing MCP bridge error: ${error.message}\n`);
+        bridgedWire.destroy();
+      });
+      // Do not resume before the MCP transport installs its data listener:
+      // premature flowing mode can discard the first initialize/discover message.
+    } else {
+      process.stdin.on('end', () => {
+        void desktopRuntime?.close().finally(() => process.exit(0));
+      });
+      process.stdin.on('close', () => {
+        void desktopRuntime?.close().finally(() => process.exit(0));
+      });
+    }
     process.stdout.on('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EPIPE' || error.code === 'ECONNRESET') {
         void desktopRuntime?.close().finally(() => process.exit(0));

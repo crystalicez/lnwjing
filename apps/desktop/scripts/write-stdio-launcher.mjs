@@ -19,7 +19,12 @@ if not exist "%APP%" (
   echo lnwjing-mcp-stdio: packaged Electron executable missing: %APP% 1>&2
   exit /b 1
 )
-"%APP%" --mcp-stdio %*
+set "BRIDGE=%BASE%lnwjing-mcp-stdio-bridge.exe"
+if not exist "%BRIDGE%" (
+  echo lnwjing-mcp-stdio: Windows console bridge is missing: %BRIDGE% 1>&2
+  exit /b 1
+)
+"%BRIDGE%" "%APP%" --mcp-stdio %*
 exit /b %ERRORLEVEL%
 `;
 
