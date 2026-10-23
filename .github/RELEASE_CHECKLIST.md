@@ -8,6 +8,11 @@ After a tagged release is publicly published and GitHub assets are verified, syn
 
 Before tagging any new version, add its plain-language `What's new in vX.Y.Z` bullets to `README.md`, `FULL_README.md`, and `RELEASE_NOTES.md`, then preview the generated GitHub Release body. Also add a non-empty exact-version entry to the in-app What's New registry with Thai and English titles/descriptions. README and GitHub Release notes do not feed the in-app modal. The Desktop release-notes test checks the current package version and must pass in PR and main CI; do not tag or publish a build whose modal would show the empty state. The release generator must stop if the README section is missing or contains no real change; empty `Features` or `Bug Fixes` sections and `- None.` placeholders must not be published. Keep only the newest three versions in the READMEs and preserve detailed history in `RELEASE_NOTES.md` for later audit and backfill.
 
+## TypeScript strictness gate
+
+- Every referenced app/package compiler project must inherit `tsconfig.base.json` and pass `corepack pnpm@10.15.0 typecheck` with strict null/function/initialization/call semantics, no unchecked indexed access, exact optional properties, no implicit overrides/returns, no unused locals/parameters, no switch fallthrough, no unchecked side-effect imports, no unreachable code or unused labels, and no emit after a compiler error. The `tests/packaging/typescript-strictness.test.ts` contract keeps these flags enforced.
+- `noPropertyAccessFromIndexSignature` is **not** globally enabled yet: the schema-driven MCP request/response dictionary and Electron preload contracts have many existing index-signature property accesses. Migrate these to validated, explicitly typed DTOs or bracket access in a separate reviewed effort; do not hide the compiler diagnostics with `any` or blanket `@ts-ignore`, and do not label an unchecked migration as production-safe.
+
 ## Windows Portable cutover / large workspace acceptance
 
 - The build intended for use must be the freshly verified Portable artifact, not an older `portable/lnwjing-Portable-5.8.7.exe` with a different hash. Preserve the earlier executable and `portable.yml` together until a reversible promotion and a real startup/checkpoint smoke test have passed; do not mix old and new runtime extraction folders.

@@ -323,6 +323,7 @@ function isWithin(root: string, candidate: string): boolean {
 }
 
 function unavailable(capability: string, message: string): Result<never> {
+  void capability;
   return err(appError('INTERNAL_ERROR', `${message} (unsupported_ui_state)`, true));
 }
 

@@ -1223,26 +1223,6 @@ export class UpgradeRuntimeService {
     return result.ok ? ok({ tool: name, status: 'ready', available: true, ready: true, executed: true, delegateId, result: result.value }) : result;
   }
 
-  private async createTask(kind: RuntimeTask['kind'], input: Record<string, unknown>): Promise<RuntimeTask> {
-    const task: RuntimeTask = { id: randomUUID(), kind, createdAt: new Date().toISOString(), inputDigest: digest(input), state: 'queued' };
-    this.tasks.set(task.id, task);
-    await this.persistState();
-    return task;
-  }
-
-  private taskView(id: string | undefined): unknown {
-    const task = id === undefined ? undefined : this.tasks.get(id);
-    return task === undefined ? { found: false, id: id ?? null } : publicTask(task);
-  }
-
-  private async cancelTask(id: string | undefined): Promise<unknown> {
-    const task = id === undefined ? undefined : this.tasks.get(id);
-    if (task === undefined) return { cancelled: false, id: id ?? null };
-    task.state = 'cancelled';
-    await this.persistState();
-    return { cancelled: true, id };
-  }
-
   private listToolSchemas(): readonly Record<string, unknown>[] {
     const baseline = UPGRADE_TOOL_CATALOG.map((entry) => ({
       id: entry.name, version: '1.0.0', permissions: [entry.permission], streamable: entry.streamable === true,
@@ -1583,20 +1563,6 @@ export class UpgradeRuntimeService {
       result: result.value,
       ...(replacementBackup === undefined ? {} : { replacementBackup }),
     });
-  }
-
-  private async officeOutlook(input: Record<string, unknown>, authorization?: InvocationAuthorization): Promise<Result<unknown>> {
-    if (this.diagnostics.platform !== 'win32') {
-      return ok(truthfulUnavailable('office_outlook', 'unsupported', ['Windows host', 'Microsoft Outlook COM'])) as Result<unknown>;
-    }
-    const capabilities = this.services.capabilities;
-    if (capabilities === undefined) return ok({ tool: 'office_outlook', status: 'optional', available: false, reason: 'Office capability is not configured' });
-    const action = readString(input, 'action') ?? 'list_messages';
-    if (action !== 'list_folders' && action !== 'list_messages') return err(appError('INVALID_INPUT', 'office_outlook action must be list_folders or list_messages'));
-    const folder = readString(input, 'folder');
-    const maxMessages = typeof input.max_messages === 'number' ? Math.min(100, Math.max(1, Math.trunc(input.max_messages))) : undefined;
-    const result = await capabilities.execute('office', { app: 'outlook', action, ...(folder === undefined ? {} : { folder }), ...(maxMessages === undefined ? {} : { max_messages: maxMessages }) }, undefined, authorization);
-    return result.ok ? ok({ tool: 'office_outlook', status: 'ready', available: true, action, result: result.value }) : result;
   }
 
   private async eventLogQuery(name: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<Result<unknown>> {
@@ -3163,10 +3129,6 @@ function summarize(value: string): string {
 function hitRate(cache: CacheCounters): number {
   const total = cache.hits + cache.misses;
   return total === 0 ? 0 : Number((cache.hits / total).toFixed(4));
-}
-
-function publicTask(task: RuntimeTask): Omit<RuntimeTask, 'result'> & { readonly result?: unknown } {
-  return { ...task };
 }
 
 function countKinds(entries: readonly { readonly kind: string }[]): Record<string, number> {

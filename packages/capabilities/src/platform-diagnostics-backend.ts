@@ -36,13 +36,11 @@ type DiagnosticsAction = 'status' | 'logs' | 'service' | 'services' | 'ports' | 
 export class PlatformDiagnosticsCapabilityBackend implements CapabilityBackend {
   private readonly executableExists: (executable: string) => boolean;
   private readonly runImpl: (executable: string, args: readonly string[], signal?: AbortSignal) => Promise<PlatformDiagnosticsRunResult>;
-  private readonly timeoutMs: number;
   private readonly uid: () => number;
 
   public constructor(private readonly platform: PortablePlatform, options: PlatformDiagnosticsBackendOptions = {}) {
     this.executableExists = options.executableExists ?? ((executable: string): boolean => commandInPosixPath(executable));
     this.runImpl = options.runImpl ?? defaultRunner(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-    this.timeoutMs = Math.min(60_000, Math.max(1_000, options.timeoutMs ?? DEFAULT_TIMEOUT_MS));
     this.uid = options.uid ?? ((): number => typeof process.getuid === 'function' ? process.getuid() : 0);
     // Keep this read so a caller can provide a deterministic home in a test
     // without the implementation ever consulting it as a command argument.

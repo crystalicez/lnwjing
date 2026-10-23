@@ -619,7 +619,7 @@ export class FileService {
    * or text target into Recovery Trash before an external provider can replace it.
    */
   public async prepareExternalFileMutation(
-    actor: FileActor,
+    _actor: FileActor,
     workspaceId: string,
     request: PrepareExternalFileMutationRequest,
     signal?: AbortSignal,

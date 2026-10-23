@@ -510,12 +510,6 @@ export class ShellCapabilityBackend implements CapabilityBackend {
     return err(appError('PROCESS_NOT_FOUND', 'Task was not found'));
   }
 
-  private getTask(taskId: string | undefined): Result<ShellTaskRecord> {
-    if (taskId === undefined) return err(appError('INVALID_INPUT', 'Task ID is required'));
-    const task = this.tasks.get(taskId);
-    return task === undefined ? err(appError('PROCESS_NOT_FOUND', 'Task was not found')) : ok(task);
-  }
-
   private async runDurable(
     request: ShellRequest,
     cwd: string,

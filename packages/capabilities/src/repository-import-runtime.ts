@@ -66,7 +66,7 @@ export class SecureRepositoryImportRuntime {
   private readonly taskStore: DurableShellTaskStore;
   private readonly root: string;
 
-  constructor(private readonly dataPath: string) {
+  constructor(dataPath: string) {
     this.root = path.join(dataPath, 'repository-imports');
     this.taskStore = new DurableShellTaskStore(path.join(dataPath, 'background-tasks'));
   }
