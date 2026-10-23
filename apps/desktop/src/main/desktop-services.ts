@@ -33,6 +33,7 @@ import {
   ProcessService,
   SearchService,
   JsonWorkspaceIndexStore,
+  SqliteWorkspaceIndexStore,
   WorkspaceIndexService,
   WorkspaceInfoService,
   WorkspaceQueryService,
@@ -445,7 +446,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const workspaceRepository = new SqliteWorkspaceRepository(database);
   const goalRepository = new SqliteGoalRepository(database);
   const automationRepository = new SqliteAutomationRepository(database);
-  const workspaceIndex = new WorkspaceIndexService(workspaceRepository, new JsonWorkspaceIndexStore(path.join(dataPath, 'workspace-index')));
+  const indexDirectory = path.join(dataPath, 'workspace-index');
+  const workspaceIndex = new WorkspaceIndexService(workspaceRepository,
+    process.env.LNWJING_INDEX_SQLITE_PREVIEW === '1'
+      ? new SqliteWorkspaceIndexStore(indexDirectory) : new JsonWorkspaceIndexStore(indexDirectory));
   const settingsRepository = new SqliteSettingsRepository(database);
   let watcherAccessToken = '';
   let watcherAccessTokenOperation: Promise<string> | null = null;

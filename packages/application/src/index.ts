@@ -24,6 +24,7 @@ export * from './workspace-path-preflight.js';
 export * from './workspace-query-service.js';
 export * from './workspace-index-queue.js';
 export * from './workspace-index.js';
+export * from './workspace-index-sqlite.js';
 export * from './lifecycle-hooks.js';
 export * from './runtime-cache.js';
 export * from './agent-swarm-types.js';

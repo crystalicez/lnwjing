@@ -70,6 +70,7 @@ docs/
 docs/*
 !docs/CHATGPT_LONG_SESSION.md
 !docs/USAGE_TH.md
+!docs/INDEX_SQLITE_PREVIEW.md
 !docs/mcp/
 docs/mcp/*
 !docs/mcp/MCP_TASKS.md

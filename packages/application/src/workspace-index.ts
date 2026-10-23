@@ -4,7 +4,7 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/p
 import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
+import { setImmediate as yieldToEventLoop, setTimeout as pause } from 'node:timers/promises';
 import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { acquireDiskScanLease, classifyContextPath, type ContextDiscoveryMode } from '@lnwjing/search';
 import { hostPathApi, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
@@ -29,6 +29,23 @@ function waitForIndexOperation<T>(operation: Promise<T>, signal?: AbortSignal, h
     );
     if (signal.aborted) abort();
   });
+}
+
+/**
+ * A competing rg/full scan can outlive the normal 12-second disk-lease wait.
+ * Watcher batches must retry bounded contention rather than immediately
+ * recording a permanently missed filesystem event. Non-busy errors never retry.
+ */
+async function retryBusyIndexOperation<T>(
+  operation: () => Promise<Result<T>>, signal?: AbortSignal,
+): Promise<Result<T>> {
+  for (let attempt = 0; ; attempt += 1) {
+    signal?.throwIfAborted();
+    const result = await operation();
+    if (result.ok || result.error.code !== 'CONFLICT'
+      || !result.error.message.includes('Workspace index is busy') || attempt >= 3) return result;
+    await pause(250 * (attempt + 1), undefined, { ...(signal === undefined ? {} : { signal }) });
+  }
 }
 
 export interface WorkspaceIndexEntry {
@@ -476,17 +493,17 @@ export class WorkspaceIndexService {
     let bootstrapping = true;
     const queue = new WorkspaceIndexQueue(async (event) => {
       const mutationOptions = bootstrapping && options.signal !== undefined ? { signal: options.signal } : {};
-      const result = event.kind === 'rescan'
-        ? await this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
-        : await this.indexPath(workspaceId, event.relativePath, mutationOptions);
+      const result = await retryBusyIndexOperation(() => event.kind === 'rescan'
+        ? this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
+        : this.indexPath(workspaceId, event.relativePath, mutationOptions), mutationOptions.signal);
       if (!result.ok) throw new Error(result.error.message, { cause: result.error });
     }, {
       ...options,
       batchWorker: async (events): Promise<void> => {
         const mutationOptions = bootstrapping && options.signal !== undefined ? { signal: options.signal } : {};
-        const result = events.some((event) => event.kind === 'rescan')
-          ? await this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
-          : await this.indexPaths(workspaceId, events.map((event) => event.relativePath), mutationOptions);
+        const result = await retryBusyIndexOperation(() => events.some((event) => event.kind === 'rescan')
+          ? this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
+          : this.indexPaths(workspaceId, events.map((event) => event.relativePath), mutationOptions), mutationOptions.signal);
         if (!result.ok) throw new Error(result.error.message, { cause: result.error });
       },
     });
@@ -765,7 +782,7 @@ export class WorkspaceIndexService {
   }
 }
 
-function snapshotMetadata(
+export function snapshotMetadata(
   snapshot: WorkspaceIndexSnapshot,
   identity: string,
   accepted: (entry: WorkspaceIndexEntry) => boolean,
@@ -779,7 +796,7 @@ function snapshotMetadata(
   };
 }
 
-function isIndexMetadata(value: unknown, workspaceId: string, identity: string): value is WorkspaceIndexMetadata {
+export function isIndexMetadata(value: unknown, workspaceId: string, identity: string): value is WorkspaceIndexMetadata {
   if (!isRecord(value)) return false;
   return value.version === 1 && value.workspaceId === workspaceId && value.identity === identity
     && typeof value.rootPath === 'string' && typeof value.indexedAt === 'string'
@@ -788,7 +805,7 @@ function isIndexMetadata(value: unknown, workspaceId: string, identity: string):
     && typeof value.automaticCoverage === 'boolean';
 }
 
-function snapshotGeneration(snapshot: WorkspaceIndexSnapshot): string {
+export function snapshotGeneration(snapshot: WorkspaceIndexSnapshot): string {
   const identity = [snapshot.discoveryPolicyRevision, snapshot.entries.map((entry) => [entry.relativePath, entry.kind, entry.mtimeMs, entry.size, entry.contentHash])];
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
 }
@@ -859,7 +876,7 @@ async function statOrLstat(filePath: string, lstat: boolean): Promise<Awaited<Re
   return readLinkStats(filePath);
 }
 
-function isSnapshot(value: unknown): value is WorkspaceIndexSnapshot {
+export function isSnapshot(value: unknown): value is WorkspaceIndexSnapshot {
   return isRecord(value) && value.version === 1
     && value.discoveryPolicyRevision === WORKSPACE_INDEX_DISCOVERY_POLICY_REVISION
     && typeof value.workspaceId === 'string' && value.workspaceId.length > 0

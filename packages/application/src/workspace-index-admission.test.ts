@@ -1,3 +1,5 @@
+import { watch, type FSWatcher } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +10,7 @@ import { JsonWorkspaceIndexStore, WorkspaceIndexService } from './workspace-inde
 
 const admission = vi.hoisted(() => ({ occupied: false, acquisitions: 0, active: false }));
 
+vi.mock('node:fs', { spy: true });
 vi.mock('@lnwjing/search', async (importOriginal) => {
   const original = await importOriginal<typeof import('@lnwjing/search')>();
   return {
@@ -95,6 +98,40 @@ describe('incremental index disk-scan admission', () => {
       expect(admission.active).toBe(false);
     } finally {
       await service.close();
+    }
+  });
+
+  it('retries a temporarily busy watcher batch without losing the source update', async () => {
+    const { root, workspace, service } = await fixture();
+    let notify: ((event: 'change' | 'rename', filename: string | null) => void) | undefined;
+    let releaseBudget: ReturnType<typeof setTimeout> | undefined;
+    const fakeWatcher = new EventEmitter() as FSWatcher;
+    fakeWatcher.close = (): void => { fakeWatcher.emit('close'); };
+    vi.mocked(watch).mockImplementation((_root, _options, callback): FSWatcher => {
+      notify = callback as typeof notify;
+      return fakeWatcher;
+    });
+    try {
+      const source = path.join(root, 'source.ts');
+      await writeFile(source, 'export const before = 1;');
+      expect((await service.startWatch(workspace.id, { debounceMs: 10 })).ok).toBe(true);
+      const before = admission.acquisitions;
+      admission.occupied = true;
+      await writeFile(source, 'export const after = 2;');
+      notify?.('change', 'source.ts');
+      releaseBudget = setTimeout(() => { admission.occupied = false; }, 100);
+      await vi.waitFor(async () => {
+        const result = await service.status(workspace.id);
+        expect(result.ok && result.value.snapshot?.entries.find((item) => item.relativePath === 'source.ts')?.symbols)
+          .toContain('after');
+        expect(result).toMatchObject({ ok: true, value: { freshness: 'watching_clean', watcher: { failedEvents: 0 } } });
+      }, { timeout: 3_000 });
+      expect(admission.acquisitions).toBeGreaterThan(before + 1);
+    } finally {
+      if (releaseBudget !== undefined) clearTimeout(releaseBudget);
+      admission.occupied = false;
+      await service.close();
+      vi.mocked(watch).mockReset();
     }
   });
 });
