@@ -133,6 +133,9 @@ export class WorkspaceIndexQueue {
   }
 
   private async flush(): Promise<void> {
+    // An earlier worker finishing must not bypass the quiet window of a
+    // newer filesystem burst. Explicit drain() cancels the timer first.
+    if (this.timer !== undefined) return;
     const workers: Promise<void>[] = [];
     if (this.batchWorker !== undefined && this.activeWorkers === 0 && this.pending.size > 0) {
       const events = [...this.pending.values()];

@@ -131,6 +131,39 @@ describe('WorkspaceIndexQueue', () => {
     }
   });
 
+  it('preserves overflow quiet time when an earlier batch finishes during the storm', async () => {
+    vi.useFakeTimers();
+    try {
+      const firstStarted = Promise.withResolvers<void>();
+      const releaseFirst = Promise.withResolvers<void>();
+      const seen: string[] = [];
+      const queue = new WorkspaceIndexQueue(async (event) => {
+        seen.push(event.kind);
+        if (seen.length === 1) {
+          firstStarted.resolve();
+          await releaseFirst.promise;
+        }
+      }, { debounceMs: 10, concurrency: 1 });
+
+      queue.enqueue({ relativePath: 'first.ts', kind: 'change' });
+      await vi.advanceTimersByTimeAsync(10);
+      await firstStarted.promise;
+      for (let i = 0; i < 1_100; i += 1) {
+        queue.enqueue({ relativePath: `src/burst-${i}.ts`, kind: 'change' });
+      }
+      expect(queue.status()).toMatchObject({ pendingEvents: 1, overflowRescans: 1 });
+      releaseFirst.resolve();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(seen).toEqual(['change']);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(seen).toEqual(['change', 'rescan']);
+      await queue.drain();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('coalesces an explicit rescan with queued changes without dropping coverage', async () => {
     const seen: string[] = [];
     const queue = new WorkspaceIndexQueue(async (event) => {
