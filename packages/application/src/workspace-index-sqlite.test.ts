@@ -40,6 +40,18 @@ afterEach(async () => {
 });
 
 describe('opt-in SQLite workspace index persistence', () => {
+  it('leaves an unindexed workspace entirely untouched during idle compact-status polls', async () => {
+    const { directory, sqlite } = await fixture();
+    const before = await import('node:fs/promises').then(({ readdir }) => readdir(directory));
+    expect(before).toEqual([]);
+    for (let poll = 0; poll < 5; poll += 1) {
+      expect(await sqlite.loadMetadata('unknown')).toBeNull();
+      expect(await sqlite.load('unknown')).toBeNull();
+    }
+    const after = await import('node:fs/promises').then(({ readdir }) => readdir(directory));
+    expect(after).toEqual(before);
+  });
+
   it('imports existing JSON without rewriting it, then updates only the changed entry', async () => {
     const { directory, legacy, sqlite } = await fixture();
     const original = snapshot([entry('a.ts'), entry('b.ts')]);

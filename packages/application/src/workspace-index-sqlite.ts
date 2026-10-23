@@ -124,6 +124,10 @@ export class SqliteWorkspaceIndexStore implements WorkspaceIndexStore {
 
   private async ensureImported(workspaceId: string, alreadyLocked: boolean): Promise<void> {
     if (await this.initialized(workspaceId)) return;
+    // A compact status poll for a never-indexed project must not create
+    // SQLite mutex files or an index. An appearing JSON snapshot is picked up
+    // by the next request; its actual import remains protected by the mutex.
+    if (await this.legacyIdentity(workspaceId) === null) return;
     const migrate = async (): Promise<void> => {
       if (await this.initialized(workspaceId)) return;
       const existing = await this.legacy.load(workspaceId);
