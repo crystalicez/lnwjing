@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
-import { JsonWorkspaceIndexStore, WorkspaceIndexService, type WorkspaceIndexSnapshot, type WorkspaceIndexStore, type WorkspaceIndexMutation } from './workspace-index.js';
+import { JsonWorkspaceIndexStore, WorkspaceIndexService, type WorkspaceIndexEntry, type WorkspaceIndexSnapshot, type WorkspaceIndexStore, type WorkspaceIndexMutation } from './workspace-index.js';
 
 vi.mock('node:fs', { spy: true });
 
@@ -33,6 +33,43 @@ function memoryStore(beforeCommit?: () => Promise<void>): WorkspaceIndexStore {
 }
 
 describe('WorkspaceIndexService', () => {
+  it('updates an existing 30,000-entry index without losing unrelated files', async () => {
+    // Synthetic persisted metadata in RAM: avoids creating 30k files on SSD.
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-30k-'));
+    const workspace: Workspace = { id: 'large-metadata', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const base: WorkspaceIndexEntry = {
+      relativePath: 'placeholder.ts', kind: 'file', size: 1, mtimeMs: 1,
+      ctimeMs: 1, birthtimeMs: 1, contentHash: 'a'.repeat(64), gitBlobSha: 'b'.repeat(40),
+      language: 'typescript', isTest: false, symbols: ['existing'], imports: [],
+      exports: [], functions: [], classes: [], interfaces: [], indexedAt: '2026-10-23T00:00:00.000Z',
+    };
+    const source = 'src/update.ts';
+    const entries = Array.from({ length: 30_000 }, (_, index): WorkspaceIndexEntry =>
+      ({ ...base, relativePath: `src/file-${String(index).padStart(5, '0')}.ts` }));
+    const store = memoryStore();
+    await store.withMutation(workspace.id, async (mutation) => mutation.save({
+      version: 1, discoveryPolicyRevision: 1, workspaceId: workspace.id,
+      rootPath: root, indexedAt: base.indexedAt, entries,
+    }));
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), store);
+    try {
+      await mkdir(path.join(root, 'src'));
+      await writeFile(path.join(root, source), 'export const largeWorkspaceEdit = true;');
+      const changed = await service.indexPath(workspace.id, source);
+      expect(changed.ok).toBe(true);
+      if (changed.ok) {
+        expect(changed.value.entries).toHaveLength(30_001);
+        expect(changed.value.entries.find((entry) => entry.relativePath === source)?.symbols)
+          .toContain('largeWorkspaceEdit');
+        expect(changed.value.entries.find((entry) => entry.relativePath === 'src/file-29999.ts'))
+          .toMatchObject({ contentHash: base.contentHash });
+      }
+    } finally {
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('denies an out-of-root path even when the index snapshot is missing', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-containment-'));
     const workspace: Workspace = { id: 'no-outside', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };

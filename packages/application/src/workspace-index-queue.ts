@@ -31,6 +31,9 @@ type EventWorker = (event: WorkspaceIndexEvent) => Promise<void>;
 type QueueErrorListener = (event: WorkspaceIndexEvent, error: unknown) => void;
 
 const MAX_PENDING_INDEX_EVENTS = 1_024;
+// Allow filesystem storms (build, checkout, package restore) to settle before
+// a lossless full rescan. Explicit drain/stop still flushes immediately.
+const OVERFLOW_RESCAN_QUIET_MS = 2_000;
 
 /**
  * A lossless event queue: only duplicate notifications for the same path are
@@ -53,6 +56,7 @@ export class WorkspaceIndexQueue {
   private overflowRescans = 0;
   private completedRescans = 0;
   private lastRescanDurationMs = 0;
+  private overflowRescanPending = false;
 
   public constructor(private readonly worker: EventWorker, options: WorkspaceIndexQueueOptions = {}) {
     this.debounceMs = Math.max(0, Math.floor(options.debounceMs ?? 50));
@@ -76,6 +80,7 @@ export class WorkspaceIndexQueue {
       this.pending.clear();
       this.pending.set('', { relativePath: '', kind: 'rescan' });
       this.overflowRescans += 1;
+      this.overflowRescanPending = true;
     } else {
       if (this.pending.has(key)) this.coalescedEvents += 1;
       this.pending.set(key, { relativePath: key, kind: event.kind });
@@ -124,7 +129,7 @@ export class WorkspaceIndexQueue {
     this.timer = setTimeout(() => {
       this.timer = undefined;
       void this.flush();
-    }, this.debounceMs);
+    }, this.overflowRescanPending ? Math.max(this.debounceMs, OVERFLOW_RESCAN_QUIET_MS) : this.debounceMs);
   }
 
   private async flush(): Promise<void> {
@@ -132,6 +137,7 @@ export class WorkspaceIndexQueue {
     if (this.batchWorker !== undefined && this.activeWorkers === 0 && this.pending.size > 0) {
       const events = [...this.pending.values()];
       this.pending.clear();
+      if (events.some((event) => event.kind === 'rescan')) this.overflowRescanPending = false;
       this.activeWorkers += 1;
       workers.push(this.runBatch(events, this.batchWorker));
     }
@@ -139,6 +145,7 @@ export class WorkspaceIndexQueue {
       const next = this.pending.entries().next().value as [string, WorkspaceIndexEvent] | undefined;
       if (next === undefined) break;
       this.pending.delete(next[0]);
+      if (next[1].kind === 'rescan') this.overflowRescanPending = false;
       this.activeWorkers += 1;
       workers.push(this.run(next[1]));
     }

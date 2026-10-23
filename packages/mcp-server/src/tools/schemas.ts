@@ -288,7 +288,9 @@ export const workspaceIndexSchema = z.object({
   rebuild: z.boolean().default(false),
   includeIgnored: z.boolean().default(false),
 }).strict();
-export const workspaceIndexStatusSchema = workspaceInfoSchema;
+// Large workspaces can request compact status without returning tens of MB
+// of cached entry metadata in a single MCP response.
+export const workspaceIndexStatusSchema = workspaceInfoSchema.extend({ summaryOnly: z.boolean().default(false) }).strict();
 export const workspaceIndexWatchSchema = z.object({
   workspaceId: workspaceIdSchema,
   debounceMs: z.number().int().min(0).max(60_000).optional(),

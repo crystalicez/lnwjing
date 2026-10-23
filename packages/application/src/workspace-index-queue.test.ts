@@ -107,6 +107,30 @@ describe('WorkspaceIndexQueue', () => {
     expect(queue.status()).toMatchObject({ completedRescans: 1, pendingEvents: 0 });
   });
 
+  it('waits for a filesystem storm to settle before overflow rescan, without dropping updates', async () => {
+    vi.useFakeTimers();
+    try {
+      const worker = vi.fn(async () => undefined);
+      const queue = new WorkspaceIndexQueue(worker, { debounceMs: 10 });
+      for (let index = 0; index < 1_100; index += 1) {
+        queue.enqueue({ relativePath: `src/changed-${index}.ts`, kind: 'change' });
+      }
+      expect(queue.status()).toMatchObject({ pendingEvents: 1, overflowRescans: 1, droppedEvents: 0 });
+      await vi.advanceTimersByTimeAsync(1_990);
+      expect(worker).not.toHaveBeenCalled();
+      queue.enqueue({ relativePath: 'src/change-during-checkout.ts', kind: 'change' });
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(worker).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(worker).toHaveBeenCalledTimes(1);
+      expect(worker).toHaveBeenCalledWith({ relativePath: '', kind: 'rescan' });
+      await queue.drain();
+      expect(queue.status()).toMatchObject({ pendingEvents: 0, completedRescans: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('coalesces an explicit rescan with queued changes without dropping coverage', async () => {
     const seen: string[] = [];
     const queue = new WorkspaceIndexQueue(async (event) => {

@@ -4,11 +4,13 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/p
 import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { appError, err, ok, type Result } from '@lnwjing/domain';
 import { classifyContextPath, type ContextDiscoveryMode } from '@lnwjing/search';
 import { hostPathApi, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import { WorkspaceIndexQueue, type WorkspaceIndexQueueOptions, type WorkspaceIndexQueueStatus } from './workspace-index-queue.js';
 import { WorkspaceIndexBusyError, withWorkspaceIndexMutex } from './workspace-index-mutex.js';
+import { withIndexScanBudget } from './workspace-index-scan-budget.js';
 
 function waitForIndexOperation<T>(operation: Promise<T>, signal?: AbortSignal, hasStarted: () => boolean = () => false): Promise<T> {
   if (signal === undefined) return operation;
@@ -180,6 +182,10 @@ export class WorkspaceIndexService {
   private readonly watchers = new Map<string, IndexWatcher>();
   private readonly mutations = new Map<string, Promise<void>>();
   private readonly watchLifecycles = new Map<string, Promise<void>>();
+  // Identity-based memoization: idle status polls must not repeatedly hash or
+  // classify all 30k+ entries. Weak references do not retain old snapshots.
+  private readonly automaticCoverageCache = new WeakMap<WorkspaceIndexSnapshot, boolean>();
+  private readonly generationCache = new WeakMap<WorkspaceIndexSnapshot, string>();
   private watchingClosed = false;
 
   public constructor(
@@ -237,30 +243,43 @@ export class WorkspaceIndexService {
       const current = await store.load();
       if (current === null) return this.rebuildSnapshot(workspace, store, options);
       const discovery = options.discovery ?? 'automatic';
-      let entries = [...current.entries];
+      // Lookups and updates are keyed by path. The previous array.filter()
+      // implementation scanned *every* existing entry twice per changed file:
+      // 30k indexed paths x 1k events meant ~60 million comparisons.
+      const entries = new Map(current.entries.map((entry) => [entry.relativePath, entry]));
       let changed = false;
       for (const [normalized, absolutePath] of validatedPaths) {
         options.signal?.throwIfAborted();
         if (!classifyContextPath(normalized, discovery).discoverable || (discovery === 'automatic' && this.store.isInternalPath?.(absolutePath))) continue;
-        const affected = (entry: WorkspaceIndexEntry): boolean => entry.relativePath === normalized || entry.relativePath.startsWith(`${normalized}/`);
-        const previous = entries.filter(affected);
-        const remaining = entries.filter((entry) => !affected(entry));
+        const original = entries.get(normalized);
         const additions: WorkspaceIndexEntry[] = [];
+        let isDirectory = false;
         try {
           const metadata = await stat(absolutePath);
-          if (metadata.isDirectory()) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal);
+          isDirectory = metadata.isDirectory();
+          if (isDirectory) await withIndexScanBudget(() => this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal), options.signal);
           else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal));
         } catch (error: unknown) {
           if (!isNodeError(error, 'ENOENT')) throw error;
-          additions.length = 0;
         }
+        const previous = original === undefined ? [] : [original];
+        // Scanning descendants is necessary only for directory changes or
+        // removal of a previously indexed directory, not for each file event.
+        if (isDirectory || original?.kind === 'directory') {
+          const prefix = `${normalized}/`;
+          for (const [key, entry] of entries) {
+            if (key.startsWith(prefix)) previous.push(entry);
+          }
+        }
+        previous.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
         additions.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
         if (isDeepStrictEqual(previous.map(indexEntryContent), additions.map(indexEntryContent))) continue;
-        entries = [...remaining, ...additions];
+        for (const entry of previous) entries.delete(entry.relativePath);
+        for (const entry of additions) entries.set(entry.relativePath, entry);
         changed = true;
       }
       if (!changed) return ok(current);
-      const snapshot = this.snapshotValue(workspace, entries);
+      const snapshot = this.snapshotValue(workspace, [...entries.values()]);
       await store.save(snapshot);
       return ok(snapshot);
     }, options.signal);
@@ -299,7 +318,7 @@ export class WorkspaceIndexService {
       indexed: snapshot.value !== null,
       snapshot: snapshot.value,
       watcher,
-      generation: snapshot.value === null ? null : snapshotGeneration(snapshot.value),
+      generation: snapshot.value === null ? null : this.generationFor(snapshot.value),
       freshness: freshness.state,
       stale: freshness.stale,
       watcherError: watchState?.error ?? null,
@@ -434,9 +453,23 @@ export class WorkspaceIndexService {
     return workspace === null ? err(appError('WORKSPACE_NOT_FOUND', 'Workspace was not found')) : ok(workspace);
   }
 
+  private generationFor(snapshot: WorkspaceIndexSnapshot): string {
+    const cached = this.generationCache.get(snapshot);
+    if (cached !== undefined) return cached;
+    const generation = snapshotGeneration(snapshot);
+    this.generationCache.set(snapshot, generation);
+    return generation;
+  }
+
   private isAutomaticallyObservable(snapshot: WorkspaceIndexSnapshot): boolean {
+    const cached = this.automaticCoverageCache.get(snapshot);
+    if (cached !== undefined) return cached;
     const root = resolveHostPath(snapshot.rootPath);
-    return root !== null && snapshot.entries.every((entry) => classifyContextPath(entry.relativePath, 'automatic').discoverable && !this.store.isInternalPath?.(path.resolve(root, entry.relativePath)));
+    const observable = root !== null && snapshot.entries.every((entry) =>
+      classifyContextPath(entry.relativePath, 'automatic').discoverable &&
+      !this.store.isInternalPath?.(path.resolve(root, entry.relativePath)));
+    this.automaticCoverageCache.set(snapshot, observable);
+    return observable;
   }
 
   private async rebuildSnapshot(workspace: Workspace, store: WorkspaceIndexMutation, options: WorkspaceIndexOptions, skipUnchangedPublication = false): Promise<Result<WorkspaceIndexSnapshot>> {
@@ -449,7 +482,9 @@ export class WorkspaceIndexService {
     const previous = discovery === 'automatic' ? await store.load().catch(() => null) : null;
     const reusable = options.rebuild !== true && previous !== null && previous.rootPath === workspace.realRootPath && this.isAutomaticallyObservable(previous)
       ? new Map(previous.entries.map((entry) => [entry.relativePath, entry])) : undefined;
-    await this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable);
+    // One heavy full-workspace walk at a time across active projects in this
+    // process; incremental file updates remain independent of this budget.
+    await withIndexScanBudget(() => this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable), options.signal);
     const snapshot = this.snapshotValue(workspace, entries);
     options.signal?.throwIfAborted();
     // Avoid serializing and rewriting a whole index when its contents did not
@@ -501,7 +536,7 @@ export class WorkspaceIndexService {
     return waitForIndexOperation(operation, signal, () => started);
   }
 
-  private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>): Promise<void> {
+  private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>, progress: { visited: number } = { visited: 0 }): Promise<void> {
     signal?.throwIfAborted();
     if (discovery === 'automatic' && this.store.isInternalPath?.(directoryPath)) return;
     const api = hostPathApi(process.platform);
@@ -516,9 +551,15 @@ export class WorkspaceIndexService {
       if (discovery === 'automatic' && this.store.isInternalPath?.(childPath)) continue;
       const childRelativePath = normalizeRelativePath(api.relative(rootPath, childPath));
       if (!classifyContextPath(childRelativePath, discovery).discoverable) continue;
+      // Yield periodically so a 30k+ path walk does not monopolize Electron's
+      // main event loop. No timer or disk polling occurs while idle.
+      if (++progress.visited % 256 === 0) {
+        signal?.throwIfAborted();
+        await yieldToEventLoop();
+      }
       const beforeChild = entries.length;
       try {
-        if (child.isDirectory()) await this.scanDirectory(rootPath, childPath, entries, discovery, signal, reusable);
+        if (child.isDirectory()) await this.scanDirectory(rootPath, childPath, entries, discovery, signal, reusable, progress);
         else if (child.isSymbolicLink()) entries.push(await this.describePath(rootPath, childPath, await statOrLstat(childPath, true), signal));
         else entries.push(await this.describePath(rootPath, childPath, await stat(childPath), signal, reusable));
       } catch (error: unknown) {

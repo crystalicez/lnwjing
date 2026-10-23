@@ -1,3 +1,4 @@
+import { ok } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import { workspaceIndexSchema, workspaceIndexStatusSchema, workspaceIndexStopSchema, workspaceIndexWatchSchema } from './schemas.js';
 
@@ -23,9 +24,20 @@ export function workspaceIndexTools(context: McpToolContext): McpToolDefinition[
       permission: 'READ',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: workspaceIndexStatusSchema,
-      handler: async (input) => context.services.workspaceIndex === undefined
-        ? missingService()
-        : context.services.workspaceIndex.status(input.workspaceId),
+      handler: async (input) => {
+        if (context.services.workspaceIndex === undefined) return missingService();
+        const result = await context.services.workspaceIndex.status(input.workspaceId);
+        if (!result.ok || !input.summaryOnly) return result;
+        const snapshot = result.value.snapshot;
+        return ok({
+          ...result.value,
+          // Explicitly signal omitted entries; an empty list here does NOT
+          // mean an empty index. Other status metadata remains intact.
+          snapshot: snapshot === null ? null : { ...snapshot, entries: [] },
+          snapshotEntryCount: snapshot?.entries.length ?? 0,
+          snapshotEntriesOmitted: snapshot !== null,
+        });
+      },
     }),
     defineTool({
       name: 'workspace_index_watch',

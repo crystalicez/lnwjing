@@ -209,6 +209,10 @@ workspace_index สร้าง persistent index สำหรับค้นห�
 
 index สามารถ rebuild ได้ เมื่อ continuation เก่าหรือข้อมูลใน index stale ระบบมี stale detection, rebuildable index และ safe retry boundary
 
+**Large Projects / poteto-mode (20 GB+, 30,000+ files, หลาย workspace):** การเพิ่ม project อย่างเดียวไม่ trigger Full Index; ต้องสั่ง `workspace_index` หรือ `workspace_index_watch` จึงเริ่มอ่านทั้ง tree. Full Scan จำกัด **หนึ่งงานต่อ Node process** ข้าม workspace และ yield event loop ทุก 256 paths; incremental watcher batch ใช้ map lookup แทน filter index ทั้งก้อนราย event. ถ้า backlog เกิน 1,024 paths จะรวมเป็น full rescan และรอช่วงนิ่ง 2 วินาที ไม่สแกนซ้ำทุก event. Automatic discovery ข้าม cache/build directories เช่น `.gradle`, `.terraform`, `.idea`, `.dart_tool` และ `.svelte-kit` โดย explicit mode ยังอ่านได้.
+
+สำหรับ project ใหญ่ แนะนำเรียก `workspace_index_status` พร้อม `summaryOnly: true` ซึ่งคืน `snapshotEntryCount` และ `snapshotEntriesOmitted` โดยไม่ส่ง entries หลายหมื่นรายการ; ค่า default ยังเป็นผลลัพธ์แบบเต็มเพื่อคง compatibility. เปิด watcher เฉพาะ project ที่กำลังทำงาน และเลือก debounce ประมาณ 1,000 ms; เมื่อทำ build/checkout ที่เปลี่ยนไฟล์หลายพันรายการควรหยุด watcher ชั่วคราวแล้วสั่ง refresh เมื่อไฟล์นิ่ง. **ยังไม่ใช่ total disk-I/O budget:** ไฟล์เล็กจำนวนมากยังต้องอ่านเมื่อ Full Index ครั้งแรก และการ serialize ข้าม Node process ไม่ครอบคลุม จึงควรวัด real disk I/O บนเครื่องและ workload จริงก่อนรับรอง 20 GB+ ทุกกรณี.
+
 ### File mutation
 
 write_file, apply_patch, move_file, copy_file และ delete_file ผ่าน path guard, same-workspace check, permission decision และ checkpoint ตามประเภทงาน ไม่ได้เปิด arbitrary recursive write ให้กับ compound tool เอง

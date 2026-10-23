@@ -42,6 +42,11 @@ describe('context economy policy', () => {
       'portable/portable.yml',
       'downloads/lnwjing-runtime-v5.8.7-test/resources/resources.pak',
       '.audit/private-report.md',
+      '.gradle/caches/transforms-4/result.bin',
+      '.terraform/providers/cache/manifest.json',
+      '.idea/workspace.xml',
+      '.dart_tool/package_config.json',
+      '.svelte-kit/output/server.js',
     ]) {
       expect(classifyContextPath(generatedWorkspacePath, 'automatic'), generatedWorkspacePath).toMatchObject({
         discoverable: false,
@@ -94,6 +99,11 @@ describe('context economy policy', () => {
     expect(DEFAULT_CONTEXT_IGNORE_GLOBS).toEqual(
       expect.arrayContaining([
         '!**/node_modules/**',
+        '!**/.gradle/**',
+        '!**/.terraform/**',
+        '!**/.idea/**',
+        '!**/.dart_tool/**',
+        '!**/.svelte-kit/**',
         '!**/.git/**',
         '!**/portable/**',
         '!**/lnwjing-runtime-v*/**',
