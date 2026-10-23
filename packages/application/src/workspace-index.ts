@@ -319,36 +319,40 @@ export class WorkspaceIndexService {
       // 30k indexed paths x 1k events meant ~60 million comparisons.
       const entries = new Map(current.entries.map((entry) => [entry.relativePath, entry]));
       let changed = false;
-      for (const [normalized, absolutePath] of validatedPaths) {
-        options.signal?.throwIfAborted();
-        if (!classifyContextPath(normalized, discovery).discoverable || (discovery === 'automatic' && this.store.isInternalPath?.(absolutePath))) continue;
-        const original = entries.get(normalized);
-        const additions: WorkspaceIndexEntry[] = [];
-        let isDirectory = false;
-        try {
-          const metadata = await stat(absolutePath);
-          isDirectory = metadata.isDirectory();
-          if (isDirectory) await this.scanWithBudget(rootPath, () => this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal), options.signal);
-          else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal));
-        } catch (error: unknown) {
-          if (!isNodeError(error, 'ENOENT')) throw error;
-        }
-        const previous = original === undefined ? [] : [original];
-        // Scanning descendants is necessary only for directory changes or
-        // removal of a previously indexed directory, not for each file event.
-        if (isDirectory || original?.kind === 'directory') {
-          const prefix = `${normalized}/`;
-          for (const [key, entry] of entries) {
-            if (key.startsWith(prefix)) previous.push(entry);
+      // Every incremental batch can read many 8 MiB files; share the same
+      // cross-process heavy-I/O lease used by full scans and ripgrep.
+      await this.scanWithBudget(rootPath, async () => {
+        for (const [normalized, absolutePath] of validatedPaths) {
+          options.signal?.throwIfAborted();
+          if (!classifyContextPath(normalized, discovery).discoverable || (discovery === 'automatic' && this.store.isInternalPath?.(absolutePath))) continue;
+          const original = entries.get(normalized);
+          const additions: WorkspaceIndexEntry[] = [];
+          let isDirectory = false;
+          try {
+            const metadata = await stat(absolutePath);
+            isDirectory = metadata.isDirectory();
+            if (isDirectory) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal);
+            else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal));
+          } catch (error: unknown) {
+            if (!isNodeError(error, 'ENOENT')) throw error;
           }
+          const previous = original === undefined ? [] : [original];
+          // Scanning descendants is necessary only for directory changes or
+          // removal of a previously indexed directory, not for each file event.
+          if (isDirectory || original?.kind === 'directory') {
+            const prefix = `${normalized}/`;
+            for (const [key, entry] of entries) {
+              if (key.startsWith(prefix)) previous.push(entry);
+            }
+          }
+          previous.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+          additions.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+          if (isDeepStrictEqual(previous.map(indexEntryContent), additions.map(indexEntryContent))) continue;
+          for (const entry of previous) entries.delete(entry.relativePath);
+          for (const entry of additions) entries.set(entry.relativePath, entry);
+          changed = true;
         }
-        previous.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-        additions.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-        if (isDeepStrictEqual(previous.map(indexEntryContent), additions.map(indexEntryContent))) continue;
-        for (const entry of previous) entries.delete(entry.relativePath);
-        for (const entry of additions) entries.set(entry.relativePath, entry);
-        changed = true;
-      }
+      }, options.signal);
       if (!changed) return ok(current);
       const snapshot = this.snapshotValue(workspace, [...entries.values()]);
       await store.save(snapshot);
