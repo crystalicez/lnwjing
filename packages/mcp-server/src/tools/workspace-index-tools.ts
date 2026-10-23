@@ -44,14 +44,14 @@ export function workspaceIndexTools(context: McpToolContext): McpToolDefinition[
     }),
     defineTool({
       name: 'workspace_index_watch',
-      description: 'Watch all workspace paths and incrementally re-index only changed paths with configurable debounce/concurrency.',
+      description: 'Start a workspace watcher with a baseline index (serialized with other heavy indexing). Incremental updates default to a 1000 ms debounce; use workspace_index_stop to stop without waiting behind the index admission queue.',
       permission: 'WRITE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: workspaceIndexWatchSchema,
       handler: async (input, signal) => context.services.workspaceIndex === undefined
         ? missingService()
         : context.services.workspaceIndex.startWatch(input.workspaceId, {
-          ...(input.debounceMs === undefined ? {} : { debounceMs: input.debounceMs }),
+          debounceMs: input.debounceMs,
           ...(input.concurrency === undefined ? {} : { concurrency: input.concurrency }),
           signal,
         }),

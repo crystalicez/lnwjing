@@ -8,6 +8,13 @@ After a tagged release is publicly published and GitHub assets are verified, syn
 
 Before tagging any new version, add its plain-language `What's new in vX.Y.Z` bullets to `README.md`, `FULL_README.md`, and `RELEASE_NOTES.md`, then preview the generated GitHub Release body. Also add a non-empty exact-version entry to the in-app What's New registry with Thai and English titles/descriptions. README and GitHub Release notes do not feed the in-app modal. The Desktop release-notes test checks the current package version and must pass in PR and main CI; do not tag or publish a build whose modal would show the empty state. The release generator must stop if the README section is missing or contains no real change; empty `Features` or `Bug Fixes` sections and `- None.` placeholders must not be published. Keep only the newest three versions in the READMEs and preserve detailed history in `RELEASE_NOTES.md` for later audit and backfill.
 
+## Windows Portable cutover / large workspace acceptance
+
+- The build intended for use must be the freshly verified Portable artifact, not an older `portable/lnwjing-Portable-5.8.7.exe` with a different hash. Preserve the earlier executable and `portable.yml` together until a reversible promotion and a real startup/checkpoint smoke test have passed; do not mix old and new runtime extraction folders.
+- The default recursive workspace index watcher debounce is **1000 ms** in the service, queue and MCP schema. A caller may explicitly request a smaller debounce but should avoid it for large workspaces; inspect the effective watcher status. `workspace_index_status` with `summaryOnly: true` keeps response metadata bounded.
+- MCP `workspace_index_watch` does a full baseline discovery at startup and must share the endpoint-wide **index** admission permit with `workspace_index`, including across requests/sessions. `workspace_index_status` and `workspace_index_stop` must remain outside admission so operators can inspect or request shutdown during congestion; stopping may still wait for in-progress work to drain.
+- Do not interpret passing local MCP/Portable tests as proof of a live credentialed OpenAI Secure Tunnel, 20 GiB/30k-file endurance, physical SSD write reduction, or legacy `lnwjud` credential migration. Preserve legacy data, use an isolated pilot, and verify those gates before irreversible cutover.
+
 ## v5.8.0 functional release acceptance
 
 - All six bilingual Workflows must prepare a validated draft, preserve native file Browse, and create or resume a real Goal **only after explicit AI/user action**. No automatic Scheduled Task is created.

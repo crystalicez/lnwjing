@@ -2,9 +2,39 @@ import { describe, expect, it } from 'vitest';
 import { ok } from '@lnwjing/domain';
 import { ContextEconomyRuntime } from '../context-economy.js';
 import { workspaceIndexTools } from './workspace-index-tools.js';
+import { workspaceIndexWatchSchema } from './schemas.js';
 import type { McpToolContext } from './tool-types.js';
 
 describe('large-project workspace status', () => {
+  it('defaults MCP watcher starts to 1000ms and forwards explicit values', async () => {
+    const calls: Array<{ workspaceId: string; debounceMs?: number; signal?: AbortSignal }> = [];
+    const context = {
+      actor: { clientId: 'test', clientName: 'test' },
+      contextEconomy: new ContextEconomyRuntime(),
+      services: {
+        workspaceIndex: {
+          async startWatch(workspaceId: string, options: { debounceMs?: number; signal?: AbortSignal }) {
+            calls.push({ workspaceId, ...options });
+            return ok({ watcher: { debounceMs: options.debounceMs } });
+          },
+        },
+      },
+    } as unknown as McpToolContext;
+    const tool = workspaceIndexTools(context).find((item) => item.name === 'workspace_index_watch');
+    if (tool === undefined) throw new Error('workspace_index_watch is missing');
+    const signal = new AbortController().signal;
+    const defaultInput = workspaceIndexWatchSchema.parse({ workspaceId: 'workspace-large' });
+    expect(defaultInput.debounceMs).toBe(1_000);
+    await tool.execute(defaultInput, signal);
+    await tool.execute(workspaceIndexWatchSchema.parse({ workspaceId: 'workspace-large', debounceMs: 250 }), signal);
+    expect(calls).toMatchObject([
+      { workspaceId: 'workspace-large', debounceMs: 1_000 },
+      { workspaceId: 'workspace-large', debounceMs: 250 },
+    ]);
+    expect(calls.every((call) => call.signal === signal)).toBe(true);
+  });
+
+
   it('prefers the indexed sidecar fast path without calling full status', async () => {
     let fullCalls = 0;
     let compactCalls = 0;

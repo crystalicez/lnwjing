@@ -1,7 +1,8 @@
 <#
 Safely publish a locally built Windows Portable EXE without duplicating its
-~270 MiB payload. Keep the prior build until the replacement and manifest
-pass SHA-512 verification. The script touches only the generated project
+~270 MiB payload. Preserve the prior EXE and its manifest as rollback
+files after SHA-512 verification until the new build has been accepted.
+The script touches only the generated project
 portable/ and apps/desktop/dist/installers/ folders.
 #>
 [CmdletBinding()]
@@ -28,10 +29,19 @@ foreach ($directory in @($portable, $staging)) {
     }
 }
 foreach ($file in @($destinationExe, $destinationManifest, $stagedExe, $stagedManifest)) {
-    $item = Get-Item -LiteralPath $file -Force
+    $item = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    if ($null -eq $item) { continue }
     if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
         throw "Refusing redirected Portable file: $file"
     }
+}
+if (-not (Test-Path -LiteralPath $stagedExe -PathType Leaf) -or -not (Test-Path -LiteralPath $stagedManifest -PathType Leaf)) {
+    throw 'Portable staging executable and update manifest must both exist.'
+}
+$hasPreviousExe = Test-Path -LiteralPath $destinationExe -PathType Leaf
+$hasPreviousManifest = Test-Path -LiteralPath $destinationManifest -PathType Leaf
+if ($hasPreviousExe -ne $hasPreviousManifest) {
+    throw 'Existing Portable executable and manifest must be a matching pair; refusing partial replacement.'
 }
 if ((Test-Path -LiteralPath $backupExe) -or (Test-Path -LiteralPath $backupManifest)) {
     throw 'A previous build rollback already exists. Check it before retrying.'
@@ -42,9 +52,9 @@ $active = @(Get-CimInstance Win32_Process | Where-Object {
 })
 if ($active.Count -gt 0) { throw 'Portable or MCP is running from this directory. Close it first.' }
 
-Move-Item -LiteralPath $destinationExe -Destination $backupExe -ErrorAction Stop
+if ($hasPreviousExe) { Move-Item -LiteralPath $destinationExe -Destination $backupExe -ErrorAction Stop }
 try {
-    Move-Item -LiteralPath $destinationManifest -Destination $backupManifest -ErrorAction Stop
+    if ($hasPreviousManifest) { Move-Item -LiteralPath $destinationManifest -Destination $backupManifest -ErrorAction Stop }
     Move-Item -LiteralPath $stagedExe -Destination $destinationExe -ErrorAction Stop
     Move-Item -LiteralPath $stagedManifest -Destination $destinationManifest -ErrorAction Stop
 
@@ -63,7 +73,11 @@ try {
     } finally { $hash.Dispose() }
     if ($actual -cne $digest.Groups[1].Value) { throw 'Portable update manifest SHA-512 mismatch.' }
 
-    Remove-Item -LiteralPath $backupExe, $backupManifest -Force -ErrorAction Stop
+    # Keep the previous binary + its matching manifest until the user has
+    # verified actual workspaces and MCP in the new Portable. Same-volume
+    # renames avoid another ~280 MiB write while providing a rollback route.
+    if ($hasPreviousExe) { Write-Host "ROLLBACK_EXE: $backupExe" -ForegroundColor Yellow }
+    if ($hasPreviousManifest) { Write-Host "ROLLBACK_MANIFEST: $backupManifest" -ForegroundColor Yellow }
     Write-Host "PORTABLE_VERIFIED: $destinationExe" -ForegroundColor Green
     Write-Host "SIZE_BYTES: $($file.Length)"
 } catch {

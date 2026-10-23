@@ -499,6 +499,8 @@ export class WorkspaceIndexService {
       if (!result.ok) throw new Error(result.error.message, { cause: result.error });
     }, {
       ...options,
+      // Keep the service default explicit when called from MCP with no option.
+      debounceMs: options.debounceMs ?? 1_000,
       batchWorker: async (events): Promise<void> => {
         const mutationOptions = bootstrapping && options.signal !== undefined ? { signal: options.signal } : {};
         const result = await retryBusyIndexOperation(() => events.some((event) => event.kind === 'rescan')

@@ -16,9 +16,10 @@ interface Waiter {
 const MAX_WAITERS_PER_CLASS = 64;
 
 function classify(tool: string): WorkloadClass | null {
-  // Status, stop, and watcher controls must not wait behind disk-intensive
-  // indexing; callers need to remain able to cancel work promptly.
-  if (tool === 'workspace_index' || /^workspace_index_(?!status$|stop$|watch$)/.test(tool)
+  // Status and stop must never queue behind expensive baseline indexing.
+  // Starting a watcher performs an initial workspace index, so watch MUST
+  // share this permit with explicit workspace_index across all HTTP requests.
+  if (tool === 'workspace_index' || /^workspace_index_(?!status$|stop$)/.test(tool)
     || /^index_(?!status$|stop$)/.test(tool) || tool === 'workspace_reindex' || tool === 'workspace_full_scan') return 'index';
   if (/^(search_text|search_files|search_symbols|search_regex|search_all|ripgrep|workspace_context|workspace_snapshot|workspace_tree|project_snapshot|read_many_files)$/.test(tool)) return 'search';
   if (/^(shell|wsl_exec|process_start|process_run|project_dev|project_test|project_lint|project_typecheck|project_build)$/.test(tool)) return 'process';

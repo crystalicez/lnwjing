@@ -137,8 +137,10 @@ try {
             }
         }
     }
-    Move-Item -LiteralPath $stagedArtifact -Destination $artifact -Force
-    Move-Item -LiteralPath $stagedManifest -Destination (Join-Path $portableDirectory 'portable.yml') -Force
+    # Promote atomically with SHA-512 manifest verification and keep the old
+    # EXE + manifest as rollback files until actual user acceptance. Never
+    # overwrite a running Portable or silently destroy the prior version.
+    Invoke-Step 'Promote verified Portable with retained rollback' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/promote-portable-build.ps1')
 
     $file = Get-Item -LiteralPath $artifact
     if ($file.Length -ne $stagedFile.Length) { throw 'Portable artifact size changed while moving it.' }

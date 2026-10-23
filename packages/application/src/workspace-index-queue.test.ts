@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceIndexQueue } from './workspace-index-queue.js';
 
 describe('WorkspaceIndexQueue', () => {
+  it('defaults to a 1000ms debounce while allowing an explicit lower setting', () => {
+    const defaultQueue = new WorkspaceIndexQueue(async () => undefined);
+    const fastQueue = new WorkspaceIndexQueue(async () => undefined, { debounceMs: 50 });
+    expect(defaultQueue.status().debounceMs).toBe(1_000);
+    expect(fastQueue.status().debounceMs).toBe(50);
+  });
   it('batches distinct changes, preserves follow-up events and reports failed batch coverage', async () => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();

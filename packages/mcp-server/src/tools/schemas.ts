@@ -293,7 +293,7 @@ export const workspaceIndexSchema = z.object({
 export const workspaceIndexStatusSchema = workspaceInfoSchema.extend({ summaryOnly: z.boolean().default(false) }).strict();
 export const workspaceIndexWatchSchema = z.object({
   workspaceId: workspaceIdSchema,
-  debounceMs: z.number().int().min(0).max(60_000).optional(),
+  debounceMs: z.number().int().min(0).max(60_000).default(1_000),
   concurrency: z.number().int().min(1).max(32).optional(),
 }).strict();
 export const workspaceIndexStopSchema = workspaceInfoSchema;

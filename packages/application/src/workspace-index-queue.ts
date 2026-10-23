@@ -59,7 +59,9 @@ export class WorkspaceIndexQueue {
   private overflowRescanPending = false;
 
   public constructor(private readonly worker: EventWorker, options: WorkspaceIndexQueueOptions = {}) {
-    this.debounceMs = Math.max(0, Math.floor(options.debounceMs ?? 50));
+    // Recursive filesystem event bursts on large workspaces require a quiet
+    // window by default. Callers may still choose a smaller explicit value.
+    this.debounceMs = Math.max(0, Math.floor(options.debounceMs ?? 1_000));
     this.batchWorker = options.batchWorker;
     this.concurrency = this.batchWorker === undefined ? Math.max(1, Math.floor(options.concurrency ?? 2)) : 1;
   }

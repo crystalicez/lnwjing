@@ -14,6 +14,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(desktopRoot, '../..');
 const packagedExe = process.env.LNWJING_STDIO_PACKAGED_EXE?.trim();
+const installedLauncher = process.env.LNWJING_STDIO_LAUNCHER_CMD?.trim();
 const electron = packagedExe === undefined || packagedExe.length === 0
   ? path.join(desktopRoot, 'node_modules', 'electron', 'dist', 'electron.exe')
   : path.resolve(packagedExe);
@@ -103,7 +104,7 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
           ? path.join(desktopRoot, 'build', 'lnwjing-mcp-stdio-bridge.exe')
           : path.join(path.dirname(electron), 'lnwjing-mcp-stdio-bridge.exe'),
         args: runViaCmd
-          ? ['/d', '/c', path.join(path.dirname(electron), 'lnwjing-mcp-stdio.cmd'), '--workspace', workspace, '--disable-gpu', '--disable-background-networking']
+          ? ['/d', '/c', installedLauncher || path.join(path.dirname(electron), 'lnwjing-mcp-stdio.cmd'), '--workspace', workspace, '--disable-gpu', '--disable-background-networking']
           : [electron, ...(packagedExe === undefined || packagedExe.length === 0 ? [entry] : []), '--mcp-stdio', '--workspace', workspace, '--disable-gpu', '--disable-background-networking'],
         cwd: desktopRoot,
         env,

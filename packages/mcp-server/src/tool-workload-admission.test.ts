@@ -47,15 +47,37 @@ describe('ToolWorkloadAdmission', () => {
     expect(admission.snapshot().active.index).toBe(0);
   });
 
-  it('never queues status/stop/watch controls behind expensive index work', async () => {
+  it('serializes watcher baseline scans behind active indexing without blocking status/stop', async () => {
     const admission = new ToolWorkloadAdmission({ index: 1 });
-    const hold = await admission.acquire('workspace_index', new AbortController().signal);
-    const releases = await Promise.all(['workspace_index_status', 'workspace_index_stop', 'workspace_index_watch'].map(
+    const indexRelease = await admission.acquire('workspace_index', new AbortController().signal);
+    let watchEntered = false;
+    const watch = admission.acquire('workspace_index_watch', new AbortController().signal).then(release => {
+      watchEntered = true;
+      return release;
+    });
+    const controlReleases = await Promise.all(['workspace_index_status', 'workspace_index_stop'].map(
       name => admission.acquire(name, new AbortController().signal)));
-    expect(admission.snapshot().active.index).toBe(1);
+    expect(admission.snapshot()).toMatchObject({ active: { index: 1 }, queued: { index: 1 } });
+    expect(watchEntered).toBe(false);
+    for (const release of controlReleases) release();
+    indexRelease();
+    const watchRelease = await watch;
+    expect(watchEntered).toBe(true);
+    expect(admission.snapshot()).toMatchObject({ active: { index: 1 }, queued: { index: 0 } });
+    watchRelease();
+    expect(admission.snapshot().active.index).toBe(0);
+  });
+
+  it('cancels a queued watcher before its initial scan begins without taking the permit', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1 });
+    const indexRelease = await admission.acquire('workspace_index', new AbortController().signal);
+    const controller = new AbortController();
+    const watch = admission.acquire('workspace_index_watch', controller.signal);
+    controller.abort();
+    await expect(watch).rejects.toThrow('cancelled');
     expect(admission.snapshot().queued.index).toBe(0);
-    for (const release of releases) release();
-    hold();
+    indexRelease();
+    expect(admission.snapshot().active.index).toBe(0);
   });
 
   it('throttles expensive scans and builds while allowing light file commands', async () => {

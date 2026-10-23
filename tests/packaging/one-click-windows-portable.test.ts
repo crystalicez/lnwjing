@@ -12,8 +12,9 @@ describe('one-click Windows x64 portable build', () => {
     expect(cmd).toContain('if not "%EXIT_CODE%"=="0"');
     expect(cmd).toContain('explorer "%~dp0portable"');
     expect(script).toContain("$portableDirectory = Join-Path $repositoryRoot 'portable'");
-    expect(script).toContain('Move-Item -LiteralPath $stagedArtifact -Destination $artifact -Force');
-    expect(script).toContain("Move-Item -LiteralPath $stagedManifest -Destination (Join-Path $portableDirectory 'portable.yml') -Force");
+    expect(script).toContain('Promote verified Portable with retained rollback');
+    expect(script).toContain('scripts/promote-portable-build.ps1');
+    expect(script).not.toContain('Move-Item -LiteralPath $stagedArtifact -Destination $artifact -Force');
     expect(script).not.toContain('Copy-Item -LiteralPath $stagedArtifact');
     expect(await readFile(path.join(root, '.gitignore'), 'utf8')).toMatch(/^portable\/$/m);
     expect(script).toContain('lnwjing-Portable-$($package.version).exe');
@@ -60,6 +61,10 @@ describe('one-click Windows x64 portable build', () => {
     expect(script).toContain('Get-CimInstance Win32_Process');
     expect(script).toContain('[Security.Cryptography.SHA512]::Create()');
     expect(script).toContain('Portable update manifest SHA-512 mismatch.');
+    expect(script).toContain('ROLLBACK_EXE:');
+    expect(script).toContain('ROLLBACK_MANIFEST:');
+    expect(script).not.toContain('Remove-Item -LiteralPath $backupExe, $backupManifest');
+    expect(script).toContain('Existing Portable executable and manifest must be a matching pair');
     expect(script).toContain('Move-Item -LiteralPath $backupExe -Destination $destinationExe');
     expect(script).toContain('ReparsePoint');
     expect(script).not.toContain('Copy-Item -LiteralPath $stagedExe');
