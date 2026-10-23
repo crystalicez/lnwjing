@@ -5,7 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopRuntime } from '../src/main/desktop-services.js';
+import { createDesktopRuntime } from './test-desktop-runtime.js';
 
 const execFileAsync = promisify(execFile);
 const temporaryRoots: string[] = [];

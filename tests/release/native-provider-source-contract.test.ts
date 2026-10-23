@@ -120,7 +120,8 @@ describe('native provider source contract', () => {
     expect(source).toContain("['--user', 'list-unit-files'");
     expect(source).toContain("['--user', 'status', serviceName");
     expect(source).toContain('gui/${typeof process.getuid === \'function\' ? process.getuid() : 0}/${serviceName}');
-    expect(source).toContain('env: sanitizedDiagnosticEnvironment()');
+    expect(source).toContain('environment: NodeJS.ProcessEnv = sanitizedDiagnosticEnvironment()');
+    expect(source).toContain('env: environment,');
   });
 
   it('preserves POSIX desktop-session handles for regular child processes', async () => {

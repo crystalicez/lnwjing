@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-services.js';
+import { createDesktopRuntime, type DesktopRuntime } from './test-desktop-runtime.js';
 
 const temporaryRoots: string[] = [];
 

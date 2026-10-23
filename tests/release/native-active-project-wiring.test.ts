@@ -20,12 +20,12 @@ describe('path-bearing native Active Project wiring', () => {
 
   it('injects the host Active Project root into every path-bearing native request', async () => {
     const registry = await source('packages/mcp-server/src/tool-registry.ts');
-    expect(registry).toContain("const NATIVE_ACTIVE_SCOPE_TOOLS = new Set(['office', 'audio', 'screen_record']);");
+    expect(registry).toContain("const NATIVE_ACTIVE_SCOPE_TOOLS = new Set(['dom_cdp', 'office', 'audio', 'screen_record', ...OFFICE_SEMANTIC_TOOL_NAMES]);");
     expect(registry).toContain('const nativePathScopeRequired = requiresNativePathScope(tool.name, activeRoutedInput);');
-    expect(registry).toContain('const activeRoutedInput = await this.routeInputToActiveWorkspace(parsedInput);');
+    expect(registry).toContain('const activeRoutedInput = await this.routeInputToActiveWorkspace(input);');
     expect(registry).toContain('const matched = commonActiveWorkspaceScope(scopes, absolutePaths);');
     expect(registry).toContain('[CAPABILITY_ACTIVE_WORKSPACE_ROOT_METADATA_KEY]: normalizedRoot');
-    expect(registry).toContain("for (const key of ['file_path', 'target_path', 'output_path'] as const)");
+    expect(registry).toContain("for (const key of ['file_path', 'target_path', 'output_path', 'source_path', 'image_path'] as const)");
   });
 
   it('makes the host Active Project root override every fallback native root, including unrestricted mode', async () => {

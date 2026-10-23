@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDesktopRuntime } from '../src/main/desktop-services.js';
+import { createDesktopRuntime } from './test-desktop-runtime.js';
 
 const temporaryRoots: string[] = [];
 

@@ -64,6 +64,8 @@ describe('session resilience acceptance', () => {
         LNWJING_RESET_WORKSPACES: '1',
         LNWJING_CONFIRM_RESET_WORKSPACES: 'DELETE-REGISTERED-WORKSPACES',
         LNWJING_UNRESTRICTED: '0',
+        // Pure Node STDIO intentionally requires an explicit 32-byte key.
+        LNWJING_CHECKPOINT_KEY_BASE64: Buffer.alloc(32, 0x42).toString('base64'),
       },
       stderr: 'pipe',
     });

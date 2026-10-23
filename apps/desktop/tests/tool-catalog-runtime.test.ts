@@ -2,7 +2,8 @@ import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopRuntime, toolAvailabilityHostSyncDisposition } from '../src/main/desktop-services.js';
+import { toolAvailabilityHostSyncDisposition } from '../src/main/desktop-services.js';
+import { createDesktopRuntime } from './test-desktop-runtime.js';
 import { catalogDefinitions } from '../src/main/tool-catalog/catalog-definitions.js';
 
 const temporaryRoots: string[] = [];

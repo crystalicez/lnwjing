@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HostMutationApprovalRequest } from '@lnwjing/mcp-server';
-import { createDesktopRuntime } from '../src/main/desktop-services.js';
+import { createDesktopRuntime } from './test-desktop-runtime.js';
 
 const temporaryRoots: string[] = [];
 
