@@ -68,6 +68,9 @@ import {
   type RemoteMcpStatus,
   type ScheduleRestoreBackupRequest,
   type SelectWorkspaceRequest,
+  type WorkspaceIndexWatchRequest,
+  type StartWorkspaceIndexWatchRequest,
+  type WorkspaceIndexWatchSummary,
   type SetWorkspaceActiveRequest,
   type SetWorkspaceArchivedRequest,
   type SetAiDeletePolicyRequest,
@@ -163,6 +166,9 @@ export interface DesktopIpcServices {
   listWorkspaces(): Promise<IpcResponseMap[typeof ipcChannels.listWorkspaces]>;
   addWorkspace(request: AddWorkspaceRequest): Promise<WorkspaceSummary>;
   selectWorkspace(request: SelectWorkspaceRequest): Promise<WorkspaceSummary>;
+  getWorkspaceIndexStatus(request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary>;
+  startWorkspaceIndexWatch(request: StartWorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary>;
+  stopWorkspaceIndexWatch(request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary>;
   setWorkspaceActive(request: SetWorkspaceActiveRequest): Promise<{ readonly workspace: WorkspaceSummary; readonly active: boolean }>;
   setWorkspaceArchived(request: SetWorkspaceArchivedRequest): Promise<WorkspaceSummary>;
   deleteWorkspace(request: DeleteWorkspaceRequest): Promise<{ readonly deleted: boolean; readonly workspaceId: string; readonly rootPath: string }>;
@@ -292,6 +298,9 @@ const defaultDesktopServices: DesktopIpcServices = {
   selectWorkspace: async (): Promise<WorkspaceSummary> => {
     throw new Error('Workspace service is not configured');
   },
+  getWorkspaceIndexStatus: async (): Promise<WorkspaceIndexWatchSummary> => { throw new Error('Workspace index service is not configured'); },
+  startWorkspaceIndexWatch: async (): Promise<WorkspaceIndexWatchSummary> => { throw new Error('Workspace index service is not configured'); },
+  stopWorkspaceIndexWatch: async (): Promise<WorkspaceIndexWatchSummary> => { throw new Error('Workspace index service is not configured'); },
   setWorkspaceActive: async (): Promise<{ readonly workspace: WorkspaceSummary; readonly active: boolean }> => {
     throw new Error('Workspace service is not configured');
   },
@@ -506,6 +515,18 @@ export function registerIpcHandlers(
   registerHandler(ipcChannels.selectWorkspace, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
     return services.selectWorkspace(parseSelectWorkspaceRequest(payload));
+  });
+  registerHandler(ipcChannels.getWorkspaceIndexStatus, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    return services.getWorkspaceIndexStatus(parseWorkspaceIndexWatchRequest(payload));
+  });
+  registerHandler(ipcChannels.startWorkspaceIndexWatch, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    return services.startWorkspaceIndexWatch(parseStartWorkspaceIndexWatchRequest(payload));
+  });
+  registerHandler(ipcChannels.stopWorkspaceIndexWatch, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    return services.stopWorkspaceIndexWatch(parseWorkspaceIndexWatchRequest(payload));
   });
   registerHandler(ipcChannels.setWorkspaceActive, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
@@ -985,6 +1006,18 @@ function parseAddWorkspaceRequest(payload: unknown): AddWorkspaceRequest {
 function parseSelectWorkspaceRequest(payload: unknown): SelectWorkspaceRequest {
   if (!isRecord(payload)) throw new Error('Invalid IPC payload');
   return { workspaceId: nonEmptyString(payload.workspaceId, 'workspaceId') };
+}
+
+function parseWorkspaceIndexWatchRequest(payload: unknown): WorkspaceIndexWatchRequest {
+  if (!isRecord(payload)) throw new Error('Invalid IPC payload');
+  return { workspaceId: nonEmptyString(payload.workspaceId, 'workspaceId') };
+}
+
+function parseStartWorkspaceIndexWatchRequest(payload: unknown): StartWorkspaceIndexWatchRequest {
+  const request = parseWorkspaceIndexWatchRequest(payload);
+  if (!isRecord(payload) || typeof payload.debounceMs !== 'number' || !Number.isInteger(payload.debounceMs)
+    || payload.debounceMs < 0 || payload.debounceMs > 60_000) throw new Error('Invalid IPC payload: debounceMs');
+  return { ...request, debounceMs: payload.debounceMs };
 }
 
 function parseSetWorkspaceActiveRequest(payload: unknown): SetWorkspaceActiveRequest {

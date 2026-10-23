@@ -141,6 +141,30 @@ describe('production desktop IPC acceptance', () => {
       .rejects.toThrow(/requires at least one allowed root/);
   });
 
+  it('validates trusted project watcher IPC and returns only compact metadata', async () => {
+    const services = desktopServices();
+    registerIpcHandlers(() => ({}) as never, services);
+    const trusted = { senderFrame: { url: pathToFileURL(getRendererEntryPath()).href } };
+    const untrusted = { senderFrame: { url: 'https://example.invalid/' } };
+    const id = 'workspace-production';
+
+    const getStatus = requiredHandler(ipcChannels.getWorkspaceIndexStatus);
+    const startWatch = requiredHandler(ipcChannels.startWorkspaceIndexWatch);
+    const stopWatch = requiredHandler(ipcChannels.stopWorkspaceIndexWatch);
+    await expect(getStatus(trusted, { workspaceId: id })).resolves.toMatchObject({ workspaceId: id, entryCount: 3 });
+    await expect(startWatch(trusted, { workspaceId: id, debounceMs: 1000 }))
+      .resolves.toMatchObject({ workspaceId: id, watching: true, debounceMs: 1000 });
+    await expect(stopWatch(trusted, { workspaceId: id }))
+      .resolves.toMatchObject({ workspaceId: id, watching: false });
+    expect(services.startWorkspaceIndexWatch).toHaveBeenCalledWith({ workspaceId: id, debounceMs: 1000 });
+    expect(services.stopWorkspaceIndexWatch).toHaveBeenCalledWith({ workspaceId: id });
+    for (const value of [-1, 60_001, 0.5, '1000', null]) {
+      await expect(startWatch(trusted, { workspaceId: id, debounceMs: value })).rejects.toThrow('debounceMs');
+    }
+    await expect(startWatch(untrusted, { workspaceId: id, debounceMs: 1000 })).rejects.toThrow('IPC sender rejected');
+    expect(services.startWorkspaceIndexWatch).toHaveBeenCalledTimes(1);
+  });
+
   it('routes and validates project archive, restore, and registration deletion', async () => {
     const services = desktopServices();
     registerIpcHandlers(() => ({}) as never, services);
@@ -291,6 +315,21 @@ function desktopServices(): DesktopIpcServices {
     listWorkspaces: vi.fn(async () => []),
     addWorkspace: vi.fn(async () => { throw new Error('unused'); }),
     selectWorkspace: vi.fn(async () => { throw new Error('unused'); }),
+    getWorkspaceIndexStatus: vi.fn(async (request) => ({
+      workspaceId: request.workspaceId, indexed: true, entryCount: 3, watching: false,
+      freshness: 'unverified' as const, stale: null, debounceMs: null,
+      pendingEvents: 0, failedEvents: 0, overflowRescans: 0, lastRescanDurationMs: 0, error: null,
+    })),
+    startWorkspaceIndexWatch: vi.fn(async (request) => ({
+      workspaceId: request.workspaceId, indexed: true, entryCount: 3, watching: true,
+      freshness: 'watching_clean' as const, stale: false, debounceMs: request.debounceMs,
+      pendingEvents: 0, failedEvents: 0, overflowRescans: 0, lastRescanDurationMs: 0, error: null,
+    })),
+    stopWorkspaceIndexWatch: vi.fn(async (request) => ({
+      workspaceId: request.workspaceId, indexed: true, entryCount: 3, watching: false,
+      freshness: 'unverified' as const, stale: null, debounceMs: null,
+      pendingEvents: 0, failedEvents: 0, overflowRescans: 0, lastRescanDurationMs: 0, error: null,
+    })),
     setWorkspaceArchived: vi.fn(async (request) => ({ id: request.workspaceId, displayName: 'Production', rootPath: 'E:\\workspace-production', realRootPath: 'E:\\workspace-production', createdAt: new Date(0).toISOString(), archivedAt: request.archived ? new Date().toISOString() : null, kind: 'project' as const })),
     deleteWorkspace: vi.fn(async (request) => ({ deleted: true, workspaceId: request.workspaceId, rootPath: 'E:\\workspace-production', backupId: 'backup-production' })),
     getDashboard: vi.fn(async () => { throw new Error('unused'); }),

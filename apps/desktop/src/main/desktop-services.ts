@@ -212,6 +212,9 @@ import {
   type UiLocale,
   type WorkLogEntry,
   type WorkspaceSummary,
+  type WorkspaceIndexWatchSummary,
+  type WorkspaceIndexWatchRequest,
+  type StartWorkspaceIndexWatchRequest,
 } from '@lnwjing/ipc-contracts';
 import type { DesktopIpcServices } from './main.js';
 import { buildCapabilitySummary, createLocalCapabilityRuntime } from './capability-runtime.js';
@@ -1271,6 +1274,25 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     return workspace;
   }
 
+  async function compactWorkspaceIndexStatus(workspaceId: string): Promise<WorkspaceIndexWatchSummary> {
+    const workspace = await resolveManageableWorkspace(workspaceId);
+    const result = unwrap(await workspaceIndex.status(workspace.id), 'Could not read workspace index status');
+    return {
+      workspaceId: workspace.id,
+      indexed: result.indexed,
+      entryCount: result.snapshot?.entries.length ?? 0,
+      watching: result.watcher !== null,
+      freshness: result.freshness,
+      stale: result.stale,
+      debounceMs: result.watcher?.debounceMs ?? null,
+      pendingEvents: result.watcher?.pendingEvents ?? 0,
+      failedEvents: result.watcher?.failedEvents ?? 0,
+      overflowRescans: result.watcher?.overflowRescans ?? 0,
+      lastRescanDurationMs: result.watcher?.lastRescanDurationMs ?? 0,
+      error: result.watcherError,
+    };
+  }
+
   async function resolveActiveProjectWorkspaces(): Promise<readonly Workspace[]> {
     const workspaces = (await workspaceService.list()).filter((workspace) => !isMachineRootPath(workspace.realRootPath) && !isMachineRootPath(workspace.rootPath));
     if (workspaces.length === 0) {
@@ -1653,6 +1675,20 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     },
     selectWorkspace: async (request: SelectWorkspaceRequest): Promise<WorkspaceSummary> => {
       return selectWorkspaceOnly(request.workspaceId);
+    },
+    getWorkspaceIndexStatus: async (request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> =>
+      compactWorkspaceIndexStatus(request.workspaceId),
+    startWorkspaceIndexWatch: async (request: StartWorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> => {
+      const workspace = await resolveManageableWorkspace(request.workspaceId);
+      if (workspace.archivedAt !== undefined && workspace.archivedAt !== null) throw new Error('Archived project cannot start an index watcher');
+      if (!Number.isInteger(request.debounceMs) || request.debounceMs < 0 || request.debounceMs > 60_000) throw new Error('Invalid debounce interval');
+      unwrap(await workspaceIndex.startWatch(workspace.id, { debounceMs: request.debounceMs }), 'Could not start index watcher');
+      return compactWorkspaceIndexStatus(workspace.id);
+    },
+    stopWorkspaceIndexWatch: async (request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> => {
+      const workspace = await resolveManageableWorkspace(request.workspaceId);
+      unwrap(await workspaceIndex.stopWatch(workspace.id), 'Could not stop index watcher');
+      return compactWorkspaceIndexStatus(workspace.id);
     },
     setWorkspaceActive: async (request): Promise<{ readonly workspace: WorkspaceSummary; readonly active: boolean }> => {
       if (request.active) await activateWorkspace(request.workspaceId);

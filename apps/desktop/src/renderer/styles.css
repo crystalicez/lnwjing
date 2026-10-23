@@ -1507,6 +1507,52 @@ button.titlebar-whats-new {
   flex-shrink: 0;
 }
 
+.project-watcher-controls {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(9, 15, 24, 0.5);
+}
+
+.project-watcher-heading,
+.project-watcher-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.project-watcher-heading {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.project-watcher-hint,
+.project-watcher-note,
+.project-watcher-meta {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.project-watcher-actions {
+  font-size: 12px;
+}
+
+.project-watcher-actions .ui-text-input {
+  width: 100px;
+  min-width: 80px;
+}
+
+.project-watcher-error {
+  color: #ff9898 !important;
+}
+
+.project-watcher-note {
+  margin-top: 8px !important;
+}
+
 .project-status-badge {
   display: inline-flex;
   align-items: center;

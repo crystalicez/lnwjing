@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactElement } from 'react';
 import type { UiLocale, WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { settleWorkspaceAdd, type AddWorkspaceAction } from '../workspaces/workspace-add.js';
+import { WorkspaceWatcherControls } from './WorkspaceWatcherControls.js';
 
 export { settleWorkspaceAdd } from '../workspaces/workspace-add.js';
 
@@ -56,6 +57,7 @@ export function ProjectsPage(props: ProjectsPageProps): ReactElement {
           </div>
           <p>{workspace.realRootPath}</p>
           {confirmingDelete ? <p className="project-delete-hint">{t('project.deleteHint')}</p> : null}
+          {archived ? null : <WorkspaceWatcherControls workspaceId={workspace.id} locale={props.locale} />}
         </div>
         <div className="project-actions">
           {archived ? (

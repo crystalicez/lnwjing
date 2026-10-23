@@ -17,6 +17,9 @@ export const ipcChannels = {
   listWorkspaces: 'lnwjing:list-workspaces',
   addWorkspace: 'lnwjing:add-workspace',
   selectWorkspace: 'lnwjing:select-workspace',
+  getWorkspaceIndexStatus: 'lnwjing:get-workspace-index-status',
+  startWorkspaceIndexWatch: 'lnwjing:start-workspace-index-watch',
+  stopWorkspaceIndexWatch: 'lnwjing:stop-workspace-index-watch',
   setWorkspaceActive: 'lnwjing:set-workspace-active',
   setWorkspaceArchived: 'lnwjing:set-workspace-archived',
   deleteWorkspace: 'lnwjing:delete-workspace',
@@ -1021,6 +1024,28 @@ export interface SelectWorkspaceRequest {
   readonly workspaceId: string;
 }
 
+export interface WorkspaceIndexWatchRequest {
+  readonly workspaceId: string;
+}
+export interface StartWorkspaceIndexWatchRequest extends WorkspaceIndexWatchRequest {
+  readonly debounceMs: number;
+}
+/** A bounded, entries-free status for Desktop UI; never send the full snapshot over IPC. */
+export interface WorkspaceIndexWatchSummary {
+  readonly workspaceId: string;
+  readonly indexed: boolean;
+  readonly entryCount: number;
+  readonly watching: boolean;
+  readonly freshness: 'missing' | 'unverified' | 'watching_clean' | 'watching_pending' | 'watching_degraded';
+  readonly stale: boolean | null;
+  readonly debounceMs: number | null;
+  readonly pendingEvents: number;
+  readonly failedEvents: number;
+  readonly overflowRescans: number;
+  readonly lastRescanDurationMs: number;
+  readonly error: string | null;
+}
+
 export interface SetWorkspaceActiveRequest {
   readonly workspaceId: string;
   readonly active: boolean;
@@ -1176,6 +1201,9 @@ export interface IpcRequestMap {
   readonly [ipcChannels.listWorkspaces]: undefined;
   readonly [ipcChannels.addWorkspace]: AddWorkspaceRequest;
   readonly [ipcChannels.selectWorkspace]: SelectWorkspaceRequest;
+  readonly [ipcChannels.getWorkspaceIndexStatus]: WorkspaceIndexWatchRequest;
+  readonly [ipcChannels.startWorkspaceIndexWatch]: StartWorkspaceIndexWatchRequest;
+  readonly [ipcChannels.stopWorkspaceIndexWatch]: WorkspaceIndexWatchRequest;
   readonly [ipcChannels.setWorkspaceActive]: SetWorkspaceActiveRequest;
   readonly [ipcChannels.setWorkspaceArchived]: SetWorkspaceArchivedRequest;
   readonly [ipcChannels.deleteWorkspace]: DeleteWorkspaceRequest;
@@ -1263,6 +1291,9 @@ export interface IpcResponseMap {
   readonly [ipcChannels.listWorkspaces]: readonly WorkspaceSummary[];
   readonly [ipcChannels.addWorkspace]: WorkspaceSummary;
   readonly [ipcChannels.selectWorkspace]: WorkspaceSummary;
+  readonly [ipcChannels.getWorkspaceIndexStatus]: WorkspaceIndexWatchSummary;
+  readonly [ipcChannels.startWorkspaceIndexWatch]: WorkspaceIndexWatchSummary;
+  readonly [ipcChannels.stopWorkspaceIndexWatch]: WorkspaceIndexWatchSummary;
   readonly [ipcChannels.setWorkspaceActive]: { readonly workspace: WorkspaceSummary; readonly active: boolean };
   readonly [ipcChannels.setWorkspaceArchived]: WorkspaceSummary;
   readonly [ipcChannels.deleteWorkspace]: { readonly deleted: boolean; readonly workspaceId: string; readonly rootPath: string; readonly backupId: string };
@@ -1353,6 +1384,9 @@ export interface LnwjingApi {
   listWorkspaces(): Promise<IpcResponseMap[typeof ipcChannels.listWorkspaces]>;
   addWorkspace(request: AddWorkspaceRequest): Promise<IpcResponseMap[typeof ipcChannels.addWorkspace]>;
   selectWorkspace(request: SelectWorkspaceRequest): Promise<IpcResponseMap[typeof ipcChannels.selectWorkspace]>;
+  getWorkspaceIndexStatus(request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary>;
+  startWorkspaceIndexWatch(request: StartWorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary>;
+  stopWorkspaceIndexWatch(request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary>;
   setWorkspaceActive(request: SetWorkspaceActiveRequest): Promise<IpcResponseMap[typeof ipcChannels.setWorkspaceActive]>;
   setWorkspaceArchived(request: SetWorkspaceArchivedRequest): Promise<IpcResponseMap[typeof ipcChannels.setWorkspaceArchived]>;
   deleteWorkspace(request: DeleteWorkspaceRequest): Promise<IpcResponseMap[typeof ipcChannels.deleteWorkspace]>;

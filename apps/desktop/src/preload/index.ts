@@ -99,6 +99,9 @@ import {
   type UserSettings,
   type WorkLogEntry,
   type WorkspaceSummary,
+  type WorkspaceIndexWatchRequest,
+  type StartWorkspaceIndexWatchRequest,
+  type WorkspaceIndexWatchSummary,
 } from '@lnwjing/ipc-contracts';
 import { parseLogCorrelation } from './log-parser.js';
 
@@ -1097,6 +1100,49 @@ function selectWorkspace(request: SelectWorkspaceRequest): Promise<WorkspaceSumm
   return invoke(ipcChannels.selectWorkspace, { workspaceId: request.workspaceId }).then(workspaceSummary);
 }
 
+function workspaceIndexWatchSummary(value: unknown): WorkspaceIndexWatchSummary {
+  if (!isRecord(value)) throw new Error('Invalid IPC response');
+  const freshness = stringField(value, 'freshness');
+  if (!['missing', 'unverified', 'watching_clean', 'watching_pending', 'watching_degraded'].includes(freshness)) throw new Error('Invalid IPC response');
+  const status = {
+    workspaceId: stringField(value, 'workspaceId'),
+    indexed: booleanField(value, 'indexed'),
+    entryCount: numberField(value, 'entryCount'),
+    watching: booleanField(value, 'watching'),
+    freshness: freshness as WorkspaceIndexWatchSummary['freshness'],
+    stale: value.stale === null ? null : booleanField(value, 'stale'),
+    debounceMs: value.debounceMs === null ? null : numberField(value, 'debounceMs'),
+    pendingEvents: numberField(value, 'pendingEvents'),
+    failedEvents: numberField(value, 'failedEvents'),
+    overflowRescans: numberField(value, 'overflowRescans'),
+    lastRescanDurationMs: numberField(value, 'lastRescanDurationMs'),
+    error: nullableString(value.error),
+  };
+  if ([status.entryCount, status.pendingEvents, status.failedEvents, status.overflowRescans, status.lastRescanDurationMs].some((n) => !Number.isSafeInteger(n) || n < 0)
+    || (status.debounceMs !== null && (!Number.isInteger(status.debounceMs) || status.debounceMs < 0 || status.debounceMs > 60_000))) throw new Error('Invalid IPC response');
+  return status;
+}
+
+function validateWorkspaceIndexWatchRequest(request: WorkspaceIndexWatchRequest): void {
+  if (!isRecord(request) || typeof request.workspaceId !== 'string' || request.workspaceId.trim().length === 0) throw new Error('Invalid IPC request');
+}
+
+function getWorkspaceIndexStatus(request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> {
+  validateWorkspaceIndexWatchRequest(request);
+  return invoke(ipcChannels.getWorkspaceIndexStatus, { workspaceId: request.workspaceId }).then(workspaceIndexWatchSummary);
+}
+
+function startWorkspaceIndexWatch(request: StartWorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> {
+  validateWorkspaceIndexWatchRequest(request);
+  if (!Number.isInteger(request.debounceMs) || request.debounceMs < 0 || request.debounceMs > 60_000) return Promise.reject(new Error('Invalid debounce interval'));
+  return invoke(ipcChannels.startWorkspaceIndexWatch, { workspaceId: request.workspaceId, debounceMs: request.debounceMs }).then(workspaceIndexWatchSummary);
+}
+
+function stopWorkspaceIndexWatch(request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> {
+  validateWorkspaceIndexWatchRequest(request);
+  return invoke(ipcChannels.stopWorkspaceIndexWatch, { workspaceId: request.workspaceId }).then(workspaceIndexWatchSummary);
+}
+
 function setWorkspaceActive(request: SetWorkspaceActiveRequest): Promise<{ readonly workspace: WorkspaceSummary; readonly active: boolean }> {
   if (!isRecord(request) || typeof request.workspaceId !== 'string' || request.workspaceId.trim().length === 0 || typeof request.active !== 'boolean') {
     return Promise.reject(new Error('Invalid IPC request'));
@@ -1638,6 +1684,9 @@ const api: LnwjingApi = {
   listWorkspaces: () => invoke(ipcChannels.listWorkspaces).then(workspaceList),
   addWorkspace,
   selectWorkspace,
+  getWorkspaceIndexStatus,
+  startWorkspaceIndexWatch,
+  stopWorkspaceIndexWatch,
   setWorkspaceActive,
   setWorkspaceArchived,
   deleteWorkspace,
