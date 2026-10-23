@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -95,6 +96,9 @@ describe('opt-in SQLite workspace index persistence', () => {
     expect(await sqlite.load('shared')).toBeNull();
     expect(await sqlite.loadMetadata('shared')).toBeNull();
     expect(await legacy.load('shared')).toEqual(original);
+    await sqlite.withMutation('shared', (scope) => scope.save(snapshot([entry('fresh.ts')])));
+    expect((await sqlite.load('shared'))?.entries.map((item) => item.relativePath)).toEqual(['fresh.ts']);
+    expect(await legacy.load('shared')).toEqual(original);
   });
 
   it('serializes updates from independent SQLite store instances on one workspace', async () => {
@@ -111,6 +115,56 @@ describe('opt-in SQLite workspace index persistence', () => {
     };
     await Promise.all([modify(sqlite, 'b.ts'), modify(other, 'c.ts')]);
     expect((await sqlite.load('shared'))?.entries.map((item) => item.relativePath)).toEqual(['a.ts', 'b.ts', 'c.ts']);
+  });
+
+  it('rolls back earlier row changes when a later row fails mid-transaction', async () => {
+    const { directory, sqlite } = await fixture();
+    const original = snapshot([entry('a.ts'), entry('b.ts')]);
+    await sqlite.withMutation('shared', (scope) => scope.save(original));
+    const database = new DatabaseSync(path.join(directory, 'shared.sqlite'));
+    try {
+      database.exec(`CREATE TRIGGER refuse_second BEFORE UPDATE ON entries
+        WHEN NEW.relative_path = 'b.ts'
+        BEGIN SELECT RAISE(ABORT, 'simulated mid-write failure'); END`);
+    } finally {
+      database.close();
+    }
+    const changed = snapshot([
+      { ...entry('a.ts'), symbols: ['changed-a'] },
+      { ...entry('b.ts'), symbols: ['changed-b'] },
+    ]);
+    await expect(sqlite.withMutation('shared', (scope) => scope.save(changed)))
+      .rejects.toThrow('simulated mid-write failure');
+    expect(await sqlite.load('shared')).toEqual(original);
+    expect((await sqlite.loadMetadata('shared'))?.entryCount).toBe(2);
+  });
+
+  it('rejects a row whose JSON relativePath differs from the SQLite primary key', async () => {
+    const { directory, sqlite } = await fixture();
+    await sqlite.withMutation('shared', (scope) => scope.save(snapshot([entry('a.ts')])));
+    const database = new DatabaseSync(path.join(directory, 'shared.sqlite'));
+    try {
+      const payload = JSON.stringify({ ...entry('a.ts'), relativePath: 'unexpected.ts' });
+      const fingerprint = createHash('sha256').update(payload).digest('hex');
+      database.prepare('UPDATE entries SET payload = ?, fingerprint = ? WHERE relative_path = ?')
+        .run(payload, fingerprint, 'a.ts');
+    } finally {
+      database.close();
+    }
+    await expect(sqlite.load('shared')).rejects.toThrow('row path does not match its payload');
+  });
+
+  it('rejects corrupted row payloads even if the primary key still matches', async () => {
+    const { directory, sqlite } = await fixture();
+    await sqlite.withMutation('shared', (scope) => scope.save(snapshot([entry('a.ts')])));
+    const database = new DatabaseSync(path.join(directory, 'shared.sqlite'));
+    try {
+      database.prepare('UPDATE entries SET payload = ? WHERE relative_path = ?')
+        .run(JSON.stringify({ ...entry('a.ts'), symbols: ['corrupted'] }), 'a.ts');
+    } finally {
+      database.close();
+    }
+    await expect(sqlite.load('shared')).rejects.toThrow('fingerprint mismatch');
   });
 
   it('fails closed if a JSON-mode process changes the legacy index after SQLite import', async () => {

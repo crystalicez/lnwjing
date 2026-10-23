@@ -14,6 +14,7 @@ const SCHEMA_VERSION = 1;
 const VERSION_COLUMN = 'user_version';
 
 interface TextRow { readonly payload: string }
+interface IndexedRow extends TextRow { readonly relative_path: string; readonly fingerprint: string }
 interface EntryRow { readonly relative_path: string; readonly fingerprint: string }
 interface SqliteIndexMetadata extends WorkspaceIndexMetadata { readonly legacyIdentity: string | null }
 
@@ -162,9 +163,19 @@ export class SqliteWorkspaceIndexStore implements WorkspaceIndexStore {
       }
       const metadata = this.parseMetadata(record.payload, workspaceId);
       await this.assertLegacyUnchanged(workspaceId, metadata);
-      const rows = database.prepare('SELECT payload FROM entries ORDER BY relative_path').all() as unknown as TextRow[];
-      const entries = rows.map((row) => JSON.parse(row.payload) as WorkspaceIndexEntry)
-        .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+      const rows = database.prepare('SELECT relative_path, fingerprint, payload FROM entries ORDER BY relative_path').all() as unknown as IndexedRow[];
+      const entries = rows.map((row) => {
+        const fingerprint = createHash('sha256').update(row.payload).digest('hex');
+        if (fingerprint !== row.fingerprint) {
+          throw new Error('Workspace index SQLite entry fingerprint mismatch; rebuild from source');
+        }
+        const entry: unknown = JSON.parse(row.payload);
+        if (typeof entry !== 'object' || entry === null || !('relativePath' in entry)
+          || entry.relativePath !== row.relative_path) {
+          throw new Error('Workspace index SQLite row path does not match its payload');
+        }
+        return entry as WorkspaceIndexEntry;
+      }).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
       const snapshot: WorkspaceIndexSnapshot = {
         version: 1, discoveryPolicyRevision: 1, workspaceId: metadata.workspaceId,
         rootPath: metadata.rootPath, indexedAt: metadata.indexedAt, entries,
@@ -245,7 +256,8 @@ export class SqliteWorkspaceIndexStore implements WorkspaceIndexStore {
       database.exec('DELETE FROM entries; DELETE FROM metadata');
       database.exec('COMMIT');
       transaction = false;
-      database.exec('VACUUM');
+      // Keep SQLite free pages for reuse; VACUUM would rewrite the entire file
+      // for every project deletion and can create avoidable disk bursts.
     } finally {
       if (transaction) {
         try { database.exec('ROLLBACK'); } catch { /* Preserve original error. */ }
