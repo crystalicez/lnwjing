@@ -6,6 +6,7 @@ import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 import { AUDIT_MIGRATION_SQL } from './migrations/audit-migration.js';
 import { AUDIT_SCOPE_MIGRATION_SQL } from './migrations/audit-scope-migration.js';
 import { CHECKPOINT_MIGRATION_SQL } from './migrations/checkpoint-migration.js';
+import { CHECKPOINT_REVISION_MIGRATION_SQL } from './migrations/checkpoint-revision-migration.js';
 import { GOAL_CONTINUATION_MIGRATION_SQL } from './migrations/goal-continuation-migration.js';
 import { GOAL_CANCELLATION_MIGRATION_SQL } from './migrations/goal-cancellation-migration.js';
 import { GOAL_TRACKED_TASKS_MIGRATION_SQL } from './migrations/goal-tracked-tasks-migration.js';
@@ -115,6 +116,7 @@ export class SqliteDatabase {
       { id: '022_workflow_metadata', sql: WORKFLOW_METADATA_MIGRATION_SQL },
       { id: '023_call_observability', sql: CALL_OBSERVABILITY_MIGRATION_SQL },
       { id: '024_audit_call_history_paging', sql: AUDIT_CALL_HISTORY_PAGING_MIGRATION_SQL },
+      { id: '025_checkpoint_storage_revision', sql: CHECKPOINT_REVISION_MIGRATION_SQL },
     ]);
   }
 

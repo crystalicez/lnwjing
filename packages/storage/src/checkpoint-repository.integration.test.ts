@@ -184,6 +184,28 @@ describe('SqliteCheckpointRepository', () => {
     } finally { database.close(); }
   });
 
+  it('versions same-size raw checkpoint updates but ignores unrelated settings writes', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repository = new SqliteCheckpointRepository(database);
+      await repository.insert({ ...fixtureCheckpoint('first'), id: 'older', createdAt: '2026-01-01T00:00:00.000Z' });
+      await repository.insert({ ...fixtureCheckpoint('newer'), id: 'newer', createdAt: '2026-02-01T00:00:00.000Z' });
+      const options = { maxBytes: 0, deleteBefore: '2026-10-01T00:00:00.000Z' };
+      const before = repository.planStorageBudget(options);
+      const row = database.connection.prepare('SELECT files_json AS value FROM checkpoints WHERE id = ?').get('older') as { value: string };
+      const changed = row.value.replace('first', 'other');
+      expect(changed.length).toBe(row.value.length);
+      database.connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ?').run(changed, 'older');
+      const after = repository.planStorageBudget(options);
+      expect(after.totalBytes).toBe(before.totalBytes);
+      expect(after.checkpointIds).toEqual(before.checkpointIds);
+      expect(after.previewToken).not.toBe(before.previewToken);
+      database.connection.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('unrelated-budget-setting', '1');
+      expect(repository.planStorageBudget(options).previewToken).toBe(after.previewToken);
+    } finally { database.close(); }
+  });
+
   it('encrypts checkpoint file content at rest with AES-256-GCM', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));
