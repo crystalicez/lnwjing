@@ -79,6 +79,11 @@ export async function pruneVerifiedWindowsContainmentInputs(receiptPath: string)
   return removed;
 }
 
+// One directory enumeration per interactive cleanup pass. A sorted in-memory
+// cursor avoids rereading tens of thousands of task directories every 32 jobs.
+const cleanupDirectoryCache = new Map<string, { names: readonly string[]; sampledAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 const CONTAINMENT_TASK_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 /**
@@ -96,30 +101,38 @@ export async function pruneVerifiedWindowsContainmentRoot(
   if (options.afterName !== undefined && !CONTAINMENT_TASK_ID.test(options.afterName)) {
     throw new Error('Invalid native retention cursor');
   }
-  let entries: Dirent[];
-  try {
-    entries = await readdir(rootDirectory, { withFileTypes: true });
-  } catch (error: unknown) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-      return { inspected: 0, removedFiles: 0, nextCursor: null };
+  const cacheKey = path.resolve(rootDirectory);
+  const now = Date.now();
+  const cached = cleanupDirectoryCache.get(cacheKey);
+  let names: readonly string[];
+  if (cached !== undefined && now - cached.sampledAt < CACHE_TTL_MS) {
+    names = cached.names;
+  } else {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(rootDirectory, { withFileTypes: true });
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+        return { inspected: 0, removedFiles: 0, nextCursor: null };
+      }
+      throw error;
     }
-    throw error;
+    names = entries
+      .filter((entry) => entry.isDirectory() && CONTAINMENT_TASK_ID.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+    if (cleanupDirectoryCache.size >= 3) cleanupDirectoryCache.clear();
+    cleanupDirectoryCache.set(cacheKey, { names, sampledAt: now });
   }
-  const names = entries
-    .filter((entry) => entry.isDirectory() && CONTAINMENT_TASK_ID.test(entry.name))
-    .map((entry) => entry.name)
-    .sort();
   const remaining = names.filter((name) => options.afterName === undefined || name > options.afterName);
   const batch = remaining.slice(0, limit);
   let removedFiles = 0;
   for (const name of batch) {
     removedFiles += await pruneVerifiedWindowsContainmentInputs(path.join(rootDirectory, name, 'containment.receipt.json'));
   }
-  return {
-    inspected: batch.length,
-    removedFiles,
-    nextCursor: remaining.length > batch.length ? batch.at(-1) ?? null : null,
-  };
+  const nextCursor = remaining.length > batch.length ? batch.at(-1) ?? null : null;
+  if (nextCursor === null) cleanupDirectoryCache.delete(cacheKey);
+  return { inspected: batch.length, removedFiles, nextCursor };
 }
 
 const containedLaunchScript = String.raw`param([string]$Directory)

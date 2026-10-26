@@ -1,4 +1,4 @@
-import { realpathSync, statfsSync } from 'node:fs';
+import { lstatSync, opendirSync, realpathSync, statfsSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { SqliteBackupService } from './backup-service.js';
@@ -148,4 +148,56 @@ export async function compactOfflineSqliteProfile(options: {
   } finally {
     database.close();
   }
+}
+
+/**
+ * Bounded, metadata-only directory inspection. Does not read file contents,
+ * follow directory symlinks, create caches, or traverse beyond maxEntries.
+ */
+export function inspectBoundedDirectorySize(
+  directory: string,
+  maxEntries = 512,
+  maxDepth = 3,
+): { readonly bytes: number; readonly inspectedEntries: number; readonly truncated: boolean } {
+  if (!Number.isSafeInteger(maxEntries) || maxEntries < 1 || maxEntries > 4096) throw new Error('Invalid storage inspection cap');
+  const pending = [{ directory, depth: 0 }];
+  let inspectedEntries = 0;
+  let bytes = 0;
+  let truncated = false;
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (item === undefined) break;
+    let directoryHandle;
+    try {
+      if (lstatSync(item.directory).isSymbolicLink()) { truncated = true; continue; }
+      directoryHandle = opendirSync(item.directory);
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null && 'code' in error && (error.code === 'ENOENT' || error.code === 'EACCES')) {
+        truncated ||= error.code === 'EACCES';
+        continue;
+      }
+      throw error;
+    }
+    try {
+      while (inspectedEntries < maxEntries) {
+        const entry = directoryHandle.readSync();
+        if (entry === null) break;
+        inspectedEntries += 1;
+        if (entry.isSymbolicLink()) continue;
+        const name = path.join(item.directory, entry.name);
+        if (entry.isDirectory()) {
+          if (item.depth < maxDepth) pending.push({ directory: name, depth: item.depth + 1 });
+          else truncated = true;
+        } else if (entry.isFile()) {
+          try { bytes += lstatSync(name).size; }
+          catch { truncated = true; }
+        }
+      }
+      if (inspectedEntries >= maxEntries) truncated = true;
+    } finally {
+      directoryHandle.closeSync();
+    }
+    if (truncated && inspectedEntries >= maxEntries) break;
+  }
+  return { bytes, inspectedEntries, truncated };
 }

@@ -1,13 +1,31 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SqliteDatabase } from './database.js';
-import { compactOfflineSqliteProfile, compactSqliteWithBackup, inspectSqliteCompaction } from './storage-maintenance.js';
+import { compactOfflineSqliteProfile, compactSqliteWithBackup, inspectBoundedDirectorySize, inspectSqliteCompaction } from './storage-maintenance.js';
 
 const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('bounded, read-only storage categories', () => {
+  it('reports partial measurements instead of scanning every entry', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-size-cap-'));
+    roots.push(root);
+    await mkdir(path.join(root, 'a'));
+    await writeFile(path.join(root, 'a', 'file-1'), '12345');
+    await writeFile(path.join(root, 'a', 'file-2'), '123456');
+    const full = inspectBoundedDirectorySize(root, 16);
+    expect(full).toEqual({ bytes: 11, inspectedEntries: 3, truncated: false });
+    const capped = inspectBoundedDirectorySize(root, 2);
+    expect(capped.truncated).toBe(true);
+    expect(capped.inspectedEntries).toBeLessThanOrEqual(2);
+    expect(inspectBoundedDirectorySize(path.join(root, 'missing'))).toEqual({
+      bytes: 0, inspectedEntries: 0, truncated: false,
+    });
+  });
 });
 
 describe('manual-only SQLite storage maintenance', () => {

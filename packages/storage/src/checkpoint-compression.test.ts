@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { AesGcmCheckpointCipher } from './checkpoint-cipher.js';
 
 describe('checkpoint compression (poteto-mode)', () => {
-  const cipher = new AesGcmCheckpointCipher(Buffer.alloc(32, 17));
+  const cipher = new AesGcmCheckpointCipher(Buffer.alloc(32, 17), { compressionEnabled: true });
 
   it('compresses repeated text before encryption while preserving exact bytes', () => {
     const snapshot = JSON.stringify([{ path: 'src/demo.ts', content: 'export const value = 1;\\n'.repeat(50_000) }]);
@@ -18,6 +18,13 @@ describe('checkpoint compression (poteto-mode)', () => {
     expect(cipher.encrypt(small)).toMatch(/^lnwjing:checkpoint:v1:/);
     const random = randomBytes(16 * 1024).toString('base64');
     expect(cipher.decrypt(cipher.encrypt(random))).toBe(random);
+  });
+
+  it('defaults to legacy-compatible v1 even for highly compressible snapshots', () => {
+    const safeDefault = new AesGcmCheckpointCipher(Buffer.alloc(32, 17));
+    const envelope = safeDefault.encrypt('X'.repeat(80_000));
+    expect(envelope).toMatch(/^lnwjing:checkpoint:v1:/);
+    expect(cipher.decrypt(envelope)).toBe('X'.repeat(80_000));
   });
 
   it('supports an explicit compression-off backend setting without breaking restore', () => {

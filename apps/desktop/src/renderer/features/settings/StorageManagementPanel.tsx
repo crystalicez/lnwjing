@@ -101,7 +101,7 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     if (!agreed) return;
     setPending(true); setError(null); setNotice(null);
     try {
-      const result = await window.lnwjing.applyCheckpointCleanup({ ...previewRequest, userConfirmed: true });
+      const result = await window.lnwjing.applyCheckpointCleanup({ ...previewRequest, expectedPreviewToken: preview.previewToken, userConfirmed: true });
       setPreview(null); setPreviewRequest(null);
       setOverview(await window.lnwjing.getStorageOverview());
       await onChanged?.();
@@ -146,6 +146,23 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
           ? 'พบหน้าว่างที่อาจคืนพื้นที่ได้ แต่ต้องปิดโปรแกรมและใช้ Offline Compaction ที่มี Backup เท่านั้น'
           : 'Reclaimable pages detected. Compaction requires offline maintenance with a verified backup.'}</p> : null}
       </div>
+      {overview?.hasCompressedV2 === true ? (
+        <StatusMessage tone="warning" role="alert" prefix="⚠ ">
+          {th ? 'พบ Checkpoint v2 ที่บีบอัดอยู่แล้ว: อย่าเปิดโปรไฟล์นี้ด้วย Portable รุ่นเก่า เพราะอาจเข้ารหัสซ้ำจนกู้คืนไม่ได้'
+            : 'Existing compressed v2 checkpoints detected. Do not open this profile in older Portable builds: downgrading can corrupt rollback data.'}
+        </StatusMessage>
+      ) : null}
+      {overview?.usageCategories?.length ? <div className="setting-field">
+        <strong>{th ? 'สรุปโฟลเดอร์ AppData (อ่าน metadata แบบจำกัด)' : 'AppData folders (bounded metadata sampling)'}</strong>
+        {overview.usageCategories.map((item) => (
+          <p key={item.category}>{item.category}: {sizeLabel(item.bytes)}
+            {item.truncated ? (th ? ' · ประเมินบางส่วน' : ' · partial') : ''}
+          </p>
+        ))}
+        <p className="hint">{th
+          ? 'ตัวเลขไม่รวมไฟล์นอกหมวดนี้ และหมวด partial ไม่ใช่ยอดรวมจริง ไม่มีการอ่านเนื้อหาไฟล์'
+          : 'Partial counts are not full totals; other files may be excluded. No file contents are read.'}</p>
+      </div> : null}
       <div className="inline-actions">
         <ActionButton type="button" disabled={pending} onClick={() => { void refresh(); }}>
           {th ? 'รีเฟรชพื้นที่' : 'Refresh usage'}
@@ -154,8 +171,8 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
       {overview === null ? null : (
         <>
           <SettingSwitch label={th ? 'บีบอัด Checkpoint ใหม่' : 'Compress new checkpoints'}
-            description={th ? 'ต้องรีสตาร์ต และ Portable รุ่นเก่าอาจอ่านไม่ได้' : 'Requires restart; older Portable versions may not read them'}
-            checked={overview.policy.compressionEnabledOnNextStart} disabled={pending}
+            description={th ? 'ปิดชั่วคราว: Portable รุ่นเก่าอาจเข้ารหัส Checkpoint v2 ซ้ำจนข้อมูลเสียหาย ต้องแยกโปรไฟล์ก่อน' : 'Disabled for shared profiles: older Portable builds can corrupt v2 snapshots'}
+            checked={false} disabled={true}
             onChange={(value) => { void updatePolicy({ compressionEnabledOnNextStart: value }); }} />
           <SettingSwitch label={th ? 'ล้าง Checkpoint เก่าตามอายุอัตโนมัติ' : 'Automatic checkpoint age retention'}
             description={th ? 'ต้องเปิด Auto Backup และระบบจะรักษา Checkpoint ล่าสุดต่อโปรเจกต์' : 'Requires auto backup; preserves latest checkpoint per workspace'}
@@ -193,7 +210,9 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
         <div className="setting-field">
           <p>{th ? 'ข้อมูล Checkpoints ทั้งหมด' : 'Checkpoint data total'}: {sizeLabel(preview.totalBytes)}</p>
           <p>{th ? 'พื้นที่ที่อาจลดได้' : 'Potentially removable'}: {sizeLabel(preview.candidateBytes)} · {preview.checkpointIds.length} {th ? 'รายการ' : 'snapshots'}</p>
-          <p className="hint">{th ? 'คืนพื้นที่ไฟล์ SQLite จริงอาจต้องทำ Offline Compaction ภายหลัง' : 'Reclaiming file size may require subsequent offline compaction.'}</p>
+          <p className="hint">{th
+            ? 'สำคัญ: ระบบต้องสร้าง Backup ของฐานข้อมูลทั้งก้อนก่อนลบ จึงอาจใช้พื้นที่ดิสก์เพิ่มขึ้นชั่วคราว การลบแถวทำให้พื้นที่ SQLite นำกลับมาใช้ได้ แต่ไฟล์ไม่หดทันที ต้องใช้ Offline Compaction ภายหลัง'
+            : 'Important: A full database backup is required before deletion, so disk usage may increase first. Deleting rows makes SQLite pages reusable but does not shrink the file; offline compaction is needed later.'}</p>
           <ActionButton type="button" disabled={pending || preview.checkpointIds.length === 0} onClick={() => { void applyCleanup(); }}>
             {th ? 'ยืนยันล้าง Checkpoints ที่ผ่านเงื่อนไข' : 'Confirm eligible checkpoint cleanup'}
           </ActionButton>

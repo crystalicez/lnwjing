@@ -21,6 +21,7 @@
     "test:packaging": "vitest run tests/packaging/desktop-packaging.test.ts tests/packaging/native-automation-isolation.test.ts tests/packaging/application-storage-seam.test.ts tests/packaging/tunnel-stdio-layout.test.ts tests/packaging/windows-trust-evidence.test.ts tests/packaging/macos-trust-evidence.test.ts tests/packaging/macos-signing-policy.test.ts tests/packaging/linux-trust-evidence.test.ts tests/packaging/av-sensitive-secret-code.test.ts tests/packaging/capture-packaged-runtime-evidence.test.ts --exclude=.local-artifacts/** --exclude=.worktrees/** --exclude=.superpowers/** --exclude=.kilo/**",
     "test:release-gate": "vitest run tests/release/release-gate.test.ts tests/release/platform-verification-orchestrator.test.ts tests/release/release-notes.test.ts tests/release/release-asset-collector.test.ts --exclude=.local-artifacts/** --exclude=.worktrees/** --exclude=.superpowers/** --exclude=.kilo/**",
     "benchmark:baseline": "node scripts/benchmark-mcp.mjs",
+    "maintenance:compact-offline": "node scripts/compact-storage-offline.mjs",
     "package:windows": "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
     "package:macos": "corepack pnpm@10.15.0 --filter @lnwjing/desktop package:macos",
     "package:linux": "corepack pnpm@10.15.0 --filter @lnwjing/desktop package:linux",

@@ -50,9 +50,10 @@ export function parseCheckpointCleanupPreview(payload: unknown): CheckpointClean
 }
 
 export function parseApplyCheckpointCleanup(payload: unknown): ApplyCheckpointCleanupRequest {
-  const input = record(payload, ['maxBytes', 'deleteBefore', 'userConfirmed']);
+  const input = record(payload, ['maxBytes', 'deleteBefore', 'userConfirmed', 'expectedPreviewToken']);
   if (input.userConfirmed !== true) throw new Error('Checkpoint cleanup requires confirmation');
-  return { ...parseCheckpointCleanupPreview({ maxBytes: input.maxBytes, deleteBefore: input.deleteBefore }), userConfirmed: true };
+  if (typeof input.expectedPreviewToken !== 'string' || !/^[a-f0-9]{64}$/.test(input.expectedPreviewToken)) throw new Error('Checkpoint cleanup requires valid preview');
+  return { ...parseCheckpointCleanupPreview({ maxBytes: input.maxBytes, deleteBefore: input.deleteBefore }), userConfirmed: true, expectedPreviewToken: input.expectedPreviewToken };
 }
 
 export function parseNativeStorageCleanup(payload: unknown): NativeStorageCleanupRequest {

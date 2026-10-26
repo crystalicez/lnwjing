@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
-import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync, statSync, statfsSync } from 'node:fs';
 import { open, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -130,7 +130,7 @@ import {
   type EngineeringHarnessSettings,
   type EngineeringHarnessWorkspaceOverride,
 } from '@lnwjing/shared';
-import { AesGcmCheckpointCipher, inspectSqliteCompaction, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
+import { AesGcmCheckpointCipher, inspectSqliteCompaction, inspectBoundedDirectorySize, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
 import { SqliteGoalRepository } from '@lnwjing/storage';
 import type { Workspace } from '@lnwjing/workspace';
 import { comparableHostPath, isDriveRoot, isMachineRootPath, resolveHostPath, SecretPolicy, WorkspacePathGuard, WorkspaceService } from '@lnwjing/workspace';
@@ -279,8 +279,8 @@ export interface StorageMaintenanceBackend {
   }): { readonly restartRequired: boolean };
   inspect(): { readonly sqliteAllocatedBytes: number; readonly sqliteFreeBytes: number; readonly compactRecommended: boolean };
   previewCheckpointBudget(options: { readonly maxBytes: number; readonly deleteBefore: string }):
-    { readonly totalBytes: number; readonly candidateBytes: number; readonly checkpointIds: readonly string[] };
-  applyCheckpointBudget(options: { readonly maxBytes: number; readonly deleteBefore: string; readonly userConfirmed: boolean }):
+    { readonly totalBytes: number; readonly candidateBytes: number; readonly checkpointIds: readonly string[]; readonly previewToken: string };
+  applyCheckpointBudget(options: { readonly maxBytes: number; readonly deleteBefore: string; readonly userConfirmed: boolean; readonly expectedPreviewToken: string }):
     Promise<{ readonly deleted: number; readonly plannedBytes: number; readonly backupId: string | null }>;
   pruneNativeLaunchInputs(options: {
     readonly category: 'tasks' | 'git' | 'processes'; readonly userConfirmed: boolean;
@@ -525,7 +525,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const activitySessionCatalog = new ActivitySessionCatalog(auditRepository, workLogViewState);
   const auditService = new AuditService(auditRepository);
   const checkpointEncryptionKey = options.checkpointEncryptionKey ?? (options.checkpointCipher === undefined ? resolveTestCheckpointEncryptionKey() : undefined);
-  const checkpointCipher = options.checkpointCipher ?? (checkpointEncryptionKey === undefined ? undefined : new AesGcmCheckpointCipher(checkpointEncryptionKey, { compressionEnabled: settingsRepository.get('checkpoint_compression_v2_compatibility_ack') === 'true' }));
+  const checkpointCipher = options.checkpointCipher ?? (checkpointEncryptionKey === undefined ? undefined : new AesGcmCheckpointCipher(checkpointEncryptionKey, { compressionEnabled: false }));
   if (checkpointCipher === undefined) {
     throw new Error('Desktop runtime requires a checkpoint encryption key resolved by the Electron composition root');
   }
@@ -1931,10 +1931,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       return { profile: request.profile, strictRoots: request.strictRoots, allowedRoots, restartRequired: true };
     },
     createBackup: async (): Promise<IpcBackupSummary> => toIpcBackupSummary(await backupService.create('manual')),
-    getStorageOverview: async () => ({ ...storageMaintenance.inspect(), policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const }),
+    getStorageOverview: async () => storageOverview(),
     setStoragePolicy: async (request) => {
       const changed = storageMaintenance.configurePolicy(request);
-      return { ...changed, overview: { ...storageMaintenance.inspect(), policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const } };
+      return { ...changed, overview: storageOverview() };
     },
     previewCheckpointCleanup: async (request) => storageMaintenance.previewCheckpointBudget(request),
     applyCheckpointCleanup: async (request) => storageMaintenance.applyCheckpointBudget(request),
@@ -1947,8 +1947,16 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         // confirmation, but never delete all rollback snapshots without a
         // validated restorable pre-image of the database.
         for (const workspace of await workspaceService.list()) await assertWorkspaceIdle(workspace.id);
+        await requireNativeAdministrativeApproval({
+          toolName: 'checkpoint_storage_cleanup', mutationKind: 'delete',
+          reason: 'Deleting all checkpoint rollback history',
+          summary: 'Purge every file checkpoint, retaining a validated manual database backup',
+        });
         await startupBackup;
-        await backupService.create('manual');
+        const saved = await backupService.create('manual');
+        if (!(await backupService.verifyBackupForCleanup(saved.id))) {
+          throw new Error('Checkpoint purge backup integrity verification failed');
+        }
         return { category: request.category, deleted: await checkpointRepository.deleteAll() };
       }
       await startupBackup;
@@ -2449,9 +2457,41 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     database.close();
   });
 
+  function storageProtectedCheckpointIds(): ReadonlySet<string> {
+    // Only read reference IDs. Goal checkpoints belong to a separate table;
+    // their arbitrary evidence may still contain a file-checkpoint ID, so
+    // Goal-bearing profiles are conservatively refused until linked indexing.
+    const rows = database.connection.prepare(`
+      SELECT DISTINCT json_extract(metadata_json, '$.mutationReceipt.checkpointId') AS id
+      FROM audit_events
+      WHERE json_type(metadata_json, '$.mutationReceipt.checkpointId') = 'text'
+      LIMIT 4097
+    `).all() as { id: unknown }[];
+    if (rows.length > 4096 || rows.some((row) => typeof row.id !== 'string' || row.id.length > 128)) {
+      throw new Error('Checkpoint reference set too large or invalid; refusing cleanup');
+    }
+    return new Set(rows.map((row) => row.id as string));
+  }
+
+  // Reuse read-only directory metadata for 30s while Settings is open.
+  let storageCategoryCache: { at: number; entries: readonly { category: string; bytes: number; inspectedEntries: number; truncated: boolean }[] } | null = null;
+  function storageOverview(): Awaited<ReturnType<DesktopIpcServices['getStorageOverview']>> {
+    const now = Date.now();
+    if (storageCategoryCache === null || now - storageCategoryCache.at > 30_000) {
+      const entries = ['backups', 'background-tasks', 'native-managed-git', 'native-managed-processes', 'workspace-index', 'logs']
+        .map((category) => ({ category, ...inspectBoundedDirectorySize(path.join(dataPath, category), 512, 3) }));
+      storageCategoryCache = { at: now, entries };
+    }
+    const compressedPrefix = 'lnwjing:checkpoint:v2:br:';
+    const hasCompressedV2 = database.connection.prepare('SELECT 1 FROM checkpoints WHERE substr(files_json, 1, ?) = ? LIMIT 1')
+      .get(compressedPrefix.length, compressedPrefix) !== undefined;
+    return { ...storageMaintenance.inspect(), usageCategories: storageCategoryCache.entries, hasCompressedV2,
+      policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const };
+  }
+
   const storageMaintenance: StorageMaintenanceBackend = {
     getPolicy: () => ({
-      compressionEnabledOnNextStart: settingsRepository.get('checkpoint_compression_v2_compatibility_ack') === 'true',
+      compressionEnabledOnNextStart: false,
       automaticCheckpointRetention: settingsRepository.get('checkpoint_auto_retention_v1') === 'true',
       auditPruneWithoutBackup: settingsRepository.get('audit_routine_prune_without_backup_v1') === 'true',
       routineAuditRetentionDays: parseIntegerSetting(settingsRepository.get('audit_routine_retention_days_v1') ?? undefined, 90, 1, 3650),
@@ -2466,9 +2506,13 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (options.automaticCheckpointRetention === true && readSettings().autoBackupEnabled !== true) {
         throw new Error('Automatic checkpoint retention requires automatic SQLite backups');
       }
-      const before = settingsRepository.get('checkpoint_compression_v2_compatibility_ack') === 'true';
-      if (options.compressionEnabledOnNextStart !== undefined) {
-        settingsRepository.set('checkpoint_compression_v2_compatibility_ack', options.compressionEnabledOnNextStart ? 'true' : 'false');
+      // v2 would be re-encrypted as unknown plaintext by older Portable builds.
+      // Never emit it to a shared profile until isolated profile migration is supported.
+      if (options.compressionEnabledOnNextStart === true) {
+        throw new Error('Compressed checkpoints are blocked for shared profiles: older Portable builds corrupt v2 on startup');
+      }
+      if (options.compressionEnabledOnNextStart === false) {
+        settingsRepository.set('checkpoint_compression_v2_compatibility_ack', 'false');
       }
       if (options.automaticCheckpointRetention !== undefined) {
         settingsRepository.set('checkpoint_auto_retention_v1', options.automaticCheckpointRetention ? 'true' : 'false');
@@ -2481,13 +2525,13 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         settingsRepository.set('audit_routine_retention_days_v1', String(options.routineAuditRetentionDays));
       }
       lastAuditRetentionSweepAt = Date.now(); // policy changes take effect at next bounded sweep
-      return { restartRequired: before !== (settingsRepository.get('checkpoint_compression_v2_compatibility_ack') === 'true') };
+      return { restartRequired: false };
     },
     inspect: () => {
       const sqlite = inspectSqliteCompaction(database.connection);
       return { sqliteAllocatedBytes: sqlite.allocatedBytes, sqliteFreeBytes: sqlite.freeBytes, compactRecommended: sqlite.recommended };
     },
-    previewCheckpointBudget: (options) => checkpointRepository.planStorageBudget({ ...options, protectedIds: new Set<string>() }),
+    previewCheckpointBudget: (options) => checkpointRepository.planStorageBudget({ ...options, protectedIds: storageProtectedCheckpointIds() }),
     applyCheckpointBudget: async (options) => {
       if (!options.userConfirmed) throw new Error('Checkpoint cleanup requires explicit user confirmation');
       // Until Goal evidence can prove its entire reference set, refuse cleanup
@@ -2495,23 +2539,31 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (database.connection.prepare('SELECT 1 FROM goal_checkpoints LIMIT 1').get() !== undefined) {
         throw new Error('Checkpoint cleanup requires verified Goal evidence references; refusing unsafe deletion');
       }
-      // Older Audit receipts can reference file-checkpoint IDs without a
-      // foreign key. Until an authoritative reference index exists, fail
-      // closed rather than accepting an empty caller-provided protected set.
-      if (database.connection.prepare(`
-        SELECT 1 FROM audit_events
-        WHERE json_type(metadata_json, '$.mutationReceipt.checkpointId') = 'text'
-        LIMIT 1
-      `).get() !== undefined) {
-        throw new Error('Checkpoint cleanup requires verified Audit receipt references; refusing unsafe deletion');
+      // Protected audit mutation receipts are excluded individually, not globally.
+      if (mcpLifecycle.status().running) throw new Error('Stop local MCP before destructive checkpoint cleanup');
+      const cleanupTunnel = await tunnelController.status();
+      if (cleanupTunnel.state === 'running' && cleanupTunnel.source === 'desktop') {
+        throw new Error('Stop the Desktop-owned Secure MCP Tunnel before destructive checkpoint cleanup');
       }
+      if (activityTracker.listInFlight().length > 0) throw new Error('Wait for MCP calls to finish before checkpoint cleanup');
       for (const workspace of await workspaceService.list()) await assertWorkspaceIdle(workspace.id);
-      const preview = checkpointRepository.planStorageBudget({ ...options, protectedIds: new Set<string>() });
+      const protectedIds = storageProtectedCheckpointIds();
+      const preview = checkpointRepository.planStorageBudget({ ...options, protectedIds });
       if (preview.checkpointIds.length === 0) return { deleted: 0, plannedBytes: 0, backupId: null };
+      await requireNativeAdministrativeApproval({
+        toolName: 'checkpoint_storage_cleanup', mutationKind: 'delete',
+        reason: 'Deleting checkpoint rollback history requires confirmation of the exact preview and a verified backup',
+        summary: `Delete ${preview.checkpointIds.length} explicitly previewed expired checkpoints after verifying a manual database backup`,
+      });
+      const sqlite = inspectSqliteCompaction(database.connection);
+      const disk = statfsSync(dataPath, { bigint: true });
+      const requiredFree = BigInt(sqlite.allocatedBytes) * 2n + 64n * 1024n * 1024n;
+      if (disk.bavail * disk.bsize < requiredFree) throw new Error('Insufficient disk space to create safe checkpoint cleanup backup');
       await startupBackup;
       let backupId: string | null = null;
       const applied = await checkpointRepository.applyStorageBudget({
-        ...options, protectedIds: new Set<string>(), userConfirmed: true,
+        ...options, protectedIds, userConfirmed: true, expectedPreviewToken: options.expectedPreviewToken,
+        resolveProtectedIds: storageProtectedCheckpointIds,
         createVerifiedBackup: async () => {
           const backup = await backupService.create('manual');
           if (!(await backupService.verifyBackupForCleanup(backup.id))) throw new Error('Checkpoint cleanup backup integrity check failed');
@@ -2519,6 +2571,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           return { verified: true as const, id: backup.id };
         },
       });
+      storageCategoryCache = null;
       return { ...applied, backupId };
     },
     pruneNativeLaunchInputs: async (options) => {
@@ -2527,11 +2580,18 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         : options.category === 'git' ? 'native-managed-git' : 'native-managed-processes';
       const root = path.join(dataPath, name);
       if (existsSync(root) && lstatSync(root).isSymbolicLink()) throw new Error('Cannot clean redirected native artifacts');
-      return pruneVerifiedWindowsContainmentRoot(root, {
+      await requireNativeAdministrativeApproval({
+        toolName: 'native_artifact_cleanup', mutationKind: 'delete',
+        reason: 'Manually removing verified one-use native launcher sources',
+        summary: `Clean up to ${options.maxDirectories ?? 32} verified ${options.category} native launcher directories`,
+      });
+      const result = await pruneVerifiedWindowsContainmentRoot(root, {
         userConfirmed: true,
         ...(options.maxDirectories === undefined ? {} : { maxDirectories: options.maxDirectories }),
         ...(options.afterName === undefined ? {} : { afterName: options.afterName }),
       });
+      storageCategoryCache = null;
+      return result;
     },
   };
 

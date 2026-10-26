@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, readdir, writeFile, mkdir } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository } from '@lnwjing/storage';
+import { SqliteAuditRepository, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository } from '@lnwjing/storage';
 import type { Checkpoint } from '@lnwjing/workspace';
 import { createDesktopRuntime } from '../src/main/desktop-services.js';
 
@@ -29,12 +29,14 @@ describe('Desktop storage-maintenance backend', () => {
       expect(() => runtime.storageMaintenance.configurePolicy({
         userConfirmed: true, routineAuditRetentionDays: -1,
       })).toThrow(/Invalid audit retention/);
-      expect(runtime.storageMaintenance.configurePolicy({
+      expect(() => runtime.storageMaintenance.configurePolicy({
         userConfirmed: true, compressionEnabledOnNextStart: true,
-        auditPruneWithoutBackup: true, routineAuditRetentionDays: 7,
-      })).toEqual({ restartRequired: true });
+      })).toThrow(/older Portable builds corrupt v2/);
+      expect(runtime.storageMaintenance.configurePolicy({
+        userConfirmed: true, auditPruneWithoutBackup: true, routineAuditRetentionDays: 7,
+      })).toEqual({ restartRequired: false });
       expect(runtime.storageMaintenance.getPolicy()).toMatchObject({
-        compressionEnabledOnNextStart: true, auditPruneWithoutBackup: true,
+        compressionEnabledOnNextStart: false, auditPruneWithoutBackup: true,
         routineAuditRetentionDays: 7, automaticCheckpointRetention: false,
       });
       expect((await runtime.services.getStorageOverview()).policy.routineAuditRetentionDays).toBe(7);
@@ -44,7 +46,7 @@ describe('Desktop storage-maintenance backend', () => {
         maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z',
       })).checkpointIds).toEqual([]);
       expect(await runtime.services.applyCheckpointCleanup({
-        maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z', userConfirmed: true,
+        maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z', expectedPreviewToken: (await runtime.services.previewCheckpointCleanup({ maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' })).previewToken, userConfirmed: true,
       })).toEqual({ deleted: 0, plannedBytes: 0, backupId: null });
     } finally {
       await runtime.close();
@@ -119,8 +121,47 @@ describe('Desktop storage-maintenance backend', () => {
     }
   });
 
-  it('only manually cleans checkpoints after creating a verified backup', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-storage-manual-'));
+  it('protects referenced checkpoint IDs without blocking unrelated eligible history', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-protected-'));
+    try {
+      const db = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+      for (const [id, when] of [
+        ['protected', '2025-01-01T00:00:00.000Z'],
+        ['free', '2025-01-02T00:00:00.000Z'],
+        ['newest', '2025-02-01T00:00:00.000Z'],
+      ]) {
+        await new SqliteCheckpointRepository(db).insert(checkpoint(id, 'workspace-a', when));
+      }
+      await new SqliteAuditRepository(db).insert({
+        id: 'ref', workspaceId: 'workspace-a', actorId: 'test', actorName: 'test',
+        action: 'mcp_tool:edit_file', resultCode: 'SUCCESS', durationMs: 1,
+        timestamp: '2025-03-01T00:00:00.000Z',
+        metadata: { mutationReceipt: { checkpointId: 'protected', path: 'demo.txt', action: 'edit_file' } },
+      });
+      db.close();
+      const runtime = createDesktopRuntime(root, {
+        checkpointEncryptionKey: Buffer.alloc(32, 41),
+        hostMutationApprovalProvider: async () => true,
+      });
+      try {
+        const opts = { maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' };
+        const preview = await runtime.services.previewCheckpointCleanup(opts);
+        expect(preview.checkpointIds).toEqual(['free']);
+        const result = await runtime.services.applyCheckpointCleanup({
+          ...opts, userConfirmed: true, expectedPreviewToken: preview.previewToken,
+        });
+        expect(result.deleted).toBe(1);
+        const live = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+        try {
+          const items = live.connection.prepare('SELECT id FROM checkpoints ORDER BY id').all() as { id: string }[];
+          expect(items.map((item) => item.id)).toEqual(['newest', 'protected']);
+        } finally { live.close(); }
+      } finally { await runtime.close(); }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it('fails closed without native approval before creating a destructive cleanup backup', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-approval-guard-'));
     try {
       const db = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
       const repo = new SqliteCheckpointRepository(db);
@@ -129,11 +170,34 @@ describe('Desktop storage-maintenance backend', () => {
       db.close();
       const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41) });
       try {
+        const request = { maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' };
+        const preview = await runtime.services.previewCheckpointCleanup(request);
+        await expect(runtime.services.applyCheckpointCleanup({
+          ...request, userConfirmed: true, expectedPreviewToken: preview.previewToken,
+        })).rejects.toThrow(/approval/);
+        const observed = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+        try {
+          expect(observed.connection.prepare('SELECT COUNT(*) AS n FROM checkpoints').get()).toMatchObject({ n: 2 });
+        } finally { observed.close(); }
+      } finally { await runtime.close(); }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it('only manually cleans checkpoints after creating a verified backup', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-storage-manual-'));
+    try {
+      const db = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+      const repo = new SqliteCheckpointRepository(db);
+      await repo.insert(checkpoint('old', 'ws-a', '2025-01-01T00:00:00.000Z'));
+      await repo.insert(checkpoint('new', 'ws-a', '2025-02-01T00:00:00.000Z'));
+      db.close();
+      const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41), hostMutationApprovalProvider: async () => true });
+      try {
         const opts = { maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' };
         await expect(runtime.storageMaintenance.applyCheckpointBudget({ ...opts, userConfirmed: false }))
           .rejects.toThrow(/confirmation/);
         expect((await readdir(path.join(root, 'backups'))).filter((name) => name.endsWith('.sqlite'))).toHaveLength(0);
-        const result = await runtime.storageMaintenance.applyCheckpointBudget({ ...opts, userConfirmed: true });
+        const result = await runtime.storageMaintenance.applyCheckpointBudget({ ...opts, expectedPreviewToken: runtime.storageMaintenance.previewCheckpointBudget(opts).previewToken, userConfirmed: true });
         expect(result).toMatchObject({ deleted: 1, backupId: expect.any(String) });
         expect((await readdir(path.join(root, 'backups'))).some((name) => name.endsWith('.sqlite'))).toBe(true);
       } finally {
@@ -153,7 +217,7 @@ describe('Desktop storage-maintenance backend', () => {
 
   it('scopes manual native cleanup to trusted storage and verified receipts', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-storage-native-'));
-    const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41) });
+    const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41), hostMutationApprovalProvider: async () => true });
     try {
       const directory = path.join(root, 'background-tasks', '00000000-0000-4000-8000-000000000001');
       await mkdir(directory, { recursive: true });

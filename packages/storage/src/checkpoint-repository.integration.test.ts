@@ -105,15 +105,15 @@ describe('SqliteCheckpointRepository', () => {
       return { verified: true, id: 'verified-fixture-backup' };
     };
     await expect(repository.applyStorageBudget({
-      ...opts, userConfirmed: false, createVerifiedBackup: verifiedBackup,
+      ...opts, expectedPreviewToken: plan.previewToken, userConfirmed: false, createVerifiedBackup: verifiedBackup,
     })).rejects.toThrow('confirmation');
     expect(backupCount).toBe(0);
     await expect(repository.applyStorageBudget({
-      ...opts, userConfirmed: true, createVerifiedBackup: async () => { throw new Error('backup unavailable'); },
+      ...opts, expectedPreviewToken: plan.previewToken, userConfirmed: true, createVerifiedBackup: async () => { throw new Error('backup unavailable'); },
     })).rejects.toThrow('backup unavailable');
     await expect(repository.get('a-old')).resolves.toEqual(first);
     const applied = await repository.applyStorageBudget({
-      ...opts, userConfirmed: true, createVerifiedBackup: verifiedBackup,
+      ...opts, expectedPreviewToken: plan.previewToken, userConfirmed: true, createVerifiedBackup: verifiedBackup,
     });
     expect(applied.deleted).toBe(1);
     expect(backupCount).toBe(1);
@@ -122,6 +122,38 @@ describe('SqliteCheckpointRepository', () => {
     await expect(repository.get('c-new')).resolves.toEqual(newest);
     await expect(repository.get('d-other')).resolves.toEqual(separateWorkspace);
     database.close();
+  });
+
+  it('rejects stale cleanup previews even when a new checkpoint changes eligibility before confirmation', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repo = new SqliteCheckpointRepository(database);
+      for (const [id, createdAt] of [['a', '2026-01-01T00:00:00.000Z'], ['b', '2026-02-01T00:00:00.000Z']]) {
+        await repo.insert({ ...fixtureCheckpoint(id), id, createdAt });
+      }
+      const options = { maxBytes: 0, deleteBefore: '2026-12-01T00:00:00.000Z', protectedIds: new Set<string>() };
+      const preview = repo.planStorageBudget(options);
+      expect(preview.checkpointIds).toEqual(['a']);
+      await repo.insert({ ...fixtureCheckpoint('c'), id: 'c', createdAt: '2026-03-01T00:00:00.000Z' });
+      let backups = 0;
+      await expect(repo.applyStorageBudget({
+        ...options, expectedPreviewToken: preview.previewToken, userConfirmed: true,
+        createVerifiedBackup: async () => { backups++; return { verified: true as const, id: 'unused' }; },
+      })).rejects.toThrow(/stale|changed/);
+      expect(backups).toBe(0);
+      expect(database.connection.prepare('SELECT COUNT(*) AS count FROM checkpoints').get()).toMatchObject({ count: 3 });
+      const current = repo.planStorageBudget(options);
+      expect(current.checkpointIds).toEqual(['a', 'b']);
+      const applied = await repo.applyStorageBudget({
+        ...options, expectedPreviewToken: current.previewToken, userConfirmed: true,
+        createVerifiedBackup: async () => { backups++; return { verified: true as const, id: 'mocked-verified' }; },
+      });
+      expect(applied.deleted).toBe(2);
+      expect(backups).toBe(1);
+    } finally {
+      database.close();
+    }
   });
 
   it('encrypts checkpoint file content at rest with AES-256-GCM', async () => {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Checkpoint, CheckpointFile, CheckpointRepository } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import type { CheckpointPayloadCipher } from './checkpoint-cipher.js';
@@ -10,6 +11,19 @@ interface CheckpointRow {
 }
 
 export class SqliteCheckpointRepository implements CheckpointRepository {
+  private cachedByteCount: { readonly bytes: number; readonly dataVersion: number } | null = null;
+
+  private checkpointBytes(): number {
+    const connection = this.database.connection;
+    const dataVersion = (connection.prepare('PRAGMA data_version').get() as { data_version: number }).data_version;
+    if (this.cachedByteCount !== null && this.cachedByteCount.dataVersion === dataVersion) {
+      return this.cachedByteCount.bytes;
+    }
+    const row = connection.prepare('SELECT COALESCE(SUM(length(CAST(files_json AS BLOB))), 0) AS bytes FROM checkpoints').get() as { bytes: number };
+    this.cachedByteCount = { bytes: row.bytes, dataVersion };
+    return row.bytes;
+  }
+
   public constructor(
     private readonly database: SqliteDatabase,
     private readonly cipher?: CheckpointPayloadCipher,
@@ -21,6 +35,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     this.database.connection.prepare(
       'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
     ).run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, this.encodeFiles(checkpoint.files));
+    this.cachedByteCount = null;
   }
 
   public async get(id: string): Promise<Checkpoint | null> {
@@ -60,6 +75,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
         ORDER BY older.created_at ASC, older.id ASC LIMIT 128
       )
     `).run(cutoffIso);
+    this.cachedByteCount = null;
     return Number(result.changes);
   }
 
@@ -78,7 +94,9 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
   }
 
   public async deleteAll(): Promise<number> {
-    return Number(this.database.connection.prepare('DELETE FROM checkpoints').run().changes);
+    const deleted = Number(this.database.connection.prepare('DELETE FROM checkpoints').run().changes);
+    this.cachedByteCount = null;
+    return deleted;
   }
 
   /**
@@ -90,18 +108,17 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     readonly maxBytes: number;
     readonly deleteBefore: string;
     readonly protectedIds?: ReadonlySet<string>;
-  }): { readonly totalBytes: number; readonly candidateBytes: number; readonly checkpointIds: readonly string[] } {
+  }): { readonly totalBytes: number; readonly candidateBytes: number; readonly checkpointIds: readonly string[]; readonly previewToken: string } {
     if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 0 || !Number.isFinite(Date.parse(options.deleteBefore))) {
       throw new Error('Invalid checkpoint storage budget');
     }
     // Aggregate inside SQLite rather than materializing all checkpoint rows
     // and their metadata into Node. Preview is capped at 256 candidates.
-    const total = this.database.connection.prepare(
-      'SELECT COALESCE(SUM(length(CAST(files_json AS BLOB))), 0) AS bytes FROM checkpoints',
-    ).get() as { bytes: number };
-    const totalBytes = total.bytes;
+    const totalBytes = this.checkpointBytes();
     const needToReclaim = totalBytes - options.maxBytes;
-    if (needToReclaim <= 0) return { totalBytes, candidateBytes: 0, checkpointIds: [] };
+    const seal = (ids: readonly string[], bytes: number): string => createHash('sha256')
+      .update(JSON.stringify([options.maxBytes, options.deleteBefore, totalBytes, bytes, ids])).digest('hex');
+    if (needToReclaim <= 0) return { totalBytes, candidateBytes: 0, checkpointIds: [], previewToken: seal([], 0) };
     const candidates = this.database.connection.prepare(`
       SELECT older.id, length(CAST(older.files_json AS BLOB)) AS bytes
       FROM checkpoints older
@@ -121,7 +138,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       checkpointIds.push(candidate.id);
       candidateBytes += candidate.bytes;
     }
-    return { totalBytes, candidateBytes, checkpointIds };
+    return { totalBytes, candidateBytes, checkpointIds, previewToken: seal(checkpointIds, candidateBytes) };
   }
 
   /** No silent cleanup: require an actual verified backup and a reference fence. */
@@ -130,13 +147,17 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     readonly deleteBefore: string;
     readonly protectedIds: ReadonlySet<string>;
     readonly userConfirmed: boolean;
+    readonly expectedPreviewToken: string;
+    readonly resolveProtectedIds?: () => ReadonlySet<string>;
     readonly createVerifiedBackup: () => Promise<{ readonly verified: true; readonly id: string }>;
   }): Promise<{ readonly deleted: number; readonly plannedBytes: number }> {
     if (!options.userConfirmed) throw new Error('Checkpoint storage cleanup requires explicit confirmation');
+    if (!/^[0-9a-f]{64}$/.test(options.expectedPreviewToken)) throw new Error('Checkpoint cleanup requires a valid preview token');
     if (options.protectedIds === undefined || typeof options.protectedIds.has !== 'function') {
       throw new Error('Checkpoint storage cleanup requires an explicit protected-ID reference fence');
     }
     const preview = this.planStorageBudget(options);
+    if (preview.previewToken !== options.expectedPreviewToken) throw new Error('Checkpoint cleanup preview is stale; preview again');
     if (preview.checkpointIds.length === 0) return { deleted: 0, plannedBytes: 0 };
     const backup = await options.createVerifiedBackup();
     if (backup?.verified !== true || typeof backup.id !== 'string' || backup.id.length === 0) {
@@ -145,13 +166,16 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     const connection = this.database.connection;
     connection.exec('BEGIN IMMEDIATE;');
     try {
-      const plan = this.planStorageBudget(options);
+      const currentProtected = options.resolveProtectedIds?.() ?? options.protectedIds;
+      const plan = this.planStorageBudget({ ...options, protectedIds: currentProtected });
+      if (plan.previewToken !== options.expectedPreviewToken) throw new Error('Checkpoint cleanup preview changed; preview again');
       const remove = connection.prepare('DELETE FROM checkpoints WHERE id = ? AND created_at < ?');
       let deleted = 0;
       for (const id of plan.checkpointIds) {
         deleted += Number(remove.run(id, options.deleteBefore).changes);
       }
       connection.exec('COMMIT;');
+      this.cachedByteCount = null;
       return { deleted, plannedBytes: plan.candidateBytes };
     } catch (error) {
       connection.exec('ROLLBACK;');
@@ -169,6 +193,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
         this.database.connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ? AND files_json = ?').run(
           this.cipher.encrypt(decoded), value.id, value.files_json,
         );
+        this.cachedByteCount = null;
       }
     } catch {
       return null;

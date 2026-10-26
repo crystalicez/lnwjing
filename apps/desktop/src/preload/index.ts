@@ -1256,8 +1256,20 @@ function storageOverview(value: unknown): StorageOverview {
   const sqliteAllocatedBytes = integerField(value, 'sqliteAllocatedBytes');
   const sqliteFreeBytes = integerField(value, 'sqliteFreeBytes');
   if (sqliteAllocatedBytes < 0 || sqliteFreeBytes < 0 || sqliteFreeBytes > sqliteAllocatedBytes) throw new Error('Invalid SQLite sizes');
+  let usageCategories: StorageOverview['usageCategories'];
+  if (Array.isArray(value.usageCategories)) {
+    if (value.usageCategories.length > 12 || value.usageCategories.some((row: unknown) =>
+      !isRecord(row) || typeof row.category !== 'string' || row.category.length > 48 ||
+      !Number.isSafeInteger(row.bytes) || (row.bytes as number) < 0 ||
+      !Number.isSafeInteger(row.inspectedEntries) || (row.inspectedEntries as number) < 0 ||
+      typeof row.truncated !== 'boolean')) throw new Error('Invalid storage usage categories');
+    usageCategories = value.usageCategories as NonNullable<StorageOverview['usageCategories']>;
+  }
+  if (value.hasCompressedV2 !== undefined && typeof value.hasCompressedV2 !== 'boolean') throw new Error('Invalid compressed checkpoint status');
   return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes,
-    compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true };
+    ...(value.hasCompressedV2 === undefined ? {} : { hasCompressedV2: value.hasCompressedV2 as boolean }),
+    compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true,
+    ...(usageCategories === undefined ? {} : { usageCategories }) };
 }
 function getStorageOverview(): Promise<StorageOverview> {
   return invoke(ipcChannels.getStorageOverview).then(storageOverview);
@@ -1282,7 +1294,8 @@ function checkpointCleanupPreview(value: unknown): CheckpointCleanupPreview {
   const totalBytes = integerField(value, 'totalBytes');
   const candidateBytes = integerField(value, 'candidateBytes');
   if (totalBytes < 0 || candidateBytes < 0 || candidateBytes > totalBytes) throw new Error('Invalid checkpoint sizes');
-  return { totalBytes, candidateBytes, checkpointIds: value.checkpointIds as string[] };
+  if (typeof value.previewToken !== 'string' || !/^[a-f0-9]{64}$/.test(value.previewToken)) throw new Error('Invalid checkpoint preview token');
+  return { totalBytes, candidateBytes, checkpointIds: value.checkpointIds as string[], previewToken: value.previewToken };
 }
 function validCheckpointRequest(value: unknown): value is CheckpointCleanupPreviewRequest {
   return isRecord(value) && Number.isSafeInteger(value.maxBytes) && (value.maxBytes as number) >= 0 && (value.maxBytes as number) <= 1024 ** 4
@@ -1294,7 +1307,7 @@ function previewCheckpointCleanup(request: CheckpointCleanupPreviewRequest): Pro
   return invoke(ipcChannels.previewCheckpointCleanup, request).then(checkpointCleanupPreview);
 }
 function applyCheckpointCleanup(request: ApplyCheckpointCleanupRequest): Promise<ApplyCheckpointCleanupResult> {
-  if (!validCheckpointRequest(request) || request.userConfirmed !== true) return Promise.reject(new Error('Checkpoint cleanup confirmation required'));
+  if (!validCheckpointRequest(request) || request.userConfirmed !== true || !/^[a-f0-9]{64}$/.test(request.expectedPreviewToken)) return Promise.reject(new Error('Checkpoint cleanup confirmation and preview required'));
   return invoke(ipcChannels.applyCheckpointCleanup, request).then((value: unknown) => {
     if (!isRecord(value)) throw new Error('Invalid cleanup response');
     const deleted = integerField(value, 'deleted');

@@ -27,7 +27,7 @@ export class AesGcmCheckpointCipher implements CheckpointPayloadCipher {
 
   public encrypt(plainText: string): string {
     const original = Buffer.from(plainText, 'utf8');
-    const compressed = this.options.compressionEnabled !== false && original.byteLength >= COMPRESS_MIN_BYTES
+    const compressed = this.options.compressionEnabled === true && original.byteLength >= COMPRESS_MIN_BYTES
       && original.byteLength <= MAX_DECOMPRESSED_BYTES
       ? brotliCompressSync(original, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 4 } })
       : null;
