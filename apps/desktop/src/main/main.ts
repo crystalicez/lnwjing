@@ -15,6 +15,15 @@ import {
   pushChannels,
   type AddWorkspaceRequest,
   type BackupSummary,
+  type StorageOverview,
+  type SetStoragePolicyRequest,
+  type SetStoragePolicyResult,
+  type CheckpointCleanupPreviewRequest,
+  type CheckpointCleanupPreview,
+  type ApplyCheckpointCleanupRequest,
+  type ApplyCheckpointCleanupResult,
+  type NativeStorageCleanupRequest,
+  type NativeStorageCleanupResult,
   type ClearLogBufferRequest,
   type ClearWorkLogRequest,
   type ActivityTargetDetail,
@@ -100,6 +109,7 @@ import { readSharedActivitySnapshot, startMcpStdio, inspectWorkflowFile, inspect
 import { createExplicitKeySecretProtector, DEFAULT_DISPLAY_TIME_ZONE, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, formatDisplayDateTime, formatOffsetIsoTimestamp, normalizeMcpAllowedHostname, resolveLnwjingDataPath, type SecretProtector } from '@lnwjing/shared';
 import { applyPendingSqliteRestoreSync, CheckpointKeyStore, type CheckpointPayloadCipher } from '@lnwjing/storage';
 import { createDesktopRuntime, formatCompleteTargetDetail, formatIncompleteLegacyHistory, writeSerializedLogRows, type DesktopRuntime } from './desktop-services.js';
+import { parseSetStoragePolicyRequest, parseCheckpointCleanupPreview, parseApplyCheckpointCleanup, parseNativeStorageCleanup } from './storage-ipc-parser.js';
 import { resolveTunnelProfileDirectory, TUNNEL_SECRET_FILE_NAME } from './tunnel-controller.js';
 import { TunnelAliasRetirementJournal, tunnelAliasRecoveryDirectory } from './tunnel-runtime-alias-journal.js';
 import { migrateLegacyWindowsSecrets } from './legacy-secret-migration.js';
@@ -179,6 +189,11 @@ export interface DesktopIpcServices {
   setAiDeletePolicy(request: SetAiDeletePolicyRequest): Promise<{ readonly enabled: boolean; readonly policy: DestructiveDeletePolicy }>;
   setStdioPolicy(request: SetStdioPolicyRequest): Promise<{ readonly profile: PermissionProfileName; readonly strictRoots: boolean; readonly allowedRoots: readonly string[]; readonly restartRequired: boolean }>;
   createBackup(): Promise<BackupSummary>;
+  getStorageOverview(): Promise<StorageOverview>;
+  setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStoragePolicyResult>;
+  previewCheckpointCleanup(request: CheckpointCleanupPreviewRequest): Promise<CheckpointCleanupPreview>;
+  applyCheckpointCleanup(request: ApplyCheckpointCleanupRequest): Promise<ApplyCheckpointCleanupResult>;
+  pruneNativeStorage(request: NativeStorageCleanupRequest): Promise<NativeStorageCleanupResult>;
   purgeRecoveryData(request: PurgeRecoveryDataRequest): Promise<{ readonly category: PurgeRecoveryDataRequest['category']; readonly deleted: number }>;
   scheduleRestoreBackup(request: ScheduleRestoreBackupRequest): Promise<{ readonly scheduled: boolean; readonly restartRequired: boolean }>;
   restoreRecoveryItem(request: RestoreRecoveryItemRequest): Promise<{ readonly restored: boolean; readonly path: string; readonly rollbackRecoveryId: string | null }>;
@@ -370,6 +385,11 @@ const defaultDesktopServices: DesktopIpcServices = {
     profile: request.profile, strictRoots: request.strictRoots, allowedRoots: request.allowedRoots, restartRequired: false,
   }),
   createBackup: async (): Promise<BackupSummary> => ({ id: 'unavailable', createdAt: new Date(0).toISOString(), reason: 'manual', sizeBytes: 0 }),
+  getStorageOverview: async (): Promise<StorageOverview> => ({ policy: { compressionEnabledOnNextStart: false, automaticCheckpointRetention: false, auditPruneWithoutBackup: false, routineAuditRetentionDays: 90 }, sqliteAllocatedBytes: 0, sqliteFreeBytes: 0, compactRecommended: false, compactionRequiresOffline: true }),
+  setStoragePolicy: async (): Promise<SetStoragePolicyResult> => { throw new Error('Storage backend is unavailable'); },
+  previewCheckpointCleanup: async (): Promise<CheckpointCleanupPreview> => { throw new Error('Storage backend is unavailable'); },
+  applyCheckpointCleanup: async (): Promise<ApplyCheckpointCleanupResult> => { throw new Error('Storage backend is unavailable'); },
+  pruneNativeStorage: async (): Promise<NativeStorageCleanupResult> => { throw new Error('Storage backend is unavailable'); },
   purgeRecoveryData: async (request: PurgeRecoveryDataRequest): Promise<{ readonly category: PurgeRecoveryDataRequest['category']; readonly deleted: number }> => ({ category: request.category, deleted: 0 }),
   scheduleRestoreBackup: async (): Promise<{ readonly scheduled: boolean; readonly restartRequired: boolean }> => ({ scheduled: false, restartRequired: false }),
   restoreRecoveryItem: async (): Promise<{ readonly restored: boolean; readonly path: string; readonly rollbackRecoveryId: string | null }> => ({ restored: false, path: '', rollbackRecoveryId: null }),
@@ -566,6 +586,27 @@ export function registerIpcHandlers(
     assertTrustedSender(event, getMainWindow());
     assertNoPayload(payload);
     return services.createBackup();
+  });
+  registerHandler(ipcChannels.getStorageOverview, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    assertNoPayload(payload);
+    return services.getStorageOverview();
+  });
+  registerHandler(ipcChannels.setStoragePolicy, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    return services.setStoragePolicy(parseSetStoragePolicyRequest(payload));
+  });
+  registerHandler(ipcChannels.previewCheckpointCleanup, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    return services.previewCheckpointCleanup(parseCheckpointCleanupPreview(payload));
+  });
+  registerHandler(ipcChannels.applyCheckpointCleanup, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    return services.applyCheckpointCleanup(parseApplyCheckpointCleanup(payload));
+  });
+  registerHandler(ipcChannels.pruneNativeStorage, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    return services.pruneNativeStorage(parseNativeStorageCleanup(payload));
   });
   registerHandler(ipcChannels.purgeRecoveryData, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());

@@ -37,6 +37,15 @@ describe('Desktop storage-maintenance backend', () => {
         compressionEnabledOnNextStart: true, auditPruneWithoutBackup: true,
         routineAuditRetentionDays: 7, automaticCheckpointRetention: false,
       });
+      expect((await runtime.services.getStorageOverview()).policy.routineAuditRetentionDays).toBe(7);
+      const updated = await runtime.services.setStoragePolicy({ userConfirmed: true, auditPruneWithoutBackup: false });
+      expect(updated.overview.policy.auditPruneWithoutBackup).toBe(false);
+      expect((await runtime.services.previewCheckpointCleanup({
+        maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z',
+      })).checkpointIds).toEqual([]);
+      expect(await runtime.services.applyCheckpointCleanup({
+        maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z', userConfirmed: true,
+      })).toEqual({ deleted: 0, plannedBytes: 0, backupId: null });
     } finally {
       await runtime.close();
       await rm(root, { recursive: true, force: true });

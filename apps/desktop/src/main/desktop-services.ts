@@ -1931,6 +1931,14 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       return { profile: request.profile, strictRoots: request.strictRoots, allowedRoots, restartRequired: true };
     },
     createBackup: async (): Promise<IpcBackupSummary> => toIpcBackupSummary(await backupService.create('manual')),
+    getStorageOverview: async () => ({ ...storageMaintenance.inspect(), policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const }),
+    setStoragePolicy: async (request) => {
+      const changed = storageMaintenance.configurePolicy(request);
+      return { ...changed, overview: { ...storageMaintenance.inspect(), policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const } };
+    },
+    previewCheckpointCleanup: async (request) => storageMaintenance.previewCheckpointBudget(request),
+    applyCheckpointCleanup: async (request) => storageMaintenance.applyCheckpointBudget(request),
+    pruneNativeStorage: async (request) => storageMaintenance.pruneNativeLaunchInputs(request),
     purgeRecoveryData: async (request: PurgeRecoveryDataRequest): Promise<{ readonly category: PurgeRecoveryDataRequest['category']; readonly deleted: number }> => {
       if (request.userConfirmed !== true) throw new Error('Deleting recovery data requires explicit confirmation');
       if (request.category === 'trash') return { category: request.category, deleted: await fileService.purgeAllRecoveryItems() };
@@ -2506,6 +2514,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         ...options, protectedIds: new Set<string>(), userConfirmed: true,
         createVerifiedBackup: async () => {
           const backup = await backupService.create('manual');
+          if (!(await backupService.verifyBackupForCleanup(backup.id))) throw new Error('Checkpoint cleanup backup integrity check failed');
           backupId = backup.id;
           return { verified: true as const, id: backup.id };
         },

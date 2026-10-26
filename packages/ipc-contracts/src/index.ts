@@ -1,5 +1,7 @@
 import type { WorkflowPrepareRequest, WorkflowTemplate, WorkflowDraft, CallHistoryRequest, CallHistoryPage, TaskResultSummary, ResourceSnapshotRequest, ResourceSnapshot, RestoreTaskCheckpointRequest, RestoreTaskCheckpointResult, CancelOwnedGoalTaskRequest, CancelOwnedGoalTaskResult } from './workflow-contracts.js';
 export type * from './workflow-contracts.js';
+import type { StorageOverview, SetStoragePolicyRequest, SetStoragePolicyResult, CheckpointCleanupPreviewRequest, CheckpointCleanupPreview, ApplyCheckpointCleanupRequest, ApplyCheckpointCleanupResult, NativeStorageCleanupRequest, NativeStorageCleanupResult } from './storage-contracts.js';
+export type * from './storage-contracts.js';
 
 export const APP_NAME = 'lnwjing';
 export const APP_VERSION = '5.8.7';
@@ -29,6 +31,11 @@ export const ipcChannels = {
   setAiDeletePolicy: 'lnwjing:set-ai-delete-policy',
   setStdioPolicy: 'lnwjing:set-stdio-policy',
   createBackup: 'lnwjing:create-backup',
+  getStorageOverview: 'lnwjing:storage-overview',
+  setStoragePolicy: 'lnwjing:storage-set-policy',
+  previewCheckpointCleanup: 'lnwjing:storage-checkpoint-preview',
+  applyCheckpointCleanup: 'lnwjing:storage-checkpoint-apply',
+  pruneNativeStorage: 'lnwjing:storage-prune-native',
   purgeRecoveryData: 'lnwjing:purge-recovery-data',
   scheduleRestoreBackup: 'lnwjing:schedule-restore-backup',
   restoreRecoveryItem: 'lnwjing:restore-recovery-item',
@@ -1213,6 +1220,11 @@ export interface IpcRequestMap {
   readonly [ipcChannels.setAiDeletePolicy]: SetAiDeletePolicyRequest;
   readonly [ipcChannels.setStdioPolicy]: SetStdioPolicyRequest;
   readonly [ipcChannels.createBackup]: undefined;
+  readonly [ipcChannels.getStorageOverview]: undefined;
+  readonly [ipcChannels.setStoragePolicy]: SetStoragePolicyRequest;
+  readonly [ipcChannels.previewCheckpointCleanup]: CheckpointCleanupPreviewRequest;
+  readonly [ipcChannels.applyCheckpointCleanup]: ApplyCheckpointCleanupRequest;
+  readonly [ipcChannels.pruneNativeStorage]: NativeStorageCleanupRequest;
   readonly [ipcChannels.purgeRecoveryData]: PurgeRecoveryDataRequest;
   readonly [ipcChannels.scheduleRestoreBackup]: ScheduleRestoreBackupRequest;
   readonly [ipcChannels.restoreRecoveryItem]: RestoreRecoveryItemRequest;
@@ -1303,6 +1315,11 @@ export interface IpcResponseMap {
   readonly [ipcChannels.setAiDeletePolicy]: { readonly enabled: boolean; readonly policy: DestructiveDeletePolicy };
   readonly [ipcChannels.setStdioPolicy]: { readonly profile: PermissionProfileName; readonly strictRoots: boolean; readonly allowedRoots: readonly string[]; readonly restartRequired: boolean };
   readonly [ipcChannels.createBackup]: BackupSummary;
+  readonly [ipcChannels.getStorageOverview]: StorageOverview;
+  readonly [ipcChannels.setStoragePolicy]: SetStoragePolicyResult;
+  readonly [ipcChannels.previewCheckpointCleanup]: CheckpointCleanupPreview;
+  readonly [ipcChannels.applyCheckpointCleanup]: ApplyCheckpointCleanupResult;
+  readonly [ipcChannels.pruneNativeStorage]: NativeStorageCleanupResult;
   readonly [ipcChannels.purgeRecoveryData]: { readonly category: PurgeRecoveryDataRequest['category']; readonly deleted: number };
   readonly [ipcChannels.scheduleRestoreBackup]: { readonly scheduled: boolean; readonly restartRequired: boolean };
   readonly [ipcChannels.restoreRecoveryItem]: { readonly restored: boolean; readonly path: string; readonly rollbackRecoveryId: string | null };
@@ -1396,6 +1413,11 @@ export interface LnwjingApi {
   setAiDeletePolicy(request: SetAiDeletePolicyRequest): Promise<IpcResponseMap[typeof ipcChannels.setAiDeletePolicy]>;
   setStdioPolicy(request: SetStdioPolicyRequest): Promise<IpcResponseMap[typeof ipcChannels.setStdioPolicy]>;
   createBackup(): Promise<IpcResponseMap[typeof ipcChannels.createBackup]>;
+  getStorageOverview(): Promise<StorageOverview>;
+  setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStoragePolicyResult>;
+  previewCheckpointCleanup(request: CheckpointCleanupPreviewRequest): Promise<CheckpointCleanupPreview>;
+  applyCheckpointCleanup(request: ApplyCheckpointCleanupRequest): Promise<ApplyCheckpointCleanupResult>;
+  pruneNativeStorage(request: NativeStorageCleanupRequest): Promise<NativeStorageCleanupResult>;
   purgeRecoveryData(request: PurgeRecoveryDataRequest): Promise<IpcResponseMap[typeof ipcChannels.purgeRecoveryData]>;
   scheduleRestoreBackup(request: ScheduleRestoreBackupRequest): Promise<IpcResponseMap[typeof ipcChannels.scheduleRestoreBackup]>;
   restoreRecoveryItem(request: RestoreRecoveryItemRequest): Promise<IpcResponseMap[typeof ipcChannels.restoreRecoveryItem]>;

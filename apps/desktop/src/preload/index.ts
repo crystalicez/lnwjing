@@ -7,6 +7,10 @@ import {
   type AgentState,
   type BackupRestoreNotice,
   type BackupSummary,
+  type StorageOverview, type StoragePolicy, type SetStoragePolicyRequest, type SetStoragePolicyResult,
+  type CheckpointCleanupPreviewRequest, type CheckpointCleanupPreview,
+  type ApplyCheckpointCleanupRequest, type ApplyCheckpointCleanupResult,
+  type NativeStorageCleanupRequest, type NativeStorageCleanupResult,
   type ClearLogBufferRequest,
   type ClearWorkLogRequest,
   type ActivityTargetDetail,
@@ -1236,6 +1240,87 @@ function createBackup(): Promise<BackupSummary> {
   });
 }
 
+function storagePolicy(value: unknown): StoragePolicy {
+  if (!isRecord(value)) throw new Error('Invalid storage policy response');
+  const days = integerField(value, 'routineAuditRetentionDays');
+  if (days < 1 || days > 3650) throw new Error('Invalid retention response');
+  return {
+    compressionEnabledOnNextStart: booleanField(value, 'compressionEnabledOnNextStart'),
+    automaticCheckpointRetention: booleanField(value, 'automaticCheckpointRetention'),
+    auditPruneWithoutBackup: booleanField(value, 'auditPruneWithoutBackup'),
+    routineAuditRetentionDays: days,
+  };
+}
+function storageOverview(value: unknown): StorageOverview {
+  if (!isRecord(value) || value.compactionRequiresOffline !== true) throw new Error('Invalid storage overview response');
+  const sqliteAllocatedBytes = integerField(value, 'sqliteAllocatedBytes');
+  const sqliteFreeBytes = integerField(value, 'sqliteFreeBytes');
+  if (sqliteAllocatedBytes < 0 || sqliteFreeBytes < 0 || sqliteFreeBytes > sqliteAllocatedBytes) throw new Error('Invalid SQLite sizes');
+  return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes,
+    compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true };
+}
+function getStorageOverview(): Promise<StorageOverview> {
+  return invoke(ipcChannels.getStorageOverview).then(storageOverview);
+}
+function setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStoragePolicyResult> {
+  if (!isRecord(request) || request.userConfirmed !== true) return Promise.reject(new Error('Storage policy confirmation required'));
+  for (const key of ['compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup'] as const) {
+    if (request[key] !== undefined && typeof request[key] !== 'boolean') return Promise.reject(new Error('Invalid storage policy'));
+  }
+  if (request.routineAuditRetentionDays !== undefined &&
+    (!Number.isSafeInteger(request.routineAuditRetentionDays) || request.routineAuditRetentionDays < 1 || request.routineAuditRetentionDays > 3650)) {
+    return Promise.reject(new Error('Invalid retention'));
+  }
+  return invoke(ipcChannels.setStoragePolicy, request).then((value: unknown) => {
+    if (!isRecord(value)) throw new Error('Invalid storage policy result');
+    return { restartRequired: booleanField(value, 'restartRequired'), overview: storageOverview(value.overview) };
+  });
+}
+function checkpointCleanupPreview(value: unknown): CheckpointCleanupPreview {
+  if (!isRecord(value) || !Array.isArray(value.checkpointIds) || value.checkpointIds.length > 256 ||
+    !value.checkpointIds.every((id: unknown) => typeof id === 'string' && id.length > 0 && id.length <= 128)) throw new Error('Invalid checkpoint preview');
+  const totalBytes = integerField(value, 'totalBytes');
+  const candidateBytes = integerField(value, 'candidateBytes');
+  if (totalBytes < 0 || candidateBytes < 0 || candidateBytes > totalBytes) throw new Error('Invalid checkpoint sizes');
+  return { totalBytes, candidateBytes, checkpointIds: value.checkpointIds as string[] };
+}
+function validCheckpointRequest(value: unknown): value is CheckpointCleanupPreviewRequest {
+  return isRecord(value) && Number.isSafeInteger(value.maxBytes) && (value.maxBytes as number) >= 0 && (value.maxBytes as number) <= 1024 ** 4
+    && typeof value.deleteBefore === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value.deleteBefore)
+    && Number.isFinite(Date.parse(value.deleteBefore));
+}
+function previewCheckpointCleanup(request: CheckpointCleanupPreviewRequest): Promise<CheckpointCleanupPreview> {
+  if (!validCheckpointRequest(request)) return Promise.reject(new Error('Invalid preview request'));
+  return invoke(ipcChannels.previewCheckpointCleanup, request).then(checkpointCleanupPreview);
+}
+function applyCheckpointCleanup(request: ApplyCheckpointCleanupRequest): Promise<ApplyCheckpointCleanupResult> {
+  if (!validCheckpointRequest(request) || request.userConfirmed !== true) return Promise.reject(new Error('Checkpoint cleanup confirmation required'));
+  return invoke(ipcChannels.applyCheckpointCleanup, request).then((value: unknown) => {
+    if (!isRecord(value)) throw new Error('Invalid cleanup response');
+    const deleted = integerField(value, 'deleted');
+    const plannedBytes = integerField(value, 'plannedBytes');
+    if (deleted < 0 || plannedBytes < 0 || (value.backupId !== null && (typeof value.backupId !== 'string' || value.backupId.length > 200))) {
+      throw new Error('Invalid cleanup response');
+    }
+    return { deleted, plannedBytes, backupId: value.backupId as string | null };
+  });
+}
+function pruneNativeStorage(request: NativeStorageCleanupRequest): Promise<NativeStorageCleanupResult> {
+  if (!isRecord(request) || request.userConfirmed !== true || !['tasks', 'git', 'processes'].includes(String(request.category))
+    || (request.maxDirectories !== undefined && (!Number.isSafeInteger(request.maxDirectories) || request.maxDirectories < 1 || request.maxDirectories > 128))
+    || (request.afterName !== undefined && (typeof request.afterName !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(request.afterName)))) {
+    return Promise.reject(new Error('Invalid native cleanup request'));
+  }
+  return invoke(ipcChannels.pruneNativeStorage, request).then((value: unknown) => {
+    if (!isRecord(value)) throw new Error('Invalid native cleanup response');
+    const inspected = integerField(value, 'inspected');
+    const removedFiles = integerField(value, 'removedFiles');
+    if (inspected < 0 || inspected > 128 || removedFiles < 0 || removedFiles > 3 * inspected
+      || (value.nextCursor !== null && (typeof value.nextCursor !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value.nextCursor)))) throw new Error('Invalid native cleanup response');
+    return { inspected, removedFiles, nextCursor: value.nextCursor as string | null };
+  });
+}
+
 function purgeRecoveryData(request: PurgeRecoveryDataRequest): Promise<{ readonly category: PurgeRecoveryDataRequest['category']; readonly deleted: number }> {
   if (!isRecord(request) || request.userConfirmed !== true
     || (request.category !== 'trash' && request.category !== 'checkpoints' && request.category !== 'backups')) {
@@ -1696,6 +1781,11 @@ const api: LnwjingApi = {
   setAiDeletePolicy,
   setStdioPolicy,
   createBackup,
+  getStorageOverview,
+  setStoragePolicy,
+  previewCheckpointCleanup,
+  applyCheckpointCleanup,
+  pruneNativeStorage,
   purgeRecoveryData,
   scheduleRestoreBackup,
   restoreRecoveryItem,

@@ -11,6 +11,7 @@ import { EmptyState, PageHeading, SettingsCardHeading, StatusMessage , ActionBut
 import { SettingsSelect as FormSelect } from '../ui/SettingsSelect.js';
 import { PonytailPolicyEditor } from './PonytailPolicyEditor.js';
 import { SettingSwitch } from './SettingSwitch.js';
+import { StorageManagementPanel } from './StorageManagementPanel.js';
 import { UserConfigPanel, type UserConfigSection } from './UserConfigPanel.js';
 
 interface SettingsPageProps {
@@ -1015,6 +1016,7 @@ export function SettingsPage(props: SettingsPageProps): ReactElement {
 
           {activeSection === 'backup' ? (
             <>
+              <StorageManagementPanel locale={props.locale} autoBackupEnabled={props.dashboard.settings.autoBackupEnabled === true} onChanged={props.onRefresh} />
               <section className="panel settings-card settings-card-polished" aria-label={t('settingsPage.recoveryTitle')}>
                 <SettingsCardHeading
                   icon="↶"
