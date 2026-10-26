@@ -124,6 +124,80 @@ describe('SqliteCheckpointRepository', () => {
     database.close();
   });
 
+  it('upgrades pre-metadata profiles without reading or rewriting existing payloads at startup', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'state.db');
+    const legacy = new SqliteDatabase(filename);
+    try {
+      const repo = new SqliteCheckpointRepository(legacy);
+      await repo.insert({ ...fixtureCheckpoint('legacy-content'), id: 'legacy', createdAt: '2026-01-01T00:00:00.000Z' });
+      legacy.connection.exec(`
+        DROP TRIGGER checkpoint_meta_insert;
+        DROP TRIGGER checkpoint_meta_update;
+        DROP TRIGGER checkpoint_meta_delete;
+        DROP INDEX idx_checkpoint_meta_created;
+        DROP INDEX idx_checkpoint_meta_compressed;
+        DROP TABLE checkpoint_storage_meta;
+        DELETE FROM schema_migrations WHERE id = '026_checkpoint_storage_metadata';
+      `);
+    } finally { legacy.close(); }
+    const restored = new SqliteDatabase(filename);
+    try {
+      const repo = new SqliteCheckpointRepository(restored);
+      expect(restored.connection.prepare(
+        "SELECT id FROM schema_migrations WHERE id = '026_checkpoint_storage_metadata'",
+      ).get()).toEqual({ id: '026_checkpoint_storage_metadata' });
+      expect(repo.storageMetadataStatus()).toMatchObject({ complete: false, indexed: 0, total: 1 });
+      const unchanged = restored.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get('legacy') as { files_json: string };
+      expect(unchanged.files_json).toContain('legacy-content');
+      await repo.prepareStorageMetadata();
+      expect(repo.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 1, total: 1 });
+      expect(restored.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get('legacy'))
+        .toEqual(unchanged);
+    } finally { restored.close(); }
+  });
+
+  it('fills legacy metadata only on explicit request and uses an indexed budget plan', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repo = new SqliteCheckpointRepository(database);
+      await repo.insert({ ...fixtureCheckpoint('old'), id: 'old', createdAt: '2026-01-01T00:00:00.000Z' });
+      await repo.insert({ ...fixtureCheckpoint('new'), id: 'new', createdAt: '2026-02-01T00:00:00.000Z' });
+      // Models a profile that existed before the additive metadata migration:
+      // existing Checkpoint BLOBs are untouched and intentionally not backfilled at startup.
+      database.connection.prepare('DELETE FROM checkpoint_storage_meta WHERE checkpoint_id = ?').run('old');
+      expect(repo.storageMetadataStatus()).toMatchObject({ complete: false, indexed: 1, total: 2 });
+      expect(() => repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2026-12-01T00:00:00.000Z' }))
+        .toThrow(/preparation/);
+      await repo.prepareStorageMetadata();
+      expect(repo.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 2, total: 2 });
+      const preview = repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2026-12-01T00:00:00.000Z' });
+      expect(preview.checkpointIds).toEqual(['old']);
+      const explain = database.connection.prepare(`
+        EXPLAIN QUERY PLAN SELECT older.checkpoint_id FROM checkpoint_storage_meta older
+        INDEXED BY idx_checkpoint_meta_created
+        WHERE older.created_at < ?
+        AND EXISTS (
+          SELECT 1 FROM checkpoints newer
+          WHERE newer.workspace_id = older.workspace_id
+            AND (newer.created_at > older.created_at
+              OR (newer.created_at = older.created_at AND newer.id > older.checkpoint_id))
+        )
+        ORDER BY older.created_at ASC, older.checkpoint_id ASC LIMIT 256
+      `).all('2026-12-01T00:00:00.000Z') as { detail: string }[];
+      expect(explain.some((row) => row.detail.includes('idx_checkpoint_meta_created'))).toBe(true);
+      expect(explain.some((row) => row.detail.includes('USE TEMP B-TREE'))).toBe(false);
+      // The trigger sees same-length and raw writes, without requiring
+      // application-level helpers to synchronize metadata.
+      database.connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ?')
+        .run('lnwjing:checkpoint:v2:br:payload', 'old');
+      expect(repo.storageMetadataStatus().hasCompressedV2).toBe(true);
+    } finally {
+      database.close();
+    }
+  });
+
   it('rejects stale cleanup previews even when a new checkpoint changes eligibility before confirmation', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));
@@ -204,6 +278,41 @@ describe('SqliteCheckpointRepository', () => {
       database.connection.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('unrelated-budget-setting', '1');
       expect(repository.planStorageBudget(options).previewToken).toBe(after.previewToken);
     } finally { database.close(); }
+  });
+
+  it('backfills legacy metadata only on explicit request using cooperative batches', async () => {
+    const root = await temporaryRoot();
+    const db = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repo = new SqliteCheckpointRepository(db);
+      for (let i = 0; i < 70; i += 1) {
+        await repo.insert({
+          ...fixtureCheckpoint('legacy-metadata-' + i),
+          id: 'old-' + String(i).padStart(3, '0'),
+          createdAt: '2026-01-01T00:00:00.000Z',
+        });
+      }
+      // Simulate a profile created before the metadata migration. The
+      // migration itself must not silently backfill old snapshots at startup.
+      db.connection.exec('DELETE FROM checkpoint_storage_meta');
+      const before = repo.storageMetadataStatus();
+      expect(before).toMatchObject({ indexed: 0, total: 70, complete: false });
+      expect(() => repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2027-01-01T00:00:00.000Z' }))
+        .toThrow(/preparation/);
+      await repo.prepareStorageMetadata();
+      expect(repo.storageMetadataStatus()).toMatchObject({ indexed: 70, total: 70, complete: true });
+      const plan = repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2027-01-01T00:00:00.000Z' });
+      expect(plan.totalBytes).toBeGreaterThan(0);
+      expect(plan.checkpointIds).toHaveLength(69);
+      const query = db.connection.prepare(`
+        EXPLAIN QUERY PLAN
+        SELECT checkpoint_id, payload_bytes FROM checkpoint_storage_meta
+        INDEXED BY idx_checkpoint_meta_created WHERE created_at < ?
+        ORDER BY created_at ASC, checkpoint_id ASC LIMIT 256
+      `).all('2027-01-01T00:00:00.000Z') as { detail: string }[];
+      expect(query.map((row) => row.detail).join(' ')).toContain('idx_checkpoint_meta_created');
+      expect(query.map((row) => row.detail).join(' ')).not.toContain('TEMP B-TREE');
+    } finally { db.close(); }
   });
 
   it('encrypts checkpoint file content at rest with AES-256-GCM', async () => {

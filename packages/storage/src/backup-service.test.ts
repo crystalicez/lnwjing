@@ -3,13 +3,25 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyPendingSqliteRestoreSync, SqliteBackupService } from './backup-service.js';
+import { applyPendingSqliteRestoreSync, assertBackupCapacity, SqliteBackupService } from './backup-service.js';
 import { SqliteDatabase } from './database.js';
 
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('SQLite backup disk preflight', () => {
+  it('rejects insufficient space before any snapshot write, including on large profiles', () => {
+    const mib = 1024n * 1024n;
+    expect(() => assertBackupCapacity(64n * mib, 1n * mib)).toThrow(/Insufficient free disk space/);
+    expect(() => assertBackupCapacity(65n * mib, 1n * mib)).not.toThrow();
+    // For large profiles reserve the greater of 64 MiB or 10% of allocation.
+    expect(() => assertBackupCapacity(1099n * mib, 1000n * mib)).toThrow(/Insufficient free disk space/);
+    expect(() => assertBackupCapacity(1100n * mib, 1000n * mib)).not.toThrow();
+    expect(() => assertBackupCapacity(-1n, 1n)).toThrow(/Invalid SQLite backup disk capacity/);
+  });
 });
 
 describe('SqliteBackupService', { timeout: 30_000 }, () => {

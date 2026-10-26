@@ -1266,8 +1266,10 @@ function storageOverview(value: unknown): StorageOverview {
     usageCategories = value.usageCategories as NonNullable<StorageOverview['usageCategories']>;
   }
   if (value.hasCompressedV2 !== undefined && typeof value.hasCompressedV2 !== 'boolean') throw new Error('Invalid compressed checkpoint status');
+  if (value.checkpointMetadataIncomplete !== undefined && typeof value.checkpointMetadataIncomplete !== 'boolean') throw new Error('Invalid checkpoint metadata status');
   return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes,
     ...(value.hasCompressedV2 === undefined ? {} : { hasCompressedV2: value.hasCompressedV2 as boolean }),
+    ...(value.checkpointMetadataIncomplete === undefined ? {} : { checkpointMetadataIncomplete: value.checkpointMetadataIncomplete as boolean }),
     compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true,
     ...(usageCategories === undefined ? {} : { usageCategories }) };
 }

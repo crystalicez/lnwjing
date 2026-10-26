@@ -7,6 +7,7 @@ import { AUDIT_MIGRATION_SQL } from './migrations/audit-migration.js';
 import { AUDIT_SCOPE_MIGRATION_SQL } from './migrations/audit-scope-migration.js';
 import { CHECKPOINT_MIGRATION_SQL } from './migrations/checkpoint-migration.js';
 import { CHECKPOINT_REVISION_MIGRATION_SQL } from './migrations/checkpoint-revision-migration.js';
+import { CHECKPOINT_METADATA_MIGRATION_SQL } from './migrations/checkpoint-metadata-migration.js';
 import { GOAL_CONTINUATION_MIGRATION_SQL } from './migrations/goal-continuation-migration.js';
 import { GOAL_CANCELLATION_MIGRATION_SQL } from './migrations/goal-cancellation-migration.js';
 import { GOAL_TRACKED_TASKS_MIGRATION_SQL } from './migrations/goal-tracked-tasks-migration.js';
@@ -117,6 +118,7 @@ export class SqliteDatabase {
       { id: '023_call_observability', sql: CALL_OBSERVABILITY_MIGRATION_SQL },
       { id: '024_audit_call_history_paging', sql: AUDIT_CALL_HISTORY_PAGING_MIGRATION_SQL },
       { id: '025_checkpoint_storage_revision', sql: CHECKPOINT_REVISION_MIGRATION_SQL },
+      { id: '026_checkpoint_storage_metadata', sql: CHECKPOINT_METADATA_MIGRATION_SQL },
     ]);
   }
 
@@ -215,14 +217,29 @@ export class SqliteDatabase {
       const existing = this.connection.prepare('SELECT id FROM schema_migrations WHERE id = ?').get(migration.id);
       return !this.hasMigrationId(existing, migration.id);
     });
-    if (pending.length === 0) return;
+    // Historical partial databases can record migration 003 while missing
+    // its table. Defer revision triggers rather than inventing recovery rows.
+    // A checkpoint repository will still fail closed on this incomplete schema.
+    const createsCheckpointTable = pending.some((migration) => migration.id === '003_checkpoints');
+    const hasCheckpointTable = this.connection.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'checkpoints'",
+    ).get() !== undefined;
+    const eligible = pending.filter((migration) => !['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata'].includes(migration.id)
+      || createsCheckpointTable || hasCheckpointTable);
+    if (eligible.length === 0) return;
 
-    this.backupBeforeFirstPendingMigration();
+    // These metadata-only migrations only create auxiliary tables, indexes
+    // and triggers. SQLite rolls all of their DDL back on failure. Do not
+    // VACUUM-copy a multi-GB profile merely to add recoverable metadata.
+    const metadataOnly = new Set(['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata']);
+    if (eligible.some((migration) => !metadataOnly.has(migration.id))) {
+      this.backupBeforeFirstPendingMigration();
+    }
     this.connection.exec('BEGIN;');
     let outerTransactionOpen = true;
     try {
-      for (let index = 0; index < pending.length; index += 1) {
-        const migration = pending[index]!;
+      for (let index = 0; index < eligible.length; index += 1) {
+        const migration = eligible[index]!;
         // An older partial fixture/database may mark 002_audit as applied without
         // carrying its table. Defer only the optional observability index until
         // that table actually exists; do not fabricate or rewrite audit history.

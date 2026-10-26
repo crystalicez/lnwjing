@@ -226,9 +226,10 @@ describe('Desktop storage-maintenance backend', () => {
       const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41), hostMutationApprovalProvider: async () => true });
       try {
         const opts = { maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' };
+        const beforeManual = (await readdir(path.join(root, 'backups'))).filter((name) => name.endsWith('.sqlite')).length;
         await expect(runtime.storageMaintenance.applyCheckpointBudget({ ...opts, userConfirmed: false }))
           .rejects.toThrow(/confirmation/);
-        expect((await readdir(path.join(root, 'backups'))).filter((name) => name.endsWith('.sqlite'))).toHaveLength(0);
+        expect((await readdir(path.join(root, 'backups'))).filter((name) => name.endsWith('.sqlite'))).toHaveLength(beforeManual);
         const result = await runtime.storageMaintenance.applyCheckpointBudget({ ...opts, expectedPreviewToken: runtime.storageMaintenance.previewCheckpointBudget(opts).previewToken, userConfirmed: true });
         expect(result).toMatchObject({ deleted: 1, backupId: expect.any(String) });
         expect((await readdir(path.join(root, 'backups'))).some((name) => name.endsWith('.sqlite'))).toBe(true);

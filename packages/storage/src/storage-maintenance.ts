@@ -1,6 +1,6 @@
 import { lstatSync, opendirSync, realpathSync, statfsSync } from 'node:fs';
 import path from 'node:path';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { SqliteBackupService } from './backup-service.js';
 import { SqliteDatabase } from './database.js';
 
@@ -125,6 +125,17 @@ export async function compactOfflineSqliteProfile(options: {
 }> {
   if (options.userConfirmed !== true) throw new Error('Offline compaction requires explicit user confirmation');
   if (await options.assertRuntimeStopped() !== true) throw new Error('Offline compaction requires all application writers stopped');
+  // Never let a compaction request silently run pending schema migrations.
+  // Migrations have their own backup, compatibility and disk-space gates.
+  const probe = new DatabaseSync(options.databasePath, { readOnly: true });
+  try {
+    const latest = probe.prepare(
+      "SELECT 1 FROM schema_migrations WHERE id = '026_checkpoint_storage_metadata'",
+    ).get();
+    if (latest === undefined) throw new Error('Update the profile schema before offline compaction');
+  } finally {
+    probe.close();
+  }
   const database = new SqliteDatabase(options.databasePath, { backupDirectory: options.backupDirectory });
   const backupService = new SqliteBackupService(database, {
     databaseFilename: options.databasePath, backupDirectory: options.backupDirectory,

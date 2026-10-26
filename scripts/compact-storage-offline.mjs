@@ -34,7 +34,15 @@ if (args.length !== 3 || at < 0 || args[at + 1] === undefined || !args.includes(
     }
     const inspect = [
       '$ErrorActionPreference = "Stop"',
-      '$targets = @(Get-CimInstance Win32_Process -Filter "Name=\'lnwjing.exe\'")',
+      // Include development runners and portable extraction children; those
+      // can hold SQLite connections even without a process named lnwjing.exe.
+      '$targets = @(Get-CimInstance Win32_Process | Where-Object {',
+      '  ($_.ProcessId -ne ' + String(process.pid) + ') -and (',
+      '  ($_.Name -match "(?i)^lnwjing.*\\.exe$") -or',
+      '  (($_.Name -match "(?i)^(node|electron|pnpm|tsx)\\.exe$") -and',
+      '    ($_.CommandLine -match "(?i)([\\\\/]lnwjing[\\\\/]|@lnwjing|lnwjing[\\\\/]packages)"))',
+      '  )',
+      '})',
       'if ($targets.Count -ne 0) { Write-Output "ACTIVE"; exit 3 }',
       'Write-Output "CLEAR"',
     ].join('; ');

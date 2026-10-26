@@ -11,6 +11,7 @@ export interface StorageOverview {
   readonly sqliteFreeBytes: number;
   readonly compactRecommended: boolean;
   readonly hasCompressedV2?: boolean;
+  readonly checkpointMetadataIncomplete?: boolean;
   readonly compactionRequiresOffline: true;
   readonly usageCategories?: readonly { readonly category: string; readonly bytes: number; readonly inspectedEntries: number; readonly truncated: boolean }[];
 }

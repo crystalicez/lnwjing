@@ -33,11 +33,65 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       && this.cachedByteCount.revision === revision) {
       return this.cachedByteCount;
     }
+    if (!this.storageMetadataStatus().complete) throw new Error('Checkpoint storage metadata requires preparation');
     const row = connection.prepare(
-      'SELECT COALESCE(SUM(length(CAST(files_json AS BLOB))), 0) AS bytes FROM checkpoints',
+      'SELECT COALESCE(SUM(payload_bytes), 0) AS bytes FROM checkpoint_storage_meta',
     ).get() as { bytes: number };
     this.cachedByteCount = { bytes: row.bytes, connection, revision };
     return this.cachedByteCount;
+  }
+
+  /** Constant-payload-I/O metadata readiness and encrypted format check. */
+  public storageMetadataStatus(): { readonly complete: boolean; readonly indexed: number; readonly total: number; readonly hasCompressedV2: boolean } {
+    const connection = this.database.connection;
+    const indexed = (connection.prepare('SELECT COUNT(*) AS n FROM checkpoint_storage_meta').get() as { n: number }).n;
+    const total = (connection.prepare('SELECT COUNT(*) AS n FROM checkpoints').get() as { n: number }).n;
+    const hasCompressedV2 = connection.prepare(
+      'SELECT 1 FROM checkpoint_storage_meta INDEXED BY idx_checkpoint_meta_compressed WHERE compressed_v2 = 1 LIMIT 1',
+    ).get() !== undefined;
+    return { complete: indexed === total, indexed, total, hasCompressedV2 };
+  }
+
+  /** Explicit, cooperative one-time metadata fill; never during startup. */
+  public async prepareStorageMetadata(): Promise<void> {
+    const connection = this.database.connection;
+    if (this.storageMetadataStatus().complete) return;
+    let cursor = '';
+    const select = connection.prepare(`
+      SELECT c.id, c.workspace_id, c.created_at,
+        length(CAST(c.files_json AS BLOB)) AS bytes,
+        CASE WHEN substr(c.files_json,1,25) = 'lnwjing:checkpoint:v2:br:' THEN 1 ELSE 0 END AS compressed
+      FROM checkpoints c
+      WHERE c.id > ? AND NOT EXISTS (
+        SELECT 1 FROM checkpoint_storage_meta m WHERE m.checkpoint_id = c.id)
+      ORDER BY c.id ASC LIMIT 32
+    `);
+    const insert = connection.prepare(`
+      INSERT OR IGNORE INTO checkpoint_storage_meta
+        (checkpoint_id,workspace_id,created_at,payload_bytes,compressed_v2)
+      VALUES (?,?,?,?,?)
+    `);
+    while (true) {
+      const rows = select.all(cursor) as { id: string; workspace_id: string; created_at: string; bytes: number; compressed: number }[];
+      if (rows.length === 0) break;
+      connection.exec('BEGIN IMMEDIATE;');
+      try {
+        for (const row of rows) {
+          insert.run(row.id, row.workspace_id, row.created_at, row.bytes, row.compressed);
+          cursor = row.id;
+        }
+        connection.exec('COMMIT;');
+      } catch (error) {
+        connection.exec('ROLLBACK;');
+        throw error;
+      }
+      this.cachedByteCount = null;
+      if (rows.length < 32) break;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    if (!this.storageMetadataStatus().complete) {
+      throw new Error('Checkpoint metadata changed during preparation; retry preview');
+    }
   }
 
   public constructor(
@@ -140,15 +194,15 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
         state.revision, ids])).digest('hex');
     if (needToReclaim <= 0) return { totalBytes, candidateBytes: 0, checkpointIds: [], previewToken: seal([], 0) };
     const candidates = this.database.connection.prepare(`
-      SELECT older.id, length(CAST(older.files_json AS BLOB)) AS bytes
-      FROM checkpoints older
+      SELECT older.checkpoint_id AS id, older.payload_bytes AS bytes
+      FROM checkpoint_storage_meta older INDEXED BY idx_checkpoint_meta_created
       WHERE older.created_at < ?
         AND EXISTS (
           SELECT 1 FROM checkpoints newer WHERE newer.workspace_id = older.workspace_id
             AND (newer.created_at > older.created_at
-              OR (newer.created_at = older.created_at AND newer.id > older.id))
+              OR (newer.created_at = older.created_at AND newer.id > older.checkpoint_id))
         )
-      ORDER BY older.created_at ASC, older.id ASC LIMIT 256
+      ORDER BY older.created_at ASC, older.checkpoint_id ASC LIMIT 256
     `).all(options.deleteBefore) as { id: string; bytes: number }[];
     const checkpointIds: string[] = [];
     let candidateBytes = 0;

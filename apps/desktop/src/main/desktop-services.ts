@@ -1212,23 +1212,28 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       ? configuredRetentionDays : 90;
     const cutoffIso = new Date(now - retentionDays * 24 * 60 * 60 * 1000).toISOString();
     auditRetentionSweep = (async (): Promise<void> => {
+      // Probe the indexed timestamp before creating a large backup.
+      const oldest = database.connection.prepare(
+        'SELECT timestamp FROM audit_events ORDER BY timestamp ASC LIMIT 1',
+      ).get() as { timestamp: string } | undefined;
+      if (oldest === undefined || oldest.timestamp >= cutoffIso) return;
       if (!pruneWithoutBackup) {
-        // Retain prior fail-closed behavior until the user explicitly opts
-        // into telemetry-only deletion without a full daily database backup.
         if (readSettings().autoBackupEnabled !== true) return;
         const created = await backupService.ensureRecent();
-        if (created === null) {
-          const backups = await backupService.list();
-          const hasRecentDaily = backups.some((item) => item.reason === 'daily'
-            && Date.parse(item.createdAt) <= now
-            && now - Date.parse(item.createdAt) < 24 * 60 * 60 * 1000);
-          if (!hasRecentDaily) return;
+        const candidates = created === null ? await backupService.list() : [created];
+        const verifiedAt = Date.now();
+        let hasVerifiedDaily = false;
+        for (const item of candidates) {
+          if (item.reason !== 'daily' || !Number.isFinite(Date.parse(item.createdAt))
+            || verifiedAt - Date.parse(item.createdAt) < 0
+            || verifiedAt - Date.parse(item.createdAt) >= 24 * 60 * 60 * 1000) continue;
+          if (await backupService.verifyBackupForCleanup(item.id)) {
+            hasVerifiedDaily = true;
+            break;
+          }
         }
+        if (!hasVerifiedDaily) return;
       }
-      // The audit repository deliberately excludes mutation receipts,
-      // Goal evidence, failed calls, and all non-routine events.
-      const oldest = database.connection.prepare('SELECT timestamp FROM audit_events ORDER BY timestamp ASC LIMIT 1').get() as { timestamp: string } | undefined;
-      if (oldest === undefined || oldest.timestamp >= cutoffIso) return;
       let totalDeleted = 0;
       for (let batch = 0; batch < 20; batch += 1) {
         if (!pruneWithoutBackup && readSettings().autoBackupEnabled !== true) break;
@@ -1276,7 +1281,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       const recent = backups.find((backup) => backup.reason === 'daily'
         && Number.isFinite(Date.parse(backup.createdAt))
         && Math.abs(checkedAt - Date.parse(backup.createdAt)) < 24 * 60 * 60 * 1000);
-      if (recent !== undefined && (created !== null || await backupService.verifyBackupForCleanup(recent.id))) {
+      if (recent !== undefined && await backupService.verifyBackupForCleanup(recent.id)) {
         checkpointsDeleted = await checkpointRepository.deleteOlderThan(cutoffIso);
       }
     }
@@ -1936,7 +1941,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       const changed = storageMaintenance.configurePolicy(request);
       return { ...changed, overview: storageOverview() };
     },
-    previewCheckpointCleanup: async (request) => storageMaintenance.previewCheckpointBudget(request),
+    previewCheckpointCleanup: async (request) => {
+      await checkpointRepository.prepareStorageMetadata();
+      return storageMaintenance.previewCheckpointBudget(request);
+    },
     applyCheckpointCleanup: async (request) => storageMaintenance.applyCheckpointBudget(request),
     pruneNativeStorage: async (request) => storageMaintenance.pruneNativeLaunchInputs(request),
     purgeRecoveryData: async (request: PurgeRecoveryDataRequest): Promise<{ readonly category: PurgeRecoveryDataRequest['category']; readonly deleted: number }> => {
@@ -2483,10 +2491,12 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         .map((category) => ({ category, ...inspectBoundedDirectorySize(path.join(dataPath, category), 512, 3) }));
       storageCategoryCache = { at: now, entries };
     }
-    const compressedPrefix = 'lnwjing:checkpoint:v2:br:';
-    const hasCompressedV2 = database.connection.prepare('SELECT 1 FROM checkpoints WHERE substr(files_json, 1, ?) = ? LIMIT 1')
-      .get(compressedPrefix.length, compressedPrefix) !== undefined;
-    return { ...storageMaintenance.inspect(), usageCategories: storageCategoryCache.entries, hasCompressedV2,
+    const checkpointStatus = checkpointRepository.storageMetadataStatus();
+    // Legacy profiles may have unindexed v2 snapshots. Never claim that
+    // downgrade is safe until explicit metadata preparation completes.
+    const hasCompressedV2 = checkpointStatus.hasCompressedV2;
+    const checkpointMetadataIncomplete = !checkpointStatus.complete;
+    return { ...storageMaintenance.inspect(), usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete,
       policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const };
   }
 

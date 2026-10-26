@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync, type SQLInputValue } from 'node:sqlite';
@@ -82,6 +82,26 @@ export interface SqliteRestoreOptions {
 
 const RETENTION_ARCHIVE_DIRECTORY = 'retention-archive';
 
+/** Conservative snapshot preflight shared by manual, daily and migration backups. */
+export function assertBackupCapacity(availableBytes: bigint, allocatedBytes: bigint): void {
+  if (availableBytes < 0n || allocatedBytes < 0n) throw new Error('Invalid SQLite backup disk capacity');
+  const minimumHeadroom = 64n * 1024n * 1024n;
+  const reserve = allocatedBytes / 10n > minimumHeadroom ? allocatedBytes / 10n : minimumHeadroom;
+  if (availableBytes < allocatedBytes + reserve) {
+    throw new Error('Insufficient free disk space for SQLite backup');
+  }
+}
+
+function assertBackupFreeSpace(database: DatabaseSync, directory: string): void {
+  const pageCount = (database.prepare('PRAGMA page_count').get() as { page_count: number }).page_count;
+  const pageSize = (database.prepare('PRAGMA page_size').get() as { page_size: number }).page_size;
+  if (!Number.isSafeInteger(pageCount) || pageCount < 0 || !Number.isSafeInteger(pageSize) || pageSize <= 0) {
+    throw new Error('Invalid SQLite page allocation for backup');
+  }
+  const volume = statfsSync(directory, { bigint: true });
+  assertBackupCapacity(volume.bavail * volume.bsize, BigInt(pageCount) * BigInt(pageSize));
+}
+
 export class SqliteBackupService {
   private readonly backupDirectory: string;
   private readonly now: () => Date;
@@ -111,21 +131,35 @@ export class SqliteBackupService {
     const id = backupId(createdAt);
     const databaseFile = id + '.sqlite';
     const destination = path.join(this.backupDirectory, databaseFile);
-    await backup(this.database.connection, destination);
-    validateDatabase(destination);
-    const sizeBytes = (await stat(destination)).size;
-    const manifest: BackupManifest = {
-      schemaVersion: 1,
-      id,
-      createdAt,
-      reason,
-      sizeBytes,
-      databaseFile,
-      platform: this.platform,
-      arch: this.arch,
-      dataSchemaVersion: readDataSchemaVersion(this.database.connection),
-    };
-    await writeFile(manifestPath(this.backupDirectory, id), JSON.stringify(manifest, null, 2), 'utf8');
+    // Fail before writing a potentially multi-GB snapshot if the target
+    // volume cannot hold a full SQLite copy plus safety headroom.
+    assertBackupFreeSpace(this.database.connection, this.backupDirectory);
+    const manifestFilename = manifestPath(this.backupDirectory, id);
+    const temporaryManifest = manifestFilename + '.tmp-' + randomUUID();
+    let manifest: BackupManifest;
+    try {
+      await backup(this.database.connection, destination);
+      validateDatabase(destination);
+      manifest = {
+        schemaVersion: 1,
+        id,
+        createdAt,
+        reason,
+        sizeBytes: (await stat(destination)).size,
+        databaseFile,
+        platform: this.platform,
+        arch: this.arch,
+        dataSchemaVersion: readDataSchemaVersion(this.database.connection),
+      };
+      // Publish only verified snapshots; a failed manifest write must not
+      // leave a half-published backup or an orphan multi-GB SQLite file.
+      await writeFile(temporaryManifest, JSON.stringify(manifest, null, 2), { encoding: 'utf8', flag: 'wx' });
+      await rename(temporaryManifest, manifestFilename);
+    } catch (error) {
+      await rm(temporaryManifest, { force: true }).catch(() => undefined);
+      await rm(destination, { force: true }).catch(() => undefined);
+      throw error;
+    }
     await this.rotateRetention();
     return summary(manifest, this.platform, this.arch);
   }
@@ -222,21 +256,34 @@ export function createPreMigrationBackupSync(
   const id = backupId(createdAt);
   const databaseFile = id + '.sqlite';
   const destination = path.join(directory, databaseFile);
-  database.exec('VACUUM INTO ' + sqliteString(destination) + ';');
-  validateDatabase(destination);
-  const manifest: BackupManifest = {
-    schemaVersion: 1,
-    id,
-    createdAt,
-    reason: 'pre-migration',
-    sizeBytes: statSync(destination).size,
-    databaseFile,
-    platform,
-    arch,
-    dataSchemaVersion: readDataSchemaVersion(database),
-  };
-  writeFileSync(manifestPath(directory, id), JSON.stringify(manifest, null, 2), 'utf8');
-  return summary(manifest, platform, arch);
+  assertBackupFreeSpace(database, directory);
+  const manifestFilename = manifestPath(directory, id);
+  const temporaryManifest = manifestFilename + '.tmp-' + randomUUID();
+  let published = false;
+  try {
+    database.exec('VACUUM INTO ' + sqliteString(destination) + ';');
+    validateDatabase(destination);
+    const manifest: BackupManifest = {
+      schemaVersion: 1,
+      id,
+      createdAt,
+      reason: 'pre-migration',
+      sizeBytes: statSync(destination).size,
+      databaseFile,
+      platform,
+      arch,
+      dataSchemaVersion: readDataSchemaVersion(database),
+    };
+    writeFileSync(temporaryManifest, JSON.stringify(manifest, null, 2), { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporaryManifest, manifestFilename);
+    published = true;
+    return summary(manifest, platform, arch);
+  } finally {
+    if (!published) {
+      rmSync(temporaryManifest, { force: true });
+      rmSync(destination, { force: true });
+    }
+  }
 }
 
 export interface PendingRestoreResult {
