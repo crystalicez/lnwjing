@@ -8,6 +8,7 @@ import { AUDIT_SCOPE_MIGRATION_SQL } from './migrations/audit-scope-migration.js
 import { CHECKPOINT_MIGRATION_SQL } from './migrations/checkpoint-migration.js';
 import { CHECKPOINT_REVISION_MIGRATION_SQL } from './migrations/checkpoint-revision-migration.js';
 import { CHECKPOINT_METADATA_MIGRATION_SQL } from './migrations/checkpoint-metadata-migration.js';
+import { CHECKPOINT_ROLLUP_MIGRATION_SQL } from './migrations/checkpoint-rollup-migration.js';
 import { GOAL_CONTINUATION_MIGRATION_SQL } from './migrations/goal-continuation-migration.js';
 import { GOAL_CANCELLATION_MIGRATION_SQL } from './migrations/goal-cancellation-migration.js';
 import { GOAL_TRACKED_TASKS_MIGRATION_SQL } from './migrations/goal-tracked-tasks-migration.js';
@@ -119,6 +120,7 @@ export class SqliteDatabase {
       { id: '024_audit_call_history_paging', sql: AUDIT_CALL_HISTORY_PAGING_MIGRATION_SQL },
       { id: '025_checkpoint_storage_revision', sql: CHECKPOINT_REVISION_MIGRATION_SQL },
       { id: '026_checkpoint_storage_metadata', sql: CHECKPOINT_METADATA_MIGRATION_SQL },
+      { id: '027_checkpoint_storage_rollup', sql: CHECKPOINT_ROLLUP_MIGRATION_SQL },
     ]);
   }
 
@@ -224,14 +226,14 @@ export class SqliteDatabase {
     const hasCheckpointTable = this.connection.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'checkpoints'",
     ).get() !== undefined;
-    const eligible = pending.filter((migration) => !['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata'].includes(migration.id)
+    const eligible = pending.filter((migration) => !['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup'].includes(migration.id)
       || createsCheckpointTable || hasCheckpointTable);
     if (eligible.length === 0) return;
 
     // These metadata-only migrations only create auxiliary tables, indexes
     // and triggers. SQLite rolls all of their DDL back on failure. Do not
     // VACUUM-copy a multi-GB profile merely to add recoverable metadata.
-    const metadataOnly = new Set(['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata']);
+    const metadataOnly = new Set(['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup']);
     if (eligible.some((migration) => !metadataOnly.has(migration.id))) {
       this.backupBeforeFirstPendingMigration();
     }

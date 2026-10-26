@@ -35,8 +35,11 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     }
     if (!this.storageMetadataStatus().complete) throw new Error('Checkpoint storage metadata requires preparation');
     const row = connection.prepare(
-      'SELECT COALESCE(SUM(payload_bytes), 0) AS bytes FROM checkpoint_storage_meta',
-    ).get() as { bytes: number };
+      'SELECT payload_bytes AS bytes FROM checkpoint_storage_totals WHERE id = 1',
+    ).get() as { bytes: number } | undefined;
+    if (row === undefined || !Number.isSafeInteger(row.bytes) || row.bytes < 0) {
+      throw new Error('Checkpoint storage size rollup is unavailable or invalid');
+    }
     this.cachedByteCount = { bytes: row.bytes, connection, revision };
     return this.cachedByteCount;
   }
@@ -44,12 +47,20 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
   /** Constant-payload-I/O metadata readiness and encrypted format check. */
   public storageMetadataStatus(): { readonly complete: boolean; readonly indexed: number; readonly total: number; readonly hasCompressedV2: boolean } {
     const connection = this.database.connection;
-    const indexed = (connection.prepare('SELECT COUNT(*) AS n FROM checkpoint_storage_meta').get() as { n: number }).n;
-    const total = (connection.prepare('SELECT COUNT(*) AS n FROM checkpoints').get() as { n: number }).n;
-    const hasCompressedV2 = connection.prepare(
-      'SELECT 1 FROM checkpoint_storage_meta INDEXED BY idx_checkpoint_meta_compressed WHERE compressed_v2 = 1 LIMIT 1',
-    ).get() !== undefined;
-    return { complete: indexed === total, indexed, total, hasCompressedV2 };
+    const rollup = connection.prepare(
+      'SELECT indexed_count, total_count, compressed_v2_count FROM checkpoint_storage_totals WHERE id = 1',
+    ).get() as { indexed_count: number; total_count: number; compressed_v2_count: number } | undefined;
+    if (rollup === undefined || !Number.isSafeInteger(rollup.indexed_count)
+      || !Number.isSafeInteger(rollup.total_count)
+      || !Number.isSafeInteger(rollup.compressed_v2_count) || rollup.indexed_count < 0
+      || rollup.total_count < 0 || rollup.compressed_v2_count < 0
+      || rollup.compressed_v2_count > rollup.indexed_count) {
+      throw new Error('Checkpoint storage metadata rollup is unavailable or invalid');
+    }
+    return {
+      complete: rollup.indexed_count === rollup.total_count, indexed: rollup.indexed_count,
+      total: rollup.total_count, hasCompressedV2: rollup.compressed_v2_count > 0,
+    };
   }
 
   /** Explicit, cooperative one-time metadata fill; never during startup. */

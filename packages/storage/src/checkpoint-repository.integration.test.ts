@@ -138,7 +138,8 @@ describe('SqliteCheckpointRepository', () => {
         DROP INDEX idx_checkpoint_meta_created;
         DROP INDEX idx_checkpoint_meta_compressed;
         DROP TABLE checkpoint_storage_meta;
-        DELETE FROM schema_migrations WHERE id = '026_checkpoint_storage_metadata';
+        DROP TABLE checkpoint_storage_totals;
+        DELETE FROM schema_migrations WHERE id IN ('026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup');
       `);
     } finally { legacy.close(); }
     const restored = new SqliteDatabase(filename);
@@ -155,6 +156,63 @@ describe('SqliteCheckpointRepository', () => {
       expect(restored.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get('legacy'))
         .toEqual(unchanged);
     } finally { restored.close(); }
+  });
+
+  it('upgrades existing v026 metadata into a durable rollup without touching checkpoint payloads', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'state.db');
+    const old = new SqliteDatabase(filename);
+    let originalPayload: string;
+    try {
+      const repo = new SqliteCheckpointRepository(old);
+      await repo.insert({ ...fixtureCheckpoint('old-payload'), id: 'a', createdAt: '2026-01-01T00:00:00.000Z' });
+      await repo.insert({ ...fixtureCheckpoint('new-payload'), id: 'b', createdAt: '2026-02-01T00:00:00.000Z' });
+      originalPayload = (old.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?')
+        .get('a') as { files_json: string }).files_json;
+      // Simulate a database upgraded to 026 by the previous Portable. Retain
+      // all checkpoint metadata, but remove only the unrecorded v027 rollup.
+      old.connection.exec(`
+        DROP TRIGGER checkpoint_meta_rollup_insert;
+        DROP TRIGGER checkpoint_meta_rollup_update;
+        DROP TRIGGER checkpoint_meta_rollup_delete;
+        DROP TRIGGER checkpoint_total_rollup_insert;
+        DROP TRIGGER checkpoint_total_rollup_delete;
+        DROP TABLE checkpoint_storage_totals;
+        DELETE FROM schema_migrations WHERE id = '027_checkpoint_storage_rollup';
+      `);
+    } finally { old.close(); }
+
+    const upgraded = new SqliteDatabase(filename);
+    try {
+      const repo = new SqliteCheckpointRepository(upgraded);
+      expect(upgraded.connection.prepare(
+        "SELECT id FROM schema_migrations WHERE id = '027_checkpoint_storage_rollup'",
+      ).get()).toEqual({ id: '027_checkpoint_storage_rollup' });
+      expect(repo.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 2, total: 2 });
+      expect((upgraded.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?')
+        .get('a') as { files_json: string }).files_json).toBe(originalPayload);
+      const expectedBytes = (upgraded.connection.prepare(
+        'SELECT COALESCE(SUM(length(CAST(files_json AS BLOB))), 0) AS bytes FROM checkpoints',
+      ).get() as { bytes: number }).bytes;
+      expect(repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2027-01-01T00:00:00.000Z' }).totalBytes)
+        .toBe(expectedBytes);
+      // Raw SQL, including format changes, must be accounted for without
+      // rebuilding the rollup or opening checkpoint BLOBs during overview.
+      upgraded.connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ?')
+        .run('lnwjing:checkpoint:v2:br:payload', 'a');
+      expect(repo.storageMetadataStatus().hasCompressedV2).toBe(true);
+      upgraded.connection.prepare('DELETE FROM checkpoints WHERE id = ?').run('b');
+      expect(repo.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 1, total: 1, hasCompressedV2: true });
+      const rollup = upgraded.connection.prepare(
+        'SELECT indexed_count, total_count, payload_bytes, compressed_v2_count FROM checkpoint_storage_totals WHERE id = 1',
+      ).get();
+      expect(rollup).toEqual({
+        indexed_count: 1,
+        total_count: 1,
+        payload_bytes: Buffer.byteLength('lnwjing:checkpoint:v2:br:payload'),
+        compressed_v2_count: 1,
+      });
+    } finally { upgraded.close(); }
   });
 
   it('fills legacy metadata only on explicit request and uses an indexed budget plan', async () => {
@@ -174,6 +232,14 @@ describe('SqliteCheckpointRepository', () => {
       expect(repo.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 2, total: 2 });
       const preview = repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2026-12-01T00:00:00.000Z' });
       expect(preview.checkpointIds).toEqual(['old']);
+      expect(database.connection.prepare(
+        'SELECT indexed_count, total_count, payload_bytes, compressed_v2_count FROM checkpoint_storage_totals WHERE id = 1',
+      ).get()).toEqual({ indexed_count: 2, total_count: 2, payload_bytes: preview.totalBytes, compressed_v2_count: 0 });
+      const rollupPlan = database.connection.prepare(
+        'EXPLAIN QUERY PLAN SELECT payload_bytes FROM checkpoint_storage_totals WHERE id = 1',
+      ).all() as { detail: string }[];
+      expect(rollupPlan.map((item) => item.detail).join(' ')).toMatch(/INTEGER PRIMARY KEY/);
+      expect(rollupPlan.map((item) => item.detail).join(' ')).not.toContain('checkpoint_storage_meta');
       const explain = database.connection.prepare(`
         EXPLAIN QUERY PLAN SELECT older.checkpoint_id FROM checkpoint_storage_meta older
         INDEXED BY idx_checkpoint_meta_created
