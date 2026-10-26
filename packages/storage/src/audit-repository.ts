@@ -104,6 +104,7 @@ export class SqliteAuditRepository implements AuditEventRepository {
           AND candidate.action IN (
             'mcp_tool:read_file', 'mcp_tool:read_files',
             'mcp_tool:list_files', 'mcp_tool:list_directory', 'mcp_tool:search_files',
+            'mcp_tool:search_text', 'mcp_tool:read_file_page', 'mcp_tool:git_status', 'mcp_tool:git_log',
             'mcp_tool:workspace_index_status', 'mcp_tool:process_status', 'mcp_tool:process_logs'
           )
           AND candidate.result_code IN ('STARTED', 'SUCCESS')

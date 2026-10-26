@@ -61,6 +61,46 @@ describe('SqliteCheckpointRepository', () => {
     database.close();
   });
 
+  it('previews a soft budget and preserves newest/workflow-protected checkpoints', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    const repository = new SqliteCheckpointRepository(database);
+    const first = { ...fixtureCheckpoint('A'.repeat(10_000)), id: 'a-old', createdAt: '2026-01-01T00:00:00.000Z' };
+    const protectedRow = { ...fixtureCheckpoint('B'.repeat(10_000)), id: 'b-protected', createdAt: '2026-01-02T00:00:00.000Z' };
+    const newest = { ...fixtureCheckpoint('C'.repeat(10_000)), id: 'c-new', createdAt: '2026-10-26T00:00:00.000Z' };
+    const separateWorkspace = { ...fixtureCheckpoint('D'.repeat(10_000)), id: 'd-other', workspaceId: 'workspace-2', createdAt: '2026-01-01T00:00:00.000Z' };
+    for (const row of [first, protectedRow, newest, separateWorkspace]) await repository.insert(row);
+    const opts = { maxBytes: 10_000, deleteBefore: '2026-10-01T00:00:00.000Z', protectedIds: new Set(['b-protected']) };
+    const plan = repository.planStorageBudget(opts);
+    expect(plan.checkpointIds).toEqual(['a-old']);
+    expect(plan.candidateBytes).toBeGreaterThan(0);
+    let backupCount = 0;
+    const verifiedBackup = async (): Promise<{ readonly verified: true; readonly id: string }> => {
+      backupCount += 1;
+      const backupPath = path.join(root, 'checkpoint-recovery.sqlite').replaceAll("'", "''");
+      database.connection.exec(`VACUUM INTO '${backupPath}';`);
+      return { verified: true, id: 'verified-fixture-backup' };
+    };
+    await expect(repository.applyStorageBudget({
+      ...opts, userConfirmed: false, createVerifiedBackup: verifiedBackup,
+    })).rejects.toThrow('confirmation');
+    expect(backupCount).toBe(0);
+    await expect(repository.applyStorageBudget({
+      ...opts, userConfirmed: true, createVerifiedBackup: async () => { throw new Error('backup unavailable'); },
+    })).rejects.toThrow('backup unavailable');
+    await expect(repository.get('a-old')).resolves.toEqual(first);
+    const applied = await repository.applyStorageBudget({
+      ...opts, userConfirmed: true, createVerifiedBackup: verifiedBackup,
+    });
+    expect(applied.deleted).toBe(1);
+    expect(backupCount).toBe(1);
+    await expect(repository.get('a-old')).resolves.toBeNull();
+    await expect(repository.get('b-protected')).resolves.toEqual(protectedRow);
+    await expect(repository.get('c-new')).resolves.toEqual(newest);
+    await expect(repository.get('d-other')).resolves.toEqual(separateWorkspace);
+    database.close();
+  });
+
   it('encrypts checkpoint file content at rest with AES-256-GCM', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));
@@ -93,6 +133,50 @@ describe('SqliteCheckpointRepository', () => {
     const row = database.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get(checkpoint.id) as { files_json?: string } | undefined;
     expect(row?.files_json).toMatch(/^lnwjing:checkpoint:v1:/);
     expect(row?.files_json).not.toContain('legacy-plaintext-marker');
+    database.close();
+  });
+
+  it('performs legacy migration once, then upgrades rare imported plaintext lazily', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    const cipher = new AesGcmCheckpointCipher(Buffer.alloc(32, 13));
+    new SqliteCheckpointRepository(database, cipher);
+    expect(database.connection.prepare(
+      "SELECT 1 FROM schema_migrations WHERE id = 'checkpoint_cipher_legacy_encryption_v1'",
+    ).get()).toBeTruthy();
+
+    const legacy = { ...fixtureCheckpoint('later-imported-plaintext'), id: 'later-import' };
+    database.connection.prepare(
+      'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+    ).run(legacy.id, legacy.workspaceId, legacy.createdAt, JSON.stringify(legacy.files));
+    const restarted = new SqliteCheckpointRepository(database, cipher);
+    const before = database.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get(legacy.id) as { files_json: string };
+    expect(before.files_json).toContain('later-imported-plaintext');
+    await expect(restarted.get(legacy.id)).resolves.toEqual(legacy);
+    const after = database.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get(legacy.id) as { files_json: string };
+    expect(after.files_json).toMatch(/^lnwjing:checkpoint:v1:/);
+    database.close();
+  });
+
+  it('migrates legacy plaintext in bounded batches beyond one page', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    const cipher = new AesGcmCheckpointCipher(Buffer.alloc(32, 5));
+    const insert = database.connection.prepare(
+      'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+    );
+    for (let i = 0; i < 17; i += 1) {
+      const checkpoint = { ...fixtureCheckpoint('legacy-' + i), id: 'old-' + String(i).padStart(2, '0') };
+      insert.run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, JSON.stringify(checkpoint.files));
+    }
+    const repo = new SqliteCheckpointRepository(database, cipher);
+    for (let i = 0; i < 17; i += 1) {
+      const id = 'old-' + String(i).padStart(2, '0');
+      const row = database.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get(id) as { files_json: string };
+      expect(cipher.isEncrypted(row.files_json)).toBe(true);
+      const restored = await repo.get(id);
+      expect(restored?.files[0]?.content).toBe('legacy-' + i);
+    }
     database.close();
   });
 

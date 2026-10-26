@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { Dirent } from 'node:fs';
 import { windowsContainedProcessSource } from './windows-contained-process.js';
 
 export interface WindowsContainedLaunch {
@@ -55,6 +56,70 @@ export async function readWindowsContainmentReceipt(filename: string): Promise<W
       || !('exitCode' in parsed) || typeof parsed.exitCode !== 'number' || !Number.isInteger(parsed.exitCode)) return undefined;
     return { kind: parsed.kind, activeProcesses: 0, outcome: parsed.outcome, exitCode: parsed.exitCode };
   } catch { return undefined; }
+}
+
+/**
+ * Reclaim one-use native launcher sources only after a zero-active Job receipt.
+ * Keep the receipt, log and task metadata for liveness/recovery evidence.
+ * Missing files and Windows sharing violations must never change job outcome.
+ */
+export async function pruneVerifiedWindowsContainmentInputs(receiptPath: string): Promise<number> {
+  if (path.basename(receiptPath) !== 'containment.receipt.json') return 0;
+  if (await readWindowsContainmentReceipt(receiptPath) === undefined) return 0;
+  const directory = path.dirname(receiptPath);
+  let removed = 0;
+  for (const name of ['containment.cs', 'containment.ps1', 'containment.json']) {
+    try {
+      await unlink(path.join(directory, name));
+      removed += 1;
+    } catch {
+      // A terminal receipt is authoritative; cleanup is best effort.
+    }
+  }
+  return removed;
+}
+
+const CONTAINMENT_TASK_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+/**
+ * Explicit maintenance of old completed native launch inputs.
+ * Caller selects one trusted per-application root and advances nextCursor.
+ * Never recurse into workspaces, follow symlinks, or remove result metadata.
+ */
+export async function pruneVerifiedWindowsContainmentRoot(
+  rootDirectory: string,
+  options: { readonly userConfirmed: boolean; readonly maxDirectories?: number; readonly afterName?: string },
+): Promise<{ readonly inspected: number; readonly removedFiles: number; readonly nextCursor: string | null }> {
+  if (options.userConfirmed !== true) throw new Error('Native retention cleanup requires explicit confirmation');
+  const limit = options.maxDirectories ?? 32;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128) throw new Error('Invalid containment cleanup batch size');
+  if (options.afterName !== undefined && !CONTAINMENT_TASK_ID.test(options.afterName)) {
+    throw new Error('Invalid native retention cursor');
+  }
+  let entries: Dirent[];
+  try {
+    entries = await readdir(rootDirectory, { withFileTypes: true });
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+      return { inspected: 0, removedFiles: 0, nextCursor: null };
+    }
+    throw error;
+  }
+  const names = entries
+    .filter((entry) => entry.isDirectory() && CONTAINMENT_TASK_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  const remaining = names.filter((name) => options.afterName === undefined || name > options.afterName);
+  const batch = remaining.slice(0, limit);
+  let removedFiles = 0;
+  for (const name of batch) {
+    removedFiles += await pruneVerifiedWindowsContainmentInputs(path.join(rootDirectory, name, 'containment.receipt.json'));
+  }
+  return {
+    inspected: batch.length,
+    removedFiles,
+    nextCursor: remaining.length > batch.length ? batch.at(-1) ?? null : null,
+  };
 }
 
 const containedLaunchScript = String.raw`param([string]$Directory)

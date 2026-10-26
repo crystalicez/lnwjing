@@ -101,7 +101,10 @@ describe('SqliteAuditRepository', () => {
       await write('receipt', 'mcp_tool:read_file', before, { mutationReceipt: { path: 'a.ts', action: 'edit_file' } });
       await write('mutation', 'mcp_tool:edit_file', before);
       await write('external', 'codex_run', before);
+      await write('old-search', 'mcp_tool:search_text', before);
+      await write('old-git-status', 'mcp_tool:git_status', before);
 
+      expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z', 2)).toBe(2);
       expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z', 2)).toBe(2);
       expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z', 2)).toBe(1);
       expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z', 2)).toBe(0);

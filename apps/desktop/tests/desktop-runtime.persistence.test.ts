@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { CodexDiscovery } from '@lnwjing/codex';
@@ -28,6 +29,17 @@ function enableAutomaticBackups(root: string): void {
     database.close();
   }
 }
+function seedExpiredRoutineAudit(root: string): void {
+  const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+  try {
+    database.connection.prepare(
+      'INSERT INTO audit_events (id, timestamp, actor_id, actor_name, action, result_code, duration_ms, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run('expired-read-test', '2024-01-01T00:00:00.000Z', 'test', 'test', 'mcp_tool:read_file', 'SUCCESS', 0, '{}');
+  } finally {
+    database.close();
+  }
+}
+
 const isWindowsGitHubActions = process.platform === 'win32' && process.env.GITHUB_ACTIONS === 'true';
 const FAST_RUNTIME_TEST_TIMEOUT_MS = isWindowsGitHubActions ? 60_000 : 15_000;
 const RUNTIME_TEST_TIMEOUT_MS = isWindowsGitHubActions ? 90_000 : 30_000;
@@ -256,6 +268,7 @@ describe('DesktopRuntime persistence', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-retention-backup-fail-'));
     temporaryRoots.push(root);
     enableAutomaticBackups(root);
+    seedExpiredRoutineAudit(root);
     const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockRejectedValue(new Error('backup unavailable'));
     const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -279,6 +292,7 @@ describe('DesktopRuntime persistence', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-retention-no-backup-'));
     temporaryRoots.push(root);
     enableAutomaticBackups(root);
+    seedExpiredRoutineAudit(root);
     const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent').mockResolvedValue(null);
     const list = vi.spyOn(SqliteBackupService.prototype, 'list').mockResolvedValue([]);
     const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');
@@ -295,6 +309,43 @@ describe('DesktopRuntime persistence', () => {
       purge.mockRestore();
       list.mockRestore();
       backup.mockRestore();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
+  it('allows opt-in pruning of expired routine reads without automatic backups, never mutation evidence', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-opt-in-'));
+    temporaryRoots.push(root);
+    const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+    try {
+      new SqliteSettingsRepository(database).set('audit_routine_prune_without_backup_v1', 'true');
+      const audit = new SqliteAuditRepository(database);
+      for (const [id, action] of [
+        ['old-routine', 'mcp_tool:read_file'],
+        ['old-mutation', 'mcp_tool:edit_file'],
+      ] as const) {
+        await audit.insert({
+          id, action, timestamp: '2025-01-01T00:00:00.000Z',
+          actorId: 'test', actorName: 'test', resultCode: 'SUCCESS',
+          durationMs: 1, metadata: {},
+        });
+      }
+    } finally {
+      database.close();
+    }
+    const runtime = createDesktopRuntime(await realpath(root));
+    const observer = new DatabaseSync(path.join(root, 'lnwjing.sqlite'), { readOnly: true });
+    try {
+      const rowExists = (id: string): boolean => observer.prepare(
+        'SELECT 1 FROM audit_events WHERE id = ?',
+      ).get(id) !== undefined;
+      for (let i = 0; i < 50 && rowExists('old-routine'); i += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+      expect(rowExists('old-routine')).toBe(false);
+      expect(rowExists('old-mutation')).toBe(true);
+    } finally {
+      observer.close();
+      await runtime.close();
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
 

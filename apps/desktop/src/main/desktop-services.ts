@@ -1178,23 +1178,38 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
 
   function sweepAuditRetention(): void {
     const now = Date.now();
-    if (auditRetentionClosing || readSettings().autoBackupEnabled !== true || auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
+    const hasAutomaticBackup = readSettings().autoBackupEnabled === true;
+    // This backend-only opt-in will become a user setting after the retention
+    // and recovery checks are validated. Default remains fail-closed.
+    const pruneWithoutBackup = settingsRepository.get('audit_routine_prune_without_backup_v1') === 'true';
+    if (auditRetentionClosing || (!hasAutomaticBackup && !pruneWithoutBackup)
+      || auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
     lastAuditRetentionSweepAt = now;
-    const cutoffIso = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const configuredRetentionDays = Number(settingsRepository.get('audit_routine_retention_days_v1') ?? '90');
+    const retentionDays = Number.isSafeInteger(configuredRetentionDays) && configuredRetentionDays >= 1 && configuredRetentionDays <= 3650
+      ? configuredRetentionDays : 90;
+    const cutoffIso = new Date(now - retentionDays * 24 * 60 * 60 * 1000).toISOString();
     auditRetentionSweep = (async (): Promise<void> => {
-      // Fail closed: pruning must not run without a recent, available daily backup.
-      if (readSettings().autoBackupEnabled !== true) return;
-      const created = await backupService.ensureRecent();
-      if (created === null) {
-        const backups = await backupService.list();
-        const hasRecentDaily = backups.some((item) => item.reason === 'daily'
-          && Date.parse(item.createdAt) <= now
-          && now - Date.parse(item.createdAt) < 24 * 60 * 60 * 1000);
-        if (!hasRecentDaily) return;
+      if (!pruneWithoutBackup) {
+        // Retain prior fail-closed behavior until the user explicitly opts
+        // into telemetry-only deletion without a full daily database backup.
+        if (readSettings().autoBackupEnabled !== true) return;
+        const created = await backupService.ensureRecent();
+        if (created === null) {
+          const backups = await backupService.list();
+          const hasRecentDaily = backups.some((item) => item.reason === 'daily'
+            && Date.parse(item.createdAt) <= now
+            && now - Date.parse(item.createdAt) < 24 * 60 * 60 * 1000);
+          if (!hasRecentDaily) return;
+        }
       }
+      // The audit repository deliberately excludes mutation receipts,
+      // Goal evidence, failed calls, and all non-routine events.
+      const oldest = database.connection.prepare('SELECT timestamp FROM audit_events ORDER BY timestamp ASC LIMIT 1').get() as { timestamp: string } | undefined;
+      if (oldest === undefined || oldest.timestamp >= cutoffIso) return;
       let totalDeleted = 0;
       for (let batch = 0; batch < 20; batch += 1) {
-        if (readSettings().autoBackupEnabled !== true) break;
+        if (!pruneWithoutBackup && readSettings().autoBackupEnabled !== true) break;
         const deleted = await auditRepository.purgeExpiredRoutineReads(cutoffIso);
         totalDeleted += deleted;
         if (deleted < 500) break;

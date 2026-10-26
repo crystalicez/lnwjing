@@ -7,7 +7,7 @@ import { PathExecutableResolver, type ExecutableResolver } from './executable-re
 import { LogRingBuffer } from './ring-buffer.js';
 import { createProcessTreeTerminator, type ProcessTreeTerminator } from './process-tree.js';
 import { createSpawnInvocationFactory, type SpawnInvocationFactory } from './spawn-invocation.js';
-import { prepareWindowsContainedLaunch, readWindowsContainmentReceipt, type WindowsContainmentReceipt } from './windows-contained-launch.js';
+import { prepareWindowsContainedLaunch, pruneVerifiedWindowsContainmentInputs, readWindowsContainmentReceipt, type WindowsContainmentReceipt } from './windows-contained-launch.js';
 import type { LogQuery, ManagedProcess, ManagedProcessStart, ManagedProcessState, ProcessLogResult } from './process-types.js';
 
 const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
@@ -252,6 +252,7 @@ export class ProcessManager {
       return;
     }
     this.acceptNativeReceipt(record, receipt);
+    await pruneVerifiedWindowsContainmentInputs(record.nativeReceiptPath);
   }
 
   private acceptNativeReceipt(record: ManagedRecord, receipt: WindowsContainmentReceipt): void {

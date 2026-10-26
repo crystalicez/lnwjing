@@ -2,7 +2,7 @@ import { execFile, spawn } from 'node:child_process';
 import { mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { prepareWindowsContainedLaunch, readWindowsContainmentReceipt } from '@lnwjing/process';
+import { prepareWindowsContainedLaunch, pruneVerifiedWindowsContainmentInputs, readWindowsContainmentReceipt } from '@lnwjing/process';
 import { promisify } from 'node:util';
 import { appError, err, ok, type GoalTaskCancellationObservation, type Result } from '@lnwjing/domain';
 import {
@@ -118,6 +118,7 @@ export class DurableShellTaskStore {
   private readonly maxConcurrentTasks: number;
   private readonly platform: NodeJS.Platform;
   private readonly activeIndex: DurableShellTaskIndex;
+  private readonly nativeCleanupAttempted = new Set<string>();
 
   public constructor(private readonly rootDirectory: string, options: DurableShellTaskStoreOptions = {}) {
     this.maxConcurrentTasks = normalizeMaxConcurrentTasks(options.maxConcurrentTasks);
@@ -565,6 +566,17 @@ export class DurableShellTaskStore {
   private async releaseTerminalReservation(metadata: DurableTaskMetadata): Promise<void> {
     if (!isTerminal(metadata.state)) return;
     await this.activeIndex.release(metadata.task_id, metadata.request_digest ?? null);
+    // Do not remove task.json, stdout/stderr, or the native completion receipt:
+    // Goals and automation may still need their durable result/evidence.
+    if (metadata.containment === 'windows_job_v1' && !this.nativeCleanupAttempted.has(metadata.task_id)) {
+      // Avoid repeatedly touching three missing files on every status/log
+      // request. One best-effort pass per task is sufficient for this run.
+      if (this.nativeCleanupAttempted.size >= 8192) this.nativeCleanupAttempted.clear();
+      this.nativeCleanupAttempted.add(metadata.task_id);
+      await pruneVerifiedWindowsContainmentInputs(
+        path.join(this.taskDirectory(metadata.task_id), 'containment.receipt.json'),
+      );
+    }
   }
 
   private async reconcile(metadata: DurableTaskMetadata): Promise<DurableTaskMetadata> {
