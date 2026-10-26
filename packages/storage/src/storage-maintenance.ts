@@ -130,7 +130,7 @@ export async function compactOfflineSqliteProfile(options: {
   const probe = new DatabaseSync(options.databasePath, { readOnly: true });
   try {
     const latest = probe.prepare(
-      "SELECT 1 FROM schema_migrations WHERE id = '027_checkpoint_storage_rollup'",
+      "SELECT 1 FROM schema_migrations WHERE id = '028_checkpoint_rollup_replace_fix'",
     ).get();
     if (latest === undefined) throw new Error('Update the profile schema before offline compaction');
   } finally {

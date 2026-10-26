@@ -139,7 +139,7 @@ describe('SqliteCheckpointRepository', () => {
         DROP INDEX idx_checkpoint_meta_compressed;
         DROP TABLE checkpoint_storage_meta;
         DROP TABLE checkpoint_storage_totals;
-        DELETE FROM schema_migrations WHERE id IN ('026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup');
+        DELETE FROM schema_migrations WHERE id IN ('026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix');
       `);
     } finally { legacy.close(); }
     const restored = new SqliteDatabase(filename);
@@ -175,10 +175,10 @@ describe('SqliteCheckpointRepository', () => {
         DROP TRIGGER checkpoint_meta_rollup_insert;
         DROP TRIGGER checkpoint_meta_rollup_update;
         DROP TRIGGER checkpoint_meta_rollup_delete;
-        DROP TRIGGER checkpoint_total_rollup_insert;
-        DROP TRIGGER checkpoint_total_rollup_delete;
+        DROP TRIGGER IF EXISTS checkpoint_total_rollup_insert;
+        DROP TRIGGER IF EXISTS checkpoint_total_rollup_delete;
         DROP TABLE checkpoint_storage_totals;
-        DELETE FROM schema_migrations WHERE id = '027_checkpoint_storage_rollup';
+        DELETE FROM schema_migrations WHERE id IN ('027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix');
       `);
     } finally { old.close(); }
 
@@ -213,6 +213,59 @@ describe('SqliteCheckpointRepository', () => {
         compressed_v2_count: 1,
       });
     } finally { upgraded.close(); }
+  });
+
+  it('repairs a v027 miscount at migration without rewriting checkpoint payloads', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'state.db');
+    const older = new SqliteDatabase(filename);
+    const raw = older.connection.prepare(
+      'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+    );
+    raw.run('legacy-id', 'workspace-1', '2025-01-01', 'do-not-rewrite');
+    // Recreate a v027 profile whose total_count already drifted due to
+    // INSERT OR REPLACE while SQLite recursive_triggers was OFF.
+    older.connection.prepare('UPDATE checkpoint_storage_totals SET total_count = ? WHERE id = 1').run(2);
+    older.connection.prepare("DELETE FROM schema_migrations WHERE id = '028_checkpoint_rollup_replace_fix'").run();
+    older.close();
+    const repaired = new SqliteDatabase(filename);
+    try {
+      const repo = new SqliteCheckpointRepository(repaired);
+      expect(repo.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 1, total: 1 });
+      expect(repaired.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get('legacy-id'))
+        .toEqual({ files_json: 'do-not-rewrite' });
+      expect(repaired.connection.prepare(
+        "SELECT id FROM schema_migrations WHERE id = '028_checkpoint_rollup_replace_fix'",
+      ).get()).toEqual({ id: '028_checkpoint_rollup_replace_fix' });
+    } finally { repaired.close(); }
+  });
+
+  it('preserves rollup count across legacy INSERT OR REPLACE on the same checkpoint ID', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repository = new SqliteCheckpointRepository(database);
+      const rawReplace = database.connection.prepare(
+        'INSERT OR REPLACE INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+      );
+      rawReplace.run('legacy-id', 'workspace-1', '2025-01-01', 'old-payload');
+      expect(repository.storageMetadataStatus()).toMatchObject({ complete: true, total: 1 });
+      const before = repository.planStorageBudget({ maxBytes: 0, deleteBefore: '2027-01-01T00:00:00.000Z' });
+      rawReplace.run('legacy-id', 'workspace-1', '2025-01-02', 'different-and-longer');
+      expect(repository.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 1, total: 1 });
+      const after = repository.planStorageBudget({ maxBytes: 0, deleteBefore: '2027-01-01T00:00:00.000Z' });
+      expect(after.totalBytes).toBe(Buffer.byteLength('different-and-longer'));
+      expect(after.previewToken).not.toBe(before.previewToken);
+      expect(database.connection.prepare('SELECT COUNT(*) AS n FROM checkpoints').get()).toEqual({ n: 1 });
+      // Other SQLite clients may explicitly enable recursive REPLACE deletes.
+      // The paired delete/insert triggers must still preserve the count.
+      database.connection.exec('PRAGMA recursive_triggers=ON;');
+      rawReplace.run('legacy-id', 'workspace-1', '2025-01-03', 'new');
+      expect(repository.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 1, total: 1 });
+      expect(repository.planStorageBudget({ maxBytes: 0, deleteBefore: '2027-01-01T00:00:00.000Z' }).totalBytes)
+        .toBe(3);
+      database.connection.exec('PRAGMA recursive_triggers=OFF;');
+    } finally { database.close(); }
   });
 
   it('fills legacy metadata only on explicit request and uses an indexed budget plan', async () => {
