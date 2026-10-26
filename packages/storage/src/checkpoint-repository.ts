@@ -41,10 +41,40 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     });
   }
 
+  /**
+   * Bounded age pruning, preserving the newest checkpoint of each workspace.
+   * Callers must hold a verified backup/retention gate before invoking this.
+   */
   public async deleteOlderThan(cutoffIso: string): Promise<number> {
     if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Checkpoint retention cutoff is invalid');
-    const result = this.database.connection.prepare('DELETE FROM checkpoints WHERE created_at < ?').run(cutoffIso);
+    const result = this.database.connection.prepare(`
+      DELETE FROM checkpoints WHERE id IN (
+        SELECT older.id FROM checkpoints older
+        WHERE older.created_at < ?
+          AND EXISTS (
+            SELECT 1 FROM checkpoints newer
+            WHERE newer.workspace_id = older.workspace_id
+              AND (newer.created_at > older.created_at
+                OR (newer.created_at = older.created_at AND newer.id > older.id))
+          )
+        ORDER BY older.created_at ASC, older.id ASC LIMIT 128
+      )
+    `).run(cutoffIso);
     return Number(result.changes);
+  }
+
+  /** Metadata-only eligibility check to avoid full backup when nothing expires. */
+  public hasExpiredCleanupCandidates(cutoffIso: string): boolean {
+    if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Checkpoint retention cutoff is invalid');
+    return this.database.connection.prepare(`
+      SELECT 1 FROM checkpoints older
+      WHERE older.created_at < ?
+        AND EXISTS (
+          SELECT 1 FROM checkpoints newer WHERE newer.workspace_id = older.workspace_id
+            AND (newer.created_at > older.created_at
+              OR (newer.created_at = older.created_at AND newer.id > older.id))
+        ) LIMIT 1
+    `).get(cutoffIso) !== undefined;
   }
 
   public async deleteAll(): Promise<number> {
@@ -64,27 +94,29 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 0 || !Number.isFinite(Date.parse(options.deleteBefore))) {
       throw new Error('Invalid checkpoint storage budget');
     }
-    const rows = this.database.connection.prepare(
-      'SELECT id, workspace_id, created_at, length(CAST(files_json AS BLOB)) AS bytes FROM checkpoints ORDER BY workspace_id, created_at DESC, id DESC',
-    ).all() as { id: string; workspace_id: string; created_at: string; bytes: number }[];
-    const latestByWorkspace = new Set<string>();
-    let totalBytes = 0;
-    const candidates: typeof rows = [];
-    for (const row of rows) {
-      totalBytes += row.bytes;
-      if (!latestByWorkspace.has(row.workspace_id)) {
-        latestByWorkspace.add(row.workspace_id);
-        continue;
-      }
-      if (row.created_at >= options.deleteBefore || options.protectedIds?.has(row.id)) continue;
-      candidates.push(row);
-    }
+    // Aggregate inside SQLite rather than materializing all checkpoint rows
+    // and their metadata into Node. Preview is capped at 256 candidates.
+    const total = this.database.connection.prepare(
+      'SELECT COALESCE(SUM(length(CAST(files_json AS BLOB))), 0) AS bytes FROM checkpoints',
+    ).get() as { bytes: number };
+    const totalBytes = total.bytes;
     const needToReclaim = totalBytes - options.maxBytes;
     if (needToReclaim <= 0) return { totalBytes, candidateBytes: 0, checkpointIds: [] };
-    candidates.sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id));
+    const candidates = this.database.connection.prepare(`
+      SELECT older.id, length(CAST(older.files_json AS BLOB)) AS bytes
+      FROM checkpoints older
+      WHERE older.created_at < ?
+        AND EXISTS (
+          SELECT 1 FROM checkpoints newer WHERE newer.workspace_id = older.workspace_id
+            AND (newer.created_at > older.created_at
+              OR (newer.created_at = older.created_at AND newer.id > older.id))
+        )
+      ORDER BY older.created_at ASC, older.id ASC LIMIT 256
+    `).all(options.deleteBefore) as { id: string; bytes: number }[];
     const checkpointIds: string[] = [];
     let candidateBytes = 0;
     for (const candidate of candidates) {
+      if (options.protectedIds?.has(candidate.id)) continue;
       if (candidateBytes >= needToReclaim) break;
       checkpointIds.push(candidate.id);
       candidateBytes += candidate.bytes;
@@ -147,28 +179,30 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
 
   private encryptLegacyRowsAtRest(): void {
     if (this.cipher === undefined) return;
-    // Historic code loaded all encrypted checkpoint payloads on every launch.
-    // Mark the completion of the one-time plaintext migration transaction.
+    // Complete mandatory encryption migration with bounded 8-row transactions.
+    // Plaintext must not remain at rest after startup; separate commits avoid
+    // one unbounded SQLite WAL transaction on large legacy profiles.
     const marker = 'checkpoint_cipher_legacy_encryption_v1';
     const connection = this.database.connection;
     if (connection.prepare('SELECT 1 FROM schema_migrations WHERE id = ?').get(marker)) return;
-    connection.exec('BEGIN IMMEDIATE;');
-    try {
-      const selectLegacy = connection.prepare(`
-        SELECT id, files_json FROM checkpoints
-        WHERE id > ?
-          AND substr(files_json, 1, 22) != 'lnwjing:checkpoint:v1:'
-          AND substr(files_json, 1, 21) != 'lnwjud:checkpoint:v1:'
-          AND substr(files_json, 1, 25) != 'lnwjing:checkpoint:v2:br:'
-        ORDER BY id LIMIT 8
-      `);
-      const update = connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ? AND files_json = ?');
-      let afterId = '';
-      while (true) {
-        // Bounded migration batches prevent hundreds of MiB being loaded into
-        // JS when upgrading an older installation with plaintext checkpoints.
-        const rows = selectLegacy.all(afterId);
-        if (rows.length === 0) break;
+    const select = connection.prepare(`
+      SELECT id, files_json FROM checkpoints
+      WHERE id > ?
+        AND substr(files_json, 1, 22) != 'lnwjing:checkpoint:v1:'
+        AND substr(files_json, 1, 21) != 'lnwjud:checkpoint:v1:'
+        AND substr(files_json, 1, 25) != 'lnwjing:checkpoint:v2:br:'
+      ORDER BY id LIMIT 8
+    `);
+    const update = connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ? AND files_json = ?');
+    let afterId = '';
+    while (true) {
+      const rows = select.all(afterId);
+      if (rows.length === 0) {
+        connection.prepare('INSERT OR IGNORE INTO schema_migrations (id) VALUES (?)').run(marker);
+        return;
+      }
+      connection.exec('BEGIN IMMEDIATE;');
+      try {
         for (const row of rows) {
           if (!isLegacyPayloadRow(row)) continue;
           afterId = row.id;
@@ -176,14 +210,17 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
             update.run(this.cipher.encrypt(row.files_json), row.id, row.files_json);
           }
         }
-        if (rows.length < 8) break;
+        connection.exec('COMMIT;');
+      } catch (error) {
+        connection.exec('ROLLBACK;');
+        throw error;
       }
-      connection.prepare('INSERT INTO schema_migrations (id) VALUES (?)').run(marker);
-      connection.exec('COMMIT;');
-    } catch (error) {
-      connection.exec('ROLLBACK;');
-      throw error;
+      if (rows.length < 8) {
+        connection.prepare('INSERT OR IGNORE INTO schema_migrations (id) VALUES (?)').run(marker);
+        return;
+      }
     }
+    // Single-item get() still upgrades late-imported plaintext on demand.
   }
 
   private encodeFiles(files: readonly CheckpointFile[]): string {

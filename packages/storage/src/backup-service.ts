@@ -149,6 +149,20 @@ export class SqliteBackupService {
     return (await listManifests(this.backupDirectory)).map((value) => summary(value, this.platform, this.arch));
   }
 
+  /** Destructive storage maintenance must validate the actual backup file, not a manifest alone. */
+  public async verifyBackupForCleanup(id: string): Promise<boolean> {
+    const stored = await readStoredManifestById(this.backupDirectory, id);
+    if (stored === null) return false;
+    const filename = path.join(stored.directory, stored.manifest.databaseFile);
+    try {
+      if ((await stat(filename)).size !== stored.manifest.sizeBytes) return false;
+      validateDatabase(filename);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   public async scheduleRestore(backupIdValue: string): Promise<void> {
     await mkdir(this.backupDirectory, { recursive: true });
     const stored = await readStoredManifestById(this.backupDirectory, backupIdValue);

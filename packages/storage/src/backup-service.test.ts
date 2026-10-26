@@ -37,6 +37,24 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
     expect(await readFile(secretPath, 'utf8')).toBe('local-key-must-survive');
   });
 
+  it('checks backup bytes before allowing destructive cleanup', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const database = new SqliteDatabase(filename);
+    try {
+      const service = new SqliteBackupService(database, {
+        databaseFilename: filename, backupDirectory: path.join(root, 'backups'),
+      });
+      const saved = await service.create('manual');
+      expect(await service.verifyBackupForCleanup(saved.id)).toBe(true);
+      expect(await service.verifyBackupForCleanup('not-a-backup')).toBe(false);
+      await writeFile(path.join(root, 'backups', saved.id + '.sqlite'), 'corrupt', 'utf8');
+      expect(await service.verifyBackupForCleanup(saved.id)).toBe(false);
+    } finally {
+      database.close();
+    }
+  });
+
   it('quarantines Remote MCP and external tunnel OAuth credentials on a cross-host restore', async () => {
     const root = await temporaryRoot();
     const dataPath = path.join(root, 'data');

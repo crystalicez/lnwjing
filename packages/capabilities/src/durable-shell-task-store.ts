@@ -571,11 +571,14 @@ export class DurableShellTaskStore {
     if (metadata.containment === 'windows_job_v1' && !this.nativeCleanupAttempted.has(metadata.task_id)) {
       // Avoid repeatedly touching three missing files on every status/log
       // request. One best-effort pass per task is sufficient for this run.
+      const receiptPath = path.join(this.taskDirectory(metadata.task_id), 'containment.receipt.json');
+      // Terminal metadata can precede native proof. Retry later if receipt is
+      // not verified, rather than permanently skipping cleanup for that task.
+      const receipt = await readWindowsContainmentReceipt(receiptPath);
+      if (receipt === undefined) return;
       if (this.nativeCleanupAttempted.size >= 8192) this.nativeCleanupAttempted.clear();
       this.nativeCleanupAttempted.add(metadata.task_id);
-      await pruneVerifiedWindowsContainmentInputs(
-        path.join(this.taskDirectory(metadata.task_id), 'containment.receipt.json'),
-      );
+      await pruneVerifiedWindowsContainmentInputs(receiptPath);
     }
   }
 

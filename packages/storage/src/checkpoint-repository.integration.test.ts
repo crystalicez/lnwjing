@@ -61,6 +61,29 @@ describe('SqliteCheckpointRepository', () => {
     database.close();
   });
 
+  it('never age-prunes the only or latest checkpoint in any workspace', async () => {
+    const root = await temporaryRoot();
+    const db = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repo = new SqliteCheckpointRepository(db);
+      const rows = [
+        { ...fixtureCheckpoint('solo'), id: 'solo', workspaceId: 'ws-solo', createdAt: '2026-01-01T00:00:00.000Z' },
+        { ...fixtureCheckpoint('old'), id: 'old', workspaceId: 'ws-pair', createdAt: '2026-01-01T00:00:00.000Z' },
+        { ...fixtureCheckpoint('recent'), id: 'recent', workspaceId: 'ws-pair', createdAt: '2026-02-01T00:00:00.000Z' },
+      ];
+      for (const row of rows) await repo.insert(row);
+      expect(repo.hasExpiredCleanupCandidates('2026-03-01T00:00:00.000Z')).toBe(true);
+      expect(await repo.deleteOlderThan('2026-03-01T00:00:00.000Z')).toBe(1);
+      expect(await repo.get('solo')).toEqual(rows[0]);
+      expect(await repo.get('recent')).toEqual(rows[2]);
+      expect(await repo.get('old')).toBeNull();
+      expect(repo.hasExpiredCleanupCandidates('2026-03-01T00:00:00.000Z')).toBe(false);
+      expect(await repo.deleteOlderThan('2026-03-01T00:00:00.000Z')).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
   it('previews a soft budget and preserves newest/workflow-protected checkpoints', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));

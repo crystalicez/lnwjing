@@ -1,6 +1,8 @@
 import { realpathSync, statfsSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
+import { SqliteBackupService } from './backup-service.js';
+import { SqliteDatabase } from './database.js';
 
 export interface SqliteCompactionPlan {
   readonly allocatedBytes: number;
@@ -44,6 +46,8 @@ export interface ManualCompactionOptions {
   /** Must create AND validate a durable SQLite backup, or reject the operation. */
   readonly createVerifiedBackup: () => Promise<{ readonly verified: true; readonly id: string }>;
   readonly minimumReclaimBytes?: number;
+  /** Fail closed unless the host has stopped its MCP/watchers/task writers. */
+  readonly assertRuntimeStopped: () => Promise<boolean>;
 }
 
 /**
@@ -71,9 +75,77 @@ export async function compactSqliteWithBackup(
   if (available < BigInt(before.allocatedBytes) * 2n + 64n * 1024n * 1024n) {
     throw new Error('Insufficient free disk space for safe SQLite compaction');
   }
-  const backup = await options.createVerifiedBackup();
-  if (backup?.verified !== true || backup.id.length === 0) throw new Error('Verified backup was not created');
-  connection.exec('VACUUM;');
+  if (await options.assertRuntimeStopped() !== true) {
+    throw new Error('SQLite compaction requires offline exclusive maintenance');
+  }
+  // The offline caller has stopped lnwjing writers. SQLite still verifies an
+  // exclusive lock can be obtained, and we keep exclusive locking through
+  // the backup + VACUUM. Do not run this function from a live Desktop runtime.
+  const previousMode = connection.prepare('PRAGMA locking_mode').get() as { locking_mode?: string } | undefined;
+  try {
+    const mode = connection.prepare('PRAGMA locking_mode=EXCLUSIVE').get() as { locking_mode?: string } | undefined;
+    if (mode?.locking_mode?.toLowerCase() !== 'exclusive') throw new Error('SQLite exclusive locking is unavailable');
+    connection.exec('BEGIN EXCLUSIVE; COMMIT;');
+    const backup = await options.createVerifiedBackup();
+    if (backup?.verified !== true || typeof backup.id !== 'string' || backup.id.length === 0) {
+      throw new Error('Verified backup was not created');
+    }
+    // The backup may have consumed the same volume. Verify free space again
+    // before the VACUUM full rewrite instead of relying on the preflight value.
+    const afterBackupDisk = statfsSync(path.dirname(options.databasePath), { bigint: true });
+    if (afterBackupDisk.bavail * afterBackupDisk.bsize < BigInt(before.allocatedBytes) + 64n * 1024n * 1024n) {
+      throw new Error('Insufficient disk space after backup for SQLite compaction');
+    }
+    connection.exec('VACUUM;');
+  } finally {
+    if (previousMode?.locking_mode?.toLowerCase() !== 'exclusive') {
+      connection.exec('PRAGMA locking_mode=NORMAL;');
+    }
+  }
   const after = inspectSqliteCompaction(connection, minimum);
   return { performed: true, before, after };
+}
+
+/**
+ * Offline-only composition for a future maintenance command/UI workflow.
+ * The host MUST have terminated Desktop, MCP, watchers and managed writers
+ * before calling. Never invoke this from an active DesktopRuntime.
+ */
+export async function compactOfflineSqliteProfile(options: {
+  readonly databasePath: string;
+  readonly backupDirectory: string;
+  readonly userConfirmed: boolean;
+  readonly assertRuntimeStopped: () => Promise<boolean>;
+  readonly minimumReclaimBytes?: number;
+}): Promise<{
+  readonly performed: boolean;
+  readonly backupId: string | null;
+  readonly before: SqliteCompactionPlan;
+  readonly after: SqliteCompactionPlan;
+}> {
+  if (options.userConfirmed !== true) throw new Error('Offline compaction requires explicit user confirmation');
+  if (await options.assertRuntimeStopped() !== true) throw new Error('Offline compaction requires all application writers stopped');
+  const database = new SqliteDatabase(options.databasePath, { backupDirectory: options.backupDirectory });
+  const backupService = new SqliteBackupService(database, {
+    databaseFilename: options.databasePath, backupDirectory: options.backupDirectory,
+  });
+  let backupId: string | null = null;
+  try {
+    const result = await compactSqliteWithBackup(database.connection, {
+      databasePath: options.databasePath, userConfirmed: true,
+      assertRuntimeStopped: options.assertRuntimeStopped,
+      ...(options.minimumReclaimBytes === undefined ? {} : { minimumReclaimBytes: options.minimumReclaimBytes }),
+      createVerifiedBackup: async () => {
+        const saved = await backupService.create('manual');
+        if (!(await backupService.verifyBackupForCleanup(saved.id))) {
+          throw new Error('Offline compaction backup integrity check failed');
+        }
+        backupId = saved.id;
+        return { verified: true, id: saved.id };
+      },
+    });
+    return { ...result, backupId };
+  } finally {
+    database.close();
+  }
 }
