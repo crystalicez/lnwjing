@@ -2474,6 +2474,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   }
 
   // Reuse read-only directory metadata for 30s while Settings is open.
+  let checkpointCleanupRunning = false;
   let storageCategoryCache: { at: number; entries: readonly { category: string; bytes: number; inspectedEntries: number; truncated: boolean }[] } | null = null;
   function storageOverview(): Awaited<ReturnType<DesktopIpcServices['getStorageOverview']>> {
     const now = Date.now();
@@ -2534,6 +2535,9 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     previewCheckpointBudget: (options) => checkpointRepository.planStorageBudget({ ...options, protectedIds: storageProtectedCheckpointIds() }),
     applyCheckpointBudget: async (options) => {
       if (!options.userConfirmed) throw new Error('Checkpoint cleanup requires explicit user confirmation');
+      if (checkpointCleanupRunning) throw new Error('Checkpoint cleanup is already running');
+      checkpointCleanupRunning = true;
+      try {
       // Until Goal evidence can prove its entire reference set, refuse cleanup
       // on a profile with persisted Goals rather than guess protected IDs.
       if (database.connection.prepare('SELECT 1 FROM goal_checkpoints LIMIT 1').get() !== undefined) {
@@ -2549,6 +2553,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       for (const workspace of await workspaceService.list()) await assertWorkspaceIdle(workspace.id);
       const protectedIds = storageProtectedCheckpointIds();
       const preview = checkpointRepository.planStorageBudget({ ...options, protectedIds });
+      if (preview.previewToken !== options.expectedPreviewToken) throw new Error('Checkpoint cleanup preview expired; preview again');
       if (preview.checkpointIds.length === 0) return { deleted: 0, plannedBytes: 0, backupId: null };
       await requireNativeAdministrativeApproval({
         toolName: 'checkpoint_storage_cleanup', mutationKind: 'delete',
@@ -2567,12 +2572,19 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         createVerifiedBackup: async () => {
           const backup = await backupService.create('manual');
           if (!(await backupService.verifyBackupForCleanup(backup.id))) throw new Error('Checkpoint cleanup backup integrity check failed');
+          if (mcpLifecycle.status().running || activityTracker.listInFlight().length > 0) {
+            throw new Error('MCP activity began during checkpoint backup; refusing deletion');
+          }
+          for (const workspace of await workspaceService.list()) await assertWorkspaceIdle(workspace.id);
           backupId = backup.id;
           return { verified: true as const, id: backup.id };
         },
       });
       storageCategoryCache = null;
       return { ...applied, backupId };
+      } finally {
+        checkpointCleanupRunning = false;
+      }
     },
     pruneNativeLaunchInputs: async (options) => {
       if (!options.userConfirmed) throw new Error('Native artifact cleanup requires explicit user confirmation');

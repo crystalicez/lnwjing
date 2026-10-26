@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { DatabaseSync } from 'node:sqlite';
 import type { Checkpoint, CheckpointFile, CheckpointRepository } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import type { CheckpointPayloadCipher } from './checkpoint-cipher.js';
@@ -11,17 +12,27 @@ interface CheckpointRow {
 }
 
 export class SqliteCheckpointRepository implements CheckpointRepository {
-  private cachedByteCount: { readonly bytes: number; readonly dataVersion: number } | null = null;
+  private cachedByteCount: {
+    readonly bytes: number;
+    readonly connection: DatabaseSync;
+    readonly dataVersion: number;
+    readonly totalChanges: number;
+  } | null = null;
 
-  private checkpointBytes(): number {
+  private checkpointByteState(): { readonly bytes: number; readonly dataVersion: number; readonly totalChanges: number } {
     const connection = this.database.connection;
+    // data_version detects other connections; total_changes detects raw SQL on
+    // this connection. Both are metadata reads, not scans. Connection identity
+    // also protects against an atomic profile restore reopening SQLite.
     const dataVersion = (connection.prepare('PRAGMA data_version').get() as { data_version: number }).data_version;
-    if (this.cachedByteCount !== null && this.cachedByteCount.dataVersion === dataVersion) {
-      return this.cachedByteCount.bytes;
+    const totalChanges = (connection.prepare('SELECT total_changes() AS n').get() as { n: number }).n;
+    if (this.cachedByteCount !== null && this.cachedByteCount.connection === connection
+      && this.cachedByteCount.dataVersion === dataVersion && this.cachedByteCount.totalChanges === totalChanges) {
+      return this.cachedByteCount;
     }
     const row = connection.prepare('SELECT COALESCE(SUM(length(CAST(files_json AS BLOB))), 0) AS bytes FROM checkpoints').get() as { bytes: number };
-    this.cachedByteCount = { bytes: row.bytes, dataVersion };
-    return row.bytes;
+    this.cachedByteCount = { bytes: row.bytes, connection, dataVersion, totalChanges };
+    return this.cachedByteCount;
   }
 
   public constructor(
@@ -114,10 +125,15 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     }
     // Aggregate inside SQLite rather than materializing all checkpoint rows
     // and their metadata into Node. Preview is capped at 256 candidates.
-    const totalBytes = this.checkpointBytes();
+    const state = this.checkpointByteState();
+    const totalBytes = state.bytes;
     const needToReclaim = totalBytes - options.maxBytes;
+    // For destructive cleanup, refuse a stale snapshot even if an UPDATE
+    // preserves payload length and all candidate IDs. data_version catches
+    // other connections, total_changes catches same-connection SQL.
     const seal = (ids: readonly string[], bytes: number): string => createHash('sha256')
-      .update(JSON.stringify([options.maxBytes, options.deleteBefore, totalBytes, bytes, ids])).digest('hex');
+      .update(JSON.stringify([options.maxBytes, options.deleteBefore, totalBytes, bytes,
+        state.dataVersion, state.totalChanges, ids])).digest('hex');
     if (needToReclaim <= 0) return { totalBytes, candidateBytes: 0, checkpointIds: [], previewToken: seal([], 0) };
     const candidates = this.database.connection.prepare(`
       SELECT older.id, length(CAST(older.files_json AS BLOB)) AS bytes

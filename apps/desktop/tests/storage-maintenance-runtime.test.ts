@@ -183,6 +183,38 @@ describe('Desktop storage-maintenance backend', () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  it('serializes checkpoint cleanup so simultaneous confirmations never create duplicate backups', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-cleanup-serial-'));
+    try {
+      const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+      const repo = new SqliteCheckpointRepository(database);
+      await repo.insert(checkpoint('old', 'ws-a', '2025-01-01T00:00:00.000Z'));
+      await repo.insert(checkpoint('new', 'ws-a', '2025-02-01T00:00:00.000Z'));
+      database.close();
+      let signalEntry: (() => void) | undefined;
+      const enteredApproval = new Promise<void>((resolve) => { signalEntry = resolve; });
+      let allowFirst: ((value: boolean) => void) | undefined;
+      const approval = new Promise<boolean>((resolve) => { allowFirst = resolve; });
+      const runtime = createDesktopRuntime(root, {
+        checkpointEncryptionKey: Buffer.alloc(32, 41),
+        hostMutationApprovalProvider: async () => {
+          signalEntry?.();
+          return approval;
+        },
+      });
+      try {
+        const opts = { maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' };
+        const preview = await runtime.services.previewCheckpointCleanup(opts);
+        const request = { ...opts, userConfirmed: true as const, expectedPreviewToken: preview.previewToken };
+        const first = runtime.services.applyCheckpointCleanup(request);
+        await enteredApproval;
+        await expect(runtime.services.applyCheckpointCleanup(request)).rejects.toThrow(/already running/);
+        allowFirst?.(true);
+        expect((await first).deleted).toBe(1);
+      } finally { allowFirst?.(false); await runtime.close(); }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it('only manually cleans checkpoints after creating a verified backup', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-storage-manual-'));
     try {

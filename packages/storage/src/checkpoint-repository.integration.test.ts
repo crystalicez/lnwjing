@@ -156,6 +156,34 @@ describe('SqliteCheckpointRepository', () => {
     }
   });
 
+  it('invalidates cached checkpoint sizes after direct SQL edits and external eligible-set changes', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'state.db');
+    const database = new SqliteDatabase(filename);
+    const repository = new SqliteCheckpointRepository(database);
+    try {
+      await repository.insert({ ...fixtureCheckpoint('first'), id: 'older', createdAt: '2026-01-01T00:00:00.000Z' });
+      await repository.insert({ ...fixtureCheckpoint('next'), id: 'newer', createdAt: '2026-02-01T00:00:00.000Z' });
+      const opts = { maxBytes: 0, deleteBefore: '2026-10-01T00:00:00.000Z' };
+      const first = repository.planStorageBudget(opts);
+      expect(repository.planStorageBudget(opts).previewToken).toBe(first.previewToken);
+      const row = database.connection.prepare('SELECT files_json AS value FROM checkpoints WHERE id = ?').get('older') as { value: string };
+      database.connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ?')
+        .run(row.value.replace('first', 'longer-content'), 'older');
+      const second = repository.planStorageBudget(opts);
+      expect(second.totalBytes).toBeGreaterThan(first.totalBytes);
+      expect(second.previewToken).not.toBe(first.previewToken);
+      const outsider = new SqliteDatabase(filename);
+      try {
+        outsider.connection.prepare('UPDATE checkpoints SET created_at = ? WHERE id = ?')
+          .run('2025-12-01T00:00:00.000Z', 'newer');
+      } finally { outsider.close(); }
+      const third = repository.planStorageBudget(opts);
+      expect(third.checkpointIds).not.toEqual(second.checkpointIds);
+      expect(third.previewToken).not.toBe(second.previewToken);
+    } finally { database.close(); }
+  });
+
   it('encrypts checkpoint file content at rest with AES-256-GCM', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));
