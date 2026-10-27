@@ -41,4 +41,6 @@ finally {
     # randomly named untracked debug artifact in the source tree.
     Remove-Item -LiteralPath $stage -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath "$stage.pdb" -Force -ErrorAction SilentlyContinue
+    # rustc strips the temporary .tmp suffix when naming the MSVC PDB.
+    Remove-Item -LiteralPath ($stage -replace '\.tmp$', '.pdb') -Force -ErrorAction SilentlyContinue
 }

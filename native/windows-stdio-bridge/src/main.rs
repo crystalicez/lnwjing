@@ -4,10 +4,12 @@
 #![cfg(windows)]
 
 use std::env;
-use std::ffi::c_void;
+use std::ffi::{c_void, OsStr, OsString};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::mpsc;
 use std::thread;
@@ -82,18 +84,96 @@ fn relay(socket: TcpStream, child: &mut Child) -> io::Result<()> {
     Ok(())
 }
 
+fn profile_data_path() -> io::Result<PathBuf> {
+    if let Some(value) = env::var_os("LNWJING_DATA_PATH") {
+        let path = PathBuf::from(value);
+        if path.is_absolute() { return Ok(path); }
+    }
+    if let Some(value) = env::var_os("APPDATA") {
+        let path = PathBuf::from(value);
+        if path.is_absolute() { return Ok(path.join("lnwjing")); }
+    }
+    if let Some(value) = env::var_os("USERPROFILE") {
+        let path = PathBuf::from(value);
+        if path.is_absolute() { return Ok(path.join("AppData").join("Roaming").join("lnwjing")); }
+    }
+    Err(io::Error::other("Cannot determine the Windows MCP profile data directory"))
+}
+
+// The async Windows OSCrypt key lives in Chromium Local State. On a fresh
+// profile it is not durable until Electron exits cleanly. Serialize exactly
+// this first initialization across independent STDIO launchers using the OS
+// file lock; never decrypt, re-encrypt or overwrite an existing checkpoint key.
+fn initialize_profile_once(electron: &OsStr, args: &[OsString]) -> io::Result<()> {
+    let directory = profile_data_path()?;
+    fs::create_dir_all(&directory)?;
+    let guard = OpenOptions::new().read(true).write(true).create(true)
+        .open(directory.join(".stdio-profile-init.lock"))?;
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        match guard.try_lock() {
+            Ok(()) => break,
+            Err(fs::TryLockError::WouldBlock) if Instant::now() < deadline =>
+                thread::sleep(Duration::from_millis(50)),
+            Err(error) => return Err(io::Error::other(format!("Windows MCP profile initialization is busy: {error}"))),
+        }
+    }
+
+    let marker = directory.join(".stdio-profile-ready.v1");
+    let checkpoint = directory.join("checkpoint-master.key");
+    if fs::read(&marker).is_ok_and(|bytes| bytes == b"1") && checkpoint.is_file() {
+        return Ok(());
+    }
+    let mut bootstrap = Command::new(electron)
+        .args(args)
+        .arg("--mcp-stdio-profile-init")
+        .env_remove("ELECTRON_RUN_AS_NODE")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+    let bootstrap_deadline = Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        match bootstrap.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < bootstrap_deadline =>
+                thread::sleep(Duration::from_millis(50)),
+            Ok(None) => {
+                let _ = bootstrap.kill();
+                let _ = bootstrap.wait();
+                return Err(io::Error::new(io::ErrorKind::TimedOut, "Electron MCP secure profile initialization timed out"));
+            }
+            Err(error) => {
+                let _ = bootstrap.kill();
+                let _ = bootstrap.wait();
+                return Err(error);
+            }
+        }
+    };
+    if !status.success() {
+        return Err(io::Error::other(format!("Electron MCP secure profile initialization failed: {status}")));
+    }
+    if !checkpoint.is_file() {
+        return Err(io::Error::other("Electron MCP secure profile initialization did not publish a checkpoint key"));
+    }
+    fs::write(marker, b"1")?;
+    Ok(())
+}
+
 fn run() -> io::Result<()> {
     let mut args = env::args_os().skip(1);
     let electron = args.next().ok_or_else(|| io::Error::other("Missing Electron host executable"))?;
-    if !std::path::Path::new(&electron).is_absolute() {
+    if !Path::new(&electron).is_absolute() {
         return Err(io::Error::other("Electron host path must be absolute"));
     }
+    let electron_args: Vec<OsString> = args.collect();
+    initialize_profile_once(&electron, &electron_args)?;
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
     let port = listener.local_addr()?.port();
     let proof = random_secret()?;
     let proof_hex = proof.iter().map(|b| format!("{b:02x}")).collect::<String>();
     let mut child = Command::new(electron)
-        .args(args)
+        .args(&electron_args)
         .arg("--stdio-bridge-port").arg(port.to_string())
         // Do not expose the bearer secret in Win32_Process.CommandLine.
         .env("LNWJING_MCP_STDIO_BRIDGE_SECRET", proof_hex)
@@ -118,7 +198,14 @@ fn run() -> io::Result<()> {
     }
     let outcome = receive_authenticated_client(&listener, &mut child, &proof)
         .and_then(|connection| relay(connection, &mut child));
-    // Never terminate other Electron or lnwjud processes: only our exact Child handle.
+    // Closing the client stream asks Electron to finish its own shutdown.
+    // Killing it immediately can discard Chromium's persistent OSCrypt key
+    // before Local State is flushed, making the next STDIO launch unreadable.
+    // Bound the grace period; never leave an orphan Electron when the bridge exits.
+    let shutdown_deadline = Instant::now() + Duration::from_secs(5);
+    while child.try_wait()?.is_none() && Instant::now() < shutdown_deadline {
+        thread::sleep(Duration::from_millis(50));
+    }
     if child.try_wait()?.is_none() { let _ = child.kill(); }
     let _ = child.wait();
     outcome

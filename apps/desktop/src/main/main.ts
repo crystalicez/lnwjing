@@ -2130,6 +2130,12 @@ function bootstrapMcpStdio(): void {
     assertSupportedPlatform();
     prependBundledRuntimeToolsToPath();
     const secrets = await resolveDesktopRuntimeSecrets(dataPath);
+    if (process.argv.includes('--mcp-stdio-profile-init')) {
+      // The first clean exit persists Chromium's OSCrypt key before a second
+      // Windows Electron process can decrypt the same checkpoint master key.
+      app.quit();
+      return;
+    }
     const runtime = createDesktopRuntime(dataPath, {
       permissionProfile: 'full',
       hostMutationApprovalProvider: requestMutationApproval,
@@ -2175,7 +2181,7 @@ function bootstrapMcpStdio(): void {
       onError: (error): void => {
         if (/EPIPE|ECONNRESET|broken pipe/i.test(error.message)) {
           process.stderr.write(`lnwjing MCP stdio: peer closed (${error.message})\n`);
-          void desktopRuntime?.close().finally(() => process.exit(0));
+          void desktopRuntime?.close().finally(() => app.quit());
           return;
         }
         process.stderr.write(`lnwjing MCP stdio error: ${error.message}\n`);
@@ -2185,7 +2191,7 @@ function bootstrapMcpStdio(): void {
       // The Windows GUI host has no dependable inherited stdin; the Console bridge
       // supplies an authenticated loopback stream and exits on client disconnect.
       bridgedWire.once('close', () => {
-        void desktopRuntime?.close().finally(() => process.exit(0));
+        void desktopRuntime?.close().finally(() => app.quit());
       });
       bridgedWire.on('error', (error) => {
         process.stderr.write(`lnwjing MCP bridge error: ${error.message}\n`);
@@ -2195,15 +2201,15 @@ function bootstrapMcpStdio(): void {
       // premature flowing mode can discard the first initialize/discover message.
     } else {
       process.stdin.on('end', () => {
-        void desktopRuntime?.close().finally(() => process.exit(0));
+        void desktopRuntime?.close().finally(() => app.quit());
       });
       process.stdin.on('close', () => {
-        void desktopRuntime?.close().finally(() => process.exit(0));
+        void desktopRuntime?.close().finally(() => app.quit());
       });
     }
     process.stdout.on('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EPIPE' || error.code === 'ECONNRESET') {
-        void desktopRuntime?.close().finally(() => process.exit(0));
+        void desktopRuntime?.close().finally(() => app.quit());
       }
     });
   }).catch((error: unknown) => {

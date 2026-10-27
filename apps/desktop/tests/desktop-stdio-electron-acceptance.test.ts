@@ -164,10 +164,14 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
       }
     }, 30_000);
     }
-    // Opt-in release gate: sharing a fresh Windows Electron profile between
-    // separate STDIO runtimes currently reproduces a safeStorage v10 decrypt
-    // failure. Keep this red scenario executable until startup is fixed.
-    it.skipIf(process.env.LNWJING_RUN_MULTI_STDIO_SIMULATION !== '1')('keeps two real MCP STDIO clients isolated while searching and editing a shared workspace', async () => {
+    // A fresh Windows profile must bootstrap its OSCrypt key before two
+    // Electron processes independently initialize safeStorage.
+    for (const mode of ['sequential', 'warmed', 'cold'] as const) {
+    it.skipIf(mode === 'cold' && process.env.LNWJING_RUN_MULTI_STDIO_SIMULATION !== '1')(
+      mode === 'sequential' ? 'preserves safeStorage across real Electron STDIO process restarts'
+        : mode === 'warmed' ? 'shares a warmed profile across two live Electron STDIO processes'
+          : 'shares a cold profile across two live Electron STDIO processes', async () => {
+      const sequential = mode === 'sequential';
       const root = await mkdtemp(path.join(privateRoot, 'electron-stdio-concurrent-'));
       const workspace = path.join(root, 'workspace');
       const data = path.join(root, 'data');
@@ -192,12 +196,6 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
         PATH: path.join(desktopRoot, 'build', 'runtime-tools', 'ripgrep') + path.delimiter + (process.env.PATH ?? ''),
       };
       delete env.ELECTRON_RUN_AS_NODE;
-      // The application data is isolated; retain the OS credential environment
-      // so this also tests a normal Windows safeStorage session.
-      if (process.env.APPDATA === undefined) delete env.APPDATA;
-      else env.APPDATA = process.env.APPDATA;
-      if (process.env.LOCALAPPDATA === undefined) delete env.LOCALAPPDATA;
-      else env.LOCALAPPDATA = process.env.LOCALAPPDATA;
       function launch(): StdioClientTransport {
         return new StdioClientTransport({
           command: packagedExe ? path.join(path.dirname(electron), 'lnwjing-mcp-stdio-bridge.exe')
@@ -224,16 +222,41 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
         client.stderr?.on('data', (chunk: Buffer) => { diagnostics = (diagnostics + String(chunk)).slice(-4000); });
       }
       try {
-        await first.start();
-        const firstCatalog = responseData(await request(first, 1, 'tools/list', {}));
-        localStateKeyBefore = await localStateFingerprint();
-        await second.start();
-        const secondCatalog = responseData(await request(second, 1, 'tools/list', {}));
-        const listed = [firstCatalog, secondCatalog];
+        if (mode === 'warmed') {
+          const warmup = launch();
+          try {
+            await warmup.start();
+            responseData(await request(warmup, 1, 'tools/list', {}));
+          } finally {
+            await warmup.close();
+          }
+        }
+        const listed = await (async (): Promise<Record<string, unknown>[]> => {
+          if (mode === 'cold') {
+            await Promise.all([first.start(), second.start()]);
+            return Promise.all([first, second].map(async client =>
+              responseData(await request(client, 1, 'tools/list', {}))));
+          }
+          await first.start();
+          const firstCatalog = responseData(await request(first, 1, 'tools/list', {}));
+          localStateKeyBefore = await localStateFingerprint();
+          if (sequential) await first.close();
+          await second.start();
+          const secondCatalog = responseData(await request(second, 1, 'tools/list', {}));
+          return [firstCatalog, secondCatalog];
+        })();
         for (const catalog of listed) {
           const names = (catalog.tools as Array<{ name: string }>).map(tool => tool.name);
           expect(names).toContain('search_text');
           expect(names).toContain('read_file');
+        }
+        if (sequential) {
+          const reopened = responseData(await request(second, 2, 'tools/call', {
+            name: 'search_text', arguments: { path: workspace, query: 'realistic_needle_alpha', maxResults: 20 },
+          }));
+          expect(reopened.isError).not.toBe(true);
+          expect(JSON.stringify(reopened)).toContain('file-084.ts');
+          return;
         }
         const matches = await Promise.all([first, second].map(async client =>
           responseData(await request(client, 2, 'tools/call', {
@@ -285,5 +308,6 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
         await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 200 });
       }
     }, 45_000);
+    }
   },
 );
