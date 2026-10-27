@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
-import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { isForeignAbsolutePath } from '@lnwjing/workspace';
@@ -169,8 +169,17 @@ export class SqliteBackupService {
     const lease = await acquireAutomaticBackupLease(this.backupDirectory, this.now());
     if (lease === null) return null;
     try {
-      const daily = (await listManifests(this.backupDirectory)).find((value) => value.reason === 'daily');
-      if (daily !== undefined && this.now().getTime() - Date.parse(daily.createdAt) < maxAgeMs) return null;
+      const now = this.now().getTime();
+      for (const daily of await listManifests(this.backupDirectory)) {
+        const age = now - Date.parse(daily.createdAt);
+        if (daily.reason !== 'daily' || !Number.isFinite(age) || age < 0 || age >= maxAgeMs) continue;
+        try {
+          const file = await lstat(path.join(this.backupDirectory, daily.databaseFile));
+          if (file.isFile() && file.size === daily.sizeBytes && file.size > 0) return null;
+        } catch {
+          // A missing or inaccessible backup is not evidence that a daily copy exists.
+        }
+      }
       return await this.create('daily');
     } finally {
       await lease.handle.close().catch(() => undefined);

@@ -47,19 +47,21 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
   /** Constant-payload-I/O metadata readiness and encrypted format check. */
   public storageMetadataStatus(): { readonly complete: boolean; readonly indexed: number; readonly total: number; readonly hasCompressedV2: boolean } {
     const connection = this.database.connection;
-    const rollup = connection.prepare(
-      'SELECT indexed_count, total_count, compressed_v2_count FROM checkpoint_storage_totals WHERE id = 1',
-    ).get() as { indexed_count: number; total_count: number; compressed_v2_count: number } | undefined;
-    if (rollup === undefined || !Number.isSafeInteger(rollup.indexed_count)
-      || !Number.isSafeInteger(rollup.total_count)
-      || !Number.isSafeInteger(rollup.compressed_v2_count) || rollup.indexed_count < 0
-      || rollup.total_count < 0 || rollup.compressed_v2_count < 0
-      || rollup.compressed_v2_count > rollup.indexed_count) {
+    const state = connection.prepare(`
+      SELECT indexed_count, compressed_v2_count,
+        (SELECT COUNT(*) FROM checkpoints) AS checkpoint_count
+      FROM checkpoint_storage_totals WHERE id = 1
+    `).get() as { indexed_count: number; compressed_v2_count: number; checkpoint_count: number } | undefined;
+    if (state === undefined || !Number.isSafeInteger(state.indexed_count)
+      || !Number.isSafeInteger(state.checkpoint_count)
+      || !Number.isSafeInteger(state.compressed_v2_count) || state.indexed_count < 0
+      || state.checkpoint_count < 0 || state.compressed_v2_count < 0
+      || state.compressed_v2_count > state.indexed_count) {
       throw new Error('Checkpoint storage metadata rollup is unavailable or invalid');
     }
     return {
-      complete: rollup.indexed_count === rollup.total_count, indexed: rollup.indexed_count,
-      total: rollup.total_count, hasCompressedV2: rollup.compressed_v2_count > 0,
+      complete: state.indexed_count === state.checkpoint_count, indexed: state.indexed_count,
+      total: state.checkpoint_count, hasCompressedV2: state.compressed_v2_count > 0,
     };
   }
 
@@ -204,24 +206,44 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       .update(JSON.stringify([options.maxBytes, options.deleteBefore, totalBytes, bytes,
         state.revision, ids])).digest('hex');
     if (needToReclaim <= 0) return { totalBytes, candidateBytes: 0, checkpointIds: [], previewToken: seal([], 0) };
-    const candidates = this.database.connection.prepare(`
-      SELECT older.checkpoint_id AS id, older.payload_bytes AS bytes
+    const pageSize = 256;
+    const maxInspected = 4_096;
+    const select = this.database.connection.prepare(`
+      SELECT older.checkpoint_id AS id, older.created_at AS createdAt, older.payload_bytes AS bytes
       FROM checkpoint_storage_meta older INDEXED BY idx_checkpoint_meta_created
-      WHERE older.created_at < ?
+      WHERE (? = 1 OR (older.created_at, older.checkpoint_id) > (?, ?))
+        AND older.created_at < ?
         AND EXISTS (
           SELECT 1 FROM checkpoints newer WHERE newer.workspace_id = older.workspace_id
             AND (newer.created_at > older.created_at
               OR (newer.created_at = older.created_at AND newer.id > older.checkpoint_id))
         )
-      ORDER BY older.created_at ASC, older.checkpoint_id ASC LIMIT 256
-    `).all(options.deleteBefore) as { id: string; bytes: number }[];
+      ORDER BY older.created_at ASC, older.checkpoint_id ASC LIMIT ?
+    `);
     const checkpointIds: string[] = [];
     let candidateBytes = 0;
-    for (const candidate of candidates) {
-      if (options.protectedIds?.has(candidate.id)) continue;
-      if (candidateBytes >= needToReclaim) break;
-      checkpointIds.push(candidate.id);
-      candidateBytes += candidate.bytes;
+    let cursorCreatedAt = '';
+    let cursorId = '';
+    let inspected = 0;
+    while (checkpointIds.length < pageSize && candidateBytes < needToReclaim) {
+      if (inspected >= maxInspected) {
+        throw new Error('Checkpoint cleanup preview exceeds the bounded protected-row scan; refine the cutoff or references');
+      }
+      const limit = Math.min(pageSize, maxInspected - inspected);
+      const candidates = select.all(inspected === 0 ? 1 : 0, cursorCreatedAt, cursorId, options.deleteBefore, limit) as {
+        id: string; createdAt: string; bytes: number;
+      }[];
+      if (candidates.length === 0) break;
+      for (const candidate of candidates) {
+        cursorCreatedAt = candidate.createdAt;
+        cursorId = candidate.id;
+        inspected += 1;
+        if (options.protectedIds?.has(candidate.id)) continue;
+        checkpointIds.push(candidate.id);
+        candidateBytes += candidate.bytes;
+        if (checkpointIds.length >= pageSize || candidateBytes >= needToReclaim) break;
+      }
+      if (candidates.length < limit) break;
     }
     return { totalBytes, candidateBytes, checkpointIds, previewToken: seal(checkpointIds, candidateBytes) };
   }

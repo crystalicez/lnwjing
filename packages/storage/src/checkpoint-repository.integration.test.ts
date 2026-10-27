@@ -139,7 +139,7 @@ describe('SqliteCheckpointRepository', () => {
         DROP INDEX idx_checkpoint_meta_compressed;
         DROP TABLE checkpoint_storage_meta;
         DROP TABLE checkpoint_storage_totals;
-        DELETE FROM schema_migrations WHERE id IN ('026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix');
+        DELETE FROM schema_migrations WHERE id IN ('026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix', '029_checkpoint_count_source_of_truth');
       `);
     } finally { legacy.close(); }
     const restored = new SqliteDatabase(filename);
@@ -178,7 +178,7 @@ describe('SqliteCheckpointRepository', () => {
         DROP TRIGGER IF EXISTS checkpoint_total_rollup_insert;
         DROP TRIGGER IF EXISTS checkpoint_total_rollup_delete;
         DROP TABLE checkpoint_storage_totals;
-        DELETE FROM schema_migrations WHERE id IN ('027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix');
+        DELETE FROM schema_migrations WHERE id IN ('027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix', '029_checkpoint_count_source_of_truth');
       `);
     } finally { old.close(); }
 
@@ -226,7 +226,7 @@ describe('SqliteCheckpointRepository', () => {
     // Recreate a v027 profile whose total_count already drifted due to
     // INSERT OR REPLACE while SQLite recursive_triggers was OFF.
     older.connection.prepare('UPDATE checkpoint_storage_totals SET total_count = ? WHERE id = 1').run(2);
-    older.connection.prepare("DELETE FROM schema_migrations WHERE id = '028_checkpoint_rollup_replace_fix'").run();
+    older.connection.prepare("DELETE FROM schema_migrations WHERE id IN ('028_checkpoint_rollup_replace_fix', '029_checkpoint_count_source_of_truth')").run();
     older.close();
     const repaired = new SqliteDatabase(filename);
     try {
@@ -235,9 +235,105 @@ describe('SqliteCheckpointRepository', () => {
       expect(repaired.connection.prepare('SELECT files_json FROM checkpoints WHERE id = ?').get('legacy-id'))
         .toEqual({ files_json: 'do-not-rewrite' });
       expect(repaired.connection.prepare(
-        "SELECT id FROM schema_migrations WHERE id = '028_checkpoint_rollup_replace_fix'",
-      ).get()).toEqual({ id: '028_checkpoint_rollup_replace_fix' });
+        "SELECT id FROM schema_migrations WHERE id = '029_checkpoint_count_source_of_truth'",
+      ).get()).toEqual({ id: '029_checkpoint_count_source_of_truth' });
+      expect(repaired.connection.prepare('SELECT total_count FROM checkpoint_storage_totals WHERE id = 1').get())
+        .toEqual({ total_count: 1 });
     } finally { repaired.close(); }
+  });
+
+  it('does not confuse missing legacy metadata with a newly inserted checkpoint during REPLACE', async () => {
+    const db = new SqliteDatabase(':memory:');
+    try {
+      const repo = new SqliteCheckpointRepository(db);
+      const replace = db.connection.prepare(
+        'INSERT OR REPLACE INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+      );
+      replace.run('existing', 'workspace-1', '2025-01-01', 'original');
+      db.connection.prepare('DELETE FROM checkpoint_storage_meta WHERE checkpoint_id = ?').run('existing');
+      replace.run('existing', 'workspace-1', '2025-01-02', 'replacement');
+      expect(db.connection.prepare('SELECT COUNT(*) AS total FROM checkpoints').get()).toEqual({ total: 1 });
+      expect(repo.storageMetadataStatus()).toEqual({ complete: true, indexed: 1, total: 1, hasCompressedV2: false });
+      const plan = repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' });
+      expect(plan.totalBytes).toBe(Buffer.byteLength('replacement'));
+    } finally {
+      db.close();
+    }
+  });
+
+  it('pages past protected checkpoints rather than silently skipping eligible cleanup rows', () => {
+    const db = new SqliteDatabase(':memory:');
+    try {
+      const repo = new SqliteCheckpointRepository(db);
+      const insert = db.connection.prepare(
+        'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+      );
+      db.connection.exec('BEGIN');
+      try {
+        for (let index = 0; index < 260; index += 1) {
+          const id = `checkpoint-${String(index).padStart(3, '0')}`;
+          insert.run(id, 'workspace-1', new Date(Date.UTC(2025, 0, 1, 0, 0, index)).toISOString(), 'x');
+        }
+        db.connection.exec('COMMIT');
+      } catch (error) {
+        db.connection.exec('ROLLBACK');
+        throw error;
+      }
+      const protectedIds = new Set(Array.from({ length: 256 }, (_, index) => `checkpoint-${String(index).padStart(3, '0')}`));
+      const plan = repo.planStorageBudget({
+        maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z', protectedIds,
+      });
+      expect(plan.checkpointIds).toEqual(['checkpoint-256', 'checkpoint-257', 'checkpoint-258']);
+      expect(plan.candidateBytes).toBe(3);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps the first keyset page inclusive of legacy empty timestamp and ID values', () => {
+    const db = new SqliteDatabase(':memory:');
+    try {
+      const repo = new SqliteCheckpointRepository(db);
+      const insert = db.connection.prepare(
+        'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+      );
+      insert.run('', 'workspace-1', '', 'old');
+      insert.run('latest', 'workspace-1', '2025-01-01T00:00:00.000Z', 'new');
+      const plan = repo.planStorageBudget({ maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z' });
+      expect(plan.checkpointIds).toEqual(['']);
+      expect(plan.candidateBytes).toBe(3);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('fails closed when protected history exceeds the bounded cleanup scan instead of returning no work', () => {
+    const db = new SqliteDatabase(':memory:');
+    try {
+      const repo = new SqliteCheckpointRepository(db);
+      const insert = db.connection.prepare(
+        'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+      );
+      const protectedIds = new Set<string>();
+      db.connection.exec('BEGIN');
+      try {
+        for (let index = 0; index < 4_100; index += 1) {
+          const id = `row-${String(index).padStart(5, '0')}`;
+          insert.run(id, 'workspace-1', new Date(Date.UTC(2025, 0, 1, 0, 0, index)).toISOString(), 'x');
+          if (index < 4_096) protectedIds.add(id);
+        }
+        db.connection.exec('COMMIT');
+      } catch (error) {
+        db.connection.exec('ROLLBACK');
+        throw error;
+      }
+      expect(() => repo.planStorageBudget({
+        maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z', protectedIds,
+      })).toThrow('exceeds the bounded protected-row scan');
+      expect(db.connection.prepare('SELECT COUNT(*) AS count FROM checkpoints').get()).toEqual({ count: 4_100 });
+    } finally {
+      db.close();
+    }
   });
 
   it('preserves rollup count across legacy INSERT OR REPLACE on the same checkpoint ID', async () => {

@@ -260,6 +260,29 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
     database.close();
   });
 
+  it('replaces a recent daily manifest whose SQLite snapshot size no longer matches', async () => {
+    const root = await temporaryRoot();
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const database = new SqliteDatabase(databaseFile, { backupDirectory });
+    try {
+      const service = new SqliteBackupService(database, {
+        backupDirectory, databaseFilename: databaseFile,
+        now: (): Date => new Date('2026-08-01T00:00:00.000Z'),
+      });
+      const first = await service.ensureRecent();
+      expect(first?.reason).toBe('daily');
+      if (first === null) throw new Error('Initial daily backup is unavailable');
+      await writeFile(path.join(backupDirectory, `${first.id}.sqlite`), 'damaged snapshot', 'utf8');
+      const replacement = await service.ensureRecent();
+      expect(replacement?.id).not.toBe(first.id);
+      if (replacement === null) throw new Error('Damaged snapshot was treated as a usable backup');
+      expect(await service.verifyBackupForCleanup(replacement.id)).toBe(true);
+    } finally {
+      database.close();
+    }
+  });
+
   it('coordinates the daily backup lease across concurrent database runtimes', async () => {
     const root = await temporaryRoot();
     const databaseFile = path.join(root, 'lnwjing.sqlite');

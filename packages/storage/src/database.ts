@@ -10,6 +10,7 @@ import { CHECKPOINT_REVISION_MIGRATION_SQL } from './migrations/checkpoint-revis
 import { CHECKPOINT_METADATA_MIGRATION_SQL } from './migrations/checkpoint-metadata-migration.js';
 import { CHECKPOINT_ROLLUP_MIGRATION_SQL } from './migrations/checkpoint-rollup-migration.js';
 import { CHECKPOINT_ROLLUP_REPLACE_MIGRATION_SQL } from './migrations/checkpoint-rollup-replace-migration.js';
+import { CHECKPOINT_COUNT_SOURCE_MIGRATION_SQL } from './migrations/checkpoint-count-source-migration.js';
 import { GOAL_CONTINUATION_MIGRATION_SQL } from './migrations/goal-continuation-migration.js';
 import { GOAL_CANCELLATION_MIGRATION_SQL } from './migrations/goal-cancellation-migration.js';
 import { GOAL_TRACKED_TASKS_MIGRATION_SQL } from './migrations/goal-tracked-tasks-migration.js';
@@ -123,6 +124,7 @@ export class SqliteDatabase {
       { id: '026_checkpoint_storage_metadata', sql: CHECKPOINT_METADATA_MIGRATION_SQL },
       { id: '027_checkpoint_storage_rollup', sql: CHECKPOINT_ROLLUP_MIGRATION_SQL },
       { id: '028_checkpoint_rollup_replace_fix', sql: CHECKPOINT_ROLLUP_REPLACE_MIGRATION_SQL },
+      { id: '029_checkpoint_count_source_of_truth', sql: CHECKPOINT_COUNT_SOURCE_MIGRATION_SQL },
     ]);
   }
 
@@ -228,14 +230,14 @@ export class SqliteDatabase {
     const hasCheckpointTable = this.connection.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'checkpoints'",
     ).get() !== undefined;
-    const eligible = pending.filter((migration) => !['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix'].includes(migration.id)
+    const eligible = pending.filter((migration) => !['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix', '029_checkpoint_count_source_of_truth'].includes(migration.id)
       || createsCheckpointTable || hasCheckpointTable);
     if (eligible.length === 0) return;
 
-    // These metadata-only migrations only create auxiliary tables, indexes
-    // and triggers. SQLite rolls all of their DDL back on failure. Do not
-    // VACUUM-copy a multi-GB profile merely to add recoverable metadata.
-    const metadataOnly = new Set(['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix']);
+    // Metadata-only migrations alter auxiliary state, indexes and triggers.
+    // SQLite rolls their metadata/schema edits back on failure. Do not
+    // VACUUM-copy multi-GB checkpoint payloads for a counter repair.
+    const metadataOnly = new Set(['025_checkpoint_storage_revision', '026_checkpoint_storage_metadata', '027_checkpoint_storage_rollup', '028_checkpoint_rollup_replace_fix', '029_checkpoint_count_source_of_truth']);
     if (eligible.some((migration) => !metadataOnly.has(migration.id))) {
       this.backupBeforeFirstPendingMigration();
     }
