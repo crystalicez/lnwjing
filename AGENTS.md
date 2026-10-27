@@ -1,3 +1,7 @@
-- Always commit and push at the end of every coding session.
-- Always use `poteto-mode`
+- Always commit at the end of every coding session.
+- Always push at the end when the assigned task is complete.
+- Always use `poteto-mode` skill.
 - Use disk resources efficiently. Avoid unnecessary writes, redundant I/O, and excessive storage usage without compromising performance or correctness.
+- Treat `HANDOFF-NEXT-SESSION.md` as repo's memory
+- Always read `HANDOFF-NEXT-SESSION.md` at the start of every coding session.
+- Always update `HANDOFF-NEXT-SESSION.md` at the end of every coding session.
