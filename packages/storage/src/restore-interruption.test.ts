@@ -11,6 +11,53 @@ const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
 describe('interrupted database restore recovery', () => {
+  it.skipIf(process.platform !== 'win32')('recovers the original SQLite file after a real subprocess kill at the swap boundary', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-real-restore-kill-'));
+    roots.push(root);
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const db = new SqliteDatabase(filename, { backupDirectory });
+    db.connection.exec('CREATE TABLE sentinel(value TEXT NOT NULL)');
+    db.connection.prepare('INSERT INTO sentinel VALUES (?)').run('backup-state');
+    const backup = new SqliteBackupService(db, { databaseFilename: filename, backupDirectory });
+    const saved = await backup.create('manual');
+    db.connection.prepare('UPDATE sentinel SET value = ?').run('newer-committed-state');
+    await backup.scheduleRestore(saved.id);
+    db.close();
+    const moduleUrl = new URL('../dist/backup-service.js', import.meta.url).href;
+    const childSource = [
+      "import fs from 'node:fs';",
+      "import { syncBuiltinESMExports } from 'node:module';",
+      `const filename = ${JSON.stringify(filename)};`,
+      'const renameOriginal = fs.renameSync;',
+      'fs.renameSync = (from, to) => {',
+      '  renameOriginal(from, to);',
+      "  if (from === filename && to === filename + '.pre-restore') process.kill(process.pid, 'SIGKILL');",
+      '};',
+      'syncBuiltinESMExports();',
+      `const { applyPendingSqliteRestoreSync } = await import(${JSON.stringify(moduleUrl)});`,
+      `applyPendingSqliteRestoreSync(filename, ${JSON.stringify(backupDirectory)});`,
+    ].join('\n');
+    const child = spawn(process.execPath, ['--input-type=module', '-e', childSource], {
+      stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true,
+    });
+    let diagnostics = '';
+    child.stderr.on('data', (chunk: Buffer) => { diagnostics = (diagnostics + chunk.toString()).slice(-2000); });
+    const result = await new Promise<number | null>((resolve, reject) => {
+      child.once('exit', resolve);
+      child.once('error', reject);
+    });
+    expect(result, diagnostics).not.toBe(0);
+    expect(await stat(filename + '.pre-restore').then(st => st.isFile(), () => false), diagnostics).toBe(true);
+    expect((await stat(path.join(backupDirectory, 'restore-swap.json'))).isFile()).toBe(true);
+    expect(applyPendingSqliteRestoreSync(filename, backupDirectory))
+      .toMatchObject({ applied: false, error: expect.stringMatching(/interrupted/i) });
+    const reopened = new SqliteDatabase(filename, { backupDirectory });
+    expect(reopened.connection.prepare('SELECT value FROM sentinel').get())
+      .toEqual({ value: 'newer-committed-state' });
+    reopened.close();
+  }, 20_000);
+
   it('recovers the original database if the process dies between renaming old and installing new', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-restore-crash-before-'));
     roots.push(root);
@@ -319,6 +366,60 @@ describe('interrupted database restore recovery', () => {
     runtime.close();
     expect(applyPendingSqliteRestoreSync(filename, backupDirectory)).toMatchObject({ applied: true, backupId: saved.id });
   });
+
+  it.skipIf(process.platform !== 'win32')('blocks restore with an unregistered legacy SQLite writer holding a transaction', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-legacy-writer-'));
+    roots.push(root);
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const db = new SqliteDatabase(filename, { backupDirectory });
+    db.connection.exec('CREATE TABLE sentinel(value TEXT NOT NULL)');
+    db.connection.prepare('INSERT INTO sentinel VALUES (?)').run('old-committed');
+    const service = new SqliteBackupService(db, { databaseFilename: filename, backupDirectory });
+    const saved = await service.create('manual');
+    db.connection.prepare('UPDATE sentinel SET value = ?').run('new-committed');
+    await service.scheduleRestore(saved.id);
+    db.close();
+    const source = [
+      "const { DatabaseSync } = require('node:sqlite');",
+      'const db = new DatabaseSync(process.argv[1]);',
+      "db.exec('PRAGMA journal_mode = WAL; BEGIN IMMEDIATE;');",
+      "db.prepare('UPDATE sentinel SET value = ?').run('uncommitted-legacy');",
+      "process.stdout.write('ready\\n');",
+      'setInterval(() => {}, 1000);',
+    ].join('\n');
+    const child = spawn(process.execPath, ['-e', source, filename], {
+      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+    });
+    let errors = '';
+    child.stderr.on('data', (chunk: Buffer) => { errors = (errors + chunk.toString()).slice(-2000); });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Legacy writer was not ready: ' + errors)), 7000);
+        child.stdout.on('data', (chunk: Buffer) => {
+          if (!chunk.toString().includes('ready')) return;
+          clearTimeout(timer); resolve();
+        });
+        child.once('error', (error) => { clearTimeout(timer); reject(error); });
+        child.once('exit', (code) => { clearTimeout(timer); reject(new Error('Legacy writer exited unexpectedly: ' + code + errors)); });
+      });
+      const blocked = applyPendingSqliteRestoreSync(filename, backupDirectory);
+      expect(blocked).toMatchObject({ applied: false, error: expect.any(String) });
+      expect((await stat(path.join(backupDirectory, 'restore-pending.json'))).isFile()).toBe(true);
+      const reader = new DatabaseSync(filename, { readOnly: true });
+      expect(reader.prepare('SELECT value FROM sentinel').get()).toEqual({ value: 'new-committed' });
+      reader.close();
+    } finally {
+      if (child.exitCode === null) child.kill();
+      await new Promise<void>(resolve => { if (child.exitCode !== null) resolve(); else child.once('exit', () => resolve()); });
+    }
+    expect(applyPendingSqliteRestoreSync(filename, backupDirectory)).toMatchObject({
+      applied: true, backupId: saved.id,
+    });
+    const reopened = new SqliteDatabase(filename, { backupDirectory });
+    expect(reopened.connection.prepare('SELECT value FROM sentinel').get()).toEqual({ value: 'old-committed' });
+    reopened.close();
+  }, 25000);
 
   it('detects a separate live SQLite process and recovers its stale lease after termination', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-db-process-'));
