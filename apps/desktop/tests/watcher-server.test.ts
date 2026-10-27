@@ -39,10 +39,10 @@ function pairingResponse(url: URL, headers: Record<string, string>): Promise<{ s
 
 describe('Watcher server', () => {
   it('keeps two local watcher instances available when default ports collide', async () => {
-    const create = (port: number, pairingPort: number, token: string) => startWatcherServer({
+    const create = (port: number, pairingPort: number, token: string): ReturnType<typeof startWatcherServer> => startWatcherServer({
       port, pairingPort, accessToken: token, fallbackOnPortInUse: true,
       buildSnapshot: async (events) => snapshot(events),
-      subscribeActivity: () => () => undefined,
+      subscribeActivity: (): (() => void) => (): void => undefined,
     });
     const firstToken = 'watcher-first-token-0123456789abcdef';
     const secondToken = 'watcher-second-token-0123456789abcdef';
@@ -70,6 +70,51 @@ describe('Watcher server', () => {
       } finally {
         await second.close();
       }
+    } finally {
+      await first.close();
+    }
+  });
+
+  it('does not change an explicitly configured Watcher port after a collision', async () => {
+    const first = await startWatcherServer({
+      port: 0, pairingPort: 0, accessToken: 'watcher-explicit-one-0123456789abcdef',
+      buildSnapshot: async activity => snapshot(activity),
+      subscribeActivity: (): (() => void) => (): void => undefined,
+    });
+    try {
+      await expect(startWatcherServer({
+        port: Number(first.endpoint.port), pairingPort: 0,
+        accessToken: 'watcher-explicit-two-0123456789abcdef',
+        buildSnapshot: async activity => snapshot(activity),
+        subscribeActivity: (): (() => void) => (): void => undefined,
+      })).rejects.toMatchObject({ code: 'EADDRINUSE' });
+      expect((await fetch(new URL('/api/v1/snapshot', first.endpoint), {
+        headers: { Authorization: 'Bearer watcher-explicit-one-0123456789abcdef' },
+      })).status).toBe(200);
+    } finally {
+      await first.close();
+    }
+  });
+
+  it('allows automatic pairing fallback with an explicit API port, but never moves explicit pairing', async () => {
+    const create = (pairingPort: number, apiFallback: boolean, pairingFallback: boolean, token: string): ReturnType<typeof startWatcherServer> => startWatcherServer({
+      port: 0, pairingPort, accessToken: token,
+      fallbackOnPortInUse: apiFallback, fallbackOnPairingPortInUse: pairingFallback,
+      buildSnapshot: async activity => snapshot(activity),
+      subscribeActivity: (): (() => void) => (): void => undefined,
+    });
+    const first = await create(0, false, false, 'watcher-mixed-one-0123456789abcdef');
+    try {
+      const second = await create(Number(first.pairingEndpoint.port), false, true, 'watcher-mixed-two-0123456789abcdef');
+      try {
+        expect(second.pairingEndpoint.port).not.toBe(first.pairingEndpoint.port);
+        const pairing = await fetch(second.pairingEndpoint).then(response => response.json()) as { token: string };
+        expect(pairing.token).toBe('watcher-mixed-two-0123456789abcdef');
+      } finally {
+        await second.close();
+      }
+      await expect(create(Number(first.pairingEndpoint.port), true, false,
+        'watcher-mixed-explicit-0123456789abcdef')).rejects.toMatchObject({ code: 'EADDRINUSE' });
     } finally {
       await first.close();
     }

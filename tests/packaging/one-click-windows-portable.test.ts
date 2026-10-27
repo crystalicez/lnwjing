@@ -54,6 +54,24 @@ describe('one-click Windows x64 portable build', () => {
     expect(tunnelStager).toContain('process.env.LNWJING_COSIGN_PATH?.trim()');
   });
 
+  it('refuses a known existing rollback before expensive packaging I/O', async () => {
+    const script = await readFile(path.join(root, 'scripts', 'build-portable-windows-x64.ps1'), 'utf8');
+    const preflight = script.indexOf('A previous build rollback already exists; inspect it before starting an expensive build.');
+    expect(preflight).toBeGreaterThan(0);
+    expect(preflight).toBeLessThan(script.indexOf("Invoke-Step 'Install Electron runtime'"));
+    expect(preflight).toBeLessThan(script.indexOf("Invoke-Step 'Package Portable x64 only"));
+  });
+
+  it('authenticates the Microsoft .NET installer script before executing downloaded code', async () => {
+    const script = await readFile(path.join(root, 'scripts', 'build-portable-windows-x64.ps1'), 'utf8');
+    const verification = script.indexOf('Get-AuthenticodeSignature -LiteralPath $bootstrap');
+    expect(verification).toBeGreaterThan(script.indexOf("Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1'"));
+    expect(verification).toBeLessThan(script.indexOf('& powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $bootstrap'));
+    expect(script).toContain("SignerCertificate.Subject");
+    expect(script).toContain("'Valid'");
+    expect(script).toContain('O=Microsoft Corporation');
+  });
+
   it('provides a verified, rollback-safe promotion helper for local Portable builds', async () => {
     const script = await readFile(path.join(root, 'scripts', 'promote-portable-build.ps1'), 'utf8');
     expect(script).toContain('PORTABLE_VERIFIED:');

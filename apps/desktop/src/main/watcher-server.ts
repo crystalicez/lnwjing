@@ -96,6 +96,10 @@ export interface WatcherSnapshot {
 export interface WatcherServerOptions {
   readonly port: number;
   readonly pairingPort: number;
+  /** Only automatic ports may move on EADDRINUSE; explicit choices fail closed. */
+  readonly fallbackOnPortInUse?: boolean;
+  /** Pairing may fall back independently when only one port is configured explicitly. */
+  readonly fallbackOnPairingPortInUse?: boolean;
   readonly accessToken: string;
   readonly buildSnapshot: (recentActivity: readonly WatcherActivityEvent[]) => Promise<WatcherSnapshot>;
   readonly subscribeActivity: (listener: (event: WatcherActivityEvent) => void) => () => void;
@@ -204,7 +208,7 @@ function html(response: ServerResponse, statusCode: number, body: string): void 
 
 function listen(server: Server, port: number): Promise<number> {
   return new Promise((resolve, reject) => {
-    const onError = (error: Error): void => reject(error);
+    const onError = (error: Error): void => { server.off('error', onError); reject(error); };
     server.once('error', onError);
     server.listen(port, '127.0.0.1', () => {
       server.off('error', onError);
@@ -213,6 +217,19 @@ function listen(server: Server, port: number): Promise<number> {
       resolve(address.port);
     });
   });
+}
+
+function isPortInUse(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EADDRINUSE';
+}
+
+async function listenWithFallback(server: Server, port: number, enabled: boolean): Promise<number> {
+  try {
+    return await listen(server, port);
+  } catch (error) {
+    if (!enabled || port === 0 || !isPortInUse(error)) throw error;
+    return listen(server, 0);
+  }
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -295,7 +312,7 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
     });
   });
 
-  const apiPort = await listen(apiServer, options.port);
+  const apiPort = await listenWithFallback(apiServer, options.port, options.fallbackOnPortInUse === true);
 
   let pairingPort = 0;
   const pairingServer = createServer((request, response) => {
@@ -321,7 +338,8 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
   });
 
   try {
-    pairingPort = await listen(pairingServer, options.pairingPort);
+    pairingPort = await listenWithFallback(pairingServer, options.pairingPort,
+      (options.fallbackOnPairingPortInUse ?? options.fallbackOnPortInUse) === true);
   } catch (error) {
     await closeServer(apiServer).catch(() => undefined);
     webSockets.close();

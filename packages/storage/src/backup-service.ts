@@ -604,9 +604,23 @@ function applyPendingSqliteRestoreUnlocked(
     } else if (stagingPath !== null) {
       rmSync(stagingPath, { force: true });
     }
+    const reason = errorMessage(error);
+    // A legacy SQLite writer does not register a client lease. The emergency
+    // WAL checkpoint still detects its active transaction: fail closed, but
+    // keep the user's scheduled restore intent for the next safe startup.
+    if (reason === 'SQLite restore cannot checkpoint WAL while another connection is active') {
+      try {
+        if (existsSync(markerPath)) throw new Error('Another pending restore marker exists');
+        renameSync(claimPath, markerPath);
+        return { applied: false, error: 'SQLite restore deferred until the active writer exits: ' + reason };
+      } catch (retryError) {
+        // Leave the claim intact. Database opening rejects live restore claims.
+        return { applied: false, error: 'SQLite restore remains blocked; could not restore pending claim: ' + errorMessage(retryError) };
+      }
+    }
     const failedPath = markerPath + '.failed-' + Date.now();
     try { renameSync(claimPath, failedPath); } catch { /* best effort */ }
-    return { applied: false, error: errorMessage(error) };
+    return { applied: false, error: reason };
   }
 }
 

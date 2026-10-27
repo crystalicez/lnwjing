@@ -8,11 +8,13 @@ import { applyPendingSqliteRestoreSync, SqliteBackupService } from './backup-ser
 import { SqliteDatabase } from './database.js';
 
 const roots: string[] = [];
+const auditFixtureRoot = path.resolve(import.meta.dirname, '../../..', '.audit');
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
 describe('interrupted database restore recovery', () => {
   it.skipIf(process.platform !== 'win32')('recovers the original SQLite file after a real subprocess kill at the swap boundary', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-real-restore-kill-'));
+    await mkdir(auditFixtureRoot, { recursive: true });
+    const root = await mkdtemp(path.join(auditFixtureRoot, 'lnwjing-real-restore-kill-'));
     roots.push(root);
     const filename = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');
@@ -368,7 +370,8 @@ describe('interrupted database restore recovery', () => {
   });
 
   it.skipIf(process.platform !== 'win32')('blocks restore with an unregistered legacy SQLite writer holding a transaction', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-legacy-writer-'));
+    await mkdir(auditFixtureRoot, { recursive: true });
+    const root = await mkdtemp(path.join(auditFixtureRoot, 'lnwjing-legacy-writer-'));
     roots.push(root);
     const filename = path.join(root, 'lnwjing.sqlite');
     const backupDirectory = path.join(root, 'backups');

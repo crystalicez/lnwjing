@@ -919,6 +919,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     const operation = resolveWatcherAccessToken().then((accessToken) => startWatcherServer({
       port: readWatcherPort(process.env.LNWJING_WATCHER_PORT, DEFAULT_WATCHER_PORT, 'LNWJING_WATCHER_PORT'),
       pairingPort: readWatcherPort(process.env.LNWJING_WATCHER_PAIR_PORT, DEFAULT_WATCHER_PAIRING_PORT, 'LNWJING_WATCHER_PAIR_PORT'),
+      fallbackOnPortInUse: process.env.LNWJING_WATCHER_PORT === undefined,
+      fallbackOnPairingPortInUse: process.env.LNWJING_WATCHER_PAIR_PORT === undefined,
       accessToken,
       subscribeActivity: (listener) => activityTracker.subscribe((event) => listener(watcherActivityFromSink(event))),
       buildSnapshot: async (recentActivity) => {

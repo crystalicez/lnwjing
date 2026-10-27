@@ -44,6 +44,12 @@ function Invoke-Step {
 }
 
 try {
+    # Promotion preserves an existing rollback pair. Reject before costly
+    # staging and packaging to avoid wasted SSD writes on repeat builds.
+    if ((Test-Path -LiteralPath "$artifact.lnwjing-build-previous") -or
+        (Test-Path -LiteralPath (Join-Path $portableDirectory 'portable.yml.lnwjing-build-previous'))) {
+        throw 'A previous build rollback already exists; inspect it before starting an expensive build.'
+    }
     if (-not $SkipInstall) {
         # A double-click build must never block on pnpm's purge/reinstall question.
         # Scope CI=true to installation so packaging keeps its normal local behavior.
@@ -69,6 +75,15 @@ try {
         if (-not (Test-Path -LiteralPath $sdkExe -PathType Leaf)) {
             Write-Host '==> Download official .NET 8 SDK into local build cache' -ForegroundColor Cyan
             Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $bootstrap -UseBasicParsing
+            # HTTPS is not sufficient to authenticate executable code.
+            $bootstrapSignature = Get-AuthenticodeSignature -LiteralPath $bootstrap
+            $publisher = if ($null -ne $bootstrapSignature.SignerCertificate) {
+                $bootstrapSignature.SignerCertificate.Subject
+            } else { '' }
+            if ($bootstrapSignature.Status -ne 'Valid' -or
+                $publisher -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
+                throw 'Downloaded .NET SDK bootstrap lacks a trusted Microsoft Authenticode signature.'
+            }
             & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $bootstrap -Channel '8.0' -Architecture 'x64' -InstallDir $sdkDir -NoPath
             if ($LASTEXITCODE -ne 0) { throw 'Local .NET 8 SDK installation failed' }
         }
