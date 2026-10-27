@@ -38,6 +38,43 @@ function pairingResponse(url: URL, headers: Record<string, string>): Promise<{ s
 }
 
 describe('Watcher server', () => {
+  it('keeps two local watcher instances available when default ports collide', async () => {
+    const create = (port: number, pairingPort: number, token: string) => startWatcherServer({
+      port, pairingPort, accessToken: token, fallbackOnPortInUse: true,
+      buildSnapshot: async (events) => snapshot(events),
+      subscribeActivity: () => () => undefined,
+    });
+    const firstToken = 'watcher-first-token-0123456789abcdef';
+    const secondToken = 'watcher-second-token-0123456789abcdef';
+    const first = await create(0, 0, firstToken);
+    try {
+      const second = await create(Number(first.endpoint.port), Number(first.pairingEndpoint.port), secondToken);
+      try {
+        expect(second.endpoint.port).not.toBe(first.endpoint.port);
+        expect(second.pairingEndpoint.port).not.toBe(first.pairingEndpoint.port);
+        const firstSnapshot = await fetch(new URL('/api/v1/snapshot', first.endpoint), {
+          headers: { Authorization: `Bearer ${firstToken}` },
+        });
+        const secondSnapshot = await fetch(new URL('/api/v1/snapshot', second.endpoint), {
+          headers: { Authorization: `Bearer ${secondToken}` },
+        });
+        expect(firstSnapshot.status).toBe(200);
+        expect(secondSnapshot.status).toBe(200);
+        const leaked = await fetch(new URL('/api/v1/snapshot', first.endpoint), {
+          headers: { Authorization: `Bearer ${secondToken}` },
+        });
+        expect(leaked.status).toBe(401);
+        const pairing = await fetch(second.pairingEndpoint).then(response => response.json()) as { endpoint: string; token: string };
+        expect(pairing.token).toBe(secondToken);
+        expect(pairing.endpoint).toBe(second.endpoint.origin);
+      } finally {
+        await second.close();
+      }
+    } finally {
+      await first.close();
+    }
+  });
+
   it('rejects rebinding Host and foreign Origin before disclosing the pairing token', async () => {
     const token = 'watcher-test-token-0123456789abcdef';
     const server = await startWatcherServer({
