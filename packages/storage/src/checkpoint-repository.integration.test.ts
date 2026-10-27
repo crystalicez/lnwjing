@@ -61,6 +61,28 @@ describe('SqliteCheckpointRepository', () => {
     database.close();
   });
 
+  it('refuses all-checkpoint purge while an audit mutation receipt still references a checkpoint', async () => {
+    const root = await temporaryRoot();
+    const db = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repository = new SqliteCheckpointRepository(db);
+      await repository.insert({ ...fixtureCheckpoint('protected'), id: 'protected-by-audit' });
+      db.connection.prepare(`
+        INSERT INTO audit_events
+          (id, timestamp, actor_id, actor_name, workspace_id, action, target_summary,
+           permission_decision, result_code, duration_ms, metadata_json)
+        VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, 0, ?)
+      `).run('audit-ref', '2026-01-01', 'actor', 'Actor', 'write', 'OK',
+        JSON.stringify({ mutationReceipt: { checkpointId: 'protected-by-audit' } }));
+      await expect(repository.deleteAll()).rejects.toThrow(/reference/i);
+      expect(await repository.get('protected-by-audit')).not.toBeNull();
+      await expect(repository.deleteOlderThan('2027-01-01')).rejects.toThrow(/reference/i);
+      expect(await repository.get('protected-by-audit')).not.toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
   it('never age-prunes the only or latest checkpoint in any workspace', async () => {
     const root = await temporaryRoot();
     const db = new SqliteDatabase(path.join(root, 'state.db'));

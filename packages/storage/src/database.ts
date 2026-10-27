@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createPreMigrationBackupSync } from './backup-service.js';
+import { registerSqliteClientSync, releaseSqliteClientSync, type SqliteClientLease } from './sqlite-client-lease.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 import { AUDIT_MIGRATION_SQL } from './migrations/audit-migration.js';
 import { AUDIT_SCOPE_MIGRATION_SQL } from './migrations/audit-scope-migration.js';
@@ -71,6 +72,7 @@ export class SqliteDatabase {
   private canonicalFileIdentity: string | null | undefined;
   private lastCanonicalIdentityCheckAt = 0;
   private refreshingCanonicalFile = false;
+  private clientLease: SqliteClientLease | null = null;
 
   public constructor(private readonly filename: string, private readonly options: SqliteDatabaseOptions = {}) {
     const openCanonical = (): void => {
@@ -83,6 +85,9 @@ export class SqliteDatabase {
         this.initPragmas(this._connection);
         this.initializeSchema();
         this.canonicalFileIdentity = this.readCanonicalFileIdentity();
+        if (filename !== ':memory:' && options.backupDirectory !== undefined) {
+          this.clientLease = registerSqliteClientSync(options.backupDirectory);
+        }
       } catch (error) {
         this._connection.close();
         throw error;
@@ -296,10 +301,19 @@ export class SqliteDatabase {
   public close(): void {
     if (!this.isClosed) {
       this.isClosed = true;
+      let connectionClosed = false;
       try {
         this._connection.close();
+        connectionClosed = true;
       } catch {
-        // Ignored if already closed
+        // If SQLite refused to close, keep the live-client lease. Restore
+        // must not mistake a still-open file handle for a stopped runtime.
+      } finally {
+        if (connectionClosed && this.clientLease !== null && this.options.backupDirectory !== undefined) {
+          const lease = this.clientLease;
+          withSqliteLifecycleLockSync(this.options.backupDirectory, () => releaseSqliteClientSync(lease));
+          this.clientLease = null;
+        }
       }
     }
   }

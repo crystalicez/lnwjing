@@ -1955,6 +1955,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         // confirmation, but never delete all rollback snapshots without a
         // validated restorable pre-image of the database.
         for (const workspace of await workspaceService.list()) await assertWorkspaceIdle(workspace.id);
+        checkpointRepository.assertNoPersistedCleanupReferences();
         await requireNativeAdministrativeApproval({
           toolName: 'checkpoint_storage_cleanup', mutationKind: 'delete',
           reason: 'Deleting all checkpoint rollback history',

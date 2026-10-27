@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { lstat, mkdir, open, readFile, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { isForeignAbsolutePath } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
+import { assertNoActiveSqliteClientsSync } from './sqlite-client-lease.js';
 
 export type BackupReason = 'daily' | 'manual' | 'pre-update' | 'pre-migration';
 
@@ -447,15 +448,31 @@ function recoverInterruptedRestore(
     return { applied: false, error: 'Recovered original database from interrupted legacy restore' };
   }
 
+  if (journal.hadOriginal && journal.phase === 'staged' && !existsSync(oldPath)
+    && existsSync(databasePath)) {
+    // A crash can occur after renaming -wal/-shm but before the first
+    // canonical database rename. Restore those sidecars BEFORE touching the
+    // journal; otherwise committed WAL frames may be lost at next startup.
+    for (const suffix of ['-wal', '-shm']) {
+      if (existsSync(oldPath + suffix) && existsSync(databasePath + suffix)) {
+        throw new Error('Interrupted SQLite restore has conflicting original and staged WAL sidecars');
+      }
+    }
+    restoreOldSqliteSidecars(databasePath);
+    validateDatabase(databasePath);
+  }
+
   if (existsSync(oldPath)) {
     if (existsSync(databasePath)) {
       try {
-        return finishRestoredDatabase(databasePath, directory, journal, options);
+        validateDatabase(databasePath);
       } catch {
-        // The previous canonical snapshot remains available until verification.
+        // Only a CORRUPT replacement is rolled back. Quarantine errors
+        // must keep the swap journal and prevent normal application startup.
         const invalidPath = databasePath + '.restore-invalid-' + randomUUID();
         renameSync(databasePath, invalidPath);
       }
+      if (existsSync(databasePath)) return finishRestoredDatabase(databasePath, directory, journal, options, true);
     }
     validateDatabase(oldPath);
     renameSync(oldPath, databasePath);
@@ -486,7 +503,19 @@ export function applyPendingSqliteRestoreSync(
   options: SqliteRestoreOptions = {},
 ): PendingRestoreResult {
   const directory = path.resolve(backupDirectory);
-  return withSqliteLifecycleLockSync(directory, () => applyPendingSqliteRestoreUnlocked(databaseFilename, directory, options));
+  return withSqliteLifecycleLockSync(directory, () => {
+    const databasePath = path.resolve(databaseFilename);
+    const interrupted = existsSync(swapJournalPath(directory)) || existsSync(databasePath + '.pre-restore')
+      || readdirSync(directory).some(name => name.startsWith('restore-pending.json.claim-'));
+    if (interrupted || existsSync(restoreMarkerPath(directory))) {
+      try {
+        assertNoActiveSqliteClientsSync(directory);
+      } catch (error) {
+        return { applied: false, error: errorMessage(error) };
+      }
+    }
+    return applyPendingSqliteRestoreUnlocked(databaseFilename, directory, options);
+  });
 }
 
 function applyPendingSqliteRestoreUnlocked(
@@ -500,8 +529,14 @@ function applyPendingSqliteRestoreUnlocked(
   const arch = options.arch ?? process.arch;
   const now = options.now ?? ((): Date => new Date());
   const markerPath = restoreMarkerPath(directory);
-  const interrupted = recoverInterruptedRestore(dbPath, directory, options);
-  if (interrupted !== null) return interrupted;
+  try {
+    const interrupted = recoverInterruptedRestore(dbPath, directory, options);
+    if (interrupted !== null) return interrupted;
+  } catch (error) {
+    // Preserve the swap journal and prevent normal database startup. A
+    // quarantine failure is retryable; it must never be treated as success.
+    return { applied: false, error: 'SQLite restore recovery blocked: ' + errorMessage(error) };
+  }
   if (!existsSync(markerPath)) return { applied: false };
 
   mkdirSync(directory, { recursive: true });
@@ -998,14 +1033,16 @@ function quarantineHostBoundFiles(databaseFilename: string, backupIdValue: strin
   const moved: string[] = [];
   for (const candidate of candidates) {
     if (!existsSync(candidate)) continue;
+    const label = `file:${path.relative(dataDirectory, candidate).replaceAll(path.sep, '/')}`;
     try {
+      if (!lstatSync(candidate).isFile()) throw new Error('Not a regular credential file');
       mkdirSync(quarantineDirectory, { recursive: true });
       const destination = path.join(quarantineDirectory, path.basename(candidate));
       const uniqueDestination = existsSync(destination) ? `${destination}.${randomUUID()}` : destination;
       renameSync(candidate, uniqueDestination);
-      moved.push(`file:${path.relative(dataDirectory, candidate).replaceAll(path.sep, '/')}`);
+      moved.push(label);
     } catch {
-      moved.push(`file:${path.relative(dataDirectory, candidate).replaceAll(path.sep, '/')}:quarantine_failed`);
+      throw new Error(`Cross-host credential quarantine failed for ${label}; restored database remains blocked`);
     }
   }
   return moved;

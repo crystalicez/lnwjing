@@ -145,21 +145,30 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
    */
   public async deleteOlderThan(cutoffIso: string): Promise<number> {
     if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Checkpoint retention cutoff is invalid');
-    const result = this.database.connection.prepare(`
-      DELETE FROM checkpoints WHERE id IN (
-        SELECT older.id FROM checkpoints older
-        WHERE older.created_at < ?
-          AND EXISTS (
-            SELECT 1 FROM checkpoints newer
-            WHERE newer.workspace_id = older.workspace_id
-              AND (newer.created_at > older.created_at
-                OR (newer.created_at = older.created_at AND newer.id > older.id))
-          )
-        ORDER BY older.created_at ASC, older.id ASC LIMIT 128
-      )
-    `).run(cutoffIso);
-    this.cachedByteCount = null;
-    return Number(result.changes);
+    const connection = this.database.connection;
+    connection.exec('BEGIN IMMEDIATE;');
+    try {
+      this.assertNoPersistedCleanupReferences();
+      const result = connection.prepare(`
+        DELETE FROM checkpoints WHERE id IN (
+          SELECT older.id FROM checkpoints older
+          WHERE older.created_at < ?
+            AND EXISTS (
+              SELECT 1 FROM checkpoints newer
+              WHERE newer.workspace_id = older.workspace_id
+                AND (newer.created_at > older.created_at
+                  OR (newer.created_at = older.created_at AND newer.id > older.id))
+            )
+          ORDER BY older.created_at ASC, older.id ASC LIMIT 128
+        )
+      `).run(cutoffIso);
+      connection.exec('COMMIT;');
+      this.cachedByteCount = null;
+      return Number(result.changes);
+    } catch (error) {
+      connection.exec('ROLLBACK;');
+      throw error;
+    }
   }
 
   /** Metadata-only eligibility check to avoid full backup when nothing expires. */
@@ -176,10 +185,38 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     `).get(cutoffIso) !== undefined;
   }
 
+  /**
+   * Fail closed if Goal evidence or audit mutation receipts still reference
+   * checkpoints. Call before an expensive backup, then recheck inside the
+   * SQLite write transaction to cover competing Desktop/STDIO writers.
+   */
+  public assertNoPersistedCleanupReferences(): void {
+    const connection = this.database.connection;
+    if (connection.prepare('SELECT 1 FROM goal_checkpoints LIMIT 1').get() !== undefined) {
+      throw new Error('Checkpoint cleanup blocked by persisted Goal evidence references');
+    }
+    if (connection.prepare(`
+      SELECT 1 FROM audit_events
+      WHERE json_type(metadata_json, '$.mutationReceipt.checkpointId') = 'text'
+      LIMIT 1
+    `).get() !== undefined) {
+      throw new Error('Checkpoint cleanup blocked by persisted audit mutation references');
+    }
+  }
+
   public async deleteAll(): Promise<number> {
-    const deleted = Number(this.database.connection.prepare('DELETE FROM checkpoints').run().changes);
-    this.cachedByteCount = null;
-    return deleted;
+    const connection = this.database.connection;
+    connection.exec('BEGIN IMMEDIATE;');
+    try {
+      this.assertNoPersistedCleanupReferences();
+      const deleted = Number(connection.prepare('DELETE FROM checkpoints').run().changes);
+      connection.exec('COMMIT;');
+      this.cachedByteCount = null;
+      return deleted;
+    } catch (error) {
+      connection.exec('ROLLBACK;');
+      throw error;
+    }
   }
 
   /**
