@@ -44,6 +44,32 @@ describe('recoverable backup retention', () => {
     restored.close();
   });
 
+  it('keeps an archived backup pinned by a pending restore through retention and purge-all', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-retention-pinned-'));
+    temporaryRoots.push(root);
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const database = new SqliteDatabase(databaseFile, { backupDirectory });
+    database.connection.exec('CREATE TABLE restore_fixture (value TEXT NOT NULL);');
+    database.connection.prepare('INSERT INTO restore_fixture VALUES (?)').run('old');
+    let now = new Date('2026-08-01T00:00:00.000Z');
+    const backup = new SqliteBackupService(database, {
+      databaseFilename: databaseFile, backupDirectory, manualRetention: 1, now: (): Date => now,
+    });
+    const original = await backup.create('manual');
+    database.connection.prepare('UPDATE restore_fixture SET value = ?').run('new');
+    now = new Date('2026-08-02T00:00:00.000Z');
+    await backup.create('manual');
+    await backup.scheduleRestore(original.id);
+    expect(await backup.purgeArchivedOlderThan('2026-09-01T00:00:00.000Z')).toBe(0);
+    await expect(backup.purgeAll()).rejects.toThrow(/pending restore/i);
+    database.close();
+    expect(applyPendingSqliteRestoreSync(databaseFile, backupDirectory)).toMatchObject({ applied: true, backupId: original.id });
+    const restored = new SqliteDatabase(databaseFile);
+    expect(restored.connection.prepare('SELECT value FROM restore_fixture').get()).toEqual({ value: 'old' });
+    restored.close();
+  });
+
   it('expires archived backups and purge-all removes only validated backup artifacts', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-retention-purge-'));
     temporaryRoots.push(root);

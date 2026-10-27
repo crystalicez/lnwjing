@@ -135,9 +135,14 @@ export class SqliteDatabase {
   }
 
   private assertNoConcurrentRestore(): void {
-    if (this.filename === ':memory:' || this.options.backupDirectory === undefined) return;
+    if (this.filename === ':memory:') return;
+    if (!existsSync(this.filename) && existsSync(this.filename + '.pre-restore')) {
+      throw new Error(`SQLite restore interrupted before canonical publication: ${this.filename}`);
+    }
+    if (this.options.backupDirectory === undefined) return;
     try {
-      if (readdirSync(this.options.backupDirectory).some((name) => name.startsWith(RESTORE_CLAIM_PREFIX))) {
+      if (readdirSync(this.options.backupDirectory).some((name) =>
+        name.startsWith(RESTORE_CLAIM_PREFIX) || name === 'restore-swap.json')) {
         throw new Error(`SQLite restore is in progress; refusing to open the canonical database: ${this.filename}`);
       }
     } catch (error: unknown) {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { lstat, mkdir, open, readFile, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync, type SQLInputValue } from 'node:sqlite';
@@ -182,8 +182,7 @@ export class SqliteBackupService {
       }
       return await this.create('daily');
     } finally {
-      await lease.handle.close().catch(() => undefined);
-      await rm(lease.path, { force: true }).catch(() => undefined);
+      await releaseAutomaticBackupLease(lease);
     }
   }
 
@@ -216,7 +215,13 @@ export class SqliteBackupService {
     const temporary = markerPath + '.tmp-' + randomUUID();
     await writeFile(temporary, JSON.stringify(marker, null, 2), { encoding: 'utf8', flag: 'wx' });
     try {
-      await rename(temporary, markerPath);
+      withSqliteLifecycleLockSync(this.backupDirectory, () => {
+        if (existsSync(swapJournalPath(this.backupDirectory))) throw new Error('SQLite restore swap is unresolved');
+        if (readStoredManifestByIdSync(this.backupDirectory, stored.manifest.id) === null) {
+          throw new Error('Backup disappeared before restore was scheduled');
+        }
+        renameSync(temporary, markerPath);
+      });
     } catch (error) {
       await rm(temporary, { force: true });
       throw error;
@@ -227,20 +232,30 @@ export class SqliteBackupService {
     if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Backup recovery retention cutoff is invalid');
     const archiveDirectory = retentionArchiveDirectory(this.backupDirectory);
     const expired = (await listManifests(archiveDirectory)).filter((value) => value.createdAt < cutoffIso);
-    await Promise.all(expired.map((value) => deleteBackupFiles(archiveDirectory, value)));
-    return expired.length;
+    return withSqliteLifecycleLockSync(this.backupDirectory, () => {
+      const pinned = readPendingRestoreBackupIdSync(this.backupDirectory);
+      let deleted = 0;
+      for (const value of expired) {
+        if (value.id === pinned) continue;
+        deleteBackupFilesSync(archiveDirectory, value);
+        deleted += 1;
+      }
+      return deleted;
+    });
   }
 
   public async purgeAll(): Promise<number> {
     const archiveDirectory = retentionArchiveDirectory(this.backupDirectory);
     const active = await listManifests(this.backupDirectory);
     const archived = await listManifests(archiveDirectory);
-    await Promise.all([
-      ...active.map((value) => deleteBackupFiles(this.backupDirectory, value)),
-      ...archived.map((value) => deleteBackupFiles(archiveDirectory, value)),
-    ]);
-    await rm(restoreMarkerPath(this.backupDirectory), { force: true });
-    return active.length + archived.length;
+    return withSqliteLifecycleLockSync(this.backupDirectory, () => {
+      if (readPendingRestoreBackupIdSync(this.backupDirectory) !== null) {
+        throw new Error('Cannot purge backups while a pending restore exists');
+      }
+      for (const value of active) deleteBackupFilesSync(this.backupDirectory, value);
+      for (const value of archived) deleteBackupFilesSync(archiveDirectory, value);
+      return active.length + archived.length;
+    });
   }
 
   private async rotateRetention(): Promise<void> {
@@ -304,6 +319,167 @@ export interface PendingRestoreResult {
   readonly quarantinedItems?: readonly string[];
 }
 
+const RESTORE_SWAP_JOURNAL = 'restore-swap.json';
+
+interface RestoreSwapJournal {
+  readonly schemaVersion: 1;
+  readonly backupId: string;
+  readonly stagedFile: string;
+  readonly hadOriginal: boolean;
+  readonly crossHost: boolean;
+  readonly hostCompatibility?: BackupHostCompatibility;
+  readonly phase: 'staged' | 'installed';
+}
+
+function swapJournalPath(directory: string): string {
+  return path.join(directory, RESTORE_SWAP_JOURNAL);
+}
+
+function writeSwapJournalSync(directory: string, journal: RestoreSwapJournal): void {
+  const filename = swapJournalPath(directory);
+  const temporary = filename + '.tmp-' + randomUUID();
+  try {
+    writeFileSync(temporary, JSON.stringify(journal), { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporary, filename);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+}
+
+function readSwapJournalSync(directory: string, databasePath: string): RestoreSwapJournal | null {
+  const filename = swapJournalPath(directory);
+  if (!existsSync(filename)) return null;
+  const value: unknown = JSON.parse(readFileSync(filename, 'utf8'));
+  if (!isRecord(value) || value.schemaVersion !== 1 || typeof value.backupId !== 'string' || !isSafeBackupId(value.backupId)
+    || typeof value.stagedFile !== 'string'
+    || !value.stagedFile.startsWith(path.basename(databasePath) + '.restore-')
+    || !/^[a-zA-Z0-9._-]+$/.test(value.stagedFile) || !value.stagedFile.endsWith('.tmp')
+    || typeof value.hadOriginal !== 'boolean' || typeof value.crossHost !== 'boolean'
+    || (value.hostCompatibility !== undefined && !isBackupHostCompatibility(value.hostCompatibility))
+    || (value.phase !== 'staged' && value.phase !== 'installed')) {
+    throw new Error('SQLite restore journal is invalid; refusing to open an uncertain database');
+  }
+  return {
+    schemaVersion: 1, backupId: value.backupId, stagedFile: value.stagedFile,
+    hadOriginal: value.hadOriginal, crossHost: value.crossHost, phase: value.phase,
+    ...(value.hostCompatibility === undefined ? {} : { hostCompatibility: value.hostCompatibility }),
+  };
+}
+
+function retireInterruptedRestoreMarkers(directory: string): void {
+  for (const name of readdirSync(directory)) {
+    if (name !== 'restore-pending.json' && !name.startsWith('restore-pending.json.claim-')) continue;
+    renameSync(path.join(directory, name), path.join(directory, 'restore-failed-interrupted-' + randomUUID() + '.json'));
+  }
+}
+
+function restoreOldSqliteSidecars(databasePath: string): void {
+  const oldPath = databasePath + '.pre-restore';
+  for (const suffix of ['-wal', '-shm']) {
+    const saved = oldPath + suffix;
+    if (existsSync(saved)) renameSync(saved, databasePath + suffix);
+  }
+}
+
+function finishRestoredDatabase(
+  databasePath: string, directory: string, journal: RestoreSwapJournal,
+  options: SqliteRestoreOptions, alreadyValidated = false,
+): PendingRestoreResult {
+  if (!alreadyValidated) validateDatabase(databasePath);
+  const quarantinedFiles = journal.crossHost
+    ? quarantineHostBoundFiles(databasePath, journal.backupId, options.hostBoundPaths) : [];
+  const db = new DatabaseSync(databasePath, { readOnly: true });
+  let notice: BackupRestoreNotice | null = null;
+  try {
+    if (journal.crossHost && hasTable(db, 'settings')) {
+      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(BACKUP_RESTORE_NOTICE_SETTING_KEY) as { value: string } | undefined;
+      notice = parseBackupRestoreNotice(row?.value);
+    }
+  } finally {
+    db.close();
+  }
+  const allQuarantinedItems = [...new Set([...(notice?.quarantinedItems ?? []), ...quarantinedFiles])];
+  if (journal.crossHost && quarantinedFiles.length > 0 && notice !== null) {
+    appendRestoreNotice(databasePath, notice, allQuarantinedItems);
+  }
+  const oldPath = databasePath + '.pre-restore';
+  rmSync(oldPath, { force: true });
+  rmSync(oldPath + '-wal', { force: true });
+  rmSync(oldPath + '-shm', { force: true });
+  rmSync(path.join(path.dirname(databasePath), journal.stagedFile), { force: true });
+  for (const name of readdirSync(directory)) {
+    if (name === 'restore-pending.json' || name.startsWith('restore-pending.json.claim-')) {
+      rmSync(path.join(directory, name), { force: true });
+    }
+  }
+  rmSync(swapJournalPath(directory), { force: true });
+  return {
+    applied: true, backupId: journal.backupId,
+    crossHost: journal.crossHost,
+    hostCompatibility: journal.hostCompatibility ?? (journal.crossHost ? 'cross_host' : 'same_host'),
+    quarantinedItems: allQuarantinedItems,
+  };
+}
+
+function recoverInterruptedRestore(
+  databasePath: string, directory: string, options: SqliteRestoreOptions,
+): PendingRestoreResult | null {
+  const oldPath = databasePath + '.pre-restore';
+  const journal = readSwapJournalSync(directory, databasePath);
+  if (journal === null) {
+    if (!existsSync(oldPath)) {
+      const orphanClaims = readdirSync(directory).filter(name => name.startsWith('restore-pending.json.claim-'));
+      if (orphanClaims.length === 0) return null;
+      if (!existsSync(databasePath)) {
+        throw new Error('Abandoned restore claim has no canonical SQLite database; refusing empty initialization');
+      }
+      validateDatabase(databasePath);
+      retireInterruptedRestoreMarkers(directory);
+      return { applied: false, error: 'Recovered abandoned restore claim before SQLite swap' };
+    }
+    if (existsSync(databasePath)) {
+      return { applied: false, error: 'Legacy interrupted restore has both database copies; resolve them before another restore' };
+    }
+    validateDatabase(oldPath);
+    renameSync(oldPath, databasePath);
+    restoreOldSqliteSidecars(databasePath);
+    retireInterruptedRestoreMarkers(directory);
+    return { applied: false, error: 'Recovered original database from interrupted legacy restore' };
+  }
+
+  if (existsSync(oldPath)) {
+    if (existsSync(databasePath)) {
+      try {
+        return finishRestoredDatabase(databasePath, directory, journal, options);
+      } catch {
+        // The previous canonical snapshot remains available until verification.
+        const invalidPath = databasePath + '.restore-invalid-' + randomUUID();
+        renameSync(databasePath, invalidPath);
+      }
+    }
+    validateDatabase(oldPath);
+    renameSync(oldPath, databasePath);
+    restoreOldSqliteSidecars(databasePath);
+  } else if (journal.phase === 'installed' || !journal.hadOriginal) {
+    if (!existsSync(databasePath) && !journal.hadOriginal) {
+      const staged = path.join(path.dirname(databasePath), journal.stagedFile);
+      validateDatabase(staged);
+      renameSync(staged, databasePath);
+      writeSwapJournalSync(directory, { ...journal, phase: 'installed' });
+    }
+    if (!existsSync(databasePath)) {
+      throw new Error('Interrupted SQLite restore has no canonical or previous database; refusing empty initialization');
+    }
+    return finishRestoredDatabase(databasePath, directory, journal, options);
+  } else if (!existsSync(databasePath)) {
+    throw new Error('Interrupted SQLite restore lost both database paths; refusing empty initialization');
+  }
+  rmSync(path.join(path.dirname(databasePath), journal.stagedFile), { force: true });
+  retireInterruptedRestoreMarkers(directory);
+  rmSync(swapJournalPath(directory), { force: true });
+  return { applied: false, error: 'Recovered original database after interrupted SQLite restore' };
+}
+
 export function applyPendingSqliteRestoreSync(
   databaseFilename: string,
   backupDirectory: string,
@@ -324,6 +500,8 @@ function applyPendingSqliteRestoreUnlocked(
   const arch = options.arch ?? process.arch;
   const now = options.now ?? ((): Date => new Date());
   const markerPath = restoreMarkerPath(directory);
+  const interrupted = recoverInterruptedRestore(dbPath, directory, options);
+  if (interrupted !== null) return interrupted;
   if (!existsSync(markerPath)) return { applied: false };
 
   mkdirSync(directory, { recursive: true });
@@ -334,6 +512,7 @@ function applyPendingSqliteRestoreUnlocked(
     return isMissingFile(error) ? { applied: false } : { applied: false, error: errorMessage(error) };
   }
 
+  let stagingPath: string | null = null;
   try {
     const marker = parseRestoreMarker(readFileSync(claimPath, 'utf8'));
     const stored = readStoredManifestByIdSync(directory, marker.backupId);
@@ -346,46 +525,50 @@ function applyPendingSqliteRestoreUnlocked(
     const crossHost = compatibility === 'cross_host';
 
     const temporary = dbPath + '.restore-' + randomUUID() + '.tmp';
+    stagingPath = temporary;
     copyFileSync(source, temporary);
-    const restore = crossHost
-      ? sanitizeCrossHostDatabase(temporary, {
-        backupId: stored.manifest.id,
-        restoredAt: now().toISOString(),
-        sourcePlatform: stored.manifest.platform ?? null,
-        sourceArch: stored.manifest.arch ?? null,
-        targetPlatform: platform,
-        targetArch: arch,
-      })
-      : emptyCrossHostRestore(stored.manifest, platform, arch, now);
+    if (crossHost) sanitizeCrossHostDatabase(temporary, {
+      backupId: stored.manifest.id,
+      restoredAt: now().toISOString(),
+      sourcePlatform: stored.manifest.platform ?? null,
+      sourceArch: stored.manifest.arch ?? null,
+      targetPlatform: platform,
+      targetArch: arch,
+    });
     validateDatabase(temporary);
-    if (existsSync(dbPath)) createEmergencyBackup(dbPath, directory, platform, arch);
+    const hadOriginal = existsSync(dbPath);
+    if (hadOriginal) createEmergencyBackup(dbPath, directory, platform, arch);
     const oldPath = dbPath + '.pre-restore';
-    rmSync(oldPath, { force: true });
-    if (existsSync(dbPath)) renameSync(dbPath, oldPath);
-    try {
-      renameSync(temporary, dbPath);
-    } catch (error) {
-      if (existsSync(oldPath) && !existsSync(dbPath)) renameSync(oldPath, dbPath);
-      rmSync(temporary, { force: true });
-      throw error;
+    if (existsSync(oldPath) || existsSync(oldPath + '-wal') || existsSync(oldPath + '-shm')
+      || existsSync(swapJournalPath(directory))) {
+      throw new Error('SQLite restore has an unresolved previous swap');
     }
-    rmSync(oldPath, { force: true });
-    rmSync(dbPath + '-wal', { force: true });
-    rmSync(dbPath + '-shm', { force: true });
-    const quarantinedFiles = crossHost ? quarantineHostBoundFiles(dbPath, marker.backupId, options.hostBoundPaths) : [];
-    const allQuarantinedItems = [...new Set([...restore.quarantinedItems, ...quarantinedFiles])];
-    if (crossHost && quarantinedFiles.length > 0) {
-      try { appendRestoreNotice(dbPath, restore.notice, allQuarantinedItems); } catch { /* the database replacement itself remains authoritative */ }
-    }
-    rmSync(claimPath, { force: true });
-    return {
-      applied: true,
-      backupId: marker.backupId,
-      crossHost,
-      hostCompatibility: compatibility,
-      quarantinedItems: allQuarantinedItems,
+    const journal: RestoreSwapJournal = {
+      schemaVersion: 1, backupId: marker.backupId, stagedFile: path.basename(temporary),
+      hadOriginal, crossHost, hostCompatibility: compatibility, phase: 'staged',
     };
+    writeSwapJournalSync(directory, journal);
+    if (hadOriginal) {
+      for (const suffix of ['-wal', '-shm']) {
+        if (existsSync(dbPath + suffix)) renameSync(dbPath + suffix, oldPath + suffix);
+      }
+      renameSync(dbPath, oldPath);
+    }
+    renameSync(temporary, dbPath);
+    validateDatabase(dbPath);
+    writeSwapJournalSync(directory, { ...journal, phase: 'installed' });
+    return finishRestoredDatabase(dbPath, directory, journal, options, true);
   } catch (error) {
+    if (existsSync(swapJournalPath(directory))) {
+      try {
+        const recovered = recoverInterruptedRestore(dbPath, directory, options);
+        if (recovered !== null) return recovered;
+      } catch (recoveryError) {
+        return { applied: false, error: 'SQLite restore recovery failed: ' + errorMessage(recoveryError) };
+      }
+    } else if (stagingPath !== null) {
+      rmSync(stagingPath, { force: true });
+    }
     const failedPath = markerPath + '.failed-' + Date.now();
     try { renameSync(claimPath, failedPath); } catch { /* best effort */ }
     return { applied: false, error: errorMessage(error) };
@@ -396,7 +579,9 @@ function createEmergencyBackup(dbPath: string, directory: string, platform: Node
   const active = new DatabaseSync(dbPath);
   try {
     active.exec('PRAGMA busy_timeout = 5000;');
-    active.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+    const wal = active.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get() as { busy: number };
+    if (wal.busy !== 0) throw new Error('SQLite restore cannot checkpoint WAL while another connection is active');
+    assertBackupFreeSpace(active, directory);
     const createdAt = new Date().toISOString();
     const id = backupId(createdAt);
     const databaseFile = id + '.sqlite';
@@ -423,21 +608,33 @@ function createEmergencyBackup(dbPath: string, directory: string, platform: Node
 interface AutomaticBackupLease {
   readonly handle: FileHandle;
   readonly path: string;
+  readonly ownerId: string;
+  readonly dev: number;
+  readonly ino: number;
 }
 
 async function acquireAutomaticBackupLease(directory: string, now: Date): Promise<AutomaticBackupLease | null> {
   const leasePath = path.join(directory, 'automatic-backup.lock');
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    let handle: FileHandle | undefined;
     try {
-      const handle = await open(leasePath, 'wx');
-      await handle.writeFile(JSON.stringify({ pid: process.pid, acquiredAt: now.toISOString() }), 'utf8');
-      return { handle, path: leasePath };
+      handle = await open(leasePath, 'wx');
+      const ownerId = randomUUID();
+      await handle.writeFile(JSON.stringify({ pid: process.pid, ownerId, acquiredAt: now.toISOString() }), 'utf8');
+      const info = await handle.stat();
+      return { handle, path: leasePath, ownerId, dev: info.dev, ino: info.ino };
     } catch (error) {
+      if (handle !== undefined) await handle.close().catch(() => undefined);
       if (!isAlreadyExists(error)) throw error;
       if (attempt > 0) return null;
       try {
-        const info = await stat(leasePath);
-        if (now.getTime() - info.mtimeMs <= 60 * 60 * 1000) return null;
+        const before = await lstat(leasePath);
+        if (!before.isFile() || now.getTime() - before.mtimeMs <= 60 * 60 * 1000) return null;
+        const parsed: unknown = JSON.parse(await readFile(leasePath, 'utf8'));
+        if (!isRecord(parsed) || !Number.isSafeInteger(parsed.pid) || (parsed.pid as number) <= 0) return null;
+        if (processIsAliveForBackup(parsed.pid as number)) return null;
+        const current = await lstat(leasePath);
+        if (before.dev !== current.dev || before.ino !== current.ino) return null;
         await rm(leasePath, { force: true });
       } catch (staleError) {
         if (!isMissingFile(staleError)) return null;
@@ -445,6 +642,28 @@ async function acquireAutomaticBackupLease(directory: string, now: Date): Promis
     }
   }
   return null;
+}
+
+async function releaseAutomaticBackupLease(lease: AutomaticBackupLease): Promise<void> {
+  await lease.handle.close();
+  try {
+    const current = await lstat(lease.path);
+    if (current.isFile() && current.dev === lease.dev && current.ino === lease.ino) {
+      const owner: unknown = JSON.parse(await readFile(lease.path, 'utf8'));
+      if (isRecord(owner) && owner.ownerId === lease.ownerId) await rm(lease.path, { force: true });
+    }
+  } catch (error) {
+    if (!isMissingFile(error)) process.stderr.write('Automatic SQLite backup lease could not be released safely\n');
+  }
+}
+
+function processIsAliveForBackup(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !isRecord(error) || error.code !== 'ESRCH';
+  }
 }
 
 function selectDailyAndWeeklyRetention(values: readonly BackupManifest[], dailyKeep: number, weeklyKeep: number): ReadonlySet<string> {
@@ -526,30 +745,6 @@ function determineBackupHostCompatibility(manifest: BackupManifest, sourceDataba
   // violation into a same-host restore.
   if (hasForeignWorkspacePath(sourceDatabase, targetPlatform)) return 'cross_host';
   return declared;
-}
-
-function emptyCrossHostRestore(
-  manifest: BackupManifest,
-  targetPlatform: NodeJS.Platform,
-  targetArch: string,
-  now: () => Date,
-): CrossHostRestoreResult {
-  return {
-    notice: {
-      schemaVersion: 1,
-      backupId: manifest.id,
-      restoredAt: now().toISOString(),
-      sourcePlatform: manifest.platform ?? null,
-      sourceArch: manifest.arch ?? null,
-      targetPlatform,
-      targetArch,
-      hostCompatibility: backupHostCompatibility(manifest, targetPlatform, targetArch),
-      incomplete: false,
-      relinkRequired: false,
-      quarantinedItems: [],
-    },
-    quarantinedItems: [],
-  };
 }
 
 /**
@@ -1023,11 +1218,19 @@ async function archiveNotKept(directory: string, values: readonly BackupManifest
   for (const value of values) if (!keep.has(value.id)) await archiveBackup(directory, value);
 }
 
-async function deleteBackupFiles(directory: string, value: BackupManifest): Promise<void> {
-  await Promise.all([
-    rm(path.join(directory, value.databaseFile), { force: true }),
-    rm(manifestPath(directory, value.id), { force: true }),
-  ]);
+function readPendingRestoreBackupIdSync(directory: string): string | null {
+  if (existsSync(swapJournalPath(directory))
+    || readdirSync(directory).some((name) => name.startsWith('restore-pending.json.claim-'))) {
+    throw new Error('Cannot modify backup retention while an interrupted restore is unresolved');
+  }
+  const marker = restoreMarkerPath(directory);
+  if (!existsSync(marker)) return null;
+  return parseRestoreMarker(readFileSync(marker, 'utf8')).backupId;
+}
+
+function deleteBackupFilesSync(directory: string, value: BackupManifest): void {
+  rmSync(path.join(directory, value.databaseFile), { force: true });
+  rmSync(manifestPath(directory, value.id), { force: true });
 }
 
 async function archiveBackup(directory: string, value: BackupManifest): Promise<void> {
@@ -1038,13 +1241,19 @@ async function archiveBackup(directory: string, value: BackupManifest): Promise<
   const archivedDatabase = path.join(archiveDirectory, value.databaseFile);
   const archivedManifest = manifestPath(archiveDirectory, value.id);
 
-  await rename(sourceDatabase, archivedDatabase);
-  try {
-    await rename(sourceManifest, archivedManifest);
-  } catch (error) {
-    await rename(archivedDatabase, sourceDatabase).catch(() => undefined);
-    throw error;
-  }
+  withSqliteLifecycleLockSync(directory, () => {
+    if (!existsSync(sourceDatabase) || !existsSync(sourceManifest)) return;
+    if (existsSync(archivedDatabase) || existsSync(archivedManifest)) {
+      throw new Error('Backup archive already contains the destination');
+    }
+    renameSync(sourceDatabase, archivedDatabase);
+    try {
+      renameSync(sourceManifest, archivedManifest);
+    } catch (error) {
+      renameSync(archivedDatabase, sourceDatabase);
+      throw error;
+    }
+  });
 }
 
 function isSafeBackupId(value: string): boolean {

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -242,6 +242,25 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
     expect(row?.value).toBe('before-backup');
     restored.close();
     expect((await readdir(backupDirectory)).some((name) => name.endsWith('.sqlite'))).toBe(true);
+  });
+
+  it('never reclaims an aged automatic-backup lock while the owner process remains alive', async () => {
+    const root = await temporaryRoot();
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const database = new SqliteDatabase(databaseFile, { backupDirectory });
+    try {
+      const service = new SqliteBackupService(database, { databaseFilename: databaseFile, backupDirectory });
+      const lock = path.join(backupDirectory, 'automatic-backup.lock');
+      await writeFile(lock, JSON.stringify({ pid: process.pid, acquiredAt: '2020-01-01T00:00:00.000Z' }));
+      const aged = new Date(Date.now() - 65 * 60_000);
+      await utimes(lock, aged, aged);
+      expect(await service.ensureRecent()).toBeNull();
+      expect(await readFile(lock, 'utf8')).toContain(String(process.pid));
+      expect(await service.list()).toEqual([]);
+    } finally {
+      database.close();
+    }
   });
 
   it('does not duplicate the automatic daily backup inside the 24-hour window', async () => {

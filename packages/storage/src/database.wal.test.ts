@@ -64,6 +64,21 @@ describe('SqliteDatabase WAL', () => {
     expect(existsSync(filename)).toBe(false);
   });
 
+  it('refuses empty initialization while an interrupted restore journal remains', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-restore-journal-'));
+    temporaryRoots.push(root);
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    await mkdir(backupDirectory, { recursive: true });
+    await writeFile(path.join(backupDirectory, 'restore-swap.json'), '{}');
+    expect(() => new SqliteDatabase(filename, { backupDirectory })).toThrow(/restore is in progress/i);
+    expect(existsSync(filename)).toBe(false);
+    await rm(path.join(backupDirectory, 'restore-swap.json'));
+    await writeFile(filename + '.pre-restore', 'prior-image');
+    expect(() => new SqliteDatabase(filename)).toThrow(/restore interrupted/i);
+    expect(existsSync(filename)).toBe(false);
+  });
+
   it('waits through the canonical restore swap instead of opening the temporary gap', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-restore-lock-'));
     temporaryRoots.push(root);
