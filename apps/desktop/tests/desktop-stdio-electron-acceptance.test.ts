@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -309,5 +310,96 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
       }
     }, 45_000);
     }
+
+    it('refuses an unresolved restore before creating a new checkpoint key', async () => {
+      const root = await mkdtemp(path.join(privateRoot, 'electron-restore-refusal-'));
+      const data = path.join(root, 'data');
+      const backups = path.join(data, 'backups');
+      const roaming = path.join(root, 'roaming');
+      const local = path.join(root, 'local');
+      const temp = path.join(root, 'temp');
+      await Promise.all([backups, roaming, local, temp].map(p => mkdir(p, { recursive: true })));
+      await writeFile(path.join(backups, 'restore-swap.json'), '{ "schemaVersion": 1, "invalid": true }');
+      const env = { ...process.env, LNWJING_DATA_PATH: data, APPDATA: roaming,
+        LOCALAPPDATA: local, TEMP: temp, TMP: temp };
+      delete env.ELECTRON_RUN_AS_NODE;
+      const child = spawn(electron, [...(packagedExe ? [] : [entry]), '--mcp-stdio',
+        '--mcp-stdio-profile-init', '--disable-gpu', '--disable-background-networking'], {
+        cwd: desktopRoot, env, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      let diagnostics = '';
+      child.stderr?.on('data', (chunk: Buffer) => {
+        diagnostics = (diagnostics + String(chunk)).slice(-2500);
+      });
+      try {
+        const code = await new Promise<number | null>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('Restore refusal never exited')), 10_000);
+          child.once('close', (status) => { clearTimeout(timer); resolve(status); });
+          child.once('error', (error) => { clearTimeout(timer); reject(error); });
+        });
+        expect(code).not.toBe(0);
+        expect(diagnostics).toMatch(/restore initialization failed/i);
+        await expect(readFile(path.join(data, 'checkpoint-master.key')))
+          .rejects.toMatchObject({ code: 'ENOENT' });
+        expect(await readFile(path.join(backups, 'restore-swap.json'), 'utf8')).toContain('invalid');
+      } finally {
+        if (child.exitCode === null) child.kill();
+        await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 200 });
+      }
+    }, 18_000);
+
+    it.skipIf(process.env.LNWJING_RUN_GUI_STDIO_SIMULATION !== '1')(
+      'starts a GUI and MCP STDIO together with one fresh isolated key', async () => {
+      const root = await mkdtemp(path.join(privateRoot, 'electron-gui-stdio-'));
+      const workspace = path.join(root, 'workspace');
+      const data = path.join(root, 'data');
+      const roaming = path.join(root, 'roaming');
+      const local = path.join(root, 'local');
+      const temp = path.join(root, 'temp');
+      await Promise.all([workspace, data, roaming, local, temp].map(p => mkdir(p, { recursive: true })));
+      await writeFile(path.join(workspace, 'source.ts'), 'export const gui_stdio_fixture = true;\n');
+      const env = {
+        ...process.env, LNWJING_DATA_PATH: data, LNWJING_WORKSPACE: workspace,
+        APPDATA: roaming, LOCALAPPDATA: local, TEMP: temp, TMP: temp,
+        PATH: path.join(desktopRoot, 'build', 'runtime-tools', 'ripgrep') + path.delimiter + (process.env.PATH ?? ''),
+      };
+      delete env.ELECTRON_RUN_AS_NODE;
+      const gui = spawn(electron, [...(packagedExe ? [] : [entry]), '--disable-gpu',
+        '--disable-background-networking', '--no-default-browser-check'], {
+        cwd: desktopRoot, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const transport = new StdioClientTransport({
+        command: packagedExe ? path.join(path.dirname(electron), 'lnwjing-mcp-stdio-bridge.exe')
+          : path.join(desktopRoot, 'build', 'lnwjing-mcp-stdio-bridge.exe'),
+        args: [electron, ...(packagedExe ? [] : [entry]), '--mcp-stdio', '--workspace', workspace,
+          '--disable-gpu', '--disable-background-networking'],
+        cwd: desktopRoot, env, stderr: 'pipe',
+      });
+      let diagnostics = '';
+      for (const stream of [gui.stdout, gui.stderr, transport.stderr]) {
+        stream?.on('data', (chunk: Buffer) => { diagnostics = (diagnostics + String(chunk)).slice(-4000); });
+      }
+      try {
+        await transport.start();
+        const catalog = responseData(await request(transport, 1, 'tools/list', {}));
+        expect((catalog.tools as Array<{ name: string }>).map(tool => tool.name)).toContain('read_file');
+        await new Promise(resolve => setTimeout(resolve, 2_500));
+        expect(gui.exitCode, diagnostics).toBeNull();
+        const secret = await readFile(path.join(data, 'checkpoint-master.key'), 'utf8');
+        expect(secret.startsWith('safe:v1:')).toBe(true);
+      } catch (error) {
+        throw new Error('Fresh GUI+STDIO profile startup failed: ' + String(error)
+          + '; diagnostics: ' + diagnostics, { cause: error });
+      } finally {
+        await transport.close().catch(() => undefined);
+        if (gui.exitCode === null) gui.kill();
+        await new Promise<void>(resolve => {
+          if (gui.exitCode !== null) { resolve(); return; }
+          const timer = setTimeout(resolve, 5_000);
+          gui.once('exit', () => { clearTimeout(timer); resolve(); });
+        });
+        await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 200 });
+      }
+    }, 50_000);
   },
 );

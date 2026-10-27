@@ -270,6 +270,38 @@ describe('interrupted database restore recovery', () => {
     reopened.close();
   });
 
+  it('keeps separate quarantine evidence when the same backup is restored twice', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-repeat-cross-host-'));
+    roots.push(root);
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const key = path.join(root, 'checkpoint-master.key');
+    const original = new SqliteDatabase(filename, { backupDirectory });
+    const snapshots = new SqliteBackupService(original, {
+      databaseFilename: filename, backupDirectory, platform: 'win32',
+    });
+    const backup = await snapshots.create('manual');
+    original.close();
+    for (let i = 1; i <= 2; i += 1) {
+      await writeFile(key, `local-secret-${i}`, { flag: 'wx' });
+      const database = new SqliteDatabase(filename, { backupDirectory });
+      const service = new SqliteBackupService(database, {
+        databaseFilename: filename, backupDirectory, platform: 'win32',
+      });
+      await service.scheduleRestore(backup.id);
+      database.close();
+      expect(applyPendingSqliteRestoreSync(filename, backupDirectory, { platform: 'linux' }))
+        .toMatchObject({ applied: true, crossHost: true });
+      await expect(readFile(key)).rejects.toMatchObject({ code: 'ENOENT' });
+    }
+    const quarantine = path.join(root, 'restore-quarantine', backup.id);
+    const names = (await (await import('node:fs/promises')).readdir(quarantine))
+      .filter(name => name.endsWith('-checkpoint-master.key'));
+    expect(names).toHaveLength(2);
+    const values = await Promise.all(names.map(name => readFile(path.join(quarantine, name), 'utf8')));
+    expect(values.sort()).toEqual(['local-secret-1', 'local-secret-2']);
+  });
+
   it('refuses a scheduled restore while a registered SQLite runtime still has the profile open', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-runtime-'));
     roots.push(root);

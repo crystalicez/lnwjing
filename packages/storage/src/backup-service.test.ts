@@ -91,9 +91,13 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
       platform: 'linux', arch: 'x64', hostBoundPaths: [path.join(tunnelPath, 'lnwjing.runtime.secret')],
     });
     expect(result).toMatchObject({ applied: true, crossHost: true });
+    const quarantineDirectory = path.join(dataPath, 'restore-quarantine', snapshot.id);
+    const movedNames = await readdir(quarantineDirectory);
     for (const filename of files) {
       await expect(readFile(filename, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-      expect(await readFile(path.join(dataPath, 'restore-quarantine', snapshot.id, path.basename(filename)), 'utf8')).toBe('host-bound-ciphertext');
+      const matches = movedNames.filter(name => name.endsWith('-' + path.basename(filename)));
+      expect(matches).toHaveLength(1);
+      expect(await readFile(path.join(quarantineDirectory, matches[0]!), 'utf8')).toBe('host-bound-ciphertext');
     }
     expect(result.quarantinedItems).toHaveLength(3);
   });

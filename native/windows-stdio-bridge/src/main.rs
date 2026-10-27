@@ -126,6 +126,7 @@ fn initialize_profile_once(electron: &OsStr, args: &[OsString]) -> io::Result<()
     }
     let mut bootstrap = Command::new(electron)
         .args(args)
+        .arg("--mcp-stdio")
         .arg("--mcp-stdio-profile-init")
         .env_remove("ELECTRON_RUN_AS_NODE")
         .stdin(Stdio::null())
@@ -162,12 +163,17 @@ fn initialize_profile_once(electron: &OsStr, args: &[OsString]) -> io::Result<()
 
 fn run() -> io::Result<()> {
     let mut args = env::args_os().skip(1);
-    let electron = args.next().ok_or_else(|| io::Error::other("Missing Electron host executable"))?;
+    let first = args.next().ok_or_else(|| io::Error::other("Missing Electron host executable"))?;
+    let initialize_only = first == "--profile-init-only";
+    let electron = if initialize_only {
+        args.next().ok_or_else(|| io::Error::other("Missing Electron host executable"))?
+    } else { first };
     if !Path::new(&electron).is_absolute() {
         return Err(io::Error::other("Electron host path must be absolute"));
     }
     let electron_args: Vec<OsString> = args.collect();
     initialize_profile_once(&electron, &electron_args)?;
+    if initialize_only { return Ok(()); }
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
     let port = listener.local_addr()?.port();
     let proof = random_secret()?;

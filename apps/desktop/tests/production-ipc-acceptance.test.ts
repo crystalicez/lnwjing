@@ -44,15 +44,16 @@ vi.mock('electron', () => ({
   Tray: class Tray {},
 }));
 
-vi.mock('electron-updater', () => ({
-  autoUpdater: {
+vi.mock('electron-updater', () => {
+  const autoUpdater = {
     autoDownload: false,
     autoInstallOnAppQuit: false,
     on: vi.fn(),
     checkForUpdates: vi.fn(),
     quitAndInstall: vi.fn(),
-  },
-}));
+  };
+  return { autoUpdater, default: { autoUpdater } };
+});
 
 import { registerIpcHandlers, type DesktopIpcServices } from '../src/main/main.js';
 import { getRendererEntryPath } from '../src/main/window.js';

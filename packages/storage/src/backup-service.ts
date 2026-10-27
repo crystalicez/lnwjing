@@ -388,7 +388,7 @@ function finishRestoredDatabase(
 ): PendingRestoreResult {
   if (!alreadyValidated) validateDatabase(databasePath);
   const quarantinedFiles = journal.crossHost
-    ? quarantineHostBoundFiles(databasePath, journal.backupId, options.hostBoundPaths) : [];
+    ? quarantineHostBoundFiles(databasePath, journal.backupId, journal.stagedFile, options.hostBoundPaths) : [];
   const db = new DatabaseSync(databasePath, { readOnly: true });
   let notice: BackupRestoreNotice | null = null;
   try {
@@ -1011,7 +1011,7 @@ function appendRestoreNotice(databaseFilename: string, original: BackupRestoreNo
   }
 }
 
-function quarantineHostBoundFiles(databaseFilename: string, backupIdValue: string, configuredPaths: readonly string[] | undefined): string[] {
+function quarantineHostBoundFiles(databaseFilename: string, backupIdValue: string, stagedFile: string, configuredPaths: readonly string[] | undefined): string[] {
   const dataDirectory = path.dirname(databaseFilename);
   const quarantineDirectory = path.join(dataDirectory, 'restore-quarantine', backupIdValue);
   const defaultCandidates = [
@@ -1032,14 +1032,50 @@ function quarantineHostBoundFiles(databaseFilename: string, backupIdValue: strin
   const candidates = [...new Set([...(configuredPaths ?? []), ...defaultCandidates, ...tunnelSessions])];
   const moved: string[] = [];
   for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
     const label = `file:${path.relative(dataDirectory, candidate).replaceAll(path.sep, '/')}`;
+    // Persist intent BEFORE rename: retry must recognize previously moved files.
+    const digest = createHash('sha256').update(path.resolve(candidate)).digest('hex');
+    // Each restore attempt has a unique staged file; later restores from
+    // the same backup must not reuse an earlier credential destination.
+    const operation = createHash('sha256').update(stagedFile).digest('hex').slice(0, 16);
+    const intent = path.join(quarantineDirectory, `intent-${operation}-${digest}.json`);
+    const destination = path.join(quarantineDirectory, `${operation}-${digest}-${path.basename(candidate).slice(-80)}`);
+    const sourceExists = existsSync(candidate);
+    const intentExists = existsSync(intent);
+    const destinationExists = existsSync(destination);
+    if (!sourceExists && !intentExists && !destinationExists) continue;
     try {
-      if (!lstatSync(candidate).isFile()) throw new Error('Not a regular credential file');
       mkdirSync(quarantineDirectory, { recursive: true });
-      const destination = path.join(quarantineDirectory, path.basename(candidate));
-      const uniqueDestination = existsSync(destination) ? `${destination}.${randomUUID()}` : destination;
-      renameSync(candidate, uniqueDestination);
+      if (!lstatSync(quarantineDirectory).isDirectory()) throw new Error('Redirected quarantine directory');
+      if (intentExists) {
+        if (!lstatSync(intent).isFile()) throw new Error('Redirected quarantine intent');
+        const recorded: unknown = JSON.parse(readFileSync(intent, 'utf8'));
+        if (!isRecord(recorded) || recorded.schemaVersion !== 1 || recorded.sourceHash !== digest
+          || recorded.label !== label) {
+          throw new Error('Invalid quarantine intent receipt');
+        }
+      } else {
+        if (!sourceExists || destinationExists || !lstatSync(candidate).isFile()) {
+          throw new Error('Unrecorded or non-regular credential candidate');
+        }
+        const temporaryIntent = intent + '.tmp-' + randomUUID();
+        try {
+          writeFileSync(temporaryIntent, JSON.stringify({ schemaVersion: 1, sourceHash: digest, label }),
+            { encoding: 'utf8', flag: 'wx', flush: true });
+          renameSync(temporaryIntent, intent);
+        } finally {
+          rmSync(temporaryIntent, { force: true });
+        }
+      }
+      if (sourceExists) {
+        if (existsSync(destination) || !lstatSync(candidate).isFile()) {
+          throw new Error('Conflicting credential source and quarantine destination');
+        }
+        renameSync(candidate, destination);
+      }
+      if (!existsSync(destination) || !lstatSync(destination).isFile()) {
+        throw new Error('Quarantine intent has no verified credential destination');
+      }
       moved.push(label);
     } catch {
       throw new Error(`Cross-host credential quarantine failed for ${label}; restored database remains blocked`);

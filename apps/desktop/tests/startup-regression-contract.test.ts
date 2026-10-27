@@ -107,6 +107,19 @@ describe('desktop packaged startup regression contract', () => {
     expect(source).toContain('const dataPath = configuredDataPath ?? configureUserDataPath();');
   });
 
+  it('prevents key creation after an unresolved SQLite restore', () => {
+    const configure = section('function configureDataPath', 'const factoryResetApplyRequested');
+    expect(configure).toContain('assertRestoreReadyBeforeSecrets(restore);');
+    expect(configure.indexOf('assertRestoreReadyBeforeSecrets(restore);')).toBeLessThan(configure.indexOf('return dataPath;'));
+    const stdio = section('function bootstrapMcpStdio', 'function applyDesktopUserSettings');
+    expect(stdio.indexOf('configureDataPath()')).toBeLessThan(stdio.indexOf('resolveDesktopRuntimeSecrets(dataPath)'));
+    const gui = section('function bootstrapDesktop', 'function bootstrapLogViewerOnly');
+    expect(gui.indexOf('configureDataPath(configuredDataPath)')).toBeLessThan(gui.indexOf('createNativeDesktopRuntime(dataPath)'));
+    const nativeRuntime = section('async function createNativeDesktopRuntime', 'function createElectronNativeCapabilityApi');
+    expect(nativeRuntime.indexOf('await ensureWindowsGuiSecretProfileReady(dataPath)'))
+      .toBeLessThan(nativeRuntime.indexOf('resolveDesktopRuntimeSecrets(dataPath)'));
+  });
+
   it('fails stdio startup explicitly if checkpoint/runtime bootstrap rejects', () => {
     const stdio = section('function bootstrapMcpStdio', 'function applyDesktopUserSettings');
     expect(stdio).toContain('resolveDesktopRuntimeSecrets(dataPath)');

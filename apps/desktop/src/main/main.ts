@@ -1,11 +1,13 @@
 import { app, BrowserWindow, clipboard, ClipboardItem, crashReporter, desktopCapturer, dialog, ipcMain, Menu, nativeImage, net, Notification, safeStorage, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
 import { randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { createConnection, type Socket } from 'node:net';
 import { performance } from 'node:perf_hooks';
 import { access, lstat, readFile } from 'node:fs/promises';
-import { autoUpdater } from 'electron-updater';
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
 import {
   APP_NAME,
   APP_VERSION,
@@ -153,6 +155,7 @@ import { parseWorkflowWorkspace, parseWorkflowPrepare, parseCallHistory, parseDo
 import { COPY_COMMANDS, OFFICIAL_URL_TARGETS } from './tool-catalog/remediation-registry.js';
 import { SafeStorageSecretProtector } from './safe-storage-secret-protector.js';
 import { createUnavailableCheckpointCipher, shouldDegradeUnavailableSecureStorage, shouldUseMacos26E2eSecrets, waitForMacosAsyncSafeStorageStartup } from './safe-storage-startup.js';
+import { assertRestoreReadyBeforeSecrets } from './restore-startup-guard.js';
 import type { ElectronNativeCapabilityApi, NativeDesktopCaptureRequest, NativeDesktopCaptureResult, NativeDialogOptions, NativeDialogResult, NativeDisplayMetadata } from './electron-native-capability-backend.js';
 import { configureLinuxAutostart } from './linux-autostart.js';
 import { InstallActivityCoordinator } from './install-activity.js';
@@ -2708,12 +2711,58 @@ function configureRuntimeDiagnosticsHistory(dataPath: string, runtime: DesktopRu
   runtimeDiagnosticsHistory = recorder;
 }
 
+async function ensureWindowsGuiSecretProfileReady(dataPath: string): Promise<void> {
+  if (process.platform !== 'win32') return;
+  try {
+    await Promise.all([
+      access(path.join(dataPath, '.stdio-profile-ready.v1')),
+      access(path.join(dataPath, 'checkpoint-master.key')),
+    ]);
+    return;
+  } catch {
+    // A new profile must be initialized through the SAME Windows OS lock as
+    // STDIO; otherwise the two Electron processes can encrypt against
+    // incompatible first-run OSCrypt state.
+  }
+  const developerEntry = process.argv[1];
+  if (!app.isPackaged && developerEntry === undefined) {
+    throw new Error('Missing Electron development entry for secure profile initialization');
+  }
+  const nativeBridge = app.isPackaged
+    ? path.join(path.dirname(process.execPath), 'lnwjing-mcp-stdio-bridge.exe')
+    : path.resolve(path.dirname(path.resolve(developerEntry!)), '..', '..', 'build', 'lnwjing-mcp-stdio-bridge.exe');
+  if (!app.isPackaged) {
+    try {
+      await access(nativeBridge);
+    } catch {
+      // Plain development GUI can run without a separately compiled Rust
+      // bridge. In that environment there is no native MCP STDIO launcher
+      // to race its initial secret creation.
+      return;
+    }
+  }
+  const args = ['--profile-init-only', process.execPath,
+    ...(app.isPackaged ? [] : [developerEntry!]), '--mcp-stdio'];
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(nativeBridge, args, {
+      env: { ...process.env, LNWJING_DATA_PATH: dataPath },
+      windowsHide: true, stdio: ['ignore', 'ignore', 'inherit'],
+    });
+    child.once('error', reject);
+    child.once('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error('Windows secure profile initialization failed; checkpoint key was not changed'));
+    });
+  });
+}
+
 async function createNativeDesktopRuntime(dataPath: string): Promise<DesktopRuntime> {
-  // Recover exact local profile artifacts from an interrupted alias removal
-  // before reading any secrets or starting Tunnel lifecycle operations.
+  // Restore interrupted alias removals before either bootstrap can migrate
+  // tunnel credentials or read the checkpoint master key.
   await new TunnelAliasRetirementJournal(
     tunnelAliasRecoveryDirectory(dataPath), resolveTunnelProfileDirectory(),
   ).recover();
+  await ensureWindowsGuiSecretProfileReady(dataPath);
   recordDesktopStartup('runtime-secrets:begin');
   const secrets = await resolveDesktopRuntimeSecrets(dataPath);
   recordDesktopStartup('runtime-secrets:end');
@@ -3244,7 +3293,13 @@ function configureDataPath(configuredDataPath?: string): string {
     ],
   });
   recordDesktopStartup('restore:end');
-  if (restore.error !== undefined) console.error(`Scheduled database restore failed: ${restore.error}`);
+  // Fail closed before any runtime secrets or checkpoint master-key creation.
+  // A partial cross-host quarantine may have moved the old key already.
+  if (restore.error !== undefined) {
+    recordDesktopStartup('restore:blocked');
+    console.error(`Scheduled SQLite restore blocked startup: ${restore.error}`);
+  }
+  assertRestoreReadyBeforeSecrets(restore);
   if (restore.applied) console.log(`Database restore applied from ${restore.backupId ?? 'scheduled backup'}`);
   return dataPath;
 }
@@ -3298,12 +3353,23 @@ if (factoryResetApplyRequested) {
         }
       });
     }
-    if (wantsMcpStdio(process.argv)) {
-      bootstrapMcpStdio();
-    } else if (process.argv.includes('--log-viewer')) {
-      bootstrapLogViewerOnly(configuredUserDataPath);
-    } else {
-      bootstrapDesktop(configuredUserDataPath);
+    try {
+      if (wantsMcpStdio(process.argv)) {
+        bootstrapMcpStdio();
+      } else if (process.argv.includes('--log-viewer')) {
+        bootstrapLogViewerOnly(configuredUserDataPath);
+      } else {
+        bootstrapDesktop(configuredUserDataPath);
+      }
+    } catch (error: unknown) {
+      // Restore checks run synchronously before app.ready. A headless STDIO
+      // client must fail without opening a modal dialog or hanging its bridge.
+      if (wantsMcpStdio(process.argv)) {
+        process.stderr.write(`lnwjing MCP stdio restore initialization failed: ${error instanceof Error ? error.message : 'unknown'}\n`);
+        app.exit(1);
+      } else {
+        handleDesktopStartupFailure('restore initialization', error);
+      }
     }
   }
 }
