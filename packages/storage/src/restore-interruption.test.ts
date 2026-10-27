@@ -225,6 +225,51 @@ describe('interrupted database restore recovery', () => {
     expect((await stat(protectedDirectory)).isDirectory()).toBe(true);
   });
 
+  it('preserves partial credential quarantine evidence through a failed restore and retry', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-partial-quarantine-'));
+    roots.push(root);
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const db = new SqliteDatabase(filename, { backupDirectory });
+    db.connection.exec('CREATE TABLE sentinel(value TEXT NOT NULL)');
+    db.connection.prepare('INSERT INTO sentinel VALUES (?)').run('from-backup');
+    const service = new SqliteBackupService(db, { databaseFilename: filename, backupDirectory, platform: 'win32' });
+    const snapshot = await service.create('manual');
+    await service.scheduleRestore(snapshot.id);
+    db.close();
+    const firstCredential = path.join(root, 'custom', 'first.secret');
+    const blockedCredential = path.join(root, 'custom', 'second.secret');
+    await mkdir(path.dirname(firstCredential), { recursive: true });
+    await writeFile(firstCredential, 'safe-content-1');
+    await mkdir(blockedCredential);
+    const paths = [firstCredential, blockedCredential];
+    const blocked = applyPendingSqliteRestoreSync(filename, backupDirectory, {
+      platform: 'linux', hostBoundPaths: paths,
+    });
+    expect(blocked).toMatchObject({ applied: false, error: expect.stringMatching(/quarantin/i) });
+    await expect(readFile(firstCredential)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await stat(path.join(backupDirectory, 'restore-swap.json'))).isFile()).toBe(true);
+    await rm(blockedCredential, { recursive: true });
+    await writeFile(blockedCredential, 'safe-content-2');
+    const result = applyPendingSqliteRestoreSync(filename, backupDirectory, {
+      platform: 'linux', hostBoundPaths: paths,
+    });
+    expect(result).toMatchObject({ applied: true, crossHost: true });
+    expect(result.quarantinedItems).toEqual(expect.arrayContaining([
+      'file:custom/first.secret', 'file:custom/second.secret',
+    ]));
+    const quarantine = path.join(root, 'restore-quarantine', snapshot.id);
+    const files = await (await import('node:fs/promises')).readdir(quarantine);
+    expect(files).toEqual(expect.arrayContaining([expect.stringContaining('first.secret'), expect.stringContaining('second.secret')]));
+    const reopened = new SqliteDatabase(filename, { backupDirectory });
+    const notice = reopened.connection.prepare('SELECT value FROM settings WHERE key = ?').get('cross_host_restore_notice') as { value: string } | undefined;
+    const record = JSON.parse(notice?.value ?? '{}') as { quarantinedItems?: string[] };
+    expect(record.quarantinedItems).toEqual(expect.arrayContaining([
+      'file:custom/first.secret', 'file:custom/second.secret',
+    ]));
+    reopened.close();
+  });
+
   it('refuses a scheduled restore while a registered SQLite runtime still has the profile open', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-runtime-'));
     roots.push(root);
