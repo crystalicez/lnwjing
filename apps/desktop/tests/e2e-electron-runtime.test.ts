@@ -1,5 +1,6 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { electronExecutablePath, terminateProcessTree } from '../e2e/electron-runtime.js';
 
@@ -15,6 +16,19 @@ describe('E2E Electron runtime', () => {
     );
   });
 
+  it.skipIf(process.platform !== 'win32')('accepts a dead Windows PID even if its exit event was missed', async () => {
+    const exited = spawn(process.execPath, ['-e', ''], { windowsHide: true, stdio: 'ignore' });
+    await new Promise<void>((resolve, reject) => {
+      exited.once('error', reject);
+      exited.once('exit', () => resolve());
+    });
+    if (exited.pid === undefined) throw new Error('Missing fixture PID');
+    const missingExitNotification = Object.assign(new EventEmitter(), {
+      pid: exited.pid, exitCode: null, signalCode: null,
+    }) as ChildProcess;
+    await expect(terminateProcessTree(missingExitNotification)).resolves.toBeUndefined();
+  }, 15_000);
+
   it('terminates an owned live process and permits repeated cleanup', async () => {
     const child = spawn(process.execPath, ['-e', 'process.send("ready"); setInterval(() => {}, 1000);'], {
       detached: process.platform !== 'win32',
@@ -28,7 +42,12 @@ describe('E2E Electron runtime', () => {
         child.once('message', () => { clearTimeout(timer); resolve(); });
       });
       await terminateProcessTree(child);
-      expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+      if (process.platform === 'win32') {
+        // taskkill can remove the process before Node has emitted 'exit'.
+        expect(() => process.kill(child.pid!, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
+      } else {
+        expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+      }
       await terminateProcessTree(child);
     } finally {
       if (child.exitCode === null && child.signalCode === null) await terminateProcessTree(child);

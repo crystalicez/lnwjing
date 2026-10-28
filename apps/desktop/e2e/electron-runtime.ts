@@ -26,12 +26,43 @@ export async function terminateProcessTree(child: ChildProcess): Promise<void> {
     }
   }
   if (child.exitCode !== null || child.signalCode !== null) return;
+  // Windows taskkill can remove a process before Node reports its exit.
+  // Check OS liveness rather than timing out on a dead child.
+  const childGone = (): boolean => {
+    if (child.exitCode !== null || child.signalCode !== null) return true;
+    if (process.platform !== 'win32') return false;
+    try {
+      process.kill(child.pid!, 0);
+      return false;
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'ESRCH') return true;
+      throw error;
+    }
+  };
+  if (childGone()) return;
   await new Promise<void>((resolve, reject) => {
-    const onExit = (): void => { clearTimeout(timer); resolve(); };
-    const timer = setTimeout(() => {
+    let settled = false;
+    const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      clearTimeout(timer);
       child.removeListener('exit', onExit);
-      reject(new Error('Timed out terminating E2E Electron process'));
-    }, 10_000);
+      child.removeListener('close', onExit);
+      if (error === undefined) resolve();
+      else reject(error);
+    };
+    const onExit = (): void => finish();
+    const poll = setInterval(() => {
+      try {
+        if (childGone()) finish();
+      } catch (error: unknown) {
+        finish(error instanceof Error ? error : new Error('Cannot verify Electron process termination'));
+      }
+    }, 150);
+    const timer = setTimeout(() => finish(new Error('Timed out terminating E2E Electron process')), 10_000);
     child.once('exit', onExit);
+    child.once('close', onExit);
+    if (childGone()) finish();
   });
 }
