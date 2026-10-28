@@ -511,6 +511,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     settingsRepository.set(watcherInstanceIdSettingKey, watcherInstanceId);
   }
   migrateLegacyMcpHttpPort(settingsRepository, process.env);
+  migrateAutomaticUpdatesToOptIn(settingsRepository);
   const toolAvailabilityService = new ToolAvailabilityService(settingsRepository);
   const stopToolAvailabilityWatch = options.watchToolAvailability === true
     // Local changes notify eligibility immediately; poll only to catch external MCP/DB writes.
@@ -3309,10 +3310,10 @@ function readUserSettings(settingsRepository: SqliteSettingsRepository, env: Nod
     engineeringHarness: engineeringHarness.settings,
     engineeringHarnessWorkspaceOverrides: parseEngineeringHarnessWorkspaceOverrides(settingsRepository.get(USER_SETTING_KEYS.engineeringHarnessWorkspaceOverrides)),
     engineeringHarnessDiagnostic: engineeringHarness.diagnostic,
-    updateAutoCheck: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.updateAutoCheck), true),
-    updateCheckOnStartup: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.updateCheckOnStartup), true),
+    updateAutoCheck: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.updateAutoCheck), false),
+    updateCheckOnStartup: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.updateCheckOnStartup), false),
     updateIntervalMinutes: parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.updateIntervalMinutes), DEFAULT_UPDATE_INTERVAL_MINUTES, 5, 24 * 60),
-    updateAutoDownload: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.updateAutoDownload), true),
+    updateAutoDownload: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.updateAutoDownload), false),
     closeBehavior: parseCloseBehavior(settingsRepository.get(USER_SETTING_KEYS.closeBehavior)),
     launchAtStartup: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.launchAtStartup), false),
     startMinimized: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.startMinimized), false),
@@ -3427,6 +3428,17 @@ function readLocale(settingsRepository: SqliteSettingsRepository): UiLocale {
 
 export const DEFAULT_MCP_HTTP_PORT = 0;
 const LEGACY_DEFAULT_MCP_HTTP_PORT = 18_765;
+
+/** One-time fork safety default: prevent an older profile from silently downloading updates. */
+function migrateAutomaticUpdatesToOptIn(settingsRepository: SqliteSettingsRepository): void {
+  if (settingsRepository.get(USER_SETTING_KEYS.updateOptInMigrationV1) === '1') return;
+  for (const key of [USER_SETTING_KEYS.updateAutoCheck, USER_SETTING_KEYS.updateCheckOnStartup, USER_SETTING_KEYS.updateAutoDownload]) {
+    if (settingsRepository.get(key) === 'true') settingsRepository.set(key, 'false');
+  }
+  // Written last so a crash before completion safely retries the remaining keys.
+  // Future user opt-ins are respected because this migration never runs again.
+  settingsRepository.set(USER_SETTING_KEYS.updateOptInMigrationV1, '1');
+}
 
 function migrateLegacyMcpHttpPort(settingsRepository: SqliteSettingsRepository, env: NodeJS.ProcessEnv): void {
   if ((env.LNWJING_MCP_PORT ?? '').trim().length > 0) return;

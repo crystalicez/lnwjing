@@ -75,6 +75,53 @@ describe('DesktopRuntime persistence', () => {
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
 
+  it('defaults automatic updates OFF, migrates old ON settings once, and preserves later opt-in', async () => {
+    const newProfile = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-update-default-off-'));
+    const legacyProfile = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-update-legacy-on-'));
+    temporaryRoots.push(newProfile, legacyProfile);
+
+    const clean = createDesktopRuntime(await realpath(newProfile));
+    try {
+      expect(clean.getUserSettings()).toMatchObject({
+        updateAutoCheck: false, updateCheckOnStartup: false, updateAutoDownload: false,
+      });
+    } finally {
+      await clean.close();
+    }
+
+    const root = await realpath(legacyProfile);
+    const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+    try {
+      const settings = new SqliteSettingsRepository(database);
+      for (const key of [USER_SETTING_KEYS.updateAutoCheck, USER_SETTING_KEYS.updateCheckOnStartup, USER_SETTING_KEYS.updateAutoDownload]) {
+        settings.set(key, 'true');
+      }
+    } finally {
+      database.close();
+    }
+
+    const migrated = createDesktopRuntime(root);
+    try {
+      expect(migrated.getUserSettings()).toMatchObject({
+        updateAutoCheck: false, updateCheckOnStartup: false, updateAutoDownload: false,
+      });
+      const optIn = { ...migrated.getUserSettings(),
+        updateAutoCheck: true, updateCheckOnStartup: true, updateAutoDownload: true };
+      await migrated.services.setUserSettings({ settings: optIn });
+    } finally {
+      await migrated.close();
+    }
+
+    const restarted = createDesktopRuntime(root);
+    try {
+      expect(restarted.getUserSettings()).toMatchObject({
+        updateAutoCheck: true, updateCheckOnStartup: true, updateAutoDownload: true,
+      });
+    } finally {
+      await restarted.close();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
   it('reports real Desktop main-process memory even with no attributable Goal tasks', async () => {
     const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-resources-data-'));
     const rawWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-resources-workspace-'));
