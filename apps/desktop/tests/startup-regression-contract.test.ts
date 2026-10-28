@@ -115,9 +115,29 @@ describe('desktop packaged startup regression contract', () => {
     expect(stdio.indexOf('configureDataPath()')).toBeLessThan(stdio.indexOf('resolveDesktopRuntimeSecrets(dataPath)'));
     const gui = section('function bootstrapDesktop', 'function bootstrapLogViewerOnly');
     expect(gui.indexOf('configureDataPath(configuredDataPath)')).toBeLessThan(gui.indexOf('createNativeDesktopRuntime(dataPath)'));
+    const guiInit = section('function bootstrapDesktop', 'function bootstrapLogViewerOnly');
+    expect(guiInit.indexOf('configureDataPath(configuredDataPath)'))
+      .toBeLessThan(guiInit.indexOf('ensureWindowsGuiSecretProfileReady(dataPath)'));
     const nativeRuntime = section('async function createNativeDesktopRuntime', 'function createElectronNativeCapabilityApi');
-    expect(nativeRuntime.indexOf('await ensureWindowsGuiSecretProfileReady(dataPath)'))
-      .toBeLessThan(nativeRuntime.indexOf('resolveDesktopRuntimeSecrets(dataPath)'));
+    expect(nativeRuntime).toContain('resolveDesktopRuntimeSecrets(dataPath)');
+  });
+
+  it('initializes the Windows GUI profile before Chromium app readiness and keeps the native cross-process lock', () => {
+    const initializer = section('function ensureWindowsGuiSecretProfileReady', 'async function createNativeDesktopRuntime');
+    expect(initializer).toContain('spawnSync(nativeBridge, args,');
+    expect(initializer).toContain("'--profile-init-only'");
+    const gui = section('function bootstrapDesktop', 'function bootstrapLogViewerOnly');
+    const viewer = section('function bootstrapLogViewerOnly', 'function handleDesktopStartupFailure');
+    expect(gui.indexOf('ensureWindowsGuiSecretProfileReady(dataPath);')).toBeLessThan(gui.indexOf('app.whenReady()'));
+    expect(viewer.indexOf('ensureWindowsGuiSecretProfileReady(dataPath);')).toBeLessThan(viewer.indexOf('app.whenReady()'));
+    expect(gui).not.toContain('app.relaunch(');
+  });
+
+  it('recovers an interrupted Tunnel alias journal before an early Windows profile key initialization', () => {
+    const stdio = section('function bootstrapMcpStdio', 'function applyDesktopUserSettings');
+    expect(stdio).toContain("if (process.argv.includes('--mcp-stdio-profile-init')) {");
+    expect(stdio.indexOf('new TunnelAliasRetirementJournal('))
+      .toBeLessThan(stdio.indexOf('resolveDesktopRuntimeSecrets(dataPath)'));
   });
 
   it('fails stdio startup explicitly if checkpoint/runtime bootstrap rejects', () => {

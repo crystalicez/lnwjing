@@ -1,10 +1,11 @@
 import { app, BrowserWindow, clipboard, ClipboardItem, crashReporter, desktopCapturer, dialog, ipcMain, Menu, nativeImage, net, Notification, safeStorage, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
 import { randomBytes } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { createConnection, type Socket } from 'node:net';
 import { performance } from 'node:perf_hooks';
+import { existsSync, readFileSync } from 'node:fs';
 import { access, lstat, readFile } from 'node:fs/promises';
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
@@ -2131,6 +2132,13 @@ function bootstrapMcpStdio(): void {
   void app.whenReady().then(async () => {
     assertSupportedPlatform();
     prependBundledRuntimeToolsToPath();
+    if (process.argv.includes('--mcp-stdio-profile-init')) {
+      // The GUI invokes this before its own Chromium readiness. Finish any
+      // interrupted Tunnel alias restoration before migrating saved secrets.
+      await new TunnelAliasRetirementJournal(
+        tunnelAliasRecoveryDirectory(dataPath), resolveTunnelProfileDirectory(),
+      ).recover();
+    }
     const secrets = await resolveDesktopRuntimeSecrets(dataPath);
     if (process.argv.includes('--mcp-stdio-profile-init')) {
       // The first clean exit persists Chromium's OSCrypt key before a second
@@ -2709,19 +2717,17 @@ function configureRuntimeDiagnosticsHistory(dataPath: string, runtime: DesktopRu
   runtimeDiagnosticsHistory = recorder;
 }
 
-async function ensureWindowsGuiSecretProfileReady(dataPath: string): Promise<void> {
+function ensureWindowsGuiSecretProfileReady(dataPath: string): void {
   if (process.platform !== 'win32') return;
   try {
-    await Promise.all([
-      access(path.join(dataPath, '.stdio-profile-ready.v1')),
-      access(path.join(dataPath, 'checkpoint-master.key')),
-    ]);
-    return;
+    if (readFileSync(path.join(dataPath, '.stdio-profile-ready.v1'), 'utf8') === '1'
+      && existsSync(path.join(dataPath, 'checkpoint-master.key'))) return;
   } catch {
-    // A new profile must be initialized through the SAME Windows OS lock as
-    // STDIO; otherwise the two Electron processes can encrypt against
-    // incompatible first-run OSCrypt state.
+    // Missing or invalid first-run marker: let the native OS-locked bridge
+    // repair the initialization without overwriting an existing secret.
   }
+  // Run before app.whenReady: once Chromium has cached an uninitialized
+  // OSCrypt state, a child-created key cannot be decrypted in this process.
   const developerEntry = process.argv[1];
   if (!app.isPackaged && developerEntry === undefined) {
     throw new Error('Missing Electron development entry for secure profile initialization');
@@ -2729,29 +2735,21 @@ async function ensureWindowsGuiSecretProfileReady(dataPath: string): Promise<voi
   const nativeBridge = app.isPackaged
     ? path.join(path.dirname(process.execPath), 'lnwjing-mcp-stdio-bridge.exe')
     : path.resolve(path.dirname(path.resolve(developerEntry!)), '..', '..', 'build', 'lnwjing-mcp-stdio-bridge.exe');
-  if (!app.isPackaged) {
-    try {
-      await access(nativeBridge);
-    } catch {
-      // Plain development GUI can run without a separately compiled Rust
-      // bridge. In that environment there is no native MCP STDIO launcher
-      // to race its initial secret creation.
-      return;
-    }
+  if (!app.isPackaged && !existsSync(nativeBridge)) {
+    // Plain development GUI can run without the separately compiled bridge;
+    // in that setup there is no packaged MCP bootstrap competing for OSCrypt.
+    return;
   }
   const args = ['--profile-init-only', process.execPath,
     ...(app.isPackaged ? [] : [developerEntry!]), '--mcp-stdio'];
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(nativeBridge, args, {
-      env: { ...process.env, LNWJING_DATA_PATH: dataPath },
-      windowsHide: true, stdio: ['ignore', 'ignore', 'inherit'],
-    });
-    child.once('error', reject);
-    child.once('exit', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error('Windows secure profile initialization failed; checkpoint key was not changed'));
-    });
+  const result = spawnSync(nativeBridge, args, {
+    env: { ...process.env, LNWJING_DATA_PATH: dataPath },
+    windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
+    timeout: 45_000, maxBuffer: 16 * 1024,
   });
+  if (result.error !== undefined || result.status !== 0) {
+    throw new Error('Windows secure profile initialization failed; checkpoint key was not changed');
+  }
 }
 
 async function createNativeDesktopRuntime(dataPath: string): Promise<DesktopRuntime> {
@@ -2760,7 +2758,6 @@ async function createNativeDesktopRuntime(dataPath: string): Promise<DesktopRunt
   await new TunnelAliasRetirementJournal(
     tunnelAliasRecoveryDirectory(dataPath), resolveTunnelProfileDirectory(),
   ).recover();
-  await ensureWindowsGuiSecretProfileReady(dataPath);
   recordDesktopStartup('runtime-secrets:begin');
   const secrets = await resolveDesktopRuntimeSecrets(dataPath);
   recordDesktopStartup('runtime-secrets:end');
@@ -2971,6 +2968,7 @@ function toElectronSaveDialogOptions(options: NativeDialogOptions): Electron.Sav
 function bootstrapDesktop(configuredDataPath?: string): void {
   if (platformCompatibility.disableHardwareAcceleration) app.disableHardwareAcceleration();
   const dataPath = configureDataPath(configuredDataPath);
+  ensureWindowsGuiSecretProfileReady(dataPath);
   recordDesktopStartup('app-ready:waiting');
   void app.whenReady().then(async () => {
     recordDesktopStartup('app-ready:resolved');
@@ -3038,6 +3036,7 @@ function bootstrapDesktop(configuredDataPath?: string): void {
 function bootstrapLogViewerOnly(configuredDataPath?: string): void {
   const dataPath = configureDataPath(configuredDataPath);
   if (platformCompatibility.disableHardwareAcceleration) app.disableHardwareAcceleration();
+  ensureWindowsGuiSecretProfileReady(dataPath);
   void app.whenReady().then(async () => {
     assertSupportedPlatform();
     app.setAppUserModelId('com.lnwjing.desktop');

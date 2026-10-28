@@ -42,6 +42,7 @@ test('desktop serves the real MCP client development workflow', async () => {
       env: {
         ...process.env,
         APPDATA: dataRoot,
+        LOCALAPPDATA: dataRoot, TEMP: dataRoot, TMP: dataRoot,
         LNWJING_DATA_PATH: dataRoot,
         LNWJING_WORKSPACE: fixtureRoot,
         LNWJING_UNRESTRICTED: '1',

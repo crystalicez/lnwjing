@@ -16,7 +16,12 @@ function launchElectron(dataRoot: string): Promise<ElectronApplication> {
       ? [`--user-data-dir=${dataRoot}`, mainEntry]
       : [`--user-data-dir=${dataRoot}`],
     cwd: desktopRoot,
-    env: { ...process.env, LNWJING_DATA_PATH: dataRoot, LNWJING_E2E_FIXTURE: '1', LNWJING_E2E_NODE_PATH: process.execPath },
+    env: {
+      ...process.env,
+      LNWJING_DATA_PATH: dataRoot, APPDATA: dataRoot, LOCALAPPDATA: dataRoot,
+      TEMP: dataRoot, TMP: dataRoot,
+      LNWJING_E2E_FIXTURE: '1', LNWJING_E2E_NODE_PATH: process.execPath,
+    },
     timeout: 40_000,
   });
 }
@@ -38,6 +43,9 @@ test('renderer cannot access Node globals', async ({ browserName }, testInfo) =>
     }
     page = await app.firstWindow();
     await expect(page.getByRole('banner').getByText('lnwjing', { exact: true })).toBeVisible({ timeout: 30_000 });
+    const startupEvidence = await readFile(path.join(dataRoot, 'crashes', 'crash-events.ndjson'), 'utf8');
+    expect(startupEvidence).toContain('"reason":"desktop:started"');
+    expect(startupEvidence).not.toContain('"reason":"desktop:failed"');
     const renderer = page;
     await expect.poll(() => renderer.evaluate(() => ({
       process: typeof Reflect.get(window, 'process'),
