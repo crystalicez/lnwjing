@@ -62,6 +62,26 @@ describe('one-click Windows x64 portable build', () => {
     expect(preflight).toBeLessThan(script.indexOf("Invoke-Step 'Package Portable x64 only"));
   });
 
+  it('fails closed on incomplete NSIS inventory before manifest generation and promotion', async () => {
+    const build = await readFile(path.join(root, 'scripts', 'build-portable-windows-x64.ps1'), 'utf8');
+    const promote = await readFile(path.join(root, 'scripts', 'promote-portable-build.ps1'), 'utf8');
+    const verify = await readFile(path.join(root, 'scripts', 'verify-portable-payload.ps1'), 'utf8');
+    expect(build).toContain('scripts/verify-portable-payload.ps1');
+    const desktopPackage = JSON.parse(await readFile(path.join(root, 'apps', 'desktop', 'package.json'), 'utf8')) as { scripts: Record<string, string> };
+    const windowsPackage = desktopPackage.scripts['package:windows'];
+    expect(windowsPackage).toContain('scripts/verify-portable-payload.ps1');
+    expect(windowsPackage.indexOf('verify-portable-payload.ps1')).toBeLessThan(windowsPackage.indexOf('write-portable-update-manifest.mjs'));
+    expect(build.indexOf('Verify complete Portable NSIS payload')).toBeLessThan(build.indexOf('Create portable update manifest'));
+    expect(promote).toContain("Join-Path $PSScriptRoot 'verify-portable-payload.ps1'");
+    expect(promote.indexOf('verify-portable-payload.ps1')).toBeLessThan(promote.indexOf('Move-Item -LiteralPath $destinationExe'));
+    expect(verify).toContain("Get-Command '7z'");
+    expect(verify).toContain('Path = $R6\\');
+    expect(verify).toContain('Get-ChildItem -LiteralPath $unpacked -Recurse -File');
+    expect(verify).toContain('$actual.Remove($relativePath)');
+    expect(verify).toContain('PORTABLE_PAYLOAD_VERIFIED:');
+    expect(verify).toContain('refusing unverified release');
+  });
+
   it('authenticates the Microsoft .NET installer script before executing downloaded code', async () => {
     const script = await readFile(path.join(root, 'scripts', 'build-portable-windows-x64.ps1'), 'utf8');
     const verification = script.indexOf('Get-AuthenticodeSignature -LiteralPath $bootstrap');

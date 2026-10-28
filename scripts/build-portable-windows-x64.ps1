@@ -121,6 +121,9 @@ try {
     Invoke-Step 'Build native Windows MCP STDIO bridge' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/build-windows-stdio-bridge.ps1')
     Invoke-Step 'Compile desktop and workspace packages' $repositoryRoot 'corepack' @('pnpm@10.15.0', '--filter', '@lnwjing/desktop...', 'build')
     Invoke-Step 'Package Portable x64 only (no installer / no publishing)' $desktopDirectory 'corepack' @('pnpm@10.15.0', 'exec', 'electron-builder', '--config', 'electron-builder.yml', '--win', 'portable', '--x64', '--publish', 'never')
+    # electron-builder can return success with a partial NSIS payload. Compare
+    # every embedded file against win-unpacked before hashing or promotion.
+    Invoke-Step 'Verify complete Portable NSIS payload' $repositoryRoot 'powershell' @('-NoProfile', '-NonInteractive', '-File', 'scripts/verify-portable-payload.ps1')
     # Manifest generation computes SHA512 and SHA256 in ONE streaming read of the EXE.
     # Do not reread ~270 MiB with PowerShell Get-FileHash after the move.
     $manifestOutput = Invoke-Step 'Create portable update manifest' $desktopDirectory 'node' @('scripts/write-portable-update-manifest.mjs')

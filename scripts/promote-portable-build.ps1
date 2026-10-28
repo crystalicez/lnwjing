@@ -38,6 +38,10 @@ foreach ($file in @($destinationExe, $destinationManifest, $stagedExe, $stagedMa
 if (-not (Test-Path -LiteralPath $stagedExe -PathType Leaf) -or -not (Test-Path -LiteralPath $stagedManifest -PathType Leaf)) {
     throw 'Portable staging executable and update manifest must both exist.'
 }
+# Fail closed if NSIS returned success but omitted any unpacked runtime file.
+# Keep this guard even for callers that bypass the one-click build script.
+& powershell -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'verify-portable-payload.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Portable payload inventory verification failed; refusing promotion.' }
 $hasPreviousExe = Test-Path -LiteralPath $destinationExe -PathType Leaf
 $hasPreviousManifest = Test-Path -LiteralPath $destinationManifest -PathType Leaf
 if ($hasPreviousExe -ne $hasPreviousManifest) {
