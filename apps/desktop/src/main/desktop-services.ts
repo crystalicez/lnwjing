@@ -3429,15 +3429,21 @@ function readLocale(settingsRepository: SqliteSettingsRepository): UiLocale {
 export const DEFAULT_MCP_HTTP_PORT = 0;
 const LEGACY_DEFAULT_MCP_HTTP_PORT = 18_765;
 
-/** One-time fork safety default: prevent an older profile from silently downloading updates. */
+/** Migrate legacy opt-ins, including aliases missed by v1, without undoing later UI opt-ins. */
 function migrateAutomaticUpdatesToOptIn(settingsRepository: SqliteSettingsRepository): void {
-  if (settingsRepository.get(USER_SETTING_KEYS.updateOptInMigrationV1) === '1') return;
+  if (settingsRepository.get(USER_SETTING_KEYS.updateOptInMigrationV2) === '1') return;
+  const migratedV1 = settingsRepository.get(USER_SETTING_KEYS.updateOptInMigrationV1) === '1';
   for (const key of [USER_SETTING_KEYS.updateAutoCheck, USER_SETTING_KEYS.updateCheckOnStartup, USER_SETTING_KEYS.updateAutoDownload]) {
-    if (settingsRepository.get(key) === 'true') settingsRepository.set(key, 'false');
+    const stored = settingsRepository.get(key);
+    // v1 could leave truthy aliases active. The UI writes canonical 'true'
+    // only after user opt-in; preserve those for profiles already migrated.
+    if (parseBooleanSetting(stored, false) && (!migratedV1 || stored !== 'true')) {
+      settingsRepository.set(key, 'false');
+    }
   }
-  // Written last so a crash before completion safely retries the remaining keys.
-  // Future user opt-ins are respected because this migration never runs again.
-  settingsRepository.set(USER_SETTING_KEYS.updateOptInMigrationV1, '1');
+  if (!migratedV1) settingsRepository.set(USER_SETTING_KEYS.updateOptInMigrationV1, '1');
+  // Commit the marker last: an interrupted migration may safely retry.
+  settingsRepository.set(USER_SETTING_KEYS.updateOptInMigrationV2, '1');
 }
 
 function migrateLegacyMcpHttpPort(settingsRepository: SqliteSettingsRepository, env: NodeJS.ProcessEnv): void {

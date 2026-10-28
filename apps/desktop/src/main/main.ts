@@ -125,7 +125,6 @@ import { createTrayMenuTemplate, createTrayToolTip, createTrayUpdateLabel, getTr
 import { confirmTunnelStopForUpdate, UpdateInstallCoordinator, updateInstallNeedsTunnelStopConfirmation, type UpdateSharedActivitySnapshot } from './update-install.js';
 import { UpdateCheckScheduler } from './update-check-scheduler.js';
 import {
-  configureUpdaterForDistribution,
   confirmPortableUpdateLaunch,
   configureUpdaterForPlatform,
   createLinuxAppImageRollback,
@@ -2280,7 +2279,6 @@ function initAutoUpdater(runtime: DesktopRuntime): void {
     return;
   }
   try {
-    configureUpdaterForDistribution(autoUpdater, windowsDistribution);
     configureUpdaterForPlatform(autoUpdater, updaterDistribution);
     autoUpdater.autoDownload = desktopUserSettings.updateAutoDownload;
     autoUpdater.autoInstallOnAppQuit = false;

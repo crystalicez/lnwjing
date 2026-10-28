@@ -68,6 +68,20 @@ describe('Windows distribution-aware auto updater', () => {
     });
   });
 
+  it('configures the Portable feed only once through the Desktop platform entrypoint', async () => {
+    const mainSource = await readFile(new URL('../src/main/main.ts', import.meta.url), 'utf8');
+    expect(mainSource.includes('configureUpdaterForDistribution(autoUpdater, windowsDistribution)')).toBe(false);
+
+    const setFeedURL = vi.fn();
+    const updater = { disableDifferentialDownload: false, setFeedURL };
+    configureUpdaterForPlatform(updater, 'portable');
+    expect(setFeedURL).toHaveBeenCalledTimes(1);
+    expect(setFeedURL).toHaveBeenCalledWith({
+      provider: 'generic', url: PORTABLE_UPDATE_FEED_URL,
+      channel: PORTABLE_UPDATE_CHANNEL, useMultipleRangeRequest: false,
+    });
+  });
+
   it('disables differential downloads for Linux AppImage without changing the native feed metadata', () => {
     const updater = { disableDifferentialDownload: false, setFeedURL: vi.fn() };
     configureUpdaterForPlatform(updater, 'linux-appimage');

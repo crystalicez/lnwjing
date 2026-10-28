@@ -24,6 +24,7 @@ export const USER_SETTING_KEYS = Object.freeze({
   updateIntervalMinutes: 'update_interval_minutes',
   updateAutoDownload: 'update_auto_download',
   updateOptInMigrationV1: 'update_opt_in_migration_v1',
+  updateOptInMigrationV2: 'update_opt_in_migration_v2',
   closeBehavior: 'close_behavior',
   launchAtStartup: 'launch_at_startup',
   startMinimized: 'start_minimized',

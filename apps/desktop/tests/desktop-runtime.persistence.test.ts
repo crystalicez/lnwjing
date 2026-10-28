@@ -93,9 +93,9 @@ describe('DesktopRuntime persistence', () => {
     const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
     try {
       const settings = new SqliteSettingsRepository(database);
-      for (const key of [USER_SETTING_KEYS.updateAutoCheck, USER_SETTING_KEYS.updateCheckOnStartup, USER_SETTING_KEYS.updateAutoDownload]) {
-        settings.set(key, 'true');
-      }
+      settings.set(USER_SETTING_KEYS.updateAutoCheck, '1');
+      settings.set(USER_SETTING_KEYS.updateCheckOnStartup, 'TRUE');
+      settings.set(USER_SETTING_KEYS.updateAutoDownload, ' on ');
     } finally {
       database.close();
     }
@@ -119,6 +119,39 @@ describe('DesktopRuntime persistence', () => {
       });
     } finally {
       await restarted.close();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
+  it('repairs previously migrated noncanonical auto-update flags without clearing an explicit UI opt-in', async () => {
+    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-update-legacy-alias-'));
+    temporaryRoots.push(rawRoot);
+    const root = await realpath(rawRoot);
+    const database = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+    try {
+      const settings = new SqliteSettingsRepository(database);
+      settings.set(USER_SETTING_KEYS.updateOptInMigrationV1, '1');
+      settings.set(USER_SETTING_KEYS.updateAutoCheck, 'yes');
+      settings.set(USER_SETTING_KEYS.updateCheckOnStartup, 'true'); // Enabled through Settings after v1.
+      settings.set(USER_SETTING_KEYS.updateAutoDownload, 'ON');
+    } finally {
+      database.close();
+    }
+
+    const runtime = createDesktopRuntime(root);
+    try {
+      expect(runtime.getUserSettings()).toMatchObject({
+        updateAutoCheck: false, updateCheckOnStartup: true, updateAutoDownload: false,
+      });
+    } finally {
+      await runtime.close();
+    }
+    const reopened = createDesktopRuntime(root);
+    try {
+      expect(reopened.getUserSettings()).toMatchObject({
+        updateAutoCheck: false, updateCheckOnStartup: true, updateAutoDownload: false,
+      });
+    } finally {
+      await reopened.close();
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
 

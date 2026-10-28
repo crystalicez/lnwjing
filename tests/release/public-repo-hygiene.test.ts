@@ -114,7 +114,7 @@ describe('public repository hygiene', () => {
     expect(readme).not.toContain(['current v3.0.0 catalog contains ', '184 tools'].join(''));
     expect(readme).not.toContain('packaged v3.0.0 build');
     expect(readme).not.toContain('127.0.0.1:39200/mcp');
-  });
+  }, 15_000); // Allow bounded cold Windows module imports without relaxing the full suite.
 
   it('does not link README readers to ignored local documentation', async () => {
     const readme = await readFile(path.join(repositoryRoot, 'README.md'), 'utf8');
