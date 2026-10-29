@@ -57,6 +57,30 @@ function services(): McpApplicationServices {
 }
 
 describe('context engine', () => {
+  it('scans multiple workspaces serially instead of contending for the one disk lease', async () => {
+    let active = 0;
+    let peak = 0;
+    const scanFiles = vi.fn().mockImplementation(async (_actor, workspaceId: string): Promise<ReturnType<typeof ok>> => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await Promise.resolve();
+      await Promise.resolve();
+      active -= 1;
+      return ok({ paths: [`${workspaceId}.ts`], truncated: false });
+    });
+    const engine = new ContextEngine({
+      workspaceInfo: { list: async (): Promise<ReturnType<typeof ok>> => ok([{ id: 'a' }, { id: 'b' }, { id: 'c' }]) },
+      search: { scanFiles, searchFiles: vi.fn(), searchText: vi.fn() },
+    }, actor);
+    const result = await engine.fullScan({ pageSize: 10 });
+    expect(result).toMatchObject({ ok: true, value: {
+      scannedWorkspaces: 3, searchTruncated: false, hasMore: false, completeness: 'complete',
+    } });
+    if (result.ok) expect(result.value.files.map((file) => file.path)).toEqual(['a.ts', 'b.ts', 'c.ts']);
+    expect(peak).toBe(1);
+    expect(scanFiles).toHaveBeenCalledTimes(3);
+  });
+
   it('defaults full scans to automatic filtering and preserves explicit opt-in', async () => {
     expect(workspaceFullScanSchema.parse({}).includeIgnored).toBe(false);
     const searchFiles = vi.fn().mockResolvedValue(ok({ paths: ['src/index.ts'], truncated: false }));

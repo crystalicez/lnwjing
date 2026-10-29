@@ -325,10 +325,17 @@ export class ContextEngine {
       if (indexed !== null) return indexed;
     }
     const maxResults = 500;
-    const results = await Promise.all(workspaceIds.value.map(async (workspaceId) => ({
-      workspaceId,
-      result: await this.safeFullScanFiles(workspaceId, { query: '*', includeIgnored: request.includeIgnored === true, ...(request.path === undefined ? {} : { path: request.path }) }, maxResults, request.glob),
-    })));
+    // Full scans share one cross-process disk slot. Do not make independent
+    // workspaces wait for that same lease at the same time.
+    const results: Array<{ readonly workspaceId: string; readonly result: ObservedProvider<z.infer<typeof fileSearchSchema>> }> = [];
+    for (const workspaceId of workspaceIds.value) {
+      signal?.throwIfAborted();
+      const result = await this.safeFullScanFiles(workspaceId, {
+        query: '*', includeIgnored: request.includeIgnored === true,
+        ...(request.path === undefined ? {} : { path: request.path }),
+      }, maxResults, request.glob, signal);
+      results.push({ workspaceId, result });
+    }
     const files: Array<{ readonly workspaceId: string; readonly path: string }> = [];
     let searchTruncated = false;
     let scannedWorkspaces = 0;

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { watch, type FSWatcher } from 'node:fs';
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -326,6 +326,15 @@ export class WorkspaceIndexService {
         const absolutePath = resolveHostPath(hostPathApi(process.platform).join(rootPath, normalized));
         if (absolutePath === null) return err(appError('INVALID_INPUT', 'Index path uses a foreign host path syntax'));
         if (!isHostPathWithin(rootPath, absolutePath)) return err(appError('PATH_OUTSIDE_WORKSPACE', 'Index path is outside workspace'));
+        // A symlink or junction inside the workspace must not make a direct
+        // incremental update read or crawl a target outside its real root.
+        try {
+          if (!isHostPathWithin(rootPath, await realpath(absolutePath))) {
+            return err(appError('PATH_OUTSIDE_WORKSPACE', 'Index path resolves outside workspace'));
+          }
+        } catch (error: unknown) {
+          if (!isNodeError(error, 'ENOENT')) throw error;
+        }
         validatedPaths.push([normalized, absolutePath]);
       }
       const current = await store.load();
@@ -346,10 +355,11 @@ export class WorkspaceIndexService {
           const additions: WorkspaceIndexEntry[] = [];
           let isDirectory = false;
           try {
-            const metadata = await stat(absolutePath);
+            const metadata = await lstat(absolutePath);
             isDirectory = metadata.isDirectory();
             if (isDirectory) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal);
-            else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal));
+            else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal,
+              options.rebuild === true ? undefined : entries));
           } catch (error: unknown) {
             if (!isNodeError(error, 'ENOENT')) throw error;
           }

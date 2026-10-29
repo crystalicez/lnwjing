@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readdir, rm, truncate, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,7 @@ import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
 import { JsonWorkspaceIndexStore, WorkspaceIndexService, type WorkspaceIndexEntry, type WorkspaceIndexSnapshot, type WorkspaceIndexStore, type WorkspaceIndexMutation } from './workspace-index.js';
 
 vi.mock('node:fs', { spy: true });
+vi.mock('node:fs/promises', { spy: true });
 
 function fixtureRepository(workspace: Workspace): WorkspaceRepository {
   return {
@@ -85,6 +86,25 @@ describe('WorkspaceIndexService', () => {
     }
   });
 
+  it('rejects incremental indexing through a directory junction outside the workspace', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-junction-root-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-junction-out-'));
+    const workspace: Workspace = { id: 'junction-escape', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    let saves = 0;
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore(async () => { saves += 1; }));
+    try {
+      await writeFile(path.join(outside, 'external.ts'), 'export const outside = 1;');
+      await symlink(outside, path.join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+      const result = await service.indexPath(workspace.id, 'linked/external.ts');
+      expect(result).toMatchObject({ ok: false, error: { code: 'PATH_OUTSIDE_WORKSPACE' } });
+      expect(saves).toBe(0);
+    } finally {
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
   it('never walks root-level Portable runtime content during automatic indexing', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-portable-'));
     const workspace: Workspace = { id: 'portable-excluded', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
@@ -132,6 +152,31 @@ describe('WorkspaceIndexService', () => {
         expect(refreshed.value.entries[0]?.symbols).toContain('recovered');
       }
     } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reuses unchanged indexed content without reading source bytes again', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-reuse-'));
+    const workspace: Workspace = { id: 'reuse', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
+    try {
+      const source = path.join(root, 'reuse.ts');
+      await writeFile(source, 'export const readOnce = 1;');
+      const initial = await service.indexWorkspace(workspace.id);
+      expect(initial.ok).toBe(true);
+      vi.mocked(readFile).mockClear();
+      const unchanged = await service.indexPath(workspace.id, 'reuse.ts');
+      expect(unchanged.ok).toBe(true);
+      expect(vi.mocked(readFile)).not.toHaveBeenCalledWith(source, expect.anything());
+      expect(vi.mocked(readFile)).not.toHaveBeenCalledWith(source);
+      await writeFile(source, 'export const readTwice = 2;');
+      vi.mocked(readFile).mockClear();
+      const changed = await service.indexPath(workspace.id, 'reuse.ts');
+      expect(changed.ok).toBe(true);
+      expect(vi.mocked(readFile)).toHaveBeenCalledWith(source, expect.anything());
+    } finally {
+      await service.close();
       await rm(root, { recursive: true, force: true });
     }
   });
