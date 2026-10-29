@@ -1,9 +1,88 @@
 import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import type { Result } from '@lnwjing/domain';
 import type { ExecutableResolver } from './executable-resolver.js';
 import { DirectProcessRunner, RipgrepAdapter, type ProcessRunResult, type ProcessRunner } from './ripgrep-adapter.js';
 
 describe('RipgrepAdapter', () => {
+  it('keeps user selection before mandatory exclusions in both rg commands', async () => {
+    const received: string[][] = [];
+    const resolver: ExecutableResolver = { resolve: async () => ({ ok: true, value: 'rg' }) };
+    const runner: ProcessRunner = {
+      async run(_command, args): Promise<ProcessRunResult> {
+        received.push([...args]);
+        return { exitCode: 1, stdout: '', stderr: '' };
+      },
+    };
+    const adapter = new RipgrepAdapter(resolver, runner);
+    const options = { rootPath: 'C:\\workspace', glob: '*.pem', excludeGlobs: ['!**/*.pem'] };
+    expect((await adapter.searchFiles(options)).ok).toBe(true);
+    expect((await adapter.searchText({ ...options, query: 'needle' })).ok).toBe(true);
+    expect(received).toHaveLength(2);
+    for (const args of received) {
+      expect(args.indexOf('*.pem')).toBeGreaterThan(-1);
+      expect(args.indexOf('*.pem')).toBeLessThan(args.indexOf('!**/*.pem'));
+      expect(args.indexOf('!**/*.pem')).toBeLessThan(args.indexOf('!**/node_modules/**'));
+    }
+  });
+
+  it.skipIf(spawnSync('rg', ['--version'], { stdio: 'ignore' }).status !== 0)(
+    'does not reopen generated directories when a positive glob is supplied', async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-rg-glob-'));
+      try {
+        for (const name of ['src/main.ts', 'node_modules/pkg/dependency.ts', 'dist/generated.ts']) {
+          const target = path.join(root, name);
+          await mkdir(path.dirname(target), { recursive: true });
+          await writeFile(target, 'export const needle = 1;');
+        }
+        const resolver: ExecutableResolver = { resolve: async () => ({ ok: true, value: 'rg' }) };
+        const adapter = new RipgrepAdapter(resolver);
+        const files = await adapter.searchFiles({ rootPath: root, glob: '*.ts', discovery: 'automatic' });
+        expect(files).toMatchObject({ ok: true, value: { paths: [path.join('src', 'main.ts')], truncated: false } });
+        const text = await adapter.searchText({ rootPath: root, glob: '*.ts', query: 'needle', discovery: 'automatic' });
+        expect(text.ok).toBe(true);
+        if (text.ok) {
+          expect(text.value.matches.map((match) => match.path.replace(/^\.[\\/]/, ''))).toEqual([path.join('src', 'main.ts')]);
+          expect(text.value.truncated).toBe(false);
+        }
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(spawnSync('rg', ['--version'], { stdio: 'ignore' }).status !== 0)(
+    'does not let a user glob override pre-process secret exclusions', async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-rg-secret-'));
+      try {
+        await writeFile(path.join(root, '.env'), 'SEARCH_NEEDLE=secret');
+        await writeFile(path.join(root, 'private.pem'), 'SEARCH_NEEDLE=private');
+        await writeFile(path.join(root, '.env.example'), 'SEARCH_NEEDLE=example');
+        const resolver: ExecutableResolver = { resolve: async () => ({ ok: true, value: 'rg' }) };
+        const adapter = new RipgrepAdapter(resolver);
+        const excludeGlobs = ['!**/.env', '!**/.env.*', '**/.env.example', '!**/*.pem'];
+        const files = await adapter.searchFiles({ rootPath: root, glob: '*.pem', excludeGlobs, discovery: 'explicit' });
+        expect(files.ok).toBe(true);
+        if (files.ok) expect(files.value.paths).not.toContain('private.pem');
+        const text = await adapter.searchText({ rootPath: root, glob: '.env', excludeGlobs, query: 'SEARCH_NEEDLE', discovery: 'explicit' });
+        expect(text.ok).toBe(true);
+        if (text.ok) expect(text.value.matches.map((match) => match.path)).not.toContain('.env');
+        const safe = await adapter.searchFiles({ rootPath: root, excludeGlobs, discovery: 'explicit' });
+        expect(safe.ok).toBe(true);
+        if (safe.ok) {
+          expect(safe.value.paths).not.toContain('.env');
+          expect(safe.value.paths).not.toContain('private.pem');
+          expect(safe.value.paths).toContain('.env.example');
+        }
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('terminates an over-budget ripgrep process and reports a timed-out partial result', async () => {
     const runner = new DirectProcessRunner();
 

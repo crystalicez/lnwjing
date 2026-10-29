@@ -272,14 +272,12 @@ export class RipgrepAdapter {
     // A directly requested file must not disappear because it exceeds 8 MiB.
     if (discovery === 'automatic' && request.targetPath === undefined) args.push('--max-filesize', '8M');
     if (request.regex !== true) args.push('--fixed-strings');
-    // A later positive exception glob (such as .env.example) must not turn
-    // the request into a whitelist of only that exception.
+    // Apply the user selection first. Security denies and generated-path
+    // exclusions must take precedence even when the user supplies a positive glob.
     if ((request.excludeGlobs?.length ?? 0) > 0) args.push('--glob', '**/*');
-    if (discovery === 'automatic') this.appendDefaultGlobs(args);
-    for (const glob of request.excludeGlobs ?? []) args.push('--glob', glob);
-    // Keep the caller's glob last: an .env.example allow rule must not
-    // turn a '*.ts' search into a search for only the exception.
     if (request.glob !== undefined) args.push('--glob', request.glob);
+    for (const glob of request.excludeGlobs ?? []) args.push('--glob', glob);
+    if (discovery === 'automatic') this.appendDefaultGlobs(args);
     args.push('--', request.query, request.targetPath ?? '.');
     let observedMatches = 0;
     const streamedMatches: SearchMatch[] = [];
@@ -351,14 +349,12 @@ export class RipgrepAdapter {
     const discovery = request.discovery ?? 'automatic';
     const args = ['--files', '--hidden', '--null'];
     args.push('--no-ignore');
-    // A later positive exception glob (such as .env.example) must not turn
-    // the request into a whitelist of only that exception.
+    // Apply the user selection first. Security denies and generated-path
+    // exclusions must take precedence even when the user supplies a positive glob.
     if ((request.excludeGlobs?.length ?? 0) > 0) args.push('--glob', '**/*');
-    if (discovery === 'automatic') this.appendDefaultGlobs(args);
-    for (const glob of request.excludeGlobs ?? []) args.push('--glob', glob);
-    // Keep the caller's glob last: an .env.example allow rule must not
-    // turn a '*.ts' search into a search for only the exception.
     if (request.glob !== undefined) args.push('--glob', request.glob);
+    for (const glob of request.excludeGlobs ?? []) args.push('--glob', glob);
+    if (discovery === 'automatic') this.appendDefaultGlobs(args);
     args.push('--');
     let observedPaths = 0;
     let retainedPathBytes = 0;
