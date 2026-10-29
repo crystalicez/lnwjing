@@ -8,7 +8,10 @@
  * when the caller starts a full workspace walk. The queue alone is not a
  * cross-process disk guarantee.
  */
+export type IndexScanPriority = 'interactive' | 'background';
+
 interface ScanWaiter {
+  readonly priority: IndexScanPriority;
   readonly resolve: () => void;
   readonly reject: (reason: unknown) => void;
   readonly signal?: AbortSignal;
@@ -17,18 +20,31 @@ interface ScanWaiter {
 
 let active = false;
 const waiting: ScanWaiter[] = [];
+// Ensure a steady stream of interactive requests cannot starve background indexing.
+const MAX_INTERACTIVE_GRANTS_BEFORE_BACKGROUND = 4;
+let consecutiveInteractiveGrants = 0;
 
 function takeNext(): void {
-  const next = waiting.shift();
+  if (waiting.length === 0) {
+    active = false;
+    consecutiveInteractiveGrants = 0;
+    return;
+  }
+  const interactive = waiting.findIndex((waiter) => waiter.priority === 'interactive');
+  const background = waiting.findIndex((waiter) => waiter.priority === 'background');
+  const selectInteractive = interactive >= 0 && (background < 0 || consecutiveInteractiveGrants < MAX_INTERACTIVE_GRANTS_BEFORE_BACKGROUND);
+  const index = selectInteractive ? interactive : background;
+  const [next] = waiting.splice(index, 1);
   if (next === undefined) {
     active = false;
     return;
   }
+  consecutiveInteractiveGrants = selectInteractive ? consecutiveInteractiveGrants + 1 : 0;
   next.signal?.removeEventListener('abort', next.cancel);
   next.resolve();
 }
 
-export async function withIndexScanBudget<T>(scan: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+export async function withIndexScanBudget<T>(scan: () => Promise<T>, signal?: AbortSignal, priority: IndexScanPriority = 'background'): Promise<T> {
   signal?.throwIfAborted();
   if (active) {
     await new Promise<void>((resolve, reject) => {
@@ -39,7 +55,7 @@ export async function withIndexScanBudget<T>(scan: () => Promise<T>, signal?: Ab
         signal?.removeEventListener('abort', cancel);
         reject(signal?.reason ?? new Error('Workspace scan cancelled'));
       };
-      const waiter: ScanWaiter = { resolve, reject, ...(signal === undefined ? {} : { signal }), cancel };
+      const waiter: ScanWaiter = { resolve, reject, priority, ...(signal === undefined ? {} : { signal }), cancel };
       waiting.push(waiter);
       signal?.addEventListener('abort', cancel, { once: true });
       if (signal?.aborted) cancel();

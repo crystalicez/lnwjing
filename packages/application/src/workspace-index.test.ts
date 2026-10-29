@@ -423,6 +423,46 @@ describe('WorkspaceIndexService', () => {
     }
   });
 
+  it('reports stale while watcher events are pending and makes indexWorkspace read the latest edit', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-read-after-write-'));
+    const workspace: Workspace = {
+      id: 'read-after-write', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString(),
+    };
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
+    let notify: ((event: 'change' | 'rename', filename: string | null) => void) | undefined;
+    const watcher = new EventEmitter() as FSWatcher;
+    watcher.close = (): void => { watcher.emit('close'); };
+    vi.mocked(watch).mockImplementation((_root, _options, callback) => { notify = callback; return watcher; });
+    try {
+      const source = path.join(root, 'latest.ts');
+      await writeFile(source, 'export const beforeEdit = 1;');
+      const started = await service.startWatch(workspace.id, { debounceMs: 60_000 });
+      expect(started).toMatchObject({ ok: true, value: { freshness: 'watching_clean', stale: false } });
+      await writeFile(source, 'export const afterEdit = 2;');
+      expect(notify).toBeDefined();
+      notify?.('change', 'latest.ts');
+
+      await expect(service.status(workspace.id)).resolves.toMatchObject({
+        ok: true, value: { freshness: 'watching_pending', stale: true, watcher: { pendingEvents: 1 } },
+      });
+      // No need to wait 60s for the watcher timer: explicit index requests
+      // drain pending changes and reuse the current snapshot.
+      const refreshed = await service.indexWorkspace(workspace.id);
+      expect(refreshed.ok).toBe(true);
+      if (refreshed.ok) {
+        expect(refreshed.value.entries.find((entry) => entry.relativePath === 'latest.ts')?.symbols).toContain('afterEdit');
+        expect(refreshed.value.entries.find((entry) => entry.relativePath === 'latest.ts')?.symbols).not.toContain('beforeEdit');
+      }
+      await expect(service.status(workspace.id)).resolves.toMatchObject({
+        ok: true, value: { freshness: 'watching_clean', stale: false },
+      });
+    } finally {
+      await service.close();
+      vi.mocked(watch).mockReset();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('counts a failed watcher commit as degraded rather than completed', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-watch-fault-'));
     const workspace: Workspace = {

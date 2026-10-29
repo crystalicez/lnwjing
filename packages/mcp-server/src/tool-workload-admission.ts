@@ -7,6 +7,7 @@
 type WorkloadClass = 'search' | 'index' | 'process';
 
 interface Waiter {
+  readonly priority: 'interactive' | 'background';
   readonly grant: () => void;
   readonly reject: (error: Error) => void;
   readonly signal: AbortSignal;
@@ -14,13 +15,14 @@ interface Waiter {
 }
 
 const MAX_WAITERS_PER_CLASS = 64;
+const MAX_INDEX_INTERACTIVE_GRANTS_BEFORE_BACKGROUND = 4;
 
 function classify(tool: string): WorkloadClass | null {
   // Status and stop must never queue behind expensive baseline indexing.
   // Starting a watcher performs an initial workspace index, so watch MUST
   // share this permit with explicit workspace_index across all HTTP requests.
   if (tool === 'workspace_index' || /^workspace_index_(?!status$|stop$)/.test(tool)
-    || /^index_(?!status$|stop$)/.test(tool) || tool === 'workspace_reindex' || tool === 'workspace_full_scan') return 'index';
+    || /^index_(?!status$|stop$)/.test(tool) || tool === 'workspace_reindex' || tool === 'workspace_full_scan' || tool === 'workspace_full_scan_continue') return 'index';
   if (/^(search_text|search_files|search_symbols|search_regex|search_all|ripgrep|workspace_context|workspace_snapshot|workspace_tree|project_snapshot|read_many_files)$/.test(tool)) return 'search';
   if (/^(shell|wsl_exec|process_start|process_run|project_dev|project_test|project_lint|project_typecheck|project_build)$/.test(tool)) return 'process';
   return null;
@@ -30,6 +32,7 @@ export class ToolWorkloadAdmission {
   private readonly busy: Record<WorkloadClass, number> = { search: 0, index: 0, process: 0 };
   private readonly waiters: Record<WorkloadClass, Waiter[]> = { search: [], index: [], process: [] };
   private readonly caps: Record<WorkloadClass, number>;
+  private consecutiveInteractiveIndexGrants = 0;
 
   public constructor(limits: Partial<Record<WorkloadClass, number>> = {}) {
     this.caps = {
@@ -58,6 +61,7 @@ export class ToolWorkloadAdmission {
         reject(new Error('Tool request was cancelled while waiting for workload admission'));
       };
       const waiter: Waiter = {
+        priority: kind === 'index' && (tool === 'workspace_index_watch' || tool === 'workspace_reindex') ? 'background' : 'interactive',
         signal, onAbort,
         grant: () => {
           signal.removeEventListener('abort', onAbort);
@@ -89,15 +93,25 @@ export class ToolWorkloadAdmission {
       released = true;
       const waiting = this.waiters[kind];
       while (waiting.length > 0) {
-        const next = waiting.shift()!;
+        const backgroundIndex = kind === 'index' ? waiting.findIndex((entry) => entry.priority === 'background') : -1;
+        const interactiveIndex = kind === 'index' ? waiting.findIndex((entry) => entry.priority === 'interactive') : -1;
+        const useInteractive = interactiveIndex >= 0
+          && (backgroundIndex < 0 || this.consecutiveInteractiveIndexGrants < MAX_INDEX_INTERACTIVE_GRANTS_BEFORE_BACKGROUND);
+        const position = kind === 'index' ? useInteractive ? interactiveIndex : backgroundIndex : 0;
+        const [next] = waiting.splice(position, 1);
+        if (next === undefined) break;
         if (next.signal.aborted) {
           next.reject(new Error('Tool request was cancelled before admission'));
           continue;
+        }
+        if (kind === 'index') {
+          this.consecutiveInteractiveIndexGrants = useInteractive ? this.consecutiveInteractiveIndexGrants + 1 : 0;
         }
         next.grant();
         return;
       }
       this.busy[kind] -= 1;
+      if (kind === 'index') this.consecutiveInteractiveIndexGrants = 0;
     };
   }
 }

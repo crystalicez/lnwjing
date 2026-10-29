@@ -236,6 +236,8 @@ export interface WorkspaceIndexOptions {
   readonly rebuild?: boolean;
   /** Explicit single-file request only; automatic and full index scans never deep-read oversized files. */
   readonly deepLargeFile?: boolean;
+  /** Watcher-driven updates are background work; targeted explicit requests stay interactive. */
+  readonly background?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -387,7 +389,7 @@ export class WorkspaceIndexService {
           for (const entry of additions) entries.set(entry.relativePath, entry);
           changed = true;
         }
-      }, options.signal);
+      }, options.signal, options.background === true ? 'background' : 'interactive');
       if (!changed) return ok(current);
       const snapshot = this.snapshotValue(workspace, [...entries.values()]);
       await store.save(snapshot);
@@ -510,7 +512,7 @@ export class WorkspaceIndexService {
     options.signal?.throwIfAborted();
     let bootstrapping = true;
     const queue = new WorkspaceIndexQueue(async (event) => {
-      const mutationOptions = bootstrapping && options.signal !== undefined ? { signal: options.signal } : {};
+      const mutationOptions: WorkspaceIndexOptions = { background: true, ...(bootstrapping && options.signal !== undefined ? { signal: options.signal } : {}) };
       const result = await retryBusyIndexOperation(() => event.kind === 'rescan'
         ? this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
         : this.indexPath(workspaceId, event.relativePath, mutationOptions), mutationOptions.signal);
@@ -520,7 +522,7 @@ export class WorkspaceIndexService {
       // Keep the service default explicit when called from MCP with no option.
       debounceMs: options.debounceMs ?? 1_000,
       batchWorker: async (events): Promise<void> => {
-        const mutationOptions = bootstrapping && options.signal !== undefined ? { signal: options.signal } : {};
+        const mutationOptions: WorkspaceIndexOptions = { background: true, ...(bootstrapping && options.signal !== undefined ? { signal: options.signal } : {}) };
         const result = await retryBusyIndexOperation(() => events.some((event) => event.kind === 'rescan')
           ? this.mutateSnapshot(workspaceId, (resolved, store) => this.rebuildSnapshot(resolved, store, mutationOptions, true), mutationOptions.signal)
           : this.indexPaths(workspaceId, events.map((event) => event.relativePath), mutationOptions), mutationOptions.signal);
@@ -704,7 +706,7 @@ export class WorkspaceIndexService {
   }
 
   /** Full and incremental directory scans share the same one-slot disk budget as rg.exe. */
-  private scanWithBudget<T>(rootPath: string, scan: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  private scanWithBudget<T>(rootPath: string, scan: () => Promise<T>, signal?: AbortSignal, priority: 'interactive' | 'background' = 'background'): Promise<T> {
     return withIndexScanBudget(async () => {
       const lease = await acquireDiskScanLease(rootPath, signal);
       if (lease.status !== 'granted') throw new WorkspaceIndexBusyError();
@@ -713,7 +715,7 @@ export class WorkspaceIndexService {
       } finally {
         await lease.release();
       }
-    }, signal);
+    }, signal, priority);
   }
 
   private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>, progress: { visited: number } = { visited: 0 }): Promise<void> {

@@ -80,6 +80,70 @@ describe('ToolWorkloadAdmission', () => {
     expect(admission.snapshot().active.index).toBe(0);
   });
 
+  it('starts an explicit index request before earlier queued watcher starts', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1 });
+    const active = await admission.acquire('workspace_index_watch', new AbortController().signal);
+    const order: string[] = [];
+    const queuedWatch = admission.acquire('workspace_index_watch', new AbortController().signal).then((release) => {
+      order.push('watch');
+      return release;
+    });
+    const queuedManual = admission.acquire('workspace_index', new AbortController().signal).then((release) => {
+      order.push('manual');
+      return release;
+    });
+    active();
+    const manual = await queuedManual;
+    expect(order).toEqual(['manual']);
+    manual();
+    const watch = await queuedWatch;
+    watch();
+    expect(order).toEqual(['manual', 'watch']);
+    expect(admission.snapshot().active.index).toBe(0);
+  });
+
+  it('prevents queued watcher starts from starving under repeated manual index requests', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1 });
+    const active = await admission.acquire('workspace_index', new AbortController().signal);
+    const order: string[] = [];
+    const watcher = admission.acquire('workspace_index_watch', new AbortController().signal).then((release) => {
+      order.push('watcher');
+      return release;
+    });
+    const manual = Array.from({ length: 6 }, (_, index) => admission.acquire('workspace_index', new AbortController().signal).then((release) => {
+      order.push(`manual-${index}`);
+      return release;
+    }));
+    active();
+    for (let index = 0; index < manual.length; index += 1) {
+      const release = await manual[index]!;
+      release();
+      if (index === 3) {
+        const background = await watcher;
+        background();
+      }
+    }
+    expect(order.slice(0, 5)).toEqual(['manual-0', 'manual-1', 'manual-2', 'manual-3', 'watcher']);
+  });
+
+  it('queues full-scan continuations with indexing rather than bypassing disk admission', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1 });
+    const hold = await admission.acquire('workspace_full_scan', new AbortController().signal);
+    let entered = false;
+    const following = admission.acquire('workspace_full_scan_continue', new AbortController().signal).then((release) => {
+      entered = true;
+      return release;
+    });
+    await Promise.resolve();
+    expect(entered).toBe(false);
+    expect(admission.snapshot()).toMatchObject({ active: { index: 1 }, queued: { index: 1 } });
+    hold();
+    const release = await following;
+    expect(entered).toBe(true);
+    release();
+    expect(admission.snapshot().active.index).toBe(0);
+  });
+
   it('throttles expensive scans and builds while allowing light file commands', async () => {
     const admission = new ToolWorkloadAdmission({ index: 1, process: 1 });
     const search = await admission.acquire('workspace_full_scan', new AbortController().signal);
