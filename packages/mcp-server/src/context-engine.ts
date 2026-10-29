@@ -409,7 +409,33 @@ export class ContextEngine {
   public async continueFullScan(token: string, pageSize?: number, signal?: AbortSignal): Promise<Result<WorkspaceFullScanResult>> {
     const continuation = this.scanContinuations.take(scopedContinuationKey(this.continuationScope, token));
     if (continuation === undefined) return err({ code: 'INVALID_INPUT', message: 'Scan continuation token is invalid or expired', recoverable: false });
-    if (continuation.walk !== undefined) return this.walkScan(continuation.walk, normalizePageSize(pageSize ?? 200), signal);
+    if (continuation.walk !== undefined) {
+      const original = continuation.walk;
+      // The inventory walker advances frame offsets in place. Isolate an
+      // attempt so cancellation cannot corrupt the saved retry position.
+      const walk: WalkingScanState = {
+        ...original,
+        observations: [...original.observations],
+        ...(original.cursor === undefined ? {} : {
+          cursor: { ...original.cursor, frames: original.cursor.frames.map((frame) => ({ ...frame })) },
+        }),
+      };
+      let result: Result<WorkspaceFullScanResult>;
+      try {
+        result = await this.walkScan(walk, normalizePageSize(pageSize ?? 200), signal);
+      } catch {
+        result = err({ code: signal?.aborted ? 'PROCESS_TIMEOUT' : 'INTERNAL_ERROR',
+          message: 'Inventory continuation failed', recoverable: true });
+      }
+      if (!result.ok && (result.error.code === 'PROCESS_TIMEOUT'
+        || result.error.code === 'CONFLICT' && result.error.details?.reason !== 'memory_budget')) {
+        if (!this.scanContinuations.set(scopedContinuationKey(this.continuationScope, token), continuation)) {
+          return err({ code: 'CONFLICT', message: 'Inventory continuation could not be retained for retry', recoverable: true });
+        }
+        return err({ ...result.error, message: 'Inventory is busy or cancelled; retry with the same continuation token' });
+      }
+      return result;
+    }
     const size = normalizePageSize(pageSize ?? 200);
     const nextIndex = Math.min(continuation.files.length, continuation.nextIndex + size);
     const files = continuation.files.slice(continuation.nextIndex, nextIndex);
@@ -449,9 +475,11 @@ export class ContextEngine {
           discovery: state.request.includeIgnored === true ? 'explicit' : 'automatic',
         }, pageSize - files.length, state.cursor, signal);
       } catch {
-        page = err({ code: 'INTERNAL_ERROR', message: 'Inventory page failed', recoverable: true });
+        page = err({ code: signal?.aborted ? 'PROCESS_TIMEOUT' : 'INTERNAL_ERROR',
+          message: 'Inventory page failed', recoverable: true });
       }
       if (!page.ok) {
+        if (page.error.code === 'CONFLICT' || page.error.code === 'PROCESS_TIMEOUT') return page;
         state.observations.push({
           workspaceId, source: 'file_search', state: 'unavailable', error: { code: page.error.code },
         });
@@ -506,7 +534,7 @@ export class ContextEngine {
         files: [], nextIndex: 0, estimatedBytes, walk: state, scannedFiles: state.scannedFiles,
         scannedWorkspaces: state.observations.filter((observation) => observation.state === 'complete').length, searchTruncated: false, observations,
       });
-      if (!saved) return err({ code: 'CONFLICT', message: 'Inventory continuation exceeds the in-memory budget', recoverable: true });
+      if (!saved) return err({ code: 'CONFLICT', message: 'Inventory continuation exceeds the in-memory budget', recoverable: true, details: { reason: 'memory_budget' } });
     }
     return ok({
       files, scannedFiles: state.scannedFiles,

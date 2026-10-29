@@ -100,7 +100,7 @@ export async function nextFileInventoryPage(
           if (!entry.isFile() && !entry.isDirectory() && !entry.isSymbolicLink()) continue;
           reservedBytes += 64 + 2 * entry.name.length;
           if (reservedBytes > MAX_INVENTORY_FRAME_BYTES) {
-            return err(appError('CONFLICT', 'A directory inventory exceeds the in-memory budget; narrow the scan path', true));
+            return err({ code: 'CONFLICT', message: 'A directory inventory exceeds the in-memory budget; narrow the scan path', recoverable: true, details: { reason: 'memory_budget' } });
           }
           entries.push({ name: entry.name, type: entry.isDirectory() ? 'directory' : 'file' });
         }

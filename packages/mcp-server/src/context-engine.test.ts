@@ -400,6 +400,107 @@ describe('context engine', () => {
     expect(store.size()).toBe(0);
   });
 
+  it('preserves the full-scan continuation and cursor when the disk lease is busy', async () => {
+    let failOnce = true;
+    const seenOffsets: number[] = [];
+    const scanFilesPage = vi.fn(async (
+      _actor: unknown, _workspaceId: string, _request: unknown, _pageSize: number,
+      cursor?: { frames: Array<{ offset: number }> },
+    ): Promise<ReturnType<typeof ok> | ReturnType<typeof err>> => {
+      if (cursor === undefined) return ok({
+        paths: ['a.ts'],
+        cursor: { rootPath: 'fixture', frames: [{ relativePath: '', offset: 1, entries: [] }] },
+      });
+      seenOffsets.push(cursor.frames[0]!.offset);
+      if (failOnce) {
+        failOnce = false;
+        cursor.frames[0]!.offset = 999;
+        return err({ code: 'CONFLICT', message: 'Disk lease busy', recoverable: true });
+      }
+      return ok({ paths: ['b.ts'] });
+    });
+    const engine = new ContextEngine({
+      search: { scanFilesPage, scanFiles: vi.fn(), searchFiles: vi.fn(), searchText: vi.fn() },
+    }, actor);
+    const first = await engine.fullScan({ workspaceId: 'w', pageSize: 1 });
+    expect(first.ok).toBe(true);
+    if (!first.ok || first.value.continuationToken === undefined) return;
+    const token = first.value.continuationToken;
+    const busy = await engine.continueFullScan(token, 1);
+    expect(busy).toMatchObject({ ok: false, error: { code: 'CONFLICT', recoverable: true } });
+    const resumed = await engine.continueFullScan(token, 1);
+    expect(resumed).toMatchObject({ ok: true, value: {
+      files: [{ workspaceId: 'w', path: 'b.ts' }], scannedFiles: 2,
+      hasMore: false, completeness: 'complete',
+    } });
+    expect(seenOffsets).toEqual([1, 1]);
+    expect(scanFilesPage).toHaveBeenCalledTimes(3);
+    await expect(engine.continueFullScan(token)).resolves.toMatchObject({
+      ok: false, error: { code: 'INVALID_INPUT' },
+    });
+  });
+
+  it('does not mislabel an in-memory inventory budget failure as a retryable disk stall', async () => {
+    const store = new ContinuationStore<ScanContinuation>({
+      maxWeight: 1_024, weightOf: (value): number => value.estimatedBytes,
+    });
+    const smallCursor = { rootPath: 'fixture', frames: [{ relativePath: '', offset: 1, entries: [] }] };
+    const largeCursor = { rootPath: 'fixture', frames: [{
+      relativePath: '', offset: 2,
+      entries: Array.from({ length: 100 }, (_, index) => ({ name: `entry-${index}.ts`, type: 'file' })),
+    }] };
+    const scanFilesPage = vi.fn()
+      .mockResolvedValueOnce(ok({ paths: ['first.ts'], cursor: smallCursor }))
+      .mockResolvedValueOnce(ok({ paths: ['second.ts'], cursor: largeCursor }));
+    const engine = new ContextEngine({
+      search: { scanFilesPage, scanFiles: vi.fn(), searchFiles: vi.fn(), searchText: vi.fn() },
+    }, actor, undefined, undefined, store);
+    const first = await engine.fullScan({ workspaceId: 'w', pageSize: 1 });
+    expect(first.ok).toBe(true);
+    if (!first.ok || first.value.continuationToken === undefined) return;
+    const token = first.value.continuationToken;
+    expect(await engine.continueFullScan(token, 1)).toMatchObject({
+      ok: false, error: { code: 'CONFLICT', details: { reason: 'memory_budget' } },
+    });
+    expect(scanFilesPage).toHaveBeenCalledTimes(2);
+    expect(await engine.continueFullScan(token, 1)).toMatchObject({
+      ok: false, error: { code: 'INVALID_INPUT' },
+    });
+  });
+
+  it('keeps the same continuation usable after a cancelled inventory page', async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    const scanFilesPage = vi.fn(async (
+      _actor: unknown, _workspaceId: string, _request: unknown, _size: number,
+      cursor?: { frames: Array<{ offset: number }> },
+    ): Promise<ReturnType<typeof ok>> => {
+      if (cursor === undefined) return ok({
+        paths: ['first.ts'], cursor: { rootPath: 'fixture', frames: [{ relativePath: '', offset: 1, entries: [] }] },
+      });
+      attempts += 1;
+      if (attempts === 1) {
+        controller.abort();
+        throw new Error('cancelled while reading directory');
+      }
+      return ok({ paths: ['last.ts'] });
+    });
+    const engine = new ContextEngine({
+      search: { scanFilesPage, scanFiles: vi.fn(), searchFiles: vi.fn(), searchText: vi.fn() },
+    }, actor);
+    const initial = await engine.fullScan({ workspaceId: 'w', pageSize: 1 });
+    expect(initial.ok).toBe(true);
+    if (!initial.ok || initial.value.continuationToken === undefined) return;
+    const token = initial.value.continuationToken;
+    await expect(engine.continueFullScan(token, 1, controller.signal)).resolves.toMatchObject({
+      ok: false, error: { code: 'PROCESS_TIMEOUT', recoverable: true },
+    });
+    await expect(engine.continueFullScan(token, 1)).resolves.toMatchObject({
+      ok: true, value: { files: [{ workspaceId: 'w', path: 'last.ts' }], completeness: 'complete' },
+    });
+    expect(attempts).toBe(2);
+  });
+
   it('marks remaining workspaces pending and preserves failed-source evidence', async () => {
     const scanFilesPage = vi.fn().mockImplementation(async (_actor, workspaceId: string): Promise<ReturnType<typeof ok> | ReturnType<typeof err>> =>
       workspaceId === 'a'
