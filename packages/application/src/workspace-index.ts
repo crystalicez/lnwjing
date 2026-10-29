@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { watch, type FSWatcher } from 'node:fs';
+import { createReadStream, watch, type FSWatcher } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -234,6 +234,8 @@ export type WorkspaceIndexWatchOptions = WorkspaceIndexQueueOptions & { readonly
 export interface WorkspaceIndexOptions {
   readonly discovery?: ContextDiscoveryMode;
   readonly rebuild?: boolean;
+  /** Explicit single-file request only; automatic and full index scans never deep-read oversized files. */
+  readonly deepLargeFile?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -321,6 +323,7 @@ export class WorkspaceIndexService {
       // Validate ALL paths before an index-missing rebuild, and before any
       // publication: a rejected path must not turn into an implicit full scan.
       const validatedPaths: Array<readonly [string, string]> = [];
+      const canonicalSeen = new Set<string>();
       for (const normalized of paths) {
         options.signal?.throwIfAborted();
         const absolutePath = resolveHostPath(hostPathApi(process.platform).join(rootPath, normalized));
@@ -335,10 +338,15 @@ export class WorkspaceIndexService {
         } catch (error: unknown) {
           if (!isNodeError(error, 'ENOENT')) throw error;
         }
-        validatedPaths.push([normalized, absolutePath]);
+        const canonicalRelative = normalizeRelativePath(hostPathApi(process.platform).relative(rootPath, absolutePath));
+        if (canonicalSeen.has(canonicalRelative)) continue;
+        canonicalSeen.add(canonicalRelative);
+        validatedPaths.push([canonicalRelative, absolutePath]);
       }
       const current = await store.load();
-      if (current === null) return this.rebuildSnapshot(workspace, store, options);
+      if (current === null) return options.deepLargeFile === true
+        ? err(appError('CONFLICT', 'Build the workspace index before requesting deep analysis of a single large file', true))
+        : this.rebuildSnapshot(workspace, store, options);
       const discovery = options.discovery ?? 'automatic';
       // Lookups and updates are keyed by path. The previous array.filter()
       // implementation scanned *every* existing entry twice per changed file:
@@ -359,7 +367,7 @@ export class WorkspaceIndexService {
             isDirectory = metadata.isDirectory();
             if (isDirectory) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal);
             else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal,
-              options.rebuild === true ? undefined : entries));
+              options.rebuild === true ? undefined : entries, options.deepLargeFile === true));
           } catch (error: unknown) {
             if (!isNodeError(error, 'ENOENT')) throw error;
           }
@@ -741,22 +749,28 @@ export class WorkspaceIndexService {
     }
   }
 
-  private async describePath(rootPath: string, absolutePath: string, metadata: Awaited<ReturnType<typeof stat>>, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>): Promise<WorkspaceIndexEntry> {
+  private async describePath(rootPath: string, absolutePath: string, metadata: Awaited<ReturnType<typeof stat>>, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>, deepLargeFile = false): Promise<WorkspaceIndexEntry> {
     const relativePath = normalizeRelativePath(hostPathApi(process.platform).relative(rootPath, absolutePath));
     const previous = reusable?.get(relativePath);
     if (metadata.isFile() && previous?.kind === 'file'
       && previous.size === metadata.size && previous.mtimeMs === metadata.mtimeMs
       && previous.ctimeMs !== undefined && previous.ctimeMs === metadata.ctimeMs
-      && previous.birthtimeMs !== undefined && previous.birthtimeMs === metadata.birthtimeMs) return previous;
+      && previous.birthtimeMs !== undefined && previous.birthtimeMs === metadata.birthtimeMs
+      && (!deepLargeFile || metadata.size <= MAX_INDEX_FILE_BYTES || previous.contentHash !== null)) return previous;
     const indexedAt = new Date().toISOString();
     if (metadata.isDirectory()) return { relativePath, kind: 'directory', size: 0, mtimeMs: Number(metadata.mtimeMs), contentHash: null, gitBlobSha: null, language: null, isTest: false, symbols: [], imports: [], exports: [], functions: [], classes: [], interfaces: [], indexedAt };
     if (metadata.isSymbolicLink()) return { relativePath, kind: 'symlink', size: Number(metadata.size), mtimeMs: Number(metadata.mtimeMs), contentHash: null, gitBlobSha: null, language: languageFor(relativePath), isTest: isTestPath(relativePath), symbols: [], imports: [], exports: [], functions: [], classes: [], interfaces: [], indexedAt };
-    if (metadata.size > MAX_INDEX_FILE_BYTES) return {
-      relativePath, kind: 'file', size: Number(metadata.size), mtimeMs: Number(metadata.mtimeMs),
-      ctimeMs: Number(metadata.ctimeMs), birthtimeMs: Number(metadata.birthtimeMs),
-      contentHash: null, gitBlobSha: null, language: languageFor(relativePath), isTest: isTestPath(relativePath),
-      symbols: [], imports: [], exports: [], functions: [], classes: [], interfaces: [], indexedAt,
-    };
+    if (metadata.size > MAX_INDEX_FILE_BYTES) {
+      const analysis = deepLargeFile
+        ? await analyzeOversizedSource(absolutePath, metadata, signal)
+        : { contentHash: null, gitBlobSha: null, symbols: [], imports: [], exports: [], functions: [], classes: [], interfaces: [] };
+      return {
+        relativePath, kind: 'file', size: Number(metadata.size), mtimeMs: Number(metadata.mtimeMs),
+        ctimeMs: Number(metadata.ctimeMs), birthtimeMs: Number(metadata.birthtimeMs),
+        language: languageFor(relativePath), isTest: isTestPath(relativePath),
+        ...analysis, indexedAt,
+      };
+    }
     const content = await readFile(absolutePath, { ...(signal === undefined ? {} : { signal }) });
     const contentHash = createHash('sha256').update(content).digest('hex');
     const gitBlobSha = createHash('sha1').update(`blob ${content.byteLength}\0`).update(content).digest('hex');
@@ -793,6 +807,76 @@ export class WorkspaceIndexService {
     return { version: 1, discoveryPolicyRevision: WORKSPACE_INDEX_DISCOVERY_POLICY_REVISION, workspaceId: workspace.id, rootPath: workspace.realRootPath, indexedAt: new Date().toISOString(), entries: [...entries].sort((left, right) => left.relativePath.localeCompare(right.relativePath)) };
   }
 }
+
+/**
+ * On-demand analysis only. Never invoked from watcher or automatic full indexing.
+ * Hashes the file once with bounded read buffers and an overlapping text window.
+ */
+async function analyzeOversizedSource(
+  absolutePath: string, metadata: Awaited<ReturnType<typeof stat>>, signal?: AbortSignal,
+): Promise<Pick<WorkspaceIndexEntry, 'contentHash' | 'gitBlobSha' | 'symbols' | 'imports' | 'exports' | 'functions' | 'classes' | 'interfaces'>> {
+  const digest = createHash('sha256');
+  const blob = createHash('sha1').update(`blob ${metadata.size}\0`);
+  const decoder = new TextDecoder();
+  const found = {
+    symbols: new Set<string>(), imports: new Set<string>(), exports: new Set<string>(),
+    functions: new Set<string>(), classes: new Set<string>(), interfaces: new Set<string>(),
+  };
+  let carry = '';
+  let binary = false;
+  const overlapChars = 8192;
+  const consume = (text: string, final = false): void => {
+    if (binary) return;
+    const source = carry + text;
+    if (source.includes('\0')) {
+      binary = true;
+      for (const values of Object.values(found)) values.clear();
+      return;
+    }
+    // Delay matches near a chunk boundary until the complete identifier has arrived.
+    const readyEnd = final ? source.length : Math.max(0, source.length - overlapChars);
+    const record = (expression: RegExp, destination: Set<string>): void => {
+      for (const match of source.matchAll(expression)) {
+        if (match.index + match[0].length > readyEnd) continue;
+        if (match[1]) destination.add(match[1]);
+      }
+    };
+    record(/\b(?:function|class|interface|type|const|let|var)\s+([A-Za-z_$][\w$]*)/g, found.symbols);
+    record(/\bfunction\s+([A-Za-z_$][\w$]*)/g, found.functions);
+    record(/\b([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g, found.functions);
+    record(/\bclass\s+([A-Za-z_$][\w$]*)/g, found.classes);
+    record(/\binterface\s+([A-Za-z_$][\w$]*)/g, found.interfaces);
+    record(/\bimport[^'"\n]*from\s*['"]([^'"]+)['"]/g, found.imports);
+    record(/\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g, found.imports);
+    record(/\bexport\s+(?:default\s+)?(?:function|class|const|let|var|interface|type)?\s*([A-Za-z_$][\w$]*)?/g, found.exports);
+    carry = source.slice(-overlapChars);
+  };
+  let bytes = 0;
+  for await (const chunk of createReadStream(absolutePath, {
+    highWaterMark: 256 * 1024,
+    ...(signal === undefined ? {} : { signal }),
+  })) {
+    signal?.throwIfAborted();
+    const buffer = chunk as Buffer;
+    bytes += buffer.byteLength;
+    digest.update(buffer);
+    blob.update(buffer);
+    consume(decoder.decode(buffer, { stream: true }));
+  }
+  consume(decoder.decode(), true);
+  const after = await stat(absolutePath);
+  if (bytes !== metadata.size || after.size !== metadata.size || after.mtimeMs !== metadata.mtimeMs
+    || after.ctimeMs !== metadata.ctimeMs || after.birthtimeMs !== metadata.birthtimeMs) {
+    throw new Error('File changed during deep indexing');
+  }
+  const sorted = (values: Set<string>): string[] => unique([...values]);
+  return {
+    contentHash: digest.digest('hex'), gitBlobSha: blob.digest('hex'),
+    symbols: sorted(found.symbols), imports: sorted(found.imports), exports: sorted(found.exports),
+    functions: sorted(found.functions), classes: sorted(found.classes), interfaces: sorted(found.interfaces),
+  };
+}
+
 
 export function snapshotMetadata(
   snapshot: WorkspaceIndexSnapshot,

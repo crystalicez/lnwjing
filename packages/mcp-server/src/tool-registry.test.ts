@@ -183,6 +183,28 @@ describe('MCP tool registry', () => {
     }
   });
 
+  it('requires an explicit file path for deep large-file indexing and dispatches only that path', async () => {
+    const fullIndex = vi.fn(async (): Promise<ReturnType<typeof ok>> => ok({ status: 'full' }));
+    const indexPath = vi.fn(async (): Promise<ReturnType<typeof ok>> => ok({ entries: [{ relativePath: 'src/oversized.ts', contentHash: 'abcdef' }] }));
+    const registry = new ToolRegistry({ workspaceIndex: {
+      indexWorkspace: fullIndex, indexPath,
+    } as never }, actor, {
+      profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+    });
+    const invalid = await registry.invoke('workspace_index', { workspaceId: 'workspace-a', deepLargeFile: true });
+    expect(invalid).toMatchObject({ isError: true, structuredContent: { error: { code: 'INVALID_INPUT' } } });
+    expect(fullIndex).not.toHaveBeenCalled();
+    expect(indexPath).not.toHaveBeenCalled();
+    const result = await registry.invoke('workspace_index', {
+      workspaceId: 'workspace-a', path: 'src/oversized.ts', deepLargeFile: true,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ entry: { relativePath: 'src/oversized.ts', contentHash: 'abcdef' }, snapshotEntryCount: 1, snapshotEntriesOmitted: true });
+    expect(indexPath).toHaveBeenCalledWith('workspace-a', 'src/oversized.ts', expect.objectContaining({ deepLargeFile: true }));
+    expect(fullIndex).not.toHaveBeenCalled();
+  });
+
   it('omits every unvalidated import input from direct and nested batch audit persistence', async () => {
     const persisted: unknown[] = [];
     const tracker = new ActivityTracker(undefined, undefined, {

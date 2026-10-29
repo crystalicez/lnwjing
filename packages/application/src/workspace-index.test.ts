@@ -1,5 +1,6 @@
-import { watch, type FSWatcher } from 'node:fs';
+import { createReadStream, watch, type FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
+import { Readable } from 'node:stream';
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -144,6 +145,20 @@ describe('WorkspaceIndexService', () => {
         contentHash: null, symbols: [],
       });
 
+      // The user explicitly selects one file. Streaming reads the sparse
+      // fixture once, never during automatic indexing or repeated no-op calls.
+      vi.mocked(createReadStream).mockClear();
+      const deep = await service.indexPath(workspace.id, 'large.ts', { deepLargeFile: true });
+      expect(deep.ok).toBe(true);
+      if (deep.ok) {
+        expect(deep.value.entries[0]?.contentHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(deep.value.entries[0]?.gitBlobSha).toMatch(/^[a-f0-9]{40}$/);
+      }
+      expect(vi.mocked(createReadStream)).toHaveBeenCalledTimes(1);
+      const rechecked = await service.indexPath(workspace.id, 'large.ts', { deepLargeFile: true });
+      expect(rechecked.ok).toBe(true);
+      expect(vi.mocked(createReadStream)).toHaveBeenCalledTimes(1);
+
       await writeFile(source, 'export const recovered = 2;');
       const refreshed = await service.indexPath(workspace.id, 'large.ts');
       expect(refreshed.ok).toBe(true);
@@ -181,6 +196,50 @@ describe('WorkspaceIndexService', () => {
     }
   });
 
+  it('combines source symbols across streaming chunks without creating partial names', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-stream-symbol-'));
+    const workspace: Workspace = { id: 'stream-symbol', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
+    try {
+      const source = path.join(root, 'oversized.ts');
+      await writeFile(source, 'start');
+      const size = 8 * 1024 * 1024 + 1;
+      await truncate(source, size);
+      expect((await service.indexWorkspace(workspace.id)).ok).toBe(true);
+      const first = Buffer.from('export const cross');
+      const second = Buffer.from('Boundary = 1;\n');
+      const filler = Buffer.alloc(size - first.byteLength - second.byteLength, 65);
+      vi.mocked(createReadStream).mockImplementationOnce(() =>
+        Readable.from([first, second, filler]) as unknown as ReturnType<typeof createReadStream>);
+      const result = await service.indexPath(workspace.id, 'oversized.ts', { deepLargeFile: true });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.entries[0]?.symbols).toContain('crossBoundary');
+        expect(result.value.entries[0]?.symbols).not.toContain('cross');
+      }
+    } finally {
+      vi.mocked(createReadStream).mockClear();
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses an implicit full scan when deep analysis is requested without an index', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-deep-uninitialized-'));
+    const workspace: Workspace = { id: 'deep-uninitialized', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    let saves = 0;
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore(async () => { saves += 1; }));
+    try {
+      await writeFile(path.join(root, 'main.ts'), 'export const value = 1;');
+      const result = await service.indexPath(workspace.id, 'main.ts', { deepLargeFile: true });
+      expect(result).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+      expect(saves).toBe(0);
+    } finally {
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('does not publish an unchanged file event or an already removed path', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-noop-'));
     const workspace: Workspace = {
@@ -198,6 +257,9 @@ describe('WorkspaceIndexService', () => {
 
       const unchanged = await service.indexPath(workspace.id, 'src.ts');
       expect(unchanged).toEqual(built);
+      expect(writes).toBe(1);
+      const alias = await service.indexPath(workspace.id, 'src/../src.ts');
+      expect(alias).toEqual(built);
       expect(writes).toBe(1);
 
       await writeFile(sourcePath, 'export const updated = 2;');

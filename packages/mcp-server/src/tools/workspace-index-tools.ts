@@ -1,4 +1,5 @@
-import { ok } from '@lnwjing/domain';
+import path from 'node:path';
+import { err, ok } from '@lnwjing/domain';
 import { defineTool, missingService, type McpToolContext, type McpToolDefinition } from './tool-types.js';
 import { workspaceIndexSchema, workspaceIndexStatusSchema, workspaceIndexStopSchema, workspaceIndexWatchSchema } from './schemas.js';
 
@@ -6,17 +7,34 @@ export function workspaceIndexTools(context: McpToolContext): McpToolDefinition[
   return [
     defineTool({
       name: 'workspace_index',
-      description: 'Build or refresh the persistent workspace index using automatic context filters unless ignored paths are explicitly included.',
+      description: 'Refresh a workspace index or one targeted path. Only deepLargeFile with a path reads oversized file content; background indexing stays metadata-only for large files.',
       permission: 'WRITE',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: workspaceIndexSchema,
-      handler: async (input, signal) => context.services.workspaceIndex === undefined
-        ? missingService()
-        : context.services.workspaceIndex.indexWorkspace(input.workspaceId, {
-          discovery: input.includeIgnored ? 'explicit' : 'automatic',
+      handler: async (input, signal) => {
+        const service = context.services.workspaceIndex;
+        if (service === undefined) return missingService();
+        if (input.deepLargeFile && input.path === undefined) {
+          return err({ code: 'INVALID_INPUT', message: 'deepLargeFile requires a specific path', recoverable: false });
+        }
+        const options = {
+          discovery: input.includeIgnored ? 'explicit' as const : 'automatic' as const,
           rebuild: input.rebuild,
           signal,
-        }),
+        };
+        if (input.path === undefined) return service.indexWorkspace(input.workspaceId, options);
+        if (service.indexPath === undefined) return missingService();
+        const result = await service.indexPath(input.workspaceId, input.path, { ...options, deepLargeFile: input.deepLargeFile });
+        if (!result.ok || input.summaryOnly === false) return result;
+        const normalizedTarget = path.posix.normalize(input.path.replaceAll(path.win32.sep, '/')).replace(/^\.\//, '');
+        return ok({
+          workspaceId: input.workspaceId,
+          path: input.path,
+          entry: result.value.entries.find((entry) => entry.relativePath === normalizedTarget) ?? null,
+          snapshotEntryCount: result.value.entries.length,
+          snapshotEntriesOmitted: true,
+        });
+      },
     }),
     defineTool({
       name: 'workspace_index_status',

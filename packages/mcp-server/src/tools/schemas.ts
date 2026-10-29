@@ -285,6 +285,10 @@ export const readManyFilesSchema = z.object({
 }).strict();
 export const workspaceIndexSchema = z.object({
   workspaceId: workspaceIdSchema,
+  path: pathSchema.optional(),
+  /** A single explicit path is required before the index may read oversized source contents. */
+  deepLargeFile: z.boolean().default(false),
+  summaryOnly: z.boolean().default(true),
   rebuild: z.boolean().default(false),
   includeIgnored: z.boolean().default(false),
 }).strict();

@@ -137,7 +137,7 @@ export interface McpApplicationServices {
   readonly goalMutationFence?: Pick<GoalMutationFenceService, 'inspectWorkspaceFence' | 'begin' | 'heartbeat' | 'end' | 'observe'>;
   readonly search?: Pick<SearchService, 'searchFiles' | 'searchText'> & Partial<Pick<SearchService, 'scanFiles' | 'filterSearchPaths'>>;
   readonly workspaceIndex?: Pick<WorkspaceIndexService, 'indexWorkspace' | 'status' | 'startWatch' | 'stopWatch'>
-    & Partial<Pick<WorkspaceIndexService, 'compactStatus'>>;
+    & Partial<Pick<WorkspaceIndexService, 'compactStatus' | 'indexPath'>>;
   readonly git?: Pick<GitService, 'status' | 'diff' | 'log' | 'run'>;
   readonly repositoryImport?: Pick<RepositoryImportService, 'start' | 'status' | 'cancel'>;
   readonly process?: Pick<ProcessService, 'start' | 'list' | 'status' | 'logs' | 'stop' | 'previewProjectCommand' | 'startProjectCommand'>;
