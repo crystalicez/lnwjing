@@ -2,6 +2,22 @@ import { err, ok, type Result } from '@lnwjing/domain';
 
 const PRIVATE_KEY_PREFIXES = ['id_rsa', 'id_ed25519'];
 
+/** Ripgrep exclusions for restricted workspaces. Match the SecretPolicy denial
+ * set before rg reads file contents; the per-result check remains authoritative.
+ */
+export const RESTRICTED_SEARCH_IGNORE_GLOBS: readonly string[] = [
+  '!**/.env',
+  '!**/.env.*',
+  '**/.env.example',
+  '!**/*.pem',
+  '!**/*.key',
+  '!**/id_rsa*',
+  '!**/id_ed25519*',
+  '!**/.ssh/**',
+  '!**/.aws/**',
+  '!**/credentials.json',
+];
+
 export class SecretPolicy {
   public assertReadable(relativePath: string): Result<void> {
     const normalizedPath = relativePath.replaceAll('/', '\\').replace(/^\.\\/, '');

@@ -68,6 +68,15 @@ describe('context engine', () => {
   });
 
 
+  it('uses exhaustive discovery when the requested context mode is exhaustive', async () => {
+    const searchText = vi.fn().mockResolvedValue(ok({ matches: [], truncated: false }));
+    const searchFiles = vi.fn().mockResolvedValue(ok({ paths: [], truncated: false }));
+    const engine = new ContextEngine({ search: { searchText, searchFiles } }, actor);
+    await engine.collect({ workspaceId: 'workspace-1', query: 'needle', mode: 'exhaustive' });
+    expect(searchText).toHaveBeenCalledWith(actor, 'workspace-1', expect.objectContaining({ discovery: 'explicit' }));
+    expect(searchFiles).toHaveBeenCalledWith(actor, 'workspace-1', expect.objectContaining({ discovery: 'explicit' }));
+  });
+
   it('deduplicates Windows dot and separator aliases while retaining the original path and text', async () => {
     const base = services();
     const readFile = vi.fn().mockImplementation(async (_actor, _workspaceId, request) => ok({ path: request.path, content: '  ไทย 😀\tneedle  \n', startLine: 1, endLine: 2, encoding: 'utf8' }));
@@ -261,7 +270,7 @@ describe('context engine', () => {
   it('aggregates matches across workspaces, ranks candidates, and filters vendor/build paths by default', async () => {
     const request: WorkspaceContextRequest = {
       query: 'login',
-      mode: 'exhaustive',
+      mode: 'optimized',
       pageSize: 20,
     };
     const result = await new ContextEngine(services(), actor).collect(request);
@@ -301,6 +310,56 @@ describe('context engine', () => {
     if (!next.ok) return;
     expect(next.value.files).toHaveLength(1);
     expect(next.value.files[0]?.path).not.toBe(first.value.files[0]?.path);
+  });
+
+  it('filters clean-index files with the live-search visibility policy', async () => {
+    const filterSearchPaths = vi.fn().mockResolvedValue(['src/main.ts']);
+    const engine = new ContextEngine({
+      workspaceIndex: { status: vi.fn().mockResolvedValue(ok({
+        freshness: 'watching_clean',
+        snapshot: { entries: [
+          { kind: 'file', relativePath: 'src/main.ts' },
+          { kind: 'file', relativePath: '.env' },
+        ] },
+      })) },
+      search: {
+        filterSearchPaths,
+        searchFiles: vi.fn().mockResolvedValue(ok({ paths: [], truncated: false })),
+        searchText: vi.fn().mockResolvedValue(ok({ matches: [], truncated: false })),
+      },
+    }, actor);
+    const result = await engine.fullScan({ workspaceId: 'workspace-1' });
+    expect(result).toMatchObject({ ok: true, value: { completeness: 'complete', files: [{ path: 'src/main.ts' }] } });
+    expect(filterSearchPaths).toHaveBeenCalledWith('workspace-1', ['.env', 'src/main.ts']);
+  });
+
+  it('paginates a full inventory beyond the 500-result interactive search cap', async () => {
+    const paths = Array.from({ length: 751 }, (_, i) => `src/file-${String(i).padStart(4, '0')}.ts`);
+    const scanFiles = vi.fn().mockResolvedValue(ok({ paths, truncated: false }));
+    const searchFiles = vi.fn().mockResolvedValue(ok({ paths: paths.slice(0, 500), truncated: true }));
+    const engine = new ContextEngine({ search: {
+      scanFiles,
+      searchFiles,
+      searchText: vi.fn().mockResolvedValue(ok({ matches: [], truncated: false })),
+    } }, actor);
+    const collected: string[] = [];
+    let token: string | undefined;
+    const first = await engine.fullScan({ workspaceId: 'workspace-1', pageSize: 200 });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    collected.push(...first.value.files.map((file) => file.path));
+    expect(first.value.completeness).toBe('complete');
+    token = first.value.continuationToken;
+    while (token !== undefined) {
+      const page = await engine.continueFullScan(token, 200);
+      expect(page.ok).toBe(true);
+      if (!page.ok) return;
+      collected.push(...page.value.files.map((file) => file.path));
+      token = page.value.continuationToken;
+    }
+    expect(collected).toEqual(paths);
+    expect(scanFiles).toHaveBeenCalledOnce();
+    expect(searchFiles).not.toHaveBeenCalled();
   });
 
   it('supports cross-workspace search, paged full scans, and parallel many-file reads', async () => {

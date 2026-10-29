@@ -51,4 +51,50 @@ describe('ContextEngine with actual file and search providers', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+  it('discovers .gitignored source by default without exposing restricted secret files', async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-search-ignore-'));
+    try {
+      const root = await realpath(temp);
+      await writeFile(path.join(root, '.gitignore'), 'ignored.ts\\n');
+      await writeFile(path.join(root, 'ignored.ts'), 'export const ignoredNeedle = 1;\\n');
+      await writeFile(path.join(root, 'normal.ts'), 'export const normalNeedle = 2;\\n');
+      await writeFile(path.join(root, '.env'), 'SECRET_IGNORE_FIXTURE=needle_secret\\n');
+      await writeFile(path.join(root, '.env.example'), 'EXAMPLE_IGNORE_FIXTURE=sample\\n');
+      await writeFile(path.join(root, 'private.pem'), 'needle_private_key_fixture\\n');
+      const workspace: Workspace = { id: 'ignore-fixture', displayName: 'Ignore fixture', rootPath: root, realRootPath: root, createdAt: new Date(0).toISOString() };
+      const repository: WorkspaceRepository = {
+        async list() { return [workspace]; },
+        async get(id) { return id === workspace.id ? workspace : null; },
+        async insert() {},
+        async delete() {},
+      };
+      const actor = { clientId: 'ignore-client', clientName: 'Ignore fixture' };
+      const search = new SearchService(repository);
+      const text = await search.searchText(actor, workspace.id, { query: 'Needle' });
+      const files = await search.searchFiles(actor, workspace.id, {});
+      expect(text.ok).toBe(true);
+      expect(files.ok).toBe(true);
+      if (!text.ok || !files.ok) return;
+      const matchPaths = text.value.matches.map((match) => match.path.replace(/^[.][\\/]/, ''));
+      const filePaths = files.value.paths.map((file) => file.replace(/^[.][\\/]/, ''));
+      expect(matchPaths).toEqual(expect.arrayContaining(['ignored.ts', 'normal.ts']));
+      expect(filePaths).toContain('ignored.ts');
+      expect(filePaths).toContain('.env.example');
+      expect(filePaths).not.toContain('.env');
+      expect(filePaths).not.toContain('private.pem');
+      const scoped = await search.searchFiles(actor, workspace.id, { glob: '*.ts' });
+      expect(scoped.ok).toBe(true);
+      if (scoped.ok) {
+        const scopedPaths = scoped.value.paths.map((file) => file.replace(/^[.][\\/]/, ''));
+        expect(scopedPaths).toEqual(expect.arrayContaining(['ignored.ts', 'normal.ts']));
+        expect(scopedPaths).not.toContain('.env.example');
+      }
+
+      const denied = await search.searchText(actor, workspace.id, { query: 'SECRET', path: '.env', discovery: 'explicit' });
+      expect(denied).toMatchObject({ ok: false, error: { code: 'SECRET_ACCESS_DENIED' } });
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+    }
+  });
+
 });

@@ -143,6 +143,11 @@ export class WorkspacePathGuard {
     });
   }
 
+  /** Share the read-file secret policy with path discovery, before returning search matches. */
+  public assertSearchPathReadable(workspace: Workspace, relativePath: string, authorization?: InvocationAuthorization): Result<void> {
+    return this.assertSecretReadable(workspace, relativePath, authorization);
+  }
+
   private assertSecretReadable(workspace: Workspace, relativePath: string, authorization?: InvocationAuthorization): Result<void> {
     void workspace;
     if (isFullBypassAuthorization(authorization) || this.options.unrestricted === true || this.options.trustedWorkspaceAccess === true) {

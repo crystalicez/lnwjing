@@ -315,7 +315,8 @@ export class ContextEngine {
     });
   }
 
-  public async fullScan(request: WorkspaceFullScanRequest): Promise<Result<WorkspaceFullScanResult>> {
+  public async fullScan(request: WorkspaceFullScanRequest, signal?: AbortSignal): Promise<Result<WorkspaceFullScanResult>> {
+    signal?.throwIfAborted();
     this.economy.beginRequest();
     const workspaceIds = await this.resolveWorkspaceIds(request.workspaceId);
     if (!workspaceIds.ok) return workspaceIds;
@@ -326,7 +327,7 @@ export class ContextEngine {
     const maxResults = 500;
     const results = await Promise.all(workspaceIds.value.map(async (workspaceId) => ({
       workspaceId,
-      result: await this.safeSearchFiles(workspaceId, { query: '*', includeIgnored: request.includeIgnored === true, ...(request.path === undefined ? {} : { path: request.path }) }, maxResults, request.glob),
+      result: await this.safeFullScanFiles(workspaceId, { query: '*', includeIgnored: request.includeIgnored === true, ...(request.path === undefined ? {} : { path: request.path }) }, maxResults, request.glob),
     })));
     const files: Array<{ readonly workspaceId: string; readonly path: string }> = [];
     let searchTruncated = false;
@@ -431,16 +432,28 @@ export class ContextEngine {
       })
       .sort((left, right) => normalizePath(left, this.platform).localeCompare(normalizePath(right, this.platform)))
       .map((path) => ({ workspaceId, path }));
-    const observations = [sourceObservation(workspaceId, 'index', status, allFiles.length)];
+    // A fresh index may contain names that the requesting actor must not
+    // discover, so apply the same visibility policy as a live search.
+    let visibleFiles = allFiles;
+    if (this.services.search?.filterSearchPaths !== undefined) {
+      try {
+        const allowed = await this.services.search.filterSearchPaths(workspaceId, allFiles.map((file) => file.path));
+        const allowedPaths = new Set(allowed);
+        visibleFiles = allFiles.filter((file) => allowedPaths.has(file.path));
+      } catch {
+        return null; // A live search can enforce the policy at its own boundary.
+      }
+    }
+    const observations = [sourceObservation(workspaceId, 'index', status, visibleFiles.length)];
     const size = normalizePageSize(pageSize ?? 200);
-    const files = allFiles.slice(0, size);
-    const remaining = allFiles.slice(files.length);
+    const files = visibleFiles.slice(0, size);
+    const remaining = visibleFiles.slice(files.length);
     let continuationToken: string | undefined;
     if (remaining.length > 0) {
       continuationToken = randomUUID();
-      this.scanContinuations.set(scopedContinuationKey(this.continuationScope, continuationToken), { files: remaining, scannedWorkspaces: 1, scannedFiles: allFiles.length, searchTruncated: false, observations });
+      this.scanContinuations.set(scopedContinuationKey(this.continuationScope, continuationToken), { files: remaining, scannedWorkspaces: 1, scannedFiles: visibleFiles.length, searchTruncated: false, observations });
     }
-    return ok({ files, scannedWorkspaces: 1, scannedFiles: allFiles.length, hasMore: remaining.length > 0, searchTruncated: false, ...observationSummary(observations), ...(continuationToken === undefined ? {} : { continuationToken }) });
+    return ok({ files, scannedWorkspaces: 1, scannedFiles: visibleFiles.length, hasMore: remaining.length > 0, searchTruncated: false, ...observationSummary(observations), ...(continuationToken === undefined ? {} : { continuationToken }) });
   }
 
   private async resolveWorkspaceIds(workspaceId: string | undefined): Promise<Result<readonly string[]>> {
@@ -498,7 +511,7 @@ export class ContextEngine {
 
     const ranked = [...candidates.values()]
       .filter((candidate) => {
-        const allowed = request.includeIgnored === true || changed.has(normalizePath(candidate.path, this.platform)) || classifyContextPath(candidate.path, 'automatic').discoverable;
+        const allowed = request.includeIgnored === true || request.mode === 'exhaustive' || changed.has(normalizePath(candidate.path, this.platform)) || classifyContextPath(candidate.path, 'automatic').discoverable;
         if (!allowed) this.economy.recordSkipped(candidate.path);
         return allowed;
       })
@@ -547,19 +560,39 @@ export class ContextEngine {
     return observeProvider(search === undefined ? undefined : (): ReturnType<NonNullable<typeof search>['searchText']> => search.searchText(this.actor, workspaceId, {
         query: request.query,
         maxResults,
-        discovery: request.includeIgnored === true ? 'explicit' : 'automatic',
+        discovery: request.includeIgnored === true || request.mode === 'exhaustive' ? 'explicit' : 'automatic',
         ...(request.path === undefined ? {} : { path: request.path }),
       }), textSearchSchema, (value) => value.truncated);
   }
 
-  private async safeSearchFiles(workspaceId: string, request: WorkspaceContextRequest, maxResults: number, glob?: string): Promise<ObservedProvider<z.infer<typeof fileSearchSchema>>> {
-    const search = this.services.search;
-    return observeProvider(search === undefined ? undefined : (): ReturnType<NonNullable<typeof search>['searchFiles']> => search.searchFiles(this.actor, workspaceId, {
-        maxResults,
-        discovery: request.includeIgnored === true ? 'explicit' : 'automatic',
+  /** A full inventory must not silently stop at the 500-hit interactive search limit. */
+  private async safeFullScanFiles(
+    workspaceId: string, request: WorkspaceContextRequest, fallbackLimit: number, glob?: string, signal?: AbortSignal,
+  ): Promise<ObservedProvider<z.infer<typeof fileSearchSchema>>> {
+    const scanFiles = this.services.search?.scanFiles;
+    if (scanFiles === undefined) return this.safeSearchFiles(workspaceId, request, fallbackLimit, glob, signal);
+    return observeProvider(
+      (): ReturnType<typeof scanFiles> => scanFiles.call(this.services.search, this.actor, workspaceId, {
+        discovery: request.includeIgnored === true || request.mode === 'exhaustive' ? 'explicit' : 'automatic',
         ...(glob === undefined ? {} : { glob }),
         ...(request.path === undefined ? {} : { path: request.path }),
-      }), fileSearchSchema, (value) => value.truncated);
+      }, signal),
+      fileSearchSchema, (value) => value.truncated,
+    );
+  }
+
+  private async safeSearchFiles(workspaceId: string, request: WorkspaceContextRequest, maxResults: number, glob?: string, signal?: AbortSignal): Promise<ObservedProvider<z.infer<typeof fileSearchSchema>>> {
+    const search = this.services.search;
+    const options = {
+      maxResults,
+      discovery: (request.includeIgnored === true || request.mode === 'exhaustive' ? 'explicit' : 'automatic') as 'explicit' | 'automatic',
+      ...(glob === undefined ? {} : { glob }),
+      ...(request.path === undefined ? {} : { path: request.path }),
+    };
+    return observeProvider(search === undefined ? undefined : (): ReturnType<NonNullable<typeof search>['searchFiles']> =>
+      signal === undefined
+        ? search.searchFiles(this.actor, workspaceId, options)
+        : search.searchFiles(this.actor, workspaceId, options, signal), fileSearchSchema, (value) => value.truncated);
   }
 
   private async safeGitStatus(workspaceId: string): Promise<ObservedProvider<z.infer<typeof gitStatusSchema>>> {
@@ -641,7 +674,7 @@ export class ContextEngine {
         path: candidate.path,
         content: result.value.content,
         contextId,
-        discovery: request.includeIgnored === true || candidate.gitRelevance === 'changed' ? 'explicit' : 'automatic',
+        discovery: request.includeIgnored === true || request.mode === 'exhaustive' || candidate.gitRelevance === 'changed' ? 'explicit' : 'automatic',
         ...(result.value.encoding === undefined ? {} : { encoding: result.value.encoding }),
         ...(result.value.byteLength === undefined ? {} : { byteLength: result.value.byteLength }),
       });

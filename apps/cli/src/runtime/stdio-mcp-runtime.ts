@@ -318,7 +318,7 @@ export function createStdioMcpRuntime(
     goalRequestCancellation: requestCancellation,
     scheduledContinuations: scheduledContinuationService,
     goalMutationFence,
-    search: new SearchService(workspaceRepository),
+    search: new SearchService(workspaceRepository, undefined, pathGuard),
     workspaceIndex,
     git: gitService,
     repositoryImport: new RepositoryImportService(workspaceRepository, new SecureRepositoryImportRuntime(dataPath)),

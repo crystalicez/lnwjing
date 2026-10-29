@@ -653,7 +653,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   };
   const workspaceInfoService = new WorkspaceInfoService(workspaceRepository, workspaceService, unrestricted);
   const workspaceQueryService = new WorkspaceQueryService(workspaceRepository, pathGuard);
-  const searchService = new SearchService(workspaceRepository);
+  const searchService = new SearchService(workspaceRepository, undefined, pathGuard);
   const projectSnapshotService = new ProjectSnapshotService(workspaceRepository, {
     projectService,
     gitService,

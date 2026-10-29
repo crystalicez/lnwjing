@@ -17,11 +17,19 @@ export interface ProcessRunResult {
   readonly timedOut?: boolean;
   /** True when the caller intentionally stopped a streaming child after collecting enough evidence. */
   readonly stoppedEarly?: boolean;
+  /** True when stdout could not be fully retained or one record exceeded the streaming bound. */
+  readonly stdoutTruncated?: boolean;
+  /** Output callback failed; no partial result may be reported as successful. */
+  readonly observerFailed?: boolean;
 }
 
 export interface ProcessRunOptions {
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
+  /** Do not retain raw stdout when the observer already owns bounded result collection. */
+  readonly captureStdout?: boolean;
+  /** rg --files --null emits NUL-delimited paths, including names containing newlines. */
+  readonly stdoutDelimiter?: '\n' | '\0';
   /**
    * Observe complete stdout lines while the child is running. Returning true
    * requests an orderly process-tree stop without classifying the result as a timeout.
@@ -60,6 +68,9 @@ export class DirectProcessRunner implements ProcessRunner {
       let stdoutBytes = 0;
       let stderrBytes = 0;
       let stdoutLinePending = '';
+      const stdoutDecoder = new TextDecoder('utf-8');
+      let stdoutTruncated = false;
+      let observerFailed = false;
       let timedOut = false;
       let stoppedEarly = false;
       let settled = false;
@@ -106,24 +117,42 @@ export class DirectProcessRunner implements ProcessRunner {
       const captureStdout = (chunk: Buffer): void => {
         const observer = options.stopAfterStdoutLine;
         if (observer === undefined) {
+          if (stdoutBytes + chunk.byteLength > MAX_PROCESS_LOG_BYTES) stdoutTruncated = true;
           stdoutBytes = appendBounded(stdoutChunks, stdoutBytes, chunk);
           return;
         }
         if (stoppedEarly || timedOut) return;
-        stdoutLinePending += chunk.toString('utf8');
-        if (Buffer.byteLength(stdoutLinePending, 'utf8') > MAX_PROCESS_LOG_BYTES) {
-          requestStop('early');
-          return;
-        }
-        const lines = stdoutLinePending.split(/\r?\n/);
-        stdoutLinePending = lines.pop() ?? '';
-        for (const line of lines) {
-          stdoutBytes = appendBounded(stdoutChunks, stdoutBytes, Buffer.from(`${line}\n`, 'utf8'));
-          if (observer(line)) {
-            stdoutLinePending = '';
+        stdoutLinePending += stdoutDecoder.decode(chunk, { stream: true });
+        const delimiter = options.stdoutDelimiter ?? '\n';
+        let separator: number;
+        while ((separator = stdoutLinePending.indexOf(delimiter)) !== -1) {
+          const record = stdoutLinePending.slice(0, separator);
+          stdoutLinePending = stdoutLinePending.slice(separator + delimiter.length);
+          const line = delimiter === '\n' && record.endsWith('\r') ? record.slice(0, -1) : record;
+          if (options.captureStdout !== false) {
+            const encoded = Buffer.from(`${record}${delimiter}`, 'utf8');
+            if (stdoutBytes + encoded.byteLength > MAX_PROCESS_LOG_BYTES) {
+              stdoutTruncated = true;
+              requestStop('early');
+              return;
+            }
+            stdoutBytes = appendBounded(stdoutChunks, stdoutBytes, encoded);
+          }
+          try {
+            if (observer(line)) {
+              stdoutLinePending = '';
+              requestStop('early');
+              return;
+            }
+          } catch {
+            observerFailed = true;
             requestStop('early');
             return;
           }
+        }
+        if (Buffer.byteLength(stdoutLinePending, 'utf8') > MAX_PROCESS_LOG_BYTES) {
+          stdoutTruncated = true;
+          requestStop('early');
         }
       };
       const finish = (exitCode: number): void => {
@@ -137,6 +166,8 @@ export class DirectProcessRunner implements ProcessRunner {
           stderr: stderrText(),
           ...(timedOut ? { timedOut: true } : {}),
           ...(stoppedEarly ? { stoppedEarly: true } : {}),
+          ...(stdoutTruncated ? { stdoutTruncated: true } : {}),
+          ...(observerFailed ? { observerFailed: true } : {}),
         });
       };
       const timeoutMs = options.timeoutMs;
@@ -171,6 +202,10 @@ export interface SearchTextRequest {
   readonly glob?: string;
   readonly maxResults?: number;
   readonly discovery?: ContextDiscoveryMode;
+  /** Enforced before counting a result against maxResults. */
+  readonly allowPath?: (path: string) => boolean;
+  /** Globs applied by the host's access policy before rg reads file contents. */
+  readonly excludeGlobs?: readonly string[];
   readonly signal?: AbortSignal;
 }
 
@@ -190,6 +225,10 @@ export interface SearchFilesRequest {
   readonly glob?: string;
   readonly maxResults?: number;
   readonly discovery?: ContextDiscoveryMode;
+  /** Enforced before counting a result against maxResults. */
+  readonly allowPath?: (path: string) => boolean;
+  /** Globs applied by the host's access policy before rg reads file contents. */
+  readonly excludeGlobs?: readonly string[];
   readonly signal?: AbortSignal;
 }
 
@@ -199,6 +238,9 @@ export interface SearchFilesResult {
 }
 
 const SEARCH_PROCESS_TIMEOUT_MS = 45_000;
+/** Internal full-inventory ceiling. Pagination remains bounded by the MCP ContextEngine. */
+const MAX_INVENTORY_RESULTS = 100_000;
+const MAX_INVENTORY_PATH_BYTES = 16 * 1024 * 1024;
 
 export class RipgrepAdapter {
   public constructor(
@@ -224,49 +266,75 @@ export class RipgrepAdapter {
     if (!executable.ok) return executable;
     const discovery = request.discovery ?? 'automatic';
     const args = ['--json', '--no-heading', '--color', 'never', '--hidden', '--threads', '2'];
-    if (discovery === 'explicit') args.push('--no-ignore');
-    else args.push('--max-filesize', '8M');
+    // Git ignore rules are not an authorization boundary. The context policy
+    // still defers expensive generated/cache paths for automatic discovery.
+    args.push('--no-ignore');
+    // A directly requested file must not disappear because it exceeds 8 MiB.
+    if (discovery === 'automatic' && request.targetPath === undefined) args.push('--max-filesize', '8M');
     if (request.regex !== true) args.push('--fixed-strings');
+    // A later positive exception glob (such as .env.example) must not turn
+    // the request into a whitelist of only that exception.
+    if ((request.excludeGlobs?.length ?? 0) > 0) args.push('--glob', '**/*');
     if (discovery === 'automatic') this.appendDefaultGlobs(args);
+    for (const glob of request.excludeGlobs ?? []) args.push('--glob', glob);
+    // Keep the caller's glob last: an .env.example allow rule must not
+    // turn a '*.ts' search into a search for only the exception.
     if (request.glob !== undefined) args.push('--glob', request.glob);
     args.push('--', request.query, request.targetPath ?? '.');
     let observedMatches = 0;
+    const streamedMatches: SearchMatch[] = [];
     const processResult = await this.runner.run(executable.value, args, request.rootPath, {
       timeoutMs: SEARCH_PROCESS_TIMEOUT_MS,
+      captureStdout: false,
       ...(request.signal === undefined ? {} : { signal: request.signal }),
       stopAfterStdoutLine: (line) => {
         const match = this.parseMatch(line);
         if (match === null) return false;
         if (discovery === 'automatic' && !classifyContextPath(match.path, discovery).discoverable) return false;
+        if (request.allowPath?.(match.path) === false) return false;
         observedMatches += 1;
+        if (observedMatches <= maxResults) streamedMatches.push(match);
         return observedMatches > maxResults;
       },
     });
+    if (processResult.observerFailed === true) return err({ code: 'INTERNAL_ERROR', message: 'Search output processing failed', recoverable: true });
     if (!processResult.timedOut && !processResult.stoppedEarly && processResult.exitCode !== 0 && processResult.exitCode !== 1) {
       return err(classifySearchError(processResult.exitCode, processResult.stderr));
     }
-    const matches: SearchMatch[] = [];
-    let hasAdditionalMatch = false;
-    for (const line of processResult.stdout.split(/\r?\n/)) {
+    const matches: SearchMatch[] = [...streamedMatches];
+    let hasAdditionalMatch = observedMatches > maxResults;
+    // Test adapters and legacy ProcessRunner implementations may return stdout
+    // instead of invoking the streaming observer.
+    for (const line of observedMatches > 0 ? [] : processResult.stdout.split(/\r?\n/)) {
       const match = this.parseMatch(line);
       if (match === null) continue;
       if (discovery === 'automatic' && !classifyContextPath(match.path, discovery).discoverable) continue;
+      if (request.allowPath?.(match.path) === false) continue;
       if (matches.length >= maxResults) {
         hasAdditionalMatch = true;
         break;
       }
       matches.push(match);
     }
-    return ok({ matches, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || hasAdditionalMatch });
+    return ok({ matches, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || processResult.stdoutTruncated === true || hasAdditionalMatch });
     } finally {
       recordRipgrepExecution(performance.now() - startedAt);
       try { await diskLease.release(); } finally { admission.release(); }
     }
   }
 
-  public async searchFiles(request: SearchFilesRequest): Promise<Result<SearchFilesResult>> {
+  /** Internal bounded inventory used only by paginated workspace_full_scan. */
+  public scanFiles(request: Omit<SearchFilesRequest, 'maxResults'>): Promise<Result<SearchFilesResult>> {
+    return this.searchFilesBounded({ ...request, maxResults: MAX_INVENTORY_RESULTS }, MAX_INVENTORY_RESULTS);
+  }
+
+  public searchFiles(request: SearchFilesRequest): Promise<Result<SearchFilesResult>> {
+    return this.searchFilesBounded(request, MAX_SEARCH_RESULTS);
+  }
+
+  private async searchFilesBounded(request: SearchFilesRequest, allowedLimit: number): Promise<Result<SearchFilesResult>> {
     const maxResults = request.maxResults ?? DEFAULT_SEARCH_RESULTS;
-    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > MAX_SEARCH_RESULTS) {
+    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > allowedLimit) {
       return err({ code: 'INVALID_INPUT', message: 'Search result limit is invalid', recoverable: false });
     }
     const admission = await acquireRipgrep(request.rootPath, request.signal);
@@ -281,31 +349,55 @@ export class RipgrepAdapter {
     const executable = await this.resolver.resolve('rg');
     if (!executable.ok) return executable;
     const discovery = request.discovery ?? 'automatic';
-    const args = ['--files', '--hidden'];
-    if (discovery === 'explicit') args.push('--no-ignore');
+    const args = ['--files', '--hidden', '--null'];
+    args.push('--no-ignore');
+    // A later positive exception glob (such as .env.example) must not turn
+    // the request into a whitelist of only that exception.
+    if ((request.excludeGlobs?.length ?? 0) > 0) args.push('--glob', '**/*');
     if (discovery === 'automatic') this.appendDefaultGlobs(args);
+    for (const glob of request.excludeGlobs ?? []) args.push('--glob', glob);
+    // Keep the caller's glob last: an .env.example allow rule must not
+    // turn a '*.ts' search into a search for only the exception.
     if (request.glob !== undefined) args.push('--glob', request.glob);
     args.push('--');
     let observedPaths = 0;
+    let retainedPathBytes = 0;
+    let memoryLimitReached = false;
+    const streamedPaths: string[] = [];
     const processResult = await this.runner.run(executable.value, args, request.rootPath, {
       timeoutMs: SEARCH_PROCESS_TIMEOUT_MS,
+      captureStdout: false,
+      stdoutDelimiter: '\0',
       ...(request.signal === undefined ? {} : { signal: request.signal }),
       stopAfterStdoutLine: (line) => {
         if (line.length === 0) return false;
         if (discovery === 'automatic' && !classifyContextPath(line, discovery).discoverable) return false;
+        if (request.allowPath?.(line) === false) return false;
         observedPaths += 1;
-        return observedPaths > maxResults;
+        if (observedPaths > maxResults) return true;
+        if (allowedLimit > MAX_SEARCH_RESULTS) {
+          const pathBytes = Buffer.byteLength(line, 'utf8');
+          if (retainedPathBytes + pathBytes > MAX_INVENTORY_PATH_BYTES) {
+            memoryLimitReached = true;
+            return true;
+          }
+          retainedPathBytes += pathBytes;
+        }
+        streamedPaths.push(line);
+        return false;
       },
     });
+    if (processResult.observerFailed === true) return err({ code: 'INTERNAL_ERROR', message: 'Search output processing failed', recoverable: true });
     if (!processResult.timedOut && !processResult.stoppedEarly && processResult.exitCode !== 0 && processResult.exitCode !== 1) {
       return err(classifySearchError(processResult.exitCode, processResult.stderr));
     }
-    const discoveredPaths = processResult.stdout
-      .split(/\r?\n/)
+    const discoveredPaths = observedPaths > 0 ? streamedPaths : processResult.stdout
+      .split(/\0|\r?\n/)
       .filter((entry) => entry.length > 0)
-      .filter((entry) => discovery === 'explicit' || classifyContextPath(entry, discovery).discoverable);
+      .filter((entry) => discovery === 'explicit' || classifyContextPath(entry, discovery).discoverable)
+      .filter((entry) => request.allowPath?.(entry) !== false);
     const paths = discoveredPaths.slice(0, maxResults);
-    return ok({ paths, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || discoveredPaths.length > maxResults });
+    return ok({ paths, truncated: processResult.timedOut === true || processResult.stoppedEarly === true || processResult.stdoutTruncated === true || observedPaths > maxResults || memoryLimitReached || discoveredPaths.length > maxResults });
     } finally {
       recordRipgrepExecution(performance.now() - startedAt);
       try { await diskLease.release(); } finally { admission.release(); }

@@ -140,7 +140,7 @@ export const CORE_TOOL_RUNTIME_FIXTURES = {
   mcp_call: service({ server: 'server-1', tool: 'noop', arguments: {}, userConfirmed: true }, 'extensions.callMcpTool'),
   workspace_context: service({ workspaceId, query: 'smoke' }, 'search.searchText'),
   workspace_context_continue: service({ continuationToken: 'context-token' }, 'file.readFile', 'workspace_context'),
-  workspace_full_scan: service({ workspaceId }, 'search.searchFiles'),
+  workspace_full_scan: service({ workspaceId }, 'search.scanFiles'),
   workspace_full_scan_continue: deterministic(
     { continuationToken: 'scan-token' },
     { expected: { scannedWorkspaces: 1, scannedFiles: 2, hasMore: false }, requiredKeys: ['files'] },

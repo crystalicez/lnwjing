@@ -18,6 +18,37 @@ describe('RipgrepAdapter', () => {
     expect(result.stdout).not.toContain('late');
   });
 
+  it('contains exceptions thrown by stdout observers instead of crashing the host', async () => {
+    const runner = new DirectProcessRunner();
+    const result = await runner.run(process.execPath, ['-e', "process.stdout.write('needle\\n')"], process.cwd(), {
+      timeoutMs: 5_000,
+      stopAfterStdoutLine: () => { throw new Error('observer failure'); },
+    });
+    expect(result.observerFailed).toBe(true);
+    expect(result.stoppedEarly).toBe(true);
+  });
+
+  it('streams records beyond the historical 10 MiB output cap without silently dropping results', async () => {
+    const runner = new DirectProcessRunner();
+    let seen = 0;
+    const script = [
+      "let n = 0;",
+      "const line = 'x'.repeat(1024) + '\\n';",
+      "function send() { while (n < 12000) { n++; if (!process.stdout.write(line)) break; }",
+      "if (n < 12000) process.stdout.once('drain', send); }",
+      "send();",
+    ].join(' ');
+    const result = await runner.run(process.execPath, ['-e', script], process.cwd(), {
+      timeoutMs: 15_000,
+      captureStdout: false,
+      stopAfterStdoutLine: () => { seen += 1; return false; },
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stdoutTruncated).not.toBe(true);
+    expect(seen).toBe(12000);
+  });
+
   it('stops a high-volume child after enough stdout lines without retaining the full stream', async () => {
     const runner = new DirectProcessRunner();
     let observed = 0;
@@ -132,7 +163,7 @@ describe('RipgrepAdapter', () => {
 
     expect(result).toEqual({ ok: true, value: { matches: [], truncated: false } });
     expect(executable).toBe('rg.exe');
-    expect(receivedArgs).not.toContain('--no-ignore');
+    expect(receivedArgs).toContain('--no-ignore');
     expect(receivedArgs).toContain('--max-filesize');
     expect(receivedArgs).toContain('--threads');
     expect(receivedArgs).toContain('--hidden');
@@ -158,6 +189,20 @@ describe('RipgrepAdapter', () => {
     });
     expect(receivedArgs).not.toContain('--fixed-strings');
     expect(receivedArgs).toContain('failureLegacyBotName\\(\\)');
+  });
+
+  it('does not apply the 8 MiB automatic cap to a directly requested file', async () => {
+    let args: readonly string[] = [];
+    const runner: ProcessRunner = { async run(_cmd, values): Promise<ProcessRunResult> {
+      args = values;
+      return { exitCode: 1, stdout: '', stderr: '' };
+    } };
+    const resolver: ExecutableResolver = { resolve: async () => ({ ok: true, value: 'rg.exe' }) };
+    const adapter = new RipgrepAdapter(resolver, runner);
+    expect((await adapter.searchText({ rootPath: 'C:\\\\workspace', targetPath: 'large.ts', query: 'needle' })).ok).toBe(true);
+    expect(args).not.toContain('--max-filesize');
+    expect((await adapter.searchText({ rootPath: 'C:\\\\workspace', query: 'needle' })).ok).toBe(true);
+    expect(args).toContain('--max-filesize');
   });
 
   it('uses an explicit text-search target instead of searching the whole cwd', async () => {

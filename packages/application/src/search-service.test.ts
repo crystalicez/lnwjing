@@ -6,6 +6,23 @@ import { SearchService, type SearchAdapter } from './search-service.js';
 import type { WorkspaceRepository, Workspace } from '@lnwjing/workspace';
 
 describe('SearchService', () => {
+  it('filters clean-index inventories using the same secret policy as live search', async () => {
+    const workspace: Workspace = {
+      id: 'workspace-1', displayName: 'Fixture', rootPath: 'C:\\\\workspace',
+      realRootPath: 'C:\\\\workspace', createdAt: new Date(0).toISOString(),
+    };
+    const repository: WorkspaceRepository = {
+      async list() { return [workspace]; },
+      async get(id) { return id === workspace.id ? workspace : null; },
+      async insert() {},
+      async delete() {},
+    };
+    const service = new SearchService(repository);
+    expect(await service.filterSearchPaths(workspace.id, [
+      'src\\\\main.ts', '.env', '.env.example', '.aws\\\\credentials', 'private.pem',
+    ])).toEqual(['src\\\\main.ts', '.env.example']);
+  });
+
   it('resolves the workspace before delegating a bounded text search', async () => {
     const workspace: Workspace = { id: 'workspace-1', displayName: 'Fixture', rootPath: 'C:\\workspace', realRootPath: 'C:\\workspace', createdAt: new Date(0).toISOString() };
     let receivedRoot = '';

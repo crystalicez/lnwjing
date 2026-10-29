@@ -44,13 +44,13 @@ export function contextTools(context: McpToolContext, engine: ContextEngine): Mc
       permission: 'READ',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: workspaceFullScanSchema,
-      handler: async (input) => engine.fullScan({
+      handler: async (input, signal) => engine.fullScan({
         ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
         ...(input.path === undefined ? {} : { path: input.path }),
         ...(input.glob === undefined ? {} : { glob: input.glob }),
         includeIgnored: input.includeIgnored,
         ...(input.pageSize === undefined ? {} : { pageSize: input.pageSize }),
-      }),
+      }, signal),
     }),
     defineTool({
       name: 'workspace_full_scan_continue',
