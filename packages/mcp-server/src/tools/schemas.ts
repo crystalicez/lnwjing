@@ -266,7 +266,7 @@ export const workspaceFullScanSchema = z.object({
   workspaceId: optionalWorkspaceIdSchema,
   path: pathSchema.optional(),
   glob: z.string().max(1024).optional(),
-  includeIgnored: z.boolean().default(false),
+  includeIgnored: z.boolean().default(true),
   pageSize: z.number().int().min(1).max(500).optional(),
 }).strict();
 export const workspaceFullScanContinueSchema = workspaceContextContinueSchema;

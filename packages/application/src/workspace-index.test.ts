@@ -64,7 +64,7 @@ describe('WorkspaceIndexService', () => {
       const result = await indexing;
       expect(result).toMatchObject({ ok: true });
       if (result.ok) expect(result.value.entries.filter((entry) => entry.kind === 'file')).toHaveLength(9);
-      expect(vi.mocked(readdir)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(readdir).mock.calls.filter(([directory]) => directory === root)).toHaveLength(1);
     } finally {
       proceed.resolve();
       vi.mocked(readdir).mockReset();

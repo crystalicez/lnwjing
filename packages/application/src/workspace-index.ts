@@ -6,7 +6,7 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { setImmediate as yieldToEventLoop, setTimeout as pause } from 'node:timers/promises';
 import { appError, err, ok, type Result } from '@lnwjing/domain';
-import { acquireDiskScanLease, classifyContextPath, type ContextDiscoveryMode } from '@lnwjing/search';
+import { acquireDiskScanLease, hasWaitingDiskScanRequests, classifyContextPath, type ContextDiscoveryMode } from '@lnwjing/search';
 import { hostPathApi, isHostPathWithin, resolveHostPath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import { WorkspaceIndexQueue, type WorkspaceIndexQueueOptions, type WorkspaceIndexQueueStatus } from './workspace-index-queue.js';
 import { WorkspaceIndexBusyError, withWorkspaceIndexMutex } from './workspace-index-mutex.js';
@@ -723,6 +723,8 @@ export class WorkspaceIndexService {
       const checkpoint = async (): Promise<void> => {
         signal?.throwIfAborted();
         if (Date.now() - acquiredAt < 2_000) return;
+        acquiredAt = Date.now();
+        if (!(await hasWaitingDiskScanRequests())) return;
         const held = release;
         release = undefined;
         await held?.();

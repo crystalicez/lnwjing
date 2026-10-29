@@ -82,14 +82,14 @@ describe('context engine', () => {
     expect(scanFiles).toHaveBeenCalledTimes(3);
   });
 
-  it('defaults full scans to automatic filtering and preserves explicit opt-in', async () => {
-    expect(workspaceFullScanSchema.parse({}).includeIgnored).toBe(false);
+  it('preserves original full-scan discovery and supports explicit filtered mode', async () => {
+    expect(workspaceFullScanSchema.parse({}).includeIgnored).toBe(true);
     const searchFiles = vi.fn().mockResolvedValue(ok({ paths: ['src/index.ts'], truncated: false }));
     const engine = new ContextEngine({ search: { searchFiles } }, actor);
-    expect((await engine.fullScan({ workspaceId: 'workspace-1' })).ok).toBe(true);
-    expect(searchFiles).toHaveBeenLastCalledWith(actor, 'workspace-1', expect.objectContaining({ discovery: 'automatic' }));
-    expect((await engine.fullScan({ workspaceId: 'workspace-1', includeIgnored: true })).ok).toBe(true);
+    expect((await engine.fullScan({ ...workspaceFullScanSchema.parse({}), workspaceId: 'workspace-1' })).ok).toBe(true);
     expect(searchFiles).toHaveBeenLastCalledWith(actor, 'workspace-1', expect.objectContaining({ discovery: 'explicit' }));
+    expect((await engine.fullScan({ workspaceId: 'workspace-1', includeIgnored: false })).ok).toBe(true);
+    expect(searchFiles).toHaveBeenLastCalledWith(actor, 'workspace-1', expect.objectContaining({ discovery: 'automatic' }));
   });
 
 

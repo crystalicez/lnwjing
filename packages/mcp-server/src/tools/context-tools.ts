@@ -40,7 +40,7 @@ export function contextTools(context: McpToolContext, engine: ContextEngine): Mc
     }),
     defineTool({
       name: 'workspace_full_scan',
-      description: 'Enumerate workspace files with per-source completeness. A fresh clean automatic index is preferred when applicable; otherwise walk directories lazily with resumable in-memory pagination and no content reads. Full coverage requires following continuation tokens.',
+      description: 'Enumerate workspace files with per-source completeness. Includes ignored paths by default, matching Original v5.8.7. Set includeIgnored: false to use faster automatic filtering and a fresh clean index when available. Otherwise walk directories lazily without content reads. Follow continuation tokens for full coverage.',
       permission: 'READ',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: workspaceFullScanSchema,

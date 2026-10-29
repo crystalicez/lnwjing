@@ -1,11 +1,11 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { acquireDiskScanLease, type DiskScanLease } from './ripgrep-disk-lease.js';
+import { acquireDiskScanLease, hasWaitingDiskScanRequests, type DiskScanLease } from './ripgrep-disk-lease.js';
 
 const temporaryDirectories: string[] = [];
 async function testDirectory(): Promise<string> {
@@ -24,6 +24,32 @@ afterEach(async () => {
 });
 
 describe('same-user cross-process ripgrep disk budget', () => {
+  it('advertises waiting work only during actual contention and removes its marker on grant', async () => {
+    const directory = await testDirectory();
+    const holder = await grant('E:\\index', directory);
+    expect(await hasWaitingDiskScanRequests({ directory })).toBe(false);
+    const waiting = acquireDiskScanLease('E:\\search', undefined, { directory, waitMs: 2_000 });
+    try {
+      let visible = false;
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (await hasWaitingDiskScanRequests({ directory })) {
+          visible = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(visible).toBe(true);
+      expect((await readdir(directory)).some((name) => name.startsWith('wait-'))).toBe(true);
+    } finally {
+      await holder.release();
+    }
+    const resumed = await waiting;
+    expect(resumed.status).toBe('granted');
+    if (resumed.status === 'granted') await resumed.release();
+    expect(await hasWaitingDiskScanRequests({ directory })).toBe(false);
+    expect((await readdir(directory)).some((name) => name.startsWith('wait-'))).toBe(false);
+  });
+
   it('admits one heavy disk scan across roots in poteto-mode', async () => {
     const directory = await testDirectory();
     const first = await grant('E:\\project-a', directory);
@@ -57,6 +83,41 @@ describe('same-user cross-process ripgrep disk budget', () => {
     }
   });
 
+  it('makes a waiting MCP process visible to the indexing process', async () => {
+    const directory = await testDirectory();
+    const holder = await grant('E:\\index-child', directory);
+    const moduleUri = pathToFileURL(path.join(import.meta.dirname, 'ripgrep-disk-lease.ts')).href;
+    const script = `import { acquireDiskScanLease } from ${JSON.stringify(moduleUri)};
+      const lease = await acquireDiskScanLease('E:/child-search', undefined, { directory: process.argv[1], waitMs: 3000 });
+      process.stdout.write(lease.status);
+      if (lease.status === 'granted') await lease.release();`;
+    const child = spawn(process.execPath, [
+      '--experimental-strip-types', '--input-type=module', '-e', script, directory,
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+    const completed = new Promise<number | null>((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', resolve);
+    });
+    try {
+      let visible = false;
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        visible = await hasWaitingDiskScanRequests({ directory });
+        if (visible) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(visible).toBe(true);
+      await holder.release();
+      expect(await completed).toBe(0);
+      expect(output).toBe('granted');
+      expect(await hasWaitingDiskScanRequests({ directory })).toBe(false);
+    } finally {
+      await holder.release();
+      if (child.exitCode === null) child.kill();
+    }
+  }, 8_000);
+
   it('limits overlapping scans of the same root despite an unused global slot', async () => {
     const directory = await testDirectory();
     const first = await grant('E:\\same', directory);
@@ -67,6 +128,27 @@ describe('same-user cross-process ripgrep disk budget', () => {
     }
     const second = await grant('E:\\same', directory);
     await second.release();
+  });
+
+  it('removes a visible waiter marker when a queued scan is cancelled', async () => {
+    const directory = await testDirectory();
+    const holder = await grant('E:\\busy-marker', directory);
+    const controller = new AbortController();
+    const queued = acquireDiskScanLease('E:\\cancelled-marker', controller.signal, { directory, waitMs: 2_000 });
+    try {
+      let announced = false;
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        announced = await hasWaitingDiskScanRequests({ directory });
+        if (announced) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(announced).toBe(true);
+    } finally {
+      controller.abort();
+    }
+    expect(await queued).toEqual({ status: 'aborted' });
+    expect(await hasWaitingDiskScanRequests({ directory })).toBe(false);
+    await holder.release();
   });
 
   it('cancels queued scans promptly without leaking global slots', async () => {
@@ -92,6 +174,16 @@ describe('same-user cross-process ripgrep disk budget', () => {
     const recovered = await acquireDiskScanLease(root, undefined, { directory, waitMs: 900 });
     expect(recovered.status).toBe('granted');
     if (recovered.status === 'granted') await recovered.release();
+  });
+
+  it('does not treat a dead orphaned request marker as ongoing contention', async () => {
+    const directory = await testDirectory();
+    const marker = path.join(directory, 'wait-00000000-0000-0000-0000-000000000000.lock');
+    await writeFile(marker, JSON.stringify({ pid: 99999999, token: 'orphaned' }));
+    const old = new Date(Date.now() - 180_000);
+    await utimes(marker, old, old);
+    expect(await hasWaitingDiskScanRequests({ directory })).toBe(false);
+    expect((await readdir(directory)).some((name) => name.startsWith('wait-'))).toBe(false);
   });
 
   it('uses the physical root when different directory aliases request a scan', async () => {
