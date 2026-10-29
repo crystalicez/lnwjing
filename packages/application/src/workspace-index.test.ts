@@ -1,8 +1,10 @@
 import { createReadStream, watch, type FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import os from 'node:os';
+import { setTimeout as pause } from 'node:timers/promises';
+import { acquireDiskScanLease } from '@lnwjing/search';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { Workspace, WorkspaceRepository } from '@lnwjing/workspace';
@@ -35,6 +37,105 @@ function memoryStore(beforeCommit?: () => Promise<void>): WorkspaceIndexStore {
 }
 
 describe('WorkspaceIndexService', () => {
+  it('hands off the disk slot during a full index and resumes without restarting directory discovery', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-handoff-'));
+    const workspace: Workspace = { id: 'handoff', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
+    const entered = Promise.withResolvers<void>();
+    const proceed = Promise.withResolvers<void>();
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    try {
+      for (let index = 0; index < 9; index += 1) {
+        await writeFile(path.join(root, `file-${index}.ts`), `export const file${index} = ${index};`);
+      }
+      vi.mocked(readdir).mockImplementationOnce(async (directory): Promise<never> => {
+        entered.resolve();
+        await proceed.promise;
+        return await actual.readdir(directory, { withFileTypes: true }) as never;
+      });
+      const indexing = service.indexWorkspace(workspace.id);
+      await entered.promise;
+      const interactive = acquireDiskScanLease(root, undefined, { waitMs: 7_000 });
+      await pause(2_200);
+      proceed.resolve();
+      const granted = await interactive;
+      expect(granted.status).toBe('granted');
+      if (granted.status === 'granted') await granted.release();
+      const result = await indexing;
+      expect(result).toMatchObject({ ok: true });
+      if (result.ok) expect(result.value.entries.filter((entry) => entry.kind === 'file')).toHaveLength(9);
+      expect(vi.mocked(readdir)).toHaveBeenCalledTimes(1);
+    } finally {
+      proceed.resolve();
+      vi.mocked(readdir).mockReset();
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 12_000);
+
+  it('releases the disk slot when cancellation happens during a handoff', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-handoff-cancel-'));
+    const workspace: Workspace = { id: 'handoff-cancel', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const store = memoryStore();
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), store);
+    const entered = Promise.withResolvers<void>();
+    const proceed = Promise.withResolvers<void>();
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const controller = new AbortController();
+    try {
+      for (let index = 0; index < 9; index += 1) await writeFile(path.join(root, `file-${index}.ts`), 'export const value = true;');
+      vi.mocked(readdir).mockImplementationOnce(async (directory): Promise<never> => {
+        entered.resolve();
+        await proceed.promise;
+        return await actual.readdir(directory, { withFileTypes: true }) as never;
+      });
+      const indexing = service.indexWorkspace(workspace.id, { signal: controller.signal });
+      await entered.promise;
+      const contender = acquireDiskScanLease(root, undefined, { waitMs: 7_000 });
+      await pause(2_200);
+      proceed.resolve();
+      const granted = await contender;
+      expect(granted.status).toBe('granted');
+      controller.abort();
+      if (granted.status === 'granted') await granted.release();
+      expect(await indexing).toMatchObject({ ok: false, error: { code: 'PROCESS_TIMEOUT' } });
+      expect(await store.load(workspace.id)).toBeNull();
+      const after = await acquireDiskScanLease(root, undefined, { waitMs: 500 });
+      expect(after.status).toBe('granted');
+      if (after.status === 'granted') await after.release();
+    } finally {
+      controller.abort();
+      proceed.resolve();
+      vi.mocked(readdir).mockReset();
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 12_000);
+
+  it('rejects oversized deep analysis before opening the source stream', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-deep-budget-'));
+    const workspace: Workspace = { id: 'deep-budget', displayName: 'fixture', rootPath: root, realRootPath: root, createdAt: new Date().toISOString() };
+    const service = new WorkspaceIndexService(fixtureRepository(workspace), memoryStore());
+    try {
+      const source = path.join(root, 'source.ts');
+      await writeFile(source, 'export const small = true;');
+      expect((await service.indexWorkspace(workspace.id)).ok).toBe(true);
+      const mockedMetadata = await lstat(source);
+      mockedMetadata.size = 128 * 1024 * 1024 + 1;
+      vi.mocked(lstat).mockResolvedValueOnce(mockedMetadata);
+      vi.mocked(createReadStream).mockClear();
+      expect(await service.indexPath(workspace.id, 'source.ts', { deepLargeFile: true })).toMatchObject({
+        ok: false, error: { code: 'FILE_TOO_LARGE' },
+      });
+      expect(vi.mocked(createReadStream)).not.toHaveBeenCalled();
+      expect((await service.indexPath(workspace.id, 'source.ts')).ok).toBe(true);
+    } finally {
+      vi.mocked(lstat).mockClear();
+      await service.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('updates an existing 30,000-entry index without losing unrelated files', async () => {
     // Synthetic persisted metadata in RAM: avoids creating 30k files on SSD.
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-30k-'));

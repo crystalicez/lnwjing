@@ -72,6 +72,8 @@ export interface WorkspaceIndexEntry {
 
 const WORKSPACE_INDEX_DISCOVERY_POLICY_REVISION = 1;
 const MAX_INDEX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_DEEP_INDEX_FILE_BYTES = 128 * 1024 * 1024;
+class DeepIndexFileTooLargeError extends Error {}
 const MAX_CACHED_INDEX_BYTES = 32 * 1024 * 1024;
 
 export interface WorkspaceIndexSnapshot {
@@ -357,8 +359,10 @@ export class WorkspaceIndexService {
       let changed = false;
       // Every incremental batch can read many 8 MiB files; share the same
       // cross-process heavy-I/O lease used by full scans and ripgrep.
-      await this.scanWithBudget(rootPath, async () => {
+      await this.scanWithBudget(rootPath, async (checkpoint) => {
+        let processed = 0;
         for (const [normalized, absolutePath] of validatedPaths) {
+          if (++processed % 8 === 0) await checkpoint();
           options.signal?.throwIfAborted();
           if (!classifyContextPath(normalized, discovery).discoverable || (discovery === 'automatic' && this.store.isInternalPath?.(absolutePath))) continue;
           const original = entries.get(normalized);
@@ -366,8 +370,11 @@ export class WorkspaceIndexService {
           let isDirectory = false;
           try {
             const metadata = await lstat(absolutePath);
+            if (options.deepLargeFile === true && metadata.isFile() && metadata.size > MAX_DEEP_INDEX_FILE_BYTES) {
+              throw new DeepIndexFileTooLargeError();
+            }
             isDirectory = metadata.isDirectory();
-            if (isDirectory) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal);
+            if (isDirectory) await this.scanDirectory(rootPath, absolutePath, additions, discovery, options.signal, undefined, { visited: 0 }, checkpoint);
             else additions.push(await this.describePath(rootPath, absolutePath, metadata, options.signal,
               options.rebuild === true ? undefined : entries, options.deepLargeFile === true));
           } catch (error: unknown) {
@@ -653,7 +660,7 @@ export class WorkspaceIndexService {
       ? new Map(previous.entries.map((entry) => [entry.relativePath, entry])) : undefined;
     // One heavy full-workspace walk at a time across active projects in this
     // process; incremental file updates remain independent of this budget.
-    await this.scanWithBudget(rootPath, () => this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable), options.signal);
+    await this.scanWithBudget(rootPath, (checkpoint) => this.scanDirectory(rootPath, rootPath, entries, discovery, options.signal, reusable, { visited: 0 }, checkpoint), options.signal);
     const snapshot = this.snapshotValue(workspace, entries);
     options.signal?.throwIfAborted();
     // Avoid serializing and rewriting a whole index when its contents did not
@@ -685,6 +692,7 @@ export class WorkspaceIndexService {
     } catch (error: unknown) {
       if (signal?.aborted) return err(appError('PROCESS_TIMEOUT', 'Workspace index update was cancelled', true));
       if (error instanceof WorkspaceIndexBusyError) return err(appError('CONFLICT', error.message, true));
+      if (error instanceof DeepIndexFileTooLargeError) return err(appError('FILE_TOO_LARGE', 'Deep file analysis exceeds the 128 MiB read budget'));
       return err(appError('INTERNAL_ERROR', 'Workspace index update failed'));
     }
   }
@@ -706,19 +714,33 @@ export class WorkspaceIndexService {
   }
 
   /** Full and incremental directory scans share the same one-slot disk budget as rg.exe. */
-  private scanWithBudget<T>(rootPath: string, scan: () => Promise<T>, signal?: AbortSignal, priority: 'interactive' | 'background' = 'background'): Promise<T> {
+  private scanWithBudget<T>(rootPath: string, scan: (checkpoint: () => Promise<void>) => Promise<T>, signal?: AbortSignal, priority: 'interactive' | 'background' = 'background'): Promise<T> {
     return withIndexScanBudget(async () => {
       const lease = await acquireDiskScanLease(rootPath, signal);
       if (lease.status !== 'granted') throw new WorkspaceIndexBusyError();
+      let release: (() => Promise<void>) | undefined = lease.release;
+      let acquiredAt = Date.now();
+      const checkpoint = async (): Promise<void> => {
+        signal?.throwIfAborted();
+        if (Date.now() - acquiredAt < 2_000) return;
+        const held = release;
+        release = undefined;
+        await held?.();
+        await pause(300, undefined, { ...(signal === undefined ? {} : { signal }) });
+        const resumed = await acquireDiskScanLease(rootPath, signal, { waitMs: 60_000 });
+        if (resumed.status !== 'granted') throw new WorkspaceIndexBusyError();
+        release = resumed.release;
+        acquiredAt = Date.now();
+      };
       try {
-        return await scan();
+        return await scan(checkpoint);
       } finally {
-        await lease.release();
+        await release?.();
       }
     }, signal, priority);
   }
 
-  private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>, progress: { visited: number } = { visited: 0 }): Promise<void> {
+  private async scanDirectory(rootPath: string, directoryPath: string, entries: WorkspaceIndexEntry[], discovery: ContextDiscoveryMode, signal?: AbortSignal, reusable?: ReadonlyMap<string, WorkspaceIndexEntry>, progress: { visited: number } = { visited: 0 }, checkpoint?: () => Promise<void>): Promise<void> {
     signal?.throwIfAborted();
     if (discovery === 'automatic' && this.store.isInternalPath?.(directoryPath)) return;
     const api = hostPathApi(process.platform);
@@ -735,13 +757,15 @@ export class WorkspaceIndexService {
       if (!classifyContextPath(childRelativePath, discovery).discoverable) continue;
       // Yield periodically so a 30k+ path walk does not monopolize Electron's
       // main event loop. No timer or disk polling occurs while idle.
-      if (++progress.visited % 256 === 0) {
+      progress.visited += 1;
+      if (progress.visited % 8 === 0) await checkpoint?.();
+      if (progress.visited % 256 === 0) {
         signal?.throwIfAborted();
         await yieldToEventLoop();
       }
       const beforeChild = entries.length;
       try {
-        if (child.isDirectory()) await this.scanDirectory(rootPath, childPath, entries, discovery, signal, reusable, progress);
+        if (child.isDirectory()) await this.scanDirectory(rootPath, childPath, entries, discovery, signal, reusable, progress, checkpoint);
         else if (child.isSymbolicLink()) entries.push(await this.describePath(rootPath, childPath, await statOrLstat(childPath, true), signal));
         else entries.push(await this.describePath(rootPath, childPath, await stat(childPath), signal, reusable));
       } catch (error: unknown) {
@@ -861,6 +885,7 @@ async function analyzeOversizedSource(
     signal?.throwIfAborted();
     const buffer = chunk as Buffer;
     bytes += buffer.byteLength;
+    if (bytes > MAX_DEEP_INDEX_FILE_BYTES) throw new DeepIndexFileTooLargeError();
     digest.update(buffer);
     blob.update(buffer);
     consume(decoder.decode(buffer, { stream: true }));
