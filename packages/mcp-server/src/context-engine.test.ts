@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { err, ok } from '@lnwjing/domain';
 import type { McpApplicationServices } from './tools/tool-types.js';
-import { ContextEngine, type WorkspaceContextRequest } from './context-engine.js';
+import { ContextEngine, type ScanContinuation, type WorkspaceContextRequest } from './context-engine.js';
+import { ContinuationStore } from './continuation-store.js';
 import { workspaceFullScanSchema } from './tools/schemas.js';
 
 const actor = { clientId: 'context-test', clientName: 'context-test' };
@@ -384,6 +385,47 @@ describe('context engine', () => {
     expect(collected).toEqual(paths);
     expect(scanFiles).toHaveBeenCalledOnce();
     expect(searchFiles).not.toHaveBeenCalled();
+  });
+
+  it('reports when an inventory cannot fit its in-memory continuation budget', async () => {
+    const store = new ContinuationStore<ScanContinuation>({
+      maxWeight: 1, weightOf: (): number => 2,
+    });
+    const engine = new ContextEngine({
+      search: { scanFiles: vi.fn().mockResolvedValue(ok({ paths: ['one.ts', 'two.ts'], truncated: false })),
+        searchText: vi.fn(), searchFiles: vi.fn() },
+    }, actor, undefined, undefined, store);
+    const result = await engine.fullScan({ workspaceId: 'workspace-1', pageSize: 1 });
+    expect(result).toMatchObject({ ok: false, error: { code: 'CONFLICT', recoverable: true } });
+    expect(store.size()).toBe(0);
+  });
+
+  it('keeps one inventory array across pages instead of copying every remaining file', async () => {
+    // No 30k-file disk fixture: the inventory lives entirely in memory.
+    const paths = Array.from({ length: 30_001 }, (_, i) => `src/file-${String(i).padStart(5, '0')}.ts`);
+    const scanFiles = vi.fn().mockResolvedValue(ok({ paths, truncated: false }));
+    const store = new ContinuationStore<ScanContinuation>();
+    const engine = new ContextEngine({ search: {
+      scanFiles, searchFiles: vi.fn(), searchText: vi.fn(),
+    } }, actor, undefined, undefined, store);
+    const first = await engine.fullScan({ workspaceId: 'workspace-1', pageSize: 200 });
+    expect(first.ok).toBe(true);
+    if (!first.ok || first.value.continuationToken === undefined) return;
+    const firstToken = first.value.continuationToken;
+    const firstState = store.take(`${actor.clientId.length}:${actor.clientId}:${firstToken}`);
+    expect(firstState?.nextIndex).toBe(200);
+    expect(firstState?.files).toHaveLength(paths.length);
+    if (firstState === undefined) return;
+    store.set(`${actor.clientId.length}:${actor.clientId}:${firstToken}`, firstState);
+
+    const second = await engine.continueFullScan(firstToken, 200);
+    expect(second.ok).toBe(true);
+    if (!second.ok || second.value.continuationToken === undefined) return;
+    expect(second.value.files[0]?.path).toBe(paths[200]);
+    const secondState = store.take(`${actor.clientId.length}:${actor.clientId}:${second.value.continuationToken}`);
+    expect(secondState?.files).toBe(firstState.files);
+    expect(secondState?.nextIndex).toBe(400);
+    expect(scanFiles).toHaveBeenCalledTimes(1);
   });
 
   it('supports cross-workspace search, paged full scans, and parallel many-file reads', async () => {

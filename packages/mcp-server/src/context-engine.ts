@@ -208,10 +208,27 @@ export interface ContextContinuation {
 
 export interface ScanContinuation {
   readonly files: readonly { readonly workspaceId: string; readonly path: string }[];
+  readonly nextIndex: number;
+  readonly estimatedBytes: number;
   readonly scannedWorkspaces: number;
   readonly scannedFiles: number;
   readonly searchTruncated: boolean;
   readonly observations: readonly ContextSourceObservation[];
+}
+
+const MAX_SCAN_CONTINUATION_MEMORY_BYTES = 64 * 1024 * 1024;
+
+function inventoryMemoryWeight(files: readonly { readonly workspaceId: string; readonly path: string }[]): number {
+  let bytes = 0;
+  for (const file of files) bytes += 96 + 2 * (Buffer.byteLength(file.path, 'utf8') + Buffer.byteLength(file.workspaceId, 'utf8'));
+  return bytes;
+}
+
+export function createScanContinuationStore(): ContinuationStore<ScanContinuation> {
+  return new ContinuationStore<ScanContinuation>({
+    maxWeight: MAX_SCAN_CONTINUATION_MEMORY_BYTES,
+    weightOf: (value) => value.estimatedBytes,
+  });
 }
 
 const DEFAULT_RESPONSE_TARGET_BYTES = 256 * 1024;
@@ -229,7 +246,7 @@ export class ContextEngine {
     private readonly actor: FileActor,
     private readonly economy: ContextEconomyRuntime = new ContextEconomyRuntime(),
     private readonly continuations: ContinuationStore<ContextContinuation> = new ContinuationStore<ContextContinuation>(),
-    private readonly scanContinuations: ContinuationStore<ScanContinuation> = new ContinuationStore<ScanContinuation>(),
+    private readonly scanContinuations: ContinuationStore<ScanContinuation> = createScanContinuationStore(),
   ) {
     this.continuationScope = actor.sessionId?.trim() || actor.clientId;
     this.platform = services.platform ?? process.platform;
@@ -350,12 +367,15 @@ export class ContextEngine {
     const deduped = dedupePaths(files, this.platform);
     const pageSize = normalizePageSize(request.pageSize ?? 200);
     const page = deduped.slice(0, pageSize);
-    const remaining = deduped.slice(page.length);
-    const hasMore = remaining.length > 0;
+    const hasMore = page.length < deduped.length;
     let continuationToken: string | undefined;
     if (hasMore) {
       continuationToken = randomUUID();
-      this.scanContinuations.set(scopedContinuationKey(this.continuationScope, continuationToken), { files: remaining, scannedWorkspaces, scannedFiles: deduped.length, searchTruncated, observations });
+      const retained = this.scanContinuations.set(scopedContinuationKey(this.continuationScope, continuationToken), {
+        files: deduped, nextIndex: page.length, estimatedBytes: inventoryMemoryWeight(deduped),
+        scannedWorkspaces, scannedFiles: deduped.length, searchTruncated, observations,
+      });
+      if (!retained) return err({ code: 'CONFLICT', message: 'Full scan exceeds the in-memory pagination budget; narrow its scope', recoverable: true });
     }
     return ok({
       files: page,
@@ -372,18 +392,21 @@ export class ContextEngine {
     const continuation = this.scanContinuations.take(scopedContinuationKey(this.continuationScope, token));
     if (continuation === undefined) return err({ code: 'INVALID_INPUT', message: 'Scan continuation token is invalid or expired', recoverable: false });
     const size = normalizePageSize(pageSize ?? 200);
-    const files = continuation.files.slice(0, size);
-    const remaining = continuation.files.slice(files.length);
+    const nextIndex = Math.min(continuation.files.length, continuation.nextIndex + size);
+    const files = continuation.files.slice(continuation.nextIndex, nextIndex);
+    const hasMore = nextIndex < continuation.files.length;
     let nextToken: string | undefined;
-    if (remaining.length > 0) {
+    if (hasMore) {
       nextToken = randomUUID();
-      this.scanContinuations.set(scopedContinuationKey(this.continuationScope, nextToken), { ...continuation, files: remaining });
+      if (!this.scanContinuations.set(scopedContinuationKey(this.continuationScope, nextToken), { ...continuation, nextIndex })) {
+        return err({ code: 'CONFLICT', message: 'Full scan exceeds the in-memory pagination budget; narrow its scope', recoverable: true });
+      }
     }
     return ok({
       files,
       scannedWorkspaces: continuation.scannedWorkspaces,
       scannedFiles: continuation.scannedFiles,
-      hasMore: remaining.length > 0,
+      hasMore,
       searchTruncated: continuation.searchTruncated,
       ...observationSummary(continuation.observations),
       ...(nextToken === undefined ? {} : { continuationToken: nextToken }),
@@ -454,13 +477,17 @@ export class ContextEngine {
     const observations = [sourceObservation(workspaceId, 'index', status, visibleFiles.length)];
     const size = normalizePageSize(pageSize ?? 200);
     const files = visibleFiles.slice(0, size);
-    const remaining = visibleFiles.slice(files.length);
+    const hasMore = files.length < visibleFiles.length;
     let continuationToken: string | undefined;
-    if (remaining.length > 0) {
+    if (hasMore) {
       continuationToken = randomUUID();
-      this.scanContinuations.set(scopedContinuationKey(this.continuationScope, continuationToken), { files: remaining, scannedWorkspaces: 1, scannedFiles: visibleFiles.length, searchTruncated: false, observations });
+      const retained = this.scanContinuations.set(scopedContinuationKey(this.continuationScope, continuationToken), {
+        files: visibleFiles, nextIndex: files.length, estimatedBytes: inventoryMemoryWeight(visibleFiles),
+        scannedWorkspaces: 1, scannedFiles: visibleFiles.length, searchTruncated: false, observations,
+      });
+      if (!retained) return err({ code: 'CONFLICT', message: 'Full scan exceeds the in-memory pagination budget; narrow its scope', recoverable: true });
     }
-    return ok({ files, scannedWorkspaces: 1, scannedFiles: visibleFiles.length, hasMore: remaining.length > 0, searchTruncated: false, ...observationSummary(observations), ...(continuationToken === undefined ? {} : { continuationToken }) });
+    return ok({ files, scannedWorkspaces: 1, scannedFiles: visibleFiles.length, hasMore, searchTruncated: false, ...observationSummary(observations), ...(continuationToken === undefined ? {} : { continuationToken }) });
   }
 
   private async resolveWorkspaceIds(workspaceId: string | undefined): Promise<Result<readonly string[]>> {

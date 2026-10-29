@@ -38,7 +38,7 @@ import {
   type ToolAvailabilitySnapshot,
 } from '@lnwjing/shared';
 import { ActivityTracker, describeStructuredResultDetail, summarizeStructuredResultTarget, summarizeToolTarget, type ActivitySink, type TraceContext } from './activity-tracker.js';
-import { ContextEngine, type ContextContinuation, type ScanContinuation } from './context-engine.js';
+import { ContextEngine, createScanContinuationStore, type ContextContinuation, type ScanContinuation } from './context-engine.js';
 import { ContextEconomyRuntime } from './context-economy.js';
 import { hasExplicitUserConfirmation } from './destructive-policy.js';
 import { isScopedAutoApprovalAllowed, type WorkspaceScope } from './destructive-scope.js';
@@ -109,7 +109,7 @@ export function createMcpContinuationState(): McpContinuationState {
   return {
     filePage: new ContinuationStore<FilePageContinuation>(),
     workspaceContext: new ContinuationStore<ContextContinuation>(),
-    workspaceFullScan: new ContinuationStore<ScanContinuation>(),
+    workspaceFullScan: createScanContinuationStore(),
   };
 }
 
