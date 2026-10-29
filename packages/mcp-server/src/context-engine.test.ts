@@ -400,6 +400,66 @@ describe('context engine', () => {
     expect(store.size()).toBe(0);
   });
 
+  it('marks remaining workspaces pending and preserves failed-source evidence', async () => {
+    const scanFilesPage = vi.fn().mockImplementation(async (_actor, workspaceId: string): Promise<ReturnType<typeof ok> | ReturnType<typeof err>> =>
+      workspaceId === 'a'
+        ? ok({ paths: ['a.ts'] })
+        : err({ code: 'PERMISSION_DENIED', message: 'private-error', recoverable: false }));
+    const engine = new ContextEngine({
+      workspaceInfo: { list: async (): Promise<ReturnType<typeof ok>> => ok([{ id: 'a' }, { id: 'b' }]) },
+      search: { scanFilesPage, scanFiles: vi.fn(), searchFiles: vi.fn(), searchText: vi.fn() },
+    }, actor);
+    const first = await engine.fullScan({ pageSize: 1 });
+    expect(first).toMatchObject({ ok: true, value: { hasMore: true, completeness: 'partial', scannedWorkspaces: 1 } });
+    if (!first.ok || first.value.continuationToken === undefined) return;
+    const second = await engine.continueFullScan(first.value.continuationToken, 1);
+    expect(second).toMatchObject({ ok: true, value: { hasMore: false, completeness: 'partial', scannedWorkspaces: 1, observations: expect.arrayContaining([
+      { workspaceId: 'b', source: 'file_search', state: 'unavailable', error: { code: 'PERMISSION_DENIED' } },
+    ]) } });
+    expect(JSON.stringify(second)).not.toContain('private-error');
+    expect(scanFilesPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('continues discovery past 100,000 files without rewalking the provider', async () => {
+    const total = 100_501;
+    const paths = Array.from({ length: total }, (_, i) => `src/file-${i.toString().padStart(6, '0')}.ts`);
+    const scanFilesPage = vi.fn().mockImplementation(async (
+      _actor: unknown, _workspaceId: string, _request: unknown, size: number,
+      cursor?: { frames: Array<{ offset: number }> },
+    ): Promise<ReturnType<typeof ok>> => {
+      const offset = cursor?.frames[0]?.offset ?? 0;
+      const end = Math.min(total, offset + size);
+      return ok({
+        paths: paths.slice(offset, end),
+        ...(end < total ? { cursor: { rootPath: 'fixture', frames: [{ relativePath: '', offset: end, entries: [] }] } } : {}),
+      });
+    });
+    const inventory = new ContextEngine({
+      search: { scanFilesPage, scanFiles: vi.fn(), searchFiles: vi.fn(), searchText: vi.fn() },
+    }, actor);
+    let token: string | undefined;
+    let totalRead = 0;
+    let last;
+    const first = await inventory.fullScan({ workspaceId: 'huge', pageSize: 500 });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    totalRead += first.value.files.length;
+    token = first.value.continuationToken;
+    const firstPage: string | undefined = first.value.files[0]?.path;
+    while (token !== undefined) {
+      const result = await inventory.continueFullScan(token, 500);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      totalRead += result.value.files.length;
+      last = result.value;
+      token = result.value.continuationToken;
+    }
+    expect(firstPage).toBe(paths[0]);
+    expect(totalRead).toBe(total);
+    expect(last).toMatchObject({ scannedFiles: total, completeness: 'complete', hasMore: false, searchTruncated: false });
+    expect(scanFilesPage).toHaveBeenCalledTimes(Math.ceil(total / 500));
+  });
+
   it('keeps one inventory array across pages instead of copying every remaining file', async () => {
     // No 30k-file disk fixture: the inventory lives entirely in memory.
     const paths = Array.from({ length: 30_001 }, (_, i) => `src/file-${String(i).padStart(5, '0')}.ts`);

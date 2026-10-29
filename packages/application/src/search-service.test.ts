@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -6,6 +6,50 @@ import { SearchService, type SearchAdapter } from './search-service.js';
 import type { WorkspaceRepository, Workspace } from '@lnwjing/workspace';
 
 describe('SearchService', () => {
+  it('resumes ignored source inventory with a glob while denying secrets and generated directories', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-search-inventory-'));
+    try {
+      await mkdir(path.join(root, 'src'));
+      await mkdir(path.join(root, 'node_modules'));
+      await writeFile(path.join(root, '.gitignore'), 'ignored.ts\n');
+      await writeFile(path.join(root, '.env'), 'SECRET=private\n');
+      await writeFile(path.join(root, 'ignored.ts'), 'export const ignored = true;');
+      await writeFile(path.join(root, 'src', 'main.ts'), 'export const ok = true;');
+      await writeFile(path.join(root, 'node_modules', 'dependency.ts'), 'ignored');
+      const realRoot = await realpath(root);
+      const workspace: Workspace = { id: 'inventory', displayName: 'fixture', rootPath: realRoot, realRootPath: realRoot, createdAt: new Date(0).toISOString() };
+      const repository: WorkspaceRepository = {
+        async list(): Promise<Workspace[]> { return [workspace]; },
+        async get(): Promise<Workspace | null> { return workspace; },
+        async insert(): Promise<void> {},
+        async delete(): Promise<void> {},
+      };
+      const service = new SearchService(repository);
+      const actor = { clientId: 'inventory', clientName: 'fixture' };
+      const files: string[] = [];
+      let cursor;
+      do {
+        const page = await service.scanFilesPage(actor, workspace.id, { glob: '*.ts' }, 1, cursor);
+        expect(page.ok).toBe(true);
+        if (!page.ok) return;
+        files.push(...page.value.paths);
+        cursor = page.value.cursor;
+      } while (cursor !== undefined);
+      expect(files).toEqual(expect.arrayContaining(['ignored.ts', path.join('src', 'main.ts')]));
+      expect(files).toHaveLength(2);
+      const subdirectory = await service.scanFilesPage(actor, workspace.id, { path: 'src' }, 1);
+      expect(subdirectory).toMatchObject({ ok: true, value: { paths: [path.join('src', 'main.ts')] } });
+      const targeted = await service.scanFilesPage(actor, workspace.id, { path: 'src/main.ts', glob: '*.ts' }, 1);
+      expect(targeted).toMatchObject({ ok: true, value: { paths: [path.join('src', 'main.ts')] } });
+      const rejectedGlob = await service.scanFilesPage(actor, workspace.id, { path: 'src/main.ts', glob: '*.js' }, 1);
+      expect(rejectedGlob).toMatchObject({ ok: true, value: { paths: [] } });
+      const protectedFile = await service.scanFilesPage(actor, workspace.id, { path: '.env' }, 1);
+      expect(protectedFile).toMatchObject({ ok: true, value: { paths: [] } });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('filters clean-index inventories using the same secret policy as live search', async () => {
     const workspace: Workspace = {
       id: 'workspace-1', displayName: 'Fixture', rootPath: 'C:\\\\workspace',

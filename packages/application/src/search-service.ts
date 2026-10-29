@@ -4,6 +4,7 @@ import { appError, err, isFullBypassAuthorization, ok, type InvocationAuthorizat
 import { RipgrepAdapter, type ContextDiscoveryMode, type SearchFilesRequest as AdapterFilesRequest, type SearchFilesResult, type SearchTextRequest as AdapterTextRequest, type SearchTextResult } from '@lnwjing/search';
 import { hostPathApi, isAbsoluteHostPath, isHostPathWithin, resolveHostPath, WorkspacePathGuard, RESTRICTED_SEARCH_IGNORE_GLOBS, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
+import { nextFileInventoryPage, type FileInventoryCursor, type FileInventoryPage } from './workspace-file-inventory.js';
 import { resolveWorkspaceForPath } from './workspace-locator.js';
 
 export interface SearchTextRequest {
@@ -83,6 +84,37 @@ export class SearchService {
       ...(request.maxResults === undefined ? {} : { maxResults: request.maxResults }),
       ...(request.discovery === undefined ? {} : { discovery: request.discovery }),
       ...(signal === undefined ? {} : { signal }),
+    });
+  }
+
+  /** Resumable, bounded directory inventory for full scans without file-content reads. */
+  public async scanFilesPage(
+    actor: FileActor, workspaceId: string | undefined, request: Omit<SearchFilesRequest, 'maxResults'>,
+    pageSize: number, cursor?: FileInventoryCursor, signal?: AbortSignal,
+    authorization?: InvocationAuthorization,
+  ): Promise<Result<FileInventoryPage>> {
+    void actor;
+    const workspace = await resolveWorkspaceForPath(this.workspaces, workspaceId, request.path ?? '.', authorization);
+    if (!workspace.ok) return workspace;
+    const root = await resolveSearchRoot(workspace.value, request.path, authorization);
+    if (!root.ok) return root;
+    const allowPath = this.searchPathPolicy(workspace.value, root.value, authorization);
+    if (cursor === undefined && (await stat(root.value)).isFile()) {
+      const relative = hostPathApi(process.platform).relative(workspace.value.realRootPath, root.value);
+      const basename = hostPathApi(process.platform).basename(root.value);
+      const negative = request.glob?.startsWith('!') === true;
+      const pattern = request.glob === undefined ? undefined : negative ? request.glob.slice(1) : request.glob;
+      const matches = pattern === undefined || path.matchesGlob(relative, pattern) || path.matchesGlob(basename, pattern);
+      const allowedByGlob = pattern === undefined || (negative ? !matches : matches);
+      return ok({ paths: allowedByGlob && allowPath('.') && this.guard.assertSearchPathReadable(workspace.value, relative, authorization).ok
+        ? [relative] : [] });
+    }
+    const page = await nextFileInventoryPage(root.value, cursor, pageSize, request.discovery ?? 'automatic', allowPath, request.glob, signal);
+    if (!page.ok) return page;
+    const relativeRoot = hostPathApi(process.platform).relative(workspace.value.realRootPath, root.value);
+    return ok({
+      paths: page.value.paths.map((file) => hostPathApi(process.platform).join(relativeRoot, file)),
+      ...(page.value.cursor === undefined ? {} : { cursor: page.value.cursor }),
     });
   }
 

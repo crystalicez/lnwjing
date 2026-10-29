@@ -19,6 +19,7 @@ export * from './project-service.js';
 export * from './process-service.js';
 export * from './project-snapshot-service.js';
 export * from './search-service.js';
+export * from './workspace-file-inventory.js';
 export * from './workspace-info-service.js';
 export * from './workspace-path-preflight.js';
 export * from './workspace-query-service.js';

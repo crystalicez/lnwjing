@@ -40,7 +40,7 @@ export function contextTools(context: McpToolContext, engine: ContextEngine): Mc
     }),
     defineTool({
       name: 'workspace_full_scan',
-      description: 'Enumerate workspace files with per-source completeness. With includeIgnored false, use a fresh clean automatic index for prefix scans; stale or unavailable indexes and glob requests fall back to real filename search.',
+      description: 'Enumerate workspace files with per-source completeness. A fresh clean automatic index is preferred when applicable; otherwise walk directories lazily with resumable in-memory pagination and no content reads. Full coverage requires following continuation tokens.',
       permission: 'READ',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: workspaceFullScanSchema,
@@ -54,11 +54,11 @@ export function contextTools(context: McpToolContext, engine: ContextEngine): Mc
     }),
     defineTool({
       name: 'workspace_full_scan_continue',
-      description: 'Continue a workspace_full_scan result page.',
+      description: 'Continue a workspace_full_scan directory walk or cached inventory without restarting discovery.',
       permission: 'READ',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: workspaceFullScanContinueSchema,
-      handler: async (input) => engine.continueFullScan(input.continuationToken, input.pageSize),
+      handler: async (input, signal) => engine.continueFullScan(input.continuationToken, input.pageSize, signal),
     }),
     defineTool({
       name: 'workspace_snapshot',

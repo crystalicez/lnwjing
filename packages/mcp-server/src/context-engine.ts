@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import { err, ok, type AppErrorCode, type Result } from '@lnwjing/domain';
-import type { FileActor } from '@lnwjing/application';
+import type { FileActor, FileInventoryCursor } from '@lnwjing/application';
+import { inventoryCursorWeight } from '@lnwjing/application';
 import { classifyContextPath } from '@lnwjing/search';
 import type { McpApplicationServices } from './tools/tool-types.js';
 import { ContextEconomyRuntime, type ContextEconomyStats, type ContextDeliveryKind } from './context-economy.js';
@@ -206,7 +207,18 @@ export interface ContextContinuation {
   readonly observations: readonly ContextSourceObservation[];
 }
 
+interface WalkingScanState {
+  readonly workspaceIds: readonly string[];
+  readonly request: WorkspaceFullScanRequest;
+  readonly observations: ContextSourceObservation[];
+  offset: number;
+  cursor?: FileInventoryCursor;
+  scannedFiles: number;
+  workspaceItems: number;
+}
+
 export interface ScanContinuation {
+  readonly walk?: WalkingScanState;
   readonly files: readonly { readonly workspaceId: string; readonly path: string }[];
   readonly nextIndex: number;
   readonly estimatedBytes: number;
@@ -341,6 +353,12 @@ export class ContextEngine {
       const indexed = await this.fullScanFromIndex(request.workspaceId, request.path, request.pageSize);
       if (indexed !== null) return indexed;
     }
+    if (this.services.search?.scanFilesPage !== undefined) {
+      return this.walkScan({
+        workspaceIds: workspaceIds.value, request, observations: [], offset: 0,
+        scannedFiles: 0, workspaceItems: 0,
+      }, normalizePageSize(request.pageSize ?? 200), signal);
+    }
     const maxResults = 500;
     // Full scans share one cross-process disk slot. Do not make independent
     // workspaces wait for that same lease at the same time.
@@ -388,9 +406,10 @@ export class ContextEngine {
     });
   }
 
-  public async continueFullScan(token: string, pageSize?: number): Promise<Result<WorkspaceFullScanResult>> {
+  public async continueFullScan(token: string, pageSize?: number, signal?: AbortSignal): Promise<Result<WorkspaceFullScanResult>> {
     const continuation = this.scanContinuations.take(scopedContinuationKey(this.continuationScope, token));
     if (continuation === undefined) return err({ code: 'INVALID_INPUT', message: 'Scan continuation token is invalid or expired', recoverable: false });
+    if (continuation.walk !== undefined) return this.walkScan(continuation.walk, normalizePageSize(pageSize ?? 200), signal);
     const size = normalizePageSize(pageSize ?? 200);
     const nextIndex = Math.min(continuation.files.length, continuation.nextIndex + size);
     const files = continuation.files.slice(continuation.nextIndex, nextIndex);
@@ -410,6 +429,91 @@ export class ContextEngine {
       searchTruncated: continuation.searchTruncated,
       ...observationSummary(continuation.observations),
       ...(nextToken === undefined ? {} : { continuationToken: nextToken }),
+    });
+  }
+
+  private async walkScan(
+    state: WalkingScanState, pageSize: number, signal?: AbortSignal,
+  ): Promise<Result<WorkspaceFullScanResult>> {
+    const scan = this.services.search?.scanFilesPage;
+    if (scan === undefined) return err({ code: 'INTERNAL_ERROR', message: 'Resumable inventory is unavailable', recoverable: true });
+    const files: Array<{ readonly workspaceId: string; readonly path: string }> = [];
+    while (files.length < pageSize && state.offset < state.workspaceIds.length) {
+      signal?.throwIfAborted();
+      const workspaceId = state.workspaceIds[state.offset]!;
+      let page: Awaited<ReturnType<typeof scan>>;
+      try {
+        page = await scan.call(this.services.search, this.actor, workspaceId, {
+          ...(state.request.path === undefined ? {} : { path: state.request.path }),
+          ...(state.request.glob === undefined ? {} : { glob: state.request.glob }),
+          discovery: state.request.includeIgnored === true ? 'explicit' : 'automatic',
+        }, pageSize - files.length, state.cursor, signal);
+      } catch {
+        page = err({ code: 'INTERNAL_ERROR', message: 'Inventory page failed', recoverable: true });
+      }
+      if (!page.ok) {
+        state.observations.push({
+          workspaceId, source: 'file_search', state: 'unavailable', error: { code: page.error.code },
+        });
+        state.offset += 1;
+        delete state.cursor;
+        state.workspaceItems = 0;
+        continue;
+      }
+      const { paths, cursor } = page.value;
+      if (!Array.isArray(paths) || !paths.every((item) => typeof item === 'string')
+        || paths.length > pageSize - files.length) {
+        return err({ code: 'INTERNAL_ERROR', message: 'Inventory returned an invalid page', recoverable: true });
+      }
+      if (paths.length === 0 && cursor !== undefined) {
+        state.observations.push({
+          workspaceId, source: 'file_search', state: 'unknown', error: { code: 'INTERNAL_ERROR' },
+        });
+        state.offset += 1;
+        delete state.cursor;
+        state.workspaceItems = 0;
+        continue;
+      }
+      files.push(...paths.map((path) => ({ workspaceId, path })));
+      state.scannedFiles += paths.length;
+      state.workspaceItems += paths.length;
+      if (cursor === undefined) {
+        state.observations.push({
+          workspaceId, source: 'file_search', state: 'complete', observedItems: state.workspaceItems,
+        });
+        state.offset += 1;
+        delete state.cursor;
+        state.workspaceItems = 0;
+      } else {
+        state.cursor = cursor;
+      }
+    }
+    const hasMore = state.offset < state.workspaceIds.length;
+    const observations: ContextSourceObservation[] = [...state.observations];
+    if (hasMore) {
+      observations.push({
+        workspaceId: state.workspaceIds[state.offset]!, source: 'file_search',
+        state: 'truncated', observedItems: state.workspaceItems,
+      });
+    }
+    let continuationToken: string | undefined;
+    if (hasMore) {
+      continuationToken = randomUUID();
+      const estimatedBytes = (state.cursor === undefined ? 256 : inventoryCursorWeight(state.cursor))
+        + state.workspaceIds.reduce((total, id) => total + 96 + 2 * id.length, 0)
+        + state.observations.length * 128;
+      const saved = this.scanContinuations.set(scopedContinuationKey(this.continuationScope, continuationToken), {
+        files: [], nextIndex: 0, estimatedBytes, walk: state, scannedFiles: state.scannedFiles,
+        scannedWorkspaces: state.observations.filter((observation) => observation.state === 'complete').length, searchTruncated: false, observations,
+      });
+      if (!saved) return err({ code: 'CONFLICT', message: 'Inventory continuation exceeds the in-memory budget', recoverable: true });
+    }
+    return ok({
+      files, scannedFiles: state.scannedFiles,
+      scannedWorkspaces: state.observations.filter((observation) => observation.state === 'complete').length,
+      hasMore, searchTruncated: false,
+      ...observationSummary(observations),
+      ...(continuationToken === undefined ? {} : { continuationToken }),
     });
   }
 

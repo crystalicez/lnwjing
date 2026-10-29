@@ -112,9 +112,23 @@ export function createRuntimeSuccessServices(calls: string[]): McpApplicationSer
       return { executed: true };
     }),
     checkpoint: serviceProxy('checkpoint', calls, (method) => method === 'list' ? [] : { restored: true }),
-    search: serviceProxy('search', calls, (method) => method === 'searchText'
-      ? { matches: [{ path: 'src/smoke.ts', line: 1, text: 'smoke' }, { path: 'src/second.test.ts', line: 1, text: 'smoke' }], truncated: false }
-      : { paths: ['src/smoke.ts', 'src/second.test.ts'], truncated: false }),
+    search: serviceProxy('search', calls, (method, args) => {
+      if (method === 'searchText') {
+        return { matches: [{ path: 'src/smoke.ts', line: 1, text: 'smoke' }, { path: 'src/second.test.ts', line: 1, text: 'smoke' }], truncated: false };
+      }
+      if (method === 'scanFilesPage') {
+        const size = typeof args[3] === 'number' ? args[3] : 200;
+        const offset = args[4] === undefined ? 0 : 1;
+        const paths = ['src/smoke.ts', 'src/second.test.ts'];
+        return {
+          paths: paths.slice(offset, offset + size),
+          ...(offset + size < paths.length
+            ? { cursor: { rootPath: 'smoke', frames: [{ relativePath: '', offset: offset + size, entries: [] }] } }
+            : {}),
+        };
+      }
+      return { paths: ['src/smoke.ts', 'src/second.test.ts'], truncated: false };
+    }),
     workspaceIndex: serviceProxy('workspaceIndex', calls, (method) => method === 'status'
       ? { indexed: true, snapshot: { entries: [
         { relativePath: 'src/smoke.ts', kind: 'file', language: 'typescript', isTest: false, symbols: ['smoke'], functions: [], classes: [], interfaces: [], imports: [], exports: [] },
