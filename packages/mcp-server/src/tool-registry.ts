@@ -1220,7 +1220,7 @@ export class ToolRegistry {
         }
         try {
           operation = (async (): Promise<McpToolResponse> => {
-            const release = await this.workloadAdmission.acquire(tool.name, controller.signal);
+            const release = await this.workloadAdmission.acquire(tool.name, controller.signal, input);
             try {
               if (controller.signal.aborted) throw new Error('Tool request cancelled before dispatch');
               const result = await tool.execute(input, controller.signal, authorization, tool.name === 'recipe_run'

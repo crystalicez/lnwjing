@@ -11,6 +11,7 @@ import { DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY, type DestructiveAutoApprovalP
 import { ActivityTracker, type ActivitySinkEvent } from './activity-tracker.js';
 import { CODEX_DELEGATION_TOOL_NAMES, isCodexDelegationTool, ToolRegistry, type McpApplicationServices, type ToolRegistryOptions, type WorkspaceScope } from './tool-registry.js';
 import { GoalRequestCancellationService, RepositoryImportService } from '@lnwjing/application';
+import { ToolWorkloadAdmission } from './tool-workload-admission.js';
 import { CODEX_TOOL_NAMES } from './tools/codex-tools.js';
 import { AUTOMATION_TOOL_NAMES } from './tools/automation-tools.js';
 import { isAdvertisedDeliveryState } from './tool-delivery-contract.js';
@@ -181,6 +182,26 @@ describe('MCP tool registry', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('passes parsed index scope into workload admission rather than only the tool name', async () => {
+    const workloadAdmission = new ToolWorkloadAdmission({ index: 1 });
+    const acquire = vi.spyOn(workloadAdmission, 'acquire');
+    const registry = new ToolRegistry({
+      workspaceIndex: {
+        indexWorkspace: async (): Promise<ReturnType<typeof ok>> => ok({ entries: [] }),
+        indexPath: async (): Promise<ReturnType<typeof ok>> => ok({ entries: [{ relativePath: 'src/current.ts' }] }),
+      } as never,
+    }, actor, {
+      workloadAdmission,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+    });
+    expect((await registry.invoke('workspace_index', { workspaceId: 'w', path: 'src/current.ts' })).isError).not.toBe(true);
+    expect((await registry.invoke('workspace_index', { workspaceId: 'w' })).isError).not.toBe(true);
+    expect(acquire).toHaveBeenNthCalledWith(1, 'workspace_index', expect.any(AbortSignal),
+      expect.objectContaining({ workspaceId: 'w', path: 'src/current.ts' }));
+    expect(acquire).toHaveBeenNthCalledWith(2, 'workspace_index', expect.any(AbortSignal),
+      expect.objectContaining({ workspaceId: 'w' }));
   });
 
   it('requires an explicit file path for deep large-file indexing and dispatches only that path', async () => {

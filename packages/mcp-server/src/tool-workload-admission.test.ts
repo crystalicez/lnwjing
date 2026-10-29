@@ -88,7 +88,7 @@ describe('ToolWorkloadAdmission', () => {
       order.push('watch');
       return release;
     });
-    const queuedManual = admission.acquire('workspace_index', new AbortController().signal).then((release) => {
+    const queuedManual = admission.acquire('workspace_index', new AbortController().signal, { path: 'src/changed.ts' }).then((release) => {
       order.push('manual');
       return release;
     });
@@ -102,6 +102,28 @@ describe('ToolWorkloadAdmission', () => {
     expect(admission.snapshot().active.index).toBe(0);
   });
 
+  it('prioritizes targeted index requests ahead of earlier queued whole-workspace scans', async () => {
+    const admission = new ToolWorkloadAdmission({ index: 1 });
+    const holding = await admission.acquire('workspace_index', new AbortController().signal);
+    const order: string[] = [];
+    const full = admission.acquire('workspace_index', new AbortController().signal, { workspaceId: 'p', path: '.' })
+      .then((release) => { order.push('whole'); return release; });
+    const scan = admission.acquire('workspace_full_scan', new AbortController().signal)
+      .then((release) => { order.push('scan'); return release; });
+    const targeted = admission.acquire('workspace_index', new AbortController().signal, {
+      workspaceId: 'p', path: 'src/changed.ts',
+    }).then((release) => { order.push('targeted'); return release; });
+    holding();
+    const fast = await targeted;
+    expect(order).toEqual(['targeted']);
+    fast();
+    const slow = await full;
+    slow();
+    const walk = await scan;
+    walk();
+    expect(order).toEqual(['targeted', 'whole', 'scan']);
+  });
+
   it('prevents queued watcher starts from starving under repeated manual index requests', async () => {
     const admission = new ToolWorkloadAdmission({ index: 1 });
     const active = await admission.acquire('workspace_index', new AbortController().signal);
@@ -110,7 +132,7 @@ describe('ToolWorkloadAdmission', () => {
       order.push('watcher');
       return release;
     });
-    const manual = Array.from({ length: 6 }, (_, index) => admission.acquire('workspace_index', new AbortController().signal).then((release) => {
+    const manual = Array.from({ length: 6 }, (_, index) => admission.acquire('workspace_index', new AbortController().signal, { path: `src/file-${index}.ts` }).then((release) => {
       order.push(`manual-${index}`);
       return release;
     }));

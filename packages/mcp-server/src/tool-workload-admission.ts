@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 /**
  * Endpoint-shared admission for tool classes with high CPU / disk pressure.
  * Per-request MCP Server instances must share one limiter or HTTP bursts bypass
@@ -12,6 +14,21 @@ interface Waiter {
   readonly reject: (error: Error) => void;
   readonly signal: AbortSignal;
   readonly onAbort: () => void;
+}
+
+/** Admission distinguishes user-targeted work from workspace-wide walks. */
+function indexAdmissionPriority(tool: string, input: unknown): 'interactive' | 'background' {
+  if (tool === 'workspace_index') {
+    if (input !== null && typeof input === 'object' && 'path' in input
+      && typeof input.path === 'string' && input.path.trim().length > 0
+      && path.win32.normalize(input.path) !== '.'
+      && !/[\\/]$/.test(input.path)) return 'interactive';
+    return 'background';
+  }
+  if (tool === 'workspace_index_watch' || tool === 'workspace_reindex'
+    || tool === 'workspace_full_scan' || tool === 'workspace_full_scan_continue'
+    || tool === 'workspace_index_rebuild') return 'background';
+  return 'interactive';
 }
 
 const MAX_WAITERS_PER_CLASS = 64;
@@ -42,7 +59,7 @@ export class ToolWorkloadAdmission {
     };
   }
 
-  public async acquire(tool: string, signal: AbortSignal): Promise<() => void> {
+  public async acquire(tool: string, signal: AbortSignal, input?: unknown): Promise<() => void> {
     const kind = classify(tool);
     if (kind === null) return () => undefined;
     if (signal.aborted) throw new Error('Tool request was cancelled before admission');
@@ -61,7 +78,7 @@ export class ToolWorkloadAdmission {
         reject(new Error('Tool request was cancelled while waiting for workload admission'));
       };
       const waiter: Waiter = {
-        priority: kind === 'index' && (tool === 'workspace_index_watch' || tool === 'workspace_reindex') ? 'background' : 'interactive',
+        priority: kind === 'index' ? indexAdmissionPriority(tool, input) : 'interactive',
         signal, onAbort,
         grant: () => {
           signal.removeEventListener('abort', onAbort);
