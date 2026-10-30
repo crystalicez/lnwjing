@@ -1,5 +1,7 @@
-import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, readFile, rm, stat, utimes, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
@@ -119,6 +121,48 @@ describe('one-click Windows x64 portable build', () => {
     expect(maintenance).toContain('ReparsePoint');
     expect(maintenance).toContain('lnwjing-ready');
     expect(maintenance).not.toContain('Remove-Item -LiteralPath $root.FullName -Recurse');
+  });
+
+  it.skipIf(process.platform !== 'win32')('deletes only verified old Portable runtimes, never forged or incomplete ready markers', async () => {
+    const portable = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-cleanup-fixture-'));
+    const current = 'lnwjing-runtime-v5.8.9-current';
+    const old = 'lnwjing-runtime-v5.8.7-old';
+    const malformed = 'lnwjing-runtime-v5.8.6-forged';
+    const missingExe = 'lnwjing-runtime-v5.8.5-incomplete';
+    const script = path.join(root, 'scripts', 'clean-portable-runtime-cache.ps1');
+    try {
+      await writeFile(path.join(portable, 'lnwjing-mcp-stdio.cmd'),
+        `@echo off\r\nREM lnwjing-managed-portable-stdio-v1\r\nset "APP=%~dp0${current}\\lnwjing.exe"\r\n`);
+      for (const name of [current, old, malformed, missingExe]) {
+        const folder = path.join(portable, name);
+        await mkdir(folder);
+        const match = /^lnwjing-runtime-v(.+)$/.exec(name);
+        if (match === null) throw new Error('Invalid test fixture');
+        await writeFile(path.join(folder, '.lnwjing-ready'), `lnwjing-v${match[1]}`);
+        if (name !== missingExe) await writeFile(path.join(folder, 'lnwjing.exe'), 'test-only');
+      }
+      await writeFile(path.join(portable, malformed, '.lnwjing-ready'), 'forged');
+      const aged = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000);
+      for (const name of [old, malformed, missingExe]) await utimes(path.join(portable, name), aged, aged);
+      const run = (apply: boolean): string => execFileSync('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', script, '-PortableDirectory', portable, '-RetainReadyCount', '1',
+        ...(apply ? ['-Apply'] : []),
+      ], { encoding: 'utf8', timeout: 25_000 });
+      const preview = run(false);
+      expect(preview).toContain('CANDIDATES=1');
+      expect(preview).toContain('WOULD_DELETE=' + old);
+      expect(preview).not.toContain('WOULD_DELETE=' + malformed);
+      expect(preview).not.toContain('WOULD_DELETE=' + missingExe);
+      const applied = run(true);
+      expect(applied).toContain('DELETED=' + old);
+      await expect(stat(path.join(portable, old))).rejects.toMatchObject({ code: 'ENOENT' });
+      for (const name of [current, malformed, missingExe]) {
+        expect((await stat(path.join(portable, name))).isDirectory()).toBe(true);
+      }
+    } finally {
+      await rm(portable, { recursive: true, force: true });
+    }
   });
 
   it('ships a persistent side-by-side runtime instead of unpacking to TEMP', async () => {

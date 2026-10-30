@@ -29,10 +29,18 @@ $launcherContents = Get-Content -LiteralPath $launcher -Raw
 if (-not $launcherContents.Contains('REM lnwjing-managed-portable-stdio-v1')) {
   throw 'Unrecognized MCP launcher; refusing cleanup'
 }
+$runtimePattern = '^lnwjing-runtime-v(?<version>\d+\.\d+\.\d+)-(?<build>[A-Za-z0-9_-]+)$'
 $all = @(Get-ChildItem -LiteralPath $portable -Directory -Force | Where-Object {
-  $_.Name -match '^lnwjing-runtime-v[0-9A-Za-z._-]+$' -and
-  ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and
-  (Test-Path -LiteralPath (Join-Path $_.FullName '.lnwjing-ready') -PathType Leaf)
+  if ($_.Name -notmatch $runtimePattern -or
+      ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+  $expected = "lnwjing-v$($Matches['version'])-$($Matches['build'])"
+  $marker = Join-Path $_.FullName '.lnwjing-ready'
+  $executable = Join-Path $_.FullName 'lnwjing.exe'
+  if (-not (Test-Path -LiteralPath $marker -PathType Leaf) -or
+      -not (Test-Path -LiteralPath $executable -PathType Leaf)) { return $false }
+  if (((Get-Item -LiteralPath $marker -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+      ((Get-Item -LiteralPath $executable -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+  [IO.File]::ReadAllText($marker) -ceq $expected
 } | Sort-Object LastWriteTimeUtc -Descending)
 $preserved = @($all | Select-Object -First $RetainReadyCount | ForEach-Object Name)
 foreach ($folder in $all) {
