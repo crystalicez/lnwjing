@@ -173,6 +173,42 @@ describe('DesktopRuntime persistence', () => {
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
 
+  it('does not partially persist Desktop settings when a late key fails', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-settings-atomic-runtime-'));
+    temporaryRoots.push(root);
+    const dataRoot = await realpath(root);
+    const runtime = createDesktopRuntime(dataRoot);
+    const initial = runtime.getUserSettings();
+    const database = new SqliteDatabase(path.join(dataRoot, 'lnwjing.sqlite'));
+    try {
+      database.connection.exec(`
+        CREATE TRIGGER fail_settings_insert BEFORE INSERT ON settings
+        WHEN NEW.key = '${USER_SETTING_KEYS.startMinimized}'
+        BEGIN SELECT RAISE(ABORT, 'injected settings write failure'); END;
+        CREATE TRIGGER fail_settings_update BEFORE UPDATE ON settings
+        WHEN NEW.key = '${USER_SETTING_KEYS.startMinimized}'
+        BEGIN SELECT RAISE(ABORT, 'injected settings write failure'); END;
+      `);
+      const previousTimeout = new SqliteSettingsRepository(database).get(USER_SETTING_KEYS.mcpCallTimeoutMs);
+      await expect(runtime.services.setUserSettings({
+        settings: { ...initial, mcpCallTimeoutMs: initial.mcpCallTimeoutMs + 1_000, startMinimized: !initial.startMinimized },
+      })).rejects.toThrow(/injected settings write failure/);
+      expect(new SqliteSettingsRepository(database).get(USER_SETTING_KEYS.mcpCallTimeoutMs)).toBe(previousTimeout);
+      expect(runtime.getUserSettings()).toMatchObject({
+        mcpCallTimeoutMs: initial.mcpCallTimeoutMs,
+        startMinimized: initial.startMinimized,
+      });
+      database.connection.exec('DROP TRIGGER fail_settings_insert; DROP TRIGGER fail_settings_update;');
+      const saved = await runtime.services.setUserSettings({
+        settings: { ...initial, mcpCallTimeoutMs: initial.mcpCallTimeoutMs + 1_000 },
+      });
+      expect(saved.settings.mcpCallTimeoutMs).toBe(initial.mcpCallTimeoutMs + 1_000);
+    } finally {
+      database.close();
+      await runtime.close();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
   it('migrates the legacy 18765 default to Auto once and preserves a later explicit 18765 pin', async () => {
     const rawDataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-mcp-port-migration-'));
     temporaryRoots.push(rawDataRoot);

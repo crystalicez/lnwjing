@@ -3323,39 +3323,41 @@ function readUserSettings(settingsRepository: SqliteSettingsRepository, env: Nod
 }
 
 function persistUserSettings(settingsRepository: SqliteSettingsRepository, settings: UserSettings): void {
-  settingsRepository.set(USER_SETTING_KEYS.customPermissionProfile, serializeCustomPermissionSettings(settings.customPermission));
-  settingsRepository.set(USER_SETTING_KEYS.desktopFullBypassAll, settings.desktopFullBypassAll ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.stdioFullBypassAll, settings.stdioFullBypassAll ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.mcpCallTimeoutMs, String(settings.mcpCallTimeoutMs));
-  settingsRepository.set(USER_SETTING_KEYS.mcpIdleTimeoutMs, String(settings.mcpIdleTimeoutMs));
-  settingsRepository.set(USER_SETTING_KEYS.processTimeoutMs, String(settings.processTimeoutMs));
-  settingsRepository.set(USER_SETTING_KEYS.mcpPollWaitSeconds, String(settings.mcpPollWaitSeconds));
-  settingsRepository.set(USER_SETTING_KEYS.shellSynchronousWaitSeconds, String(settings.shellSynchronousWaitSeconds));
-  settingsRepository.set(USER_SETTING_KEYS.capabilityRoots, serializePathList(settings.capabilityRoots));
-  settingsRepository.set(USER_SETTING_KEYS.pdfProviderPath, settings.pdfProviderPath.trim());
-  settingsRepository.set(USER_SETTING_KEYS.lspCommands, serializeStringRecordSetting(settings.lspCommands));
-  settingsRepository.set(USER_SETTING_KEYS.mcpHttpPort, String(settings.mcpHttpPort));
-  settingsRepository.set(USER_SETTING_KEYS.mcpAllowedHostnames, serializeMcpAllowedHostnames(settings.mcpAllowedHostnames));
-  settingsRepository.set(USER_SETTING_KEYS.codexToolsEnabled, settings.codexToolsEnabled ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.eccEnabled, settings.eccEnabled === true ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.ponytailMode, settings.ponytailMode);
+  const entries: Array<readonly [string, string]> = [];
+  const set = (key: string, value: string): void => { entries.push([key, value]); };
+  set(USER_SETTING_KEYS.customPermissionProfile, serializeCustomPermissionSettings(settings.customPermission));
+  set(USER_SETTING_KEYS.desktopFullBypassAll, settings.desktopFullBypassAll ? 'true' : 'false');
+  set(USER_SETTING_KEYS.stdioFullBypassAll, settings.stdioFullBypassAll ? 'true' : 'false');
+  set(USER_SETTING_KEYS.mcpCallTimeoutMs, String(settings.mcpCallTimeoutMs));
+  set(USER_SETTING_KEYS.mcpIdleTimeoutMs, String(settings.mcpIdleTimeoutMs));
+  set(USER_SETTING_KEYS.processTimeoutMs, String(settings.processTimeoutMs));
+  set(USER_SETTING_KEYS.mcpPollWaitSeconds, String(settings.mcpPollWaitSeconds));
+  set(USER_SETTING_KEYS.shellSynchronousWaitSeconds, String(settings.shellSynchronousWaitSeconds));
+  set(USER_SETTING_KEYS.capabilityRoots, serializePathList(settings.capabilityRoots));
+  set(USER_SETTING_KEYS.pdfProviderPath, settings.pdfProviderPath.trim());
+  set(USER_SETTING_KEYS.lspCommands, serializeStringRecordSetting(settings.lspCommands));
+  set(USER_SETTING_KEYS.mcpHttpPort, String(settings.mcpHttpPort));
+  set(USER_SETTING_KEYS.mcpAllowedHostnames, serializeMcpAllowedHostnames(settings.mcpAllowedHostnames));
+  set(USER_SETTING_KEYS.codexToolsEnabled, settings.codexToolsEnabled ? 'true' : 'false');
+  set(USER_SETTING_KEYS.eccEnabled, settings.eccEnabled === true ? 'true' : 'false');
+  set(USER_SETTING_KEYS.ponytailMode, settings.ponytailMode);
   if (settings.engineeringHarness !== undefined) {
-    settingsRepository.set(USER_SETTING_KEYS.engineeringHarnessSettings, serializeEngineeringHarnessSettings(settings.engineeringHarness));
+    set(USER_SETTING_KEYS.engineeringHarnessSettings, serializeEngineeringHarnessSettings(settings.engineeringHarness));
   }
   if (settings.engineeringHarnessWorkspaceOverrides !== undefined) {
-    settingsRepository.set(USER_SETTING_KEYS.engineeringHarnessWorkspaceOverrides, serializeEngineeringHarnessWorkspaceOverrides(settings.engineeringHarnessWorkspaceOverrides));
+    set(USER_SETTING_KEYS.engineeringHarnessWorkspaceOverrides, serializeEngineeringHarnessWorkspaceOverrides(settings.engineeringHarnessWorkspaceOverrides));
   }
-  settingsRepository.set(USER_SETTING_KEYS.updateAutoCheck, settings.updateAutoCheck ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.updateCheckOnStartup, settings.updateCheckOnStartup ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.updateIntervalMinutes, String(settings.updateIntervalMinutes));
-  settingsRepository.set(USER_SETTING_KEYS.updateAutoDownload, settings.updateAutoDownload ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.closeBehavior, settings.closeBehavior);
-  settingsRepository.set(USER_SETTING_KEYS.launchAtStartup, settings.launchAtStartup ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.startMinimized, settings.startMinimized ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.tunnelAutoReconnect, settings.tunnelAutoReconnect ? 'true' : 'false');
-  settingsRepository.set(USER_SETTING_KEYS.tunnelMaxAutoRestarts, String(settings.tunnelMaxAutoRestarts));
-  settingsRepository.set(USER_SETTING_KEYS.recoveryRetentionDays, String(settings.recoveryRetentionDays));
-  settingsRepository.set(USER_SETTING_KEYS.autoBackupEnabled, settings.autoBackupEnabled === true ? 'true' : 'false');
+  set(USER_SETTING_KEYS.updateAutoCheck, settings.updateAutoCheck ? 'true' : 'false');
+  set(USER_SETTING_KEYS.updateCheckOnStartup, settings.updateCheckOnStartup ? 'true' : 'false');
+  set(USER_SETTING_KEYS.updateIntervalMinutes, String(settings.updateIntervalMinutes));
+  set(USER_SETTING_KEYS.updateAutoDownload, settings.updateAutoDownload ? 'true' : 'false');
+  set(USER_SETTING_KEYS.closeBehavior, settings.closeBehavior);
+  set(USER_SETTING_KEYS.launchAtStartup, settings.launchAtStartup ? 'true' : 'false');
+  set(USER_SETTING_KEYS.startMinimized, settings.startMinimized ? 'true' : 'false');
+  set(USER_SETTING_KEYS.tunnelAutoReconnect, settings.tunnelAutoReconnect ? 'true' : 'false');
+  set(USER_SETTING_KEYS.tunnelMaxAutoRestarts, String(settings.tunnelMaxAutoRestarts));
+  set(USER_SETTING_KEYS.recoveryRetentionDays, String(settings.recoveryRetentionDays));
+  set(USER_SETTING_KEYS.autoBackupEnabled, settings.autoBackupEnabled === true ? 'true' : 'false');
   const extraMcpServers = Object.fromEntries(settings.extensions.extraMcpServers.map((server) => [server.name, {
     command: server.command,
     ...(server.args.length === 0 ? {} : { args: [...server.args] }),
@@ -3363,7 +3365,7 @@ function persistUserSettings(settingsRepository: SqliteSettingsRepository, setti
     ...(server.type.trim().length === 0 ? {} : { type: server.type.trim() }),
     ...(Object.keys(server.env).length === 0 ? {} : { env: { ...server.env } }),
   }]));
-  settingsRepository.set(EXTENSIONS_SETTINGS_KEY, JSON.stringify({
+  set(EXTENSIONS_SETTINGS_KEY, JSON.stringify({
     mode: settings.extensions.mode,
     disabledServers: [...settings.extensions.disabledServers],
     enabledServers: [...settings.extensions.enabledServers],
@@ -3371,6 +3373,7 @@ function persistUserSettings(settingsRepository: SqliteSettingsRepository, setti
     extraSkillRoots: [...settings.extensions.extraSkillRoots],
     extraMcpServers,
   }));
+  settingsRepository.setMany(entries);
 }
 
 function toIpcExtensionsSettings(settings: ExtensionsSettings): UserSettings['extensions'] {
