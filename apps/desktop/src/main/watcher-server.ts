@@ -112,7 +112,9 @@ export interface WatcherServerHandle {
 }
 
 const MAX_ACTIVITY = 100;
+const MAX_ACTIVITY_BYTES = 1024 * 1024;
 const WS_AUTH_TIMEOUT_MS = 5_000;
+const WS_MAX_BUFFERED_BYTES = 256 * 1024;
 
 /** Keep pairing secrets on literal loopback hosts; reject rebinding Host and remote browser origins. */
 function trustedPairingRequest(request: IncomingMessage, port: number): boolean {
@@ -244,7 +246,33 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
   if (options.accessToken.trim().length < 32) throw new Error('Watcher access token must contain at least 32 characters');
 
   const recentActivity: WatcherActivityEvent[] = [];
+  const recentActivitySizes: number[] = [];
+  let recentActivityBytes = 0;
   const authorizedSockets = new Set<WebSocket>();
+  const awaitingPong = new WeakSet<WebSocket>();
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  const stopHeartbeatIfIdle = (): void => {
+    if (authorizedSockets.size !== 0 || heartbeat === undefined) return;
+    clearInterval(heartbeat);
+    heartbeat = undefined;
+  };
+  const startHeartbeatIfNeeded = (): void => {
+    if (heartbeat !== undefined) return;
+    heartbeat = setInterval(() => {
+      for (const client of authorizedSockets) {
+        if (client.readyState !== WebSocket.OPEN
+          || awaitingPong.has(client) || client.bufferedAmount > WS_MAX_BUFFERED_BYTES) {
+          authorizedSockets.delete(client);
+          client.terminate();
+          continue;
+        }
+        awaitingPong.add(client);
+        client.ping();
+      }
+      stopHeartbeatIfIdle();
+    }, 20_000);
+    heartbeat.unref();
+  };
 
   const apiServer = createServer((request, response): void => {
     void (async (): Promise<void> => {
@@ -298,6 +326,8 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
         }
         clearTimeout(authTimer);
         authorizedSockets.add(client);
+        client.on('pong', () => awaitingPong.delete(client));
+        startHeartbeatIfNeeded();
         client.off('message', authenticate);
         client.send(JSON.stringify({ type: 'ready', protocolVersion: 1 }));
       } catch {
@@ -309,6 +339,7 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
     client.on('close', () => {
       clearTimeout(authTimer);
       authorizedSockets.delete(client);
+      stopHeartbeatIfIdle();
     });
   });
 
@@ -347,25 +378,36 @@ export async function startWatcherServer(options: WatcherServerOptions): Promise
   }
 
   const unsubscribe = options.subscribeActivity((event) => {
-    recentActivity.unshift(event);
-    if (recentActivity.length > MAX_ACTIVITY) recentActivity.length = MAX_ACTIVITY;
     const message = JSON.stringify(event);
-    for (const client of authorizedSockets) {
-      if (client.readyState === WebSocket.OPEN) client.send(message);
+    const bytes = Buffer.byteLength(message);
+    if (bytes <= MAX_ACTIVITY_BYTES) {
+      recentActivity.unshift(event);
+      recentActivitySizes.unshift(bytes);
+      recentActivityBytes += bytes;
+      while (recentActivity.length > MAX_ACTIVITY || recentActivityBytes > MAX_ACTIVITY_BYTES) {
+        recentActivity.pop();
+        recentActivityBytes -= recentActivitySizes.pop() ?? 0;
+      }
     }
+    for (const client of authorizedSockets) {
+      if (client.readyState !== WebSocket.OPEN) continue;
+      if (client.bufferedAmount + bytes > WS_MAX_BUFFERED_BYTES) {
+        authorizedSockets.delete(client);
+        client.terminate();
+        continue;
+      }
+      client.send(message);
+    }
+    stopHeartbeatIfIdle();
   });
-
-  const heartbeat = setInterval(() => {
-    for (const client of authorizedSockets) if (client.readyState === WebSocket.OPEN) client.ping();
-  }, 20_000);
-  heartbeat.unref();
 
   return {
     endpoint: new URL(`http://127.0.0.1:${apiPort}`),
     pairingEndpoint: new URL(`http://127.0.0.1:${pairingPort}/api/v1/pair`),
     async close(): Promise<void> {
       unsubscribe();
-      clearInterval(heartbeat);
+      if (heartbeat !== undefined) clearInterval(heartbeat);
+      heartbeat = undefined;
       for (const client of authorizedSockets) client.close(1001, 'runtime shutdown');
       authorizedSockets.clear();
       await new Promise<void>((resolve) => webSockets.close(() => resolve()));

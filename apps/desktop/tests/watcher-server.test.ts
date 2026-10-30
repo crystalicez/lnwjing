@@ -1,5 +1,5 @@
 import { get } from 'node:http';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import {
   startWatcherServer,
@@ -37,7 +37,145 @@ function pairingResponse(url: URL, headers: Record<string, string>): Promise<{ s
   });
 }
 
+async function openAuthorizedSocket(endpoint: URL, token: string): Promise<WebSocket> {
+  const address = new URL('/api/v1/events', endpoint);
+  address.protocol = 'ws:';
+  const socket = new WebSocket(address);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', resolve);
+      socket.once('error', reject);
+    });
+    const ready = new Promise<void>((resolve, reject) => {
+      socket.once('message', (message) => {
+        if (JSON.parse(message.toString()).type === 'ready') resolve();
+        else reject(new Error('Unexpected watcher response'));
+      });
+      socket.once('error', reject);
+    });
+    socket.send(JSON.stringify({ type: 'auth', token }));
+    await ready;
+    return socket;
+  } catch (error) {
+    socket.terminate();
+    throw error;
+  }
+}
+
 describe('Watcher server', () => {
+  it('does not run a heartbeat timer without authenticated clients and stops it after disconnect', async () => {
+    const intervals = vi.spyOn(globalThis, 'setInterval');
+    const clears = vi.spyOn(globalThis, 'clearInterval');
+    const token = 'watcher-idle-heartbeat-0123456789abcdef';
+    let server: Awaited<ReturnType<typeof startWatcherServer>> | undefined;
+    let client: WebSocket | undefined;
+    try {
+      server = await startWatcherServer({
+        port: 0, pairingPort: 0, accessToken: token,
+        buildSnapshot: async (activity) => snapshot(activity),
+        subscribeActivity: (): (() => void) => (): void => undefined,
+      });
+      expect(intervals.mock.calls.filter(([, interval]) => interval === 20_000)).toHaveLength(0);
+      client = await openAuthorizedSocket(server.endpoint, token);
+      const call = intervals.mock.calls.findIndex(([, interval]) => interval === 20_000);
+      expect(call).toBeGreaterThanOrEqual(0);
+      const timer = intervals.mock.results[call]?.value;
+      const closed = new Promise<void>((resolve) => client?.once('close', () => resolve()));
+      client.close();
+      await closed;
+      await vi.waitFor(() => expect(clears).toHaveBeenCalledWith(timer));
+    } finally {
+      client?.terminate();
+      await server?.close();
+      intervals.mockRestore();
+      clears.mockRestore();
+    }
+  });
+
+  it('reclaims an unresponsive authorized socket after an unanswered heartbeat', async () => {
+    const intervals = vi.spyOn(globalThis, 'setInterval');
+    const token = 'watcher-unresponsive-token-0123456789abcdef';
+    const server = await startWatcherServer({
+      port: 0, pairingPort: 0, accessToken: token,
+      buildSnapshot: async (activity) => snapshot(activity),
+      subscribeActivity: (): (() => void) => (): void => undefined,
+    });
+    let client: WebSocket | undefined;
+    try {
+      client = await openAuthorizedSocket(server.endpoint, token);
+      const timerIndex = intervals.mock.calls.findIndex(([, interval]) => interval === 20_000);
+      expect(timerIndex).toBeGreaterThanOrEqual(0);
+      const heartbeat = intervals.mock.calls[timerIndex]?.[0];
+      if (typeof heartbeat !== 'function') throw new Error('Watcher heartbeat is missing');
+      const closed = new Promise<void>((resolve) => client?.once('close', () => resolve()));
+      heartbeat();
+      heartbeat();
+      await closed;
+    } finally {
+      client?.terminate();
+      await server.close();
+      intervals.mockRestore();
+    }
+  });
+
+  it('bounds in-memory activity history by bytes even with no connected clients', async () => {
+    const token = 'watcher-activity-budget-0123456789abcdef';
+    let publish: ((event: WatcherActivityEvent) => void) | undefined;
+    const server = await startWatcherServer({
+      port: 0, pairingPort: 0, accessToken: token,
+      buildSnapshot: async (activity) => snapshot(activity),
+      subscribeActivity: (listener) => {
+        publish = listener;
+        return (): void => { publish = undefined; };
+      },
+    });
+    try {
+      for (let index = 0; index < 5; index += 1) {
+        publish?.({
+          id: `event-${index}`, timestamp: new Date().toISOString(), kind: 'project_test',
+          status: 'running', actor: 'test', summary: 'x'.repeat(300 * 1024),
+        });
+      }
+      const response = await fetch(new URL('/api/v1/snapshot', server.endpoint), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(response.status).toBe(200);
+      const result = await response.json() as { activity: Array<{ id: string }> };
+      expect(result.activity.map((event) => event.id)).toEqual(['event-4', 'event-3', 'event-2']);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('disconnects a client before unbounded activity backpressure can accumulate', async () => {
+    const token = 'watcher-backpressure-token-0123456789abcdef';
+    let publish: ((event: WatcherActivityEvent) => void) | undefined;
+    const server = await startWatcherServer({
+      port: 0, pairingPort: 0, accessToken: token,
+      buildSnapshot: async (activity) => snapshot(activity),
+      subscribeActivity: (listener) => {
+        publish = listener;
+        return (): void => { publish = undefined; };
+      },
+    });
+    let client: WebSocket | undefined;
+    try {
+      client = await openAuthorizedSocket(server.endpoint, token);
+      const closed = new Promise<void>((resolve) => client?.once('close', () => resolve()));
+      publish?.({
+        id: 'oversized-event', timestamp: new Date().toISOString(), kind: 'project_test',
+        status: 'running', actor: 'test', summary: 'x'.repeat(256 * 1024), workspaceId: 'workspace-a',
+      });
+      await closed;
+      expect((await fetch(new URL('/api/v1/snapshot', server.endpoint), {
+        headers: { Authorization: `Bearer ${token}` },
+      })).status).toBe(200);
+    } finally {
+      client?.terminate();
+      await server.close();
+    }
+  });
+
   it('keeps two local watcher instances available when default ports collide', async () => {
     const create = (port: number, pairingPort: number, token: string): ReturnType<typeof startWatcherServer> => startWatcherServer({
       port, pairingPort, accessToken: token, fallbackOnPortInUse: true,
