@@ -6,6 +6,27 @@ import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
 
+function managedPortableLauncher(runtime: string): string {
+  return [
+    '@echo off',
+    'REM lnwjing-managed-portable-stdio-v1',
+    'setlocal',
+    `set "APP=%~dp0${runtime}\\lnwjing.exe"`,
+    `set "BRIDGE=%~dp0${runtime}\\lnwjing-mcp-stdio-bridge.exe"`,
+    'if not exist "%APP%" (',
+    '  echo lnwjing portable MCP runtime is missing. Launch the Portable EXE first. 1>&2',
+    '  exit /b 1',
+    ')',
+    'if not exist "%BRIDGE%" (',
+    '  echo lnwjing portable MCP console bridge is missing. Launch the Portable EXE first. 1>&2',
+    '  exit /b 1',
+    ')',
+    '"%BRIDGE%" "%APP%" --mcp-stdio %*',
+    'exit /b %ERRORLEVEL%',
+    '',
+  ].join('\r\n');
+}
+
 describe('one-click Windows x64 portable build', () => {
   it('provides a root-level double-click launcher that invokes the portable-only builder', async () => {
     const cmd = await readFile(path.join(root, 'BUILD-LNWJING-PORTABLE-X64.cmd'), 'utf8');
@@ -117,6 +138,8 @@ describe('one-click Windows x64 portable build', () => {
     expect(maintenance).toContain("[switch]$IncludePartial");
     expect(maintenance).toContain('if (-not $Apply)');
     expect(maintenance).toContain('lnwjing-mcp-stdio.cmd');
+    expect(maintenance).toContain('assert-portable-managed-mcp-launcher.ps1');
+    expect(maintenance).not.toContain('$launcherText.Contains');
     expect(maintenance).toContain('Get-CimInstance Win32_Process');
     expect(maintenance).toContain('ReparsePoint');
     expect(maintenance).toContain('lnwjing-ready');
@@ -127,14 +150,16 @@ describe('one-click Windows x64 portable build', () => {
     const portable = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-cleanup-fixture-'));
     const current = 'lnwjing-runtime-v5.8.9-current';
     const old = 'lnwjing-runtime-v5.8.7-old';
+    const sharedPrefix = 'lnwjing-runtime-v5.8.9-cur';
     const fresh = 'lnwjing-runtime-v5.8.8-recent';
     const malformed = 'lnwjing-runtime-v5.8.6-forged';
     const missingExe = 'lnwjing-runtime-v5.8.5-incomplete';
     const script = path.join(root, 'scripts', 'clean-portable-runtime-cache.ps1');
     try {
-      await writeFile(path.join(portable, 'lnwjing-mcp-stdio.cmd'),
-        `@echo off\r\nREM lnwjing-managed-portable-stdio-v1\r\nset "APP=%~dp0${current}\\lnwjing.exe"\r\n`);
-      for (const name of [current, fresh, old, malformed, missingExe]) {
+      const launcher = path.join(portable, 'lnwjing-mcp-stdio.cmd');
+      const managed = managedPortableLauncher(current);
+      await writeFile(launcher, managed);
+      for (const name of [current, fresh, old, sharedPrefix, malformed, missingExe]) {
         const folder = path.join(portable, name);
         await mkdir(folder);
         const match = /^lnwjing-runtime-v(.+)$/.exec(name);
@@ -144,7 +169,7 @@ describe('one-click Windows x64 portable build', () => {
       }
       await writeFile(path.join(portable, malformed, '.lnwjing-ready'), 'forged');
       const aged = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000);
-      for (const name of [old, malformed, missingExe]) await utimes(path.join(portable, name), aged, aged);
+      for (const name of [old, sharedPrefix, malformed, missingExe]) await utimes(path.join(portable, name), aged, aged);
       const recent = new Date(Date.now() - 24 * 60 * 60 * 1000);
       await utimes(path.join(portable, fresh), recent, recent);
       const run = (apply: boolean): string => execFileSync('powershell.exe', [
@@ -152,20 +177,66 @@ describe('one-click Windows x64 portable build', () => {
         '-File', script, '-PortableDirectory', portable, '-RetainReadyCount', '1',
         ...(apply ? ['-Apply'] : []),
       ], { encoding: 'utf8', timeout: 25_000 });
+      await writeFile(launcher, managed + 'echo user customization\r\n');
+      expect(() => run(false)).toThrow();
+      await writeFile(launcher, managed);
       const preview = run(false);
-      expect(preview).toContain('CANDIDATES=1');
+      expect(preview).toContain('CANDIDATES=2');
       expect(preview).toContain('WOULD_DELETE=' + old);
+      expect(preview).toContain('WOULD_DELETE=' + sharedPrefix);
       expect(preview).not.toContain('WOULD_DELETE=' + malformed);
       expect(preview).not.toContain('WOULD_DELETE=' + fresh);
       expect(preview).not.toContain('WOULD_DELETE=' + missingExe);
       const applied = run(true);
       expect(applied).toContain('DELETED=' + old);
+      expect(applied).toContain('DELETED=' + sharedPrefix);
       await expect(stat(path.join(portable, old))).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(stat(path.join(portable, sharedPrefix))).rejects.toMatchObject({ code: 'ENOENT' });
       for (const name of [current, fresh, malformed, missingExe]) {
         expect((await stat(path.join(portable, name))).isDirectory()).toBe(true);
       }
     } finally {
       await rm(portable, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform !== 'win32')('requires a canonical launcher in the recommended manual runtime maintenance flow', async () => {
+    const fixture = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-maintenance-fixture-'));
+    const scripts = path.join(fixture, 'scripts');
+    const portable = path.join(fixture, 'portable');
+    const current = 'lnwjing-runtime-v5.8.9-current';
+    const old = 'lnwjing-runtime-v5.8.7-old';
+    try {
+      await mkdir(scripts);
+      await mkdir(portable);
+      for (const name of ['portable-runtime-maintenance.ps1', 'assert-portable-managed-mcp-launcher.ps1']) {
+        await writeFile(path.join(scripts, name), await readFile(path.join(root, 'scripts', name)));
+      }
+      const launcher = path.join(portable, 'lnwjing-mcp-stdio.cmd');
+      const managed = managedPortableLauncher(current);
+      await writeFile(launcher, managed);
+      for (const name of [current, old]) {
+        const folder = path.join(portable, name);
+        await mkdir(folder);
+        await writeFile(path.join(folder, '.lnwjing-ready'), name.replace('lnwjing-runtime-', 'lnwjing-'));
+        await writeFile(path.join(folder, 'lnwjing.exe'), 'test-only');
+      }
+      const aged = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000);
+      await utimes(path.join(portable, old), aged, aged);
+      const run = (apply: boolean): string => execFileSync('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', path.join(scripts, 'portable-runtime-maintenance.ps1'), '-KeepLatest', '1',
+        ...(apply ? ['-Apply'] : []),
+      ], { encoding: 'utf8', timeout: 25_000 });
+      await writeFile(launcher, managed + 'echo custom command\r\n');
+      expect(() => run(false)).toThrow();
+      await writeFile(launcher, managed);
+      expect(run(false)).toContain('DRY-RUN: ' + path.join(portable, old));
+      expect(run(true)).toContain('Removed: ' + path.join(portable, old));
+      await expect(stat(path.join(portable, old))).rejects.toMatchObject({ code: 'ENOENT' });
+      expect((await stat(path.join(portable, current))).isDirectory()).toBe(true);
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
     }
   });
 

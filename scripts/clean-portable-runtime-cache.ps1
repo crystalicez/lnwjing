@@ -19,17 +19,7 @@ if (-not $root.PSIsContainer -or ($root.Attributes -band [IO.FileAttributes]::Re
   throw 'Refusing non-directory or redirected Portable root'
 }
 $launcher = Join-Path $portable 'lnwjing-mcp-stdio.cmd'
-if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
-  throw 'The Portable MCP launcher is missing; refusing cleanup without an active runtime reference'
-}
-$launcherItem = Get-Item -LiteralPath $launcher -Force
-if ($launcherItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-  throw 'Refusing redirected MCP launcher'
-}
-$launcherContents = Get-Content -LiteralPath $launcher -Raw
-if (-not $launcherContents.Contains('REM lnwjing-managed-portable-stdio-v1')) {
-  throw 'Unrecognized MCP launcher; refusing cleanup'
-}
+$referencedRuntime = & (Join-Path $PSScriptRoot 'assert-portable-managed-mcp-launcher.ps1') -LauncherPath $launcher
 $runtimePattern = '^lnwjing-runtime-v(?<version>\d+\.\d+\.\d+)-(?<build>[A-Za-z0-9_-]+)$'
 $all = @(Get-ChildItem -LiteralPath $portable -Directory -Force | Where-Object {
   if ($_.Name -notmatch $runtimePattern -or
@@ -44,9 +34,7 @@ $all = @(Get-ChildItem -LiteralPath $portable -Directory -Force | Where-Object {
   [IO.File]::ReadAllText($marker) -ceq $expected
 } | Sort-Object LastWriteTimeUtc -Descending)
 $preserved = @($all | Select-Object -First $RetainReadyCount | ForEach-Object Name)
-foreach ($folder in $all) {
-  if ($launcherContents.Contains($folder.Name)) { $preserved += $folder.Name }
-}
+$preserved += $referencedRuntime
 $preserved = @($preserved | Select-Object -Unique)
 $now = [DateTime]::UtcNow
 $candidates = @($all | Where-Object {
@@ -68,7 +56,7 @@ foreach ($folder in $candidates) {
       throw ('Runtime age changed during cleanup; refusing deletion of ' + $folder.Name)
     }
     # Validate nested links only for directories explicitly selected for deletion.
-    if (@(Get-ChildItem -LiteralPath $folder.FullName -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop).Count -gt 0) {
+    if (@(Get-ChildItem -LiteralPath $folder.FullName -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop | Select-Object -First 1).Count -gt 0) {
       throw ('Reparse point inside cache; refusing cleanup of ' + $folder.Name)
     }
     Remove-Item -LiteralPath $folder.FullName -Recurse -Force -ErrorAction Stop

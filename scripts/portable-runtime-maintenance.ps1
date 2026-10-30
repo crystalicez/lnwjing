@@ -25,9 +25,9 @@ if (($root.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
 $rootPath = [IO.Path]::GetFullPath($root.FullName).TrimEnd('\') + '\'
 $now = Get-Date
 $launcher = Join-Path $root.FullName 'lnwjing-mcp-stdio.cmd'
-$launcherText = ''
+$referencedRuntime = $null
 if (Test-Path -LiteralPath $launcher -PathType Leaf) {
-    $launcherText = [IO.File]::ReadAllText($launcher)
+    $referencedRuntime = & (Join-Path $PSScriptRoot 'assert-portable-managed-mcp-launcher.ps1') -LauncherPath $launcher
 }
 $runtimePattern = '^lnwjing-runtime-v(?<version>\d+\.\d+\.\d+)-(?<build>[A-Za-z0-9_-]+)$'
 $partialPattern = '^lnwjing-runtime-v\d+\.\d+\.\d+-[A-Za-z0-9_-]+\.partial-\d+$'
@@ -40,7 +40,7 @@ foreach ($directory in $directories) {
     if ($directory.FullName -in $preserved) { continue }
     if (($now - $directory.LastWriteTime).TotalDays -lt $MinimumAgeDays) { continue }
     if (($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
-    if ($launcherText.Contains($directory.Name)) { continue }
+    if ($directory.Name -ceq $referencedRuntime) { continue }
     if ($directory.Name -cnotmatch $runtimePattern) { continue }
     $expected = "lnwjing-v$($Matches['version'])-$($Matches['build'])"
     $ready = Join-Path $directory.FullName '.lnwjing-ready'
@@ -61,6 +61,9 @@ if ($IncludePartial) {
 if ($candidates.Count -eq 0) {
     Write-Host 'No eligible stale Portable runtime directories. No files changed.'
     exit 0
+}
+if ($null -eq $referencedRuntime) {
+    throw 'The Portable MCP launcher is missing; refusing cleanup without an active runtime reference'
 }
 foreach ($candidate in $candidates) {
     Write-Host ("{0}: {1}" -f $(if($Apply){'Proposed cleanup'}else{'DRY-RUN'}), $candidate.FullName)
