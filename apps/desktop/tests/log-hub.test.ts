@@ -559,6 +559,28 @@ describe('LogHub', () => {
     expect(lines.at(-1)?.text).toBe('line-10004');
   });
 
+  it('keeps exact latest log order, byte accounting and scoped clear after repeated compaction', () => {
+    const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log' });
+    for (let index = 0; index < 10_400; index += 1) {
+      hub.feed('mcp', 'info', `line-${index}`, undefined, undefined, { workspaceId: index % 2 === 0 ? 'ws-a' : 'ws-b' });
+    }
+    const retained = hub.snapshot().lines.filter((line) => line.source === 'mcp');
+    expect(retained).toHaveLength(10_000);
+    expect(retained[0]?.text).toBe('line-400');
+    expect(retained.at(-1)?.text).toBe('line-10399');
+    expect(hub.telemetrySnapshot().sources.mcp.lines).toBe(10_000);
+    expect(hub.telemetrySnapshot().sources.mcp.retainedBytes).toBe(
+      retained.reduce((total, line) => total + Buffer.byteLength(JSON.stringify(line), 'utf8'), 0),
+    );
+    hub.clear('mcp', { workspaceId: 'ws-a' });
+    const remaining = hub.snapshot().lines.filter((line) => line.source === 'mcp');
+    expect(remaining).toHaveLength(5_000);
+    expect(remaining.every((line) => line.workspaceId === 'ws-b')).toBe(true);
+    hub.feed('mcp', 'info', 'new-a', undefined, undefined, { workspaceId: 'ws-a' });
+    expect(hub.snapshot().lines.at(-1)?.text).toBe('new-a');
+    expect(hub.telemetrySnapshot().sources.mcp.lines).toBe(5_001);
+  });
+
   it('notifies subscribers of new lines', () => {
     const onLine = vi.fn();
     const hub = new LogHub({ tunnelLogPath: 'Z:\\missing\\lnwjing-tunnel.log', onLine });

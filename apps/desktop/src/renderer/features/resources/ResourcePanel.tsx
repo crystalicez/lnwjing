@@ -19,6 +19,60 @@ export function trackedGoalIds(snapshot: ResourceSnapshot | null): ReadonlySet<s
   return new Set((snapshot?.resources ?? []).flatMap(row => row.goalId ? [row.goalId] : []));
 }
 
+/** Suspend resource IPC while the window is hidden; resume with one fresh sample. */
+export interface ResourceVisibilitySource {
+  readonly visibilityState: DocumentVisibilityState;
+  addEventListener(type: 'visibilitychange', listener: () => void): void;
+  removeEventListener(type: 'visibilitychange', listener: () => void): void;
+}
+
+export function subscribeVisibleResourcePolling(
+  sample: () => Promise<void>,
+  visibility: ResourceVisibilitySource,
+  intervalMs = 15_000,
+): () => void {
+  let active = true;
+  let inFlight = false;
+  let refreshOnIdle = false;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  const poll = (): void => {
+    if (!active || inFlight || visibility.visibilityState !== 'visible') return;
+    inFlight = true;
+    void Promise.resolve().then(sample).catch(() => undefined).finally(() => {
+      inFlight = false;
+      if (refreshOnIdle) {
+        refreshOnIdle = false;
+        poll();
+      }
+    });
+  };
+
+  const onVisibilityChange = (): void => {
+    if (!active) return;
+    if (visibility.visibilityState !== 'visible') {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+      return;
+    }
+    if (timer !== null) return;
+    timer = setInterval(poll, intervalMs);
+    if (inFlight) refreshOnIdle = true;
+    else poll();
+  };
+
+  visibility.addEventListener('visibilitychange', onVisibilityChange);
+  // The mount effect already fetches the initial snapshot.
+  if (visibility.visibilityState === 'visible') timer = setInterval(poll, intervalMs);
+
+  return (): void => {
+    active = false;
+    visibility.removeEventListener('visibilitychange', onVisibilityChange);
+    if (timer !== null) clearInterval(timer);
+    timer = null;
+  };
+}
+
 export function ResourcePanel(props: { readonly locale: UiLocale; readonly workspaceId: string | null }): ReactElement {
   const [goalId, setGoalId] = useState('');
   const [goals, setGoals] = useState<readonly DoctorGoalOption[]>([]);
@@ -46,22 +100,21 @@ export function ResourcePanel(props: { readonly locale: UiLocale; readonly works
     return (): void => { active = false; };
   }, [props.workspaceId]);
 
-  // Poll only while the Resources tab is mounted. Never reuse previous samples
-  // as if they were new measurements, and stop polling on workspace switch.
+  // Sample only while the Resources tab is mounted AND the window is visible.
+  // Resume immediately on visibility changes without overlapping an in-flight sample.
   useEffect(() => {
     const workspaceId = props.workspaceId;
     if (!workspaceId) return;
     let active = true;
-    let inFlight = false;
-    const timer = setInterval(() => {
-      if (inFlight) return;
-      inFlight = true;
-      void window.lnwjing.getResourceSnapshot({ workspaceId })
-        .then((next) => { if (active) setSnapshot(next); })
-        .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); })
-        .finally(() => { inFlight = false; });
-    }, 15_000);
-    return (): void => { active = false; clearInterval(timer); };
+    const stop = subscribeVisibleResourcePolling(async (): Promise<void> => {
+      try {
+        const next = await window.lnwjing.getResourceSnapshot({ workspaceId });
+        if (active) setSnapshot(next);
+      } catch (cause: unknown) {
+        if (active) setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    }, document);
+    return (): void => { active = false; stop(); };
   }, [props.workspaceId]);
 
   useEffect(() => {

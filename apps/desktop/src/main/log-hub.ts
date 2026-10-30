@@ -47,6 +47,7 @@ interface TailedFile {
 
 export class LogHub {
   private readonly lines = new Map<LogSource, LogLine[]>();
+  private readonly lineHeads = new Map<LogSource, number>();
   private readonly retainedBytes = new Map<LogSource, number>();
   private readonly seenKeys = new Map<LogSource, Set<string>>();
   private readonly seenMcpDeliveries = new Set<string>();
@@ -67,6 +68,7 @@ export class LogHub {
     this.onLine = options.onLine;
     for (const source of SOURCES) {
       this.lines.set(source, []);
+      this.lineHeads.set(source, 0);
       this.retainedBytes.set(source, 0);
       this.seenKeys.set(source, new Set());
     }
@@ -175,7 +177,7 @@ export class LogHub {
 
   public snapshot(): LogSnapshot {
     return {
-      lines: SOURCES.flatMap((source) => [...(this.lines.get(source) ?? [])]).sort((a, b) => a.id - b.id),
+      lines: SOURCES.flatMap((source) => (this.lines.get(source) ?? []).slice(this.lineHeads.get(source) ?? 0)).sort((a, b) => a.id - b.id),
       tunnelLogPath: this.tunnelLogPath,
       tunnelLogExists: existsSync(this.tunnelLogPath),
     };
@@ -183,7 +185,7 @@ export class LogHub {
 
   public telemetrySnapshot(): LogHubTelemetrySnapshot {
     const sources = Object.fromEntries(SOURCES.map((source) => [source, {
-      lines: this.lines.get(source)?.length ?? 0,
+      lines: (this.lines.get(source)?.length ?? 0) - (this.lineHeads.get(source) ?? 0),
       retainedBytes: this.retainedBytes.get(source) ?? 0,
       seenKeys: this.seenKeys.get(source)?.size ?? 0,
     }])) as Record<LogSource, { lines: number; retainedBytes: number; seenKeys: number }>;
@@ -200,14 +202,16 @@ export class LogHub {
   public clear(source: LogSource, scope: LogScopeRequest = {}, workspaces: readonly WorkspaceSummary[] = []): void {
     // Clear only the visible buffer. Keep delivery/dedup cursors so historical
     // MCP and process entries do not get rehydrated on the next dashboard sync.
-    const buffer = this.lines.get(source) ?? [];
+    const buffer = (this.lines.get(source) ?? []).slice(this.lineHeads.get(source) ?? 0);
     if (scope.workspaceId === undefined && scope.sessionId === undefined) {
       this.lines.set(source, []);
+      this.lineHeads.set(source, 0);
       this.retainedBytes.set(source, 0);
       return;
     }
     const retained = buffer.filter((line) => !matchesLogScope(line, scope, workspaces));
     this.lines.set(source, retained);
+    this.lineHeads.set(source, 0);
     this.retainedBytes.set(source, retained.reduce((bytes, line) => bytes + serializedLogLineBytes(line), 0));
   }
 
@@ -264,14 +268,22 @@ export class LogHub {
     };
     this.nextId += 1;
     const buffer = this.lines.get(source) ?? [];
+    let head = this.lineHeads.get(source) ?? 0;
     buffer.push(line);
     let retainedBytes = (this.retainedBytes.get(source) ?? 0) + serializedLogLineBytes(line);
-    while (buffer.length > MAX_LINES_PER_SOURCE || retainedBytes > MAX_BYTES_PER_SOURCE) {
-      const removed = buffer.shift();
+    while (buffer.length - head > MAX_LINES_PER_SOURCE || retainedBytes > MAX_BYTES_PER_SOURCE) {
+      const removed = buffer[head];
       if (removed === undefined) break;
+      head += 1;
       retainedBytes -= serializedLogLineBytes(removed);
     }
+    // Batch compaction rather than shifting thousands of objects on every new log line.
+    if (head >= 128) {
+      buffer.splice(0, head);
+      head = 0;
+    }
     this.lines.set(source, buffer);
+    this.lineHeads.set(source, head);
     this.retainedBytes.set(source, retainedBytes);
     this.onLine?.(line);
   }
