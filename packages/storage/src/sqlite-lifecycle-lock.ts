@@ -24,7 +24,7 @@ export function withSqliteLifecycleLockSync<T>(directory: string, operation: () 
     try {
       descriptor = openSync(lockPath, 'wx');
     } catch (error: unknown) {
-      if (!hasErrorCode(error, 'EEXIST')) throw error;
+      if (!hasErrorCode(error, 'EEXIST') && !isWindowsLiveOwnerContention(error, lockPath)) throw error;
       if (reclaimDeadOwnerLock(lockPath)) continue;
       if (Date.now() >= deadline) throw new Error(`Timed out waiting for SQLite lifecycle lock: ${lockPath}`);
       Atomics.wait(sleepCell, 0, 0, LOCK_WAIT_INTERVAL_MS);
@@ -46,6 +46,17 @@ export function withSqliteLifecycleLockSync<T>(directory: string, operation: () 
     } catch (error: unknown) {
       if (!hasErrorCode(error, 'ENOENT')) process.stderr.write('SQLite lifecycle lock cleanup failed\n');
     }
+  }
+}
+
+export function isWindowsLiveOwnerContention(error: unknown, lockPath: string): boolean {
+  if (process.platform !== 'win32' || (!hasErrorCode(error, 'EPERM') && !hasErrorCode(error, 'EACCES'))) return false;
+  try {
+    if (!lstatSync(lockPath).isFile()) return false;
+    const owner = readLockOwner(lockPath);
+    return owner !== null && processIsAlive(owner.pid);
+  } catch {
+    return false;
   }
 }
 

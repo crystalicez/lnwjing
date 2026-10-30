@@ -4,12 +4,29 @@ import { mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SQLITE_LIFECYCLE_LOCK_FILENAME, withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
+import { isWindowsLiveOwnerContention, SQLITE_LIFECYCLE_LOCK_FILENAME, withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
 describe('SQLite lifecycle lock ownership', () => {
+  it.skipIf(process.platform !== 'win32')('recognizes Windows access denial only for a live owner lock', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-life-access-denied-'));
+    roots.push(root);
+    const filename = path.join(root, SQLITE_LIFECYCLE_LOCK_FILENAME);
+    const denied = { code: 'EPERM' };
+    const accessDenied = { code: 'EACCES' };
+    expect(isWindowsLiveOwnerContention(denied, filename)).toBe(false);
+    await writeFile(filename, JSON.stringify({ pid: process.pid, ownerId: 'live-owner' }));
+    expect(isWindowsLiveOwnerContention(denied, filename)).toBe(true);
+    expect(isWindowsLiveOwnerContention(accessDenied, filename)).toBe(true);
+    expect(isWindowsLiveOwnerContention({ code: 'ENOSPC' }, filename)).toBe(false);
+    await writeFile(filename, 'unreadable owner');
+    expect(isWindowsLiveOwnerContention(denied, filename)).toBe(false);
+    await writeFile(filename, JSON.stringify({ pid: 2147483647 }));
+    expect(isWindowsLiveOwnerContention(denied, filename)).toBe(false);
+  });
+
   it('never steals an aged lock while its owner process is still alive', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-life-live-'));
     roots.push(root);
