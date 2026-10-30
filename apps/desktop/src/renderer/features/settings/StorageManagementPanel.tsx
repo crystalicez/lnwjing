@@ -54,6 +54,7 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
   async function updatePolicy(changes: Partial<StoragePolicy>): Promise<void> {
     if (pending || overview === null) return;
     const enablingCompression = changes.compressionEnabledOnNextStart === true;
+    if (changes.checkpointCreationMode === 'git-aware' && !window.confirm(t('storagePanel.confirmGitAware'))) return;
     const enablingNoBackupAudit = changes.auditPruneWithoutBackup === true;
     const enablingAutomaticRetention = changes.automaticCheckpointRetention === true;
     if (enablingAutomaticRetention && !window.confirm(t('storagePanel.confirmAuto'))) return;
@@ -159,6 +160,15 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
             description={t('storagePanel.compressionNote')}
             checked={false} disabled={true}
             onChange={(value) => { void updatePolicy({ compressionEnabledOnNextStart: value }); }} />
+          <div className="setting-field">
+            <label htmlFor="storage-checkpoint-mode">{t('storagePanel.checkpointMode')}</label>
+            <select id="storage-checkpoint-mode" disabled={pending} value={overview.policy.checkpointCreationMode}
+              onChange={(event) => { void updatePolicy({ checkpointCreationMode: event.target.value as StoragePolicy['checkpointCreationMode'] }); }}>
+              <option value="always">{t('storagePanel.checkpointAlways')}</option>
+              <option value="git-aware">{t('storagePanel.checkpointGitAware')}</option>
+            </select>
+            <p className="hint">{t('storagePanel.checkpointModeNote')}</p>
+          </div>
           <SettingSwitch label={t('storagePanel.autoRetention')}
             description={t('storagePanel.autoRetentionNote')}
             checked={overview.policy.automaticCheckpointRetention} disabled={pending || (!autoBackupEnabled && !overview.policy.automaticCheckpointRetention)}

@@ -27,6 +27,9 @@ describe('storage IPC guards', () => {
   it('rejects unknown policy fields and unconfirmed mutation commands', () => {
     expect(() => parseSetStoragePolicyRequest({ userConfirmed: false, auditPruneWithoutBackup: true })).toThrow();
     expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, auditPruneWithoutBackup: true, hidden: 1 })).toThrow();
+    expect(parseSetStoragePolicyRequest({ userConfirmed: true, checkpointCreationMode: 'git-aware' })).toEqual({ userConfirmed: true, checkpointCreationMode: 'git-aware' });
+    expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, checkpointCreationMode: 'off' })).toThrow(/Invalid checkpoint/);
+    expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, checkpointCreationMode: null })).toThrow(/Invalid checkpoint/);
     expect(() => parseApplyCheckpointCleanup({ ...preview })).toThrow();
     expect(() => parseNativeStorageCleanup({ category: 'tasks', userConfirmed: false })).toThrow();
   });

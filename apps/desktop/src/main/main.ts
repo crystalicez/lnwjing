@@ -388,7 +388,7 @@ const defaultDesktopServices: DesktopIpcServices = {
     profile: request.profile, strictRoots: request.strictRoots, allowedRoots: request.allowedRoots, restartRequired: false,
   }),
   createBackup: async (): Promise<BackupSummary> => ({ id: 'unavailable', createdAt: new Date(0).toISOString(), reason: 'manual', sizeBytes: 0 }),
-  getStorageOverview: async (): Promise<StorageOverview> => ({ policy: { compressionEnabledOnNextStart: false, automaticCheckpointRetention: false, auditPruneWithoutBackup: false, routineAuditRetentionDays: 90 }, sqliteAllocatedBytes: 0, sqliteFreeBytes: 0, compactRecommended: false, compactionRequiresOffline: true }),
+  getStorageOverview: async (): Promise<StorageOverview> => ({ policy: { checkpointCreationMode: 'always', compressionEnabledOnNextStart: false, automaticCheckpointRetention: false, auditPruneWithoutBackup: false, routineAuditRetentionDays: 90 }, sqliteAllocatedBytes: 0, sqliteFreeBytes: 0, compactRecommended: false, compactionRequiresOffline: true }),
   setStoragePolicy: async (): Promise<SetStoragePolicyResult> => { throw new Error('Storage backend is unavailable'); },
   previewCheckpointCleanup: async (): Promise<CheckpointCleanupPreview> => { throw new Error('Storage backend is unavailable'); },
   applyCheckpointCleanup: async (): Promise<ApplyCheckpointCleanupResult> => { throw new Error('Storage backend is unavailable'); },

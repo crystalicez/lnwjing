@@ -254,6 +254,7 @@ const BUNDLED_TUNNEL_CLIENT_VERSION = runtimeDependencies.tunnelClient.version;
 const MAX_GIT_DIFF_FALLBACK_BYTES = 2 * 1024 * 1024;
 const MAX_GIT_IMAGE_PREVIEW_BYTES = 4 * 1024 * 1024;
 const permissionSettingKey = 'permission_profile';
+const checkpointCreationModeSettingKey = 'checkpoint_creation_mode_v1';
 const selectedWorkspaceSettingKey = 'selected_workspace_id';
 const activeWorkspaceIdsSettingKey = 'active_workspace_ids';
 const workLogClearedSettingKey = 'work_log_cleared_at';
@@ -269,11 +270,13 @@ const DEFAULT_WATCHER_PAIRING_PORT = 17891;
 
 export interface StorageMaintenanceBackend {
   getPolicy(): {
+    readonly checkpointCreationMode: 'always' | 'git-aware';
     readonly compressionEnabledOnNextStart: boolean; readonly automaticCheckpointRetention: boolean;
     readonly auditPruneWithoutBackup: boolean; readonly routineAuditRetentionDays: number;
   };
   configurePolicy(options: {
     readonly userConfirmed: boolean; readonly compressionEnabledOnNextStart?: boolean;
+    readonly checkpointCreationMode?: 'always' | 'git-aware';
     readonly automaticCheckpointRetention?: boolean; readonly auditPruneWithoutBackup?: boolean;
     readonly routineAuditRetentionDays?: number;
   }): { readonly restartRequired: boolean };
@@ -579,6 +582,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const fileService = new FileService(workspaceRepository, pathGuard, undefined, {
     writerAdmission,
     checkpointService,
+    checkpointModeProvider: (): 'always' | 'git-aware' => settingsRepository.get(checkpointCreationModeSettingKey) === 'git-aware' ? 'git-aware' : 'always',
     profileProvider: activePermissionProfile,
     unrestricted,
     trustedWorkspaceAccess: true,
@@ -2503,6 +2507,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
 
   const storageMaintenance: StorageMaintenanceBackend = {
     getPolicy: () => ({
+      checkpointCreationMode: settingsRepository.get(checkpointCreationModeSettingKey) === 'git-aware' ? 'git-aware' : 'always',
       compressionEnabledOnNextStart: false,
       automaticCheckpointRetention: settingsRepository.get('checkpoint_auto_retention_v1') === 'true',
       auditPruneWithoutBackup: settingsRepository.get('audit_routine_prune_without_backup_v1') === 'true',
@@ -2515,6 +2520,9 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           options.routineAuditRetentionDays < 1 || options.routineAuditRetentionDays > 3650)) {
         throw new Error('Invalid audit retention days');
       }
+      if (options.checkpointCreationMode !== undefined && options.checkpointCreationMode !== 'always' && options.checkpointCreationMode !== 'git-aware') {
+        throw new Error('Invalid checkpoint creation mode');
+      }
       if (options.automaticCheckpointRetention === true && readSettings().autoBackupEnabled !== true) {
         throw new Error('Automatic checkpoint retention requires automatic SQLite backups');
       }
@@ -2525,6 +2533,9 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       }
       if (options.compressionEnabledOnNextStart === false) {
         settingsRepository.set('checkpoint_compression_v2_compatibility_ack', 'false');
+      }
+      if (options.checkpointCreationMode !== undefined) {
+        settingsRepository.set(checkpointCreationModeSettingKey, options.checkpointCreationMode);
       }
       if (options.automaticCheckpointRetention !== undefined) {
         settingsRepository.set('checkpoint_auto_retention_v1', options.automaticCheckpointRetention ? 'true' : 'false');

@@ -29,6 +29,7 @@ import { DefaultPermissionEngine, permissionProfiles, type PermissionEngine, typ
 import { isProtectedCriticalPath } from '@lnwjing/shared';
 import { isFilesystemRoot, isWithin, WorkspacePathGuard, type ResolvedWorkspacePath, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { CheckpointServicePort } from './checkpoint-service.js';
+import { canRecoverEntirelyFromGit } from './checkpoint-git-policy.js';
 import { createGuardedWriteValidator } from './guarded-write.js';
 import type { ManagedWriterAdmissionPort } from './writer-admission.js';
 import { runMutationTransaction } from './mutation-transaction.js';
@@ -69,6 +70,8 @@ export interface FileServiceDependencies {
   readonly writer?: AtomicFileWriter;
   readonly patchApplier?: PatchApplier;
   readonly checkpointService?: CheckpointServicePort;
+  /** Read at mutation time to synchronize Desktop and STDIO preferences. */
+  readonly checkpointModeProvider?: () => 'always' | 'git-aware';
   readonly permissionEngine?: PermissionEngine;
   readonly profile?: PermissionProfile;
   readonly profileProvider?: () => PermissionProfile;
@@ -215,6 +218,7 @@ export class FileService {
   private readonly writerAdmission: ManagedWriterAdmissionPort | undefined;
   private readonly patchApplier: PatchApplier;
   private readonly checkpointService: CheckpointServicePort | undefined;
+  private readonly checkpointModeProvider: () => 'always' | 'git-aware';
   private readonly permissionEngine: PermissionEngine;
   private readonly profileProvider: () => PermissionProfile;
   private readonly unboundedReader: UnboundedFileReader;
@@ -235,6 +239,7 @@ export class FileService {
     this.writerAdmission = dependencies.writerAdmission;
     this.patchApplier = dependencies.patchApplier ?? new PatchApplier();
     this.checkpointService = dependencies.checkpointService;
+    this.checkpointModeProvider = dependencies.checkpointModeProvider ?? ((): 'always' | 'git-aware' => 'always');
     this.permissionEngine = dependencies.permissionEngine ?? new DefaultPermissionEngine();
     this.profileProvider = dependencies.profileProvider ?? ((): PermissionProfile => dependencies.profile ?? permissionProfiles.balanced);
     this.unboundedReader = dependencies.unboundedReader ?? new UnboundedFileReader();
@@ -1121,8 +1126,15 @@ export class FileService {
     return ok(undefined);
   }
 
-  private async createCheckpoint(actor: FileActor, workspaceId: string, paths: readonly string[]): Promise<Result<{ readonly id: string }>> {
+  private async createCheckpoint(actor: FileActor, workspaceId: string, paths: readonly string[]): Promise<Result<{ readonly id?: string }>> {
     if (this.checkpointService === undefined) return err(appError('INTERNAL_ERROR', 'Checkpoint service is unavailable', true));
+    if (this.checkpointModeProvider() === 'git-aware') {
+      const workspace = await this.workspaces.get(workspaceId);
+      // A missing workspace is never a reason to skip durable recovery.
+      if (workspace !== null && await canRecoverEntirelyFromGit(workspace.realRootPath, paths)) {
+        return ok({});
+      }
+    }
     const checkpoint = await this.checkpointService.createForFiles(actor, workspaceId, paths);
     if (!checkpoint.ok) return checkpoint;
     return ok({ id: checkpoint.value.id });

@@ -18,11 +18,14 @@ function record(value: unknown, allowed: readonly string[]): Input {
 }
 
 export function parseSetStoragePolicyRequest(payload: unknown): SetStoragePolicyRequest {
-  const fields = ['userConfirmed', 'compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup', 'routineAuditRetentionDays'];
+  const fields = ['userConfirmed', 'compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup', 'routineAuditRetentionDays', 'checkpointCreationMode'];
   const input = record(payload, fields);
   if (input.userConfirmed !== true) throw new Error('Storage policy change requires confirmation');
   for (const name of fields.slice(1, 4)) {
     if (input[name] !== undefined && typeof input[name] !== 'boolean') throw new Error('Invalid storage policy flag');
+  }
+  if (input.checkpointCreationMode !== undefined && input.checkpointCreationMode !== 'always' && input.checkpointCreationMode !== 'git-aware') {
+    throw new Error('Invalid checkpoint creation mode');
   }
   const days = input.routineAuditRetentionDays;
   if (days !== undefined && (!Number.isSafeInteger(days) || (days as number) < 1 || (days as number) > 3650)) {
@@ -30,6 +33,7 @@ export function parseSetStoragePolicyRequest(payload: unknown): SetStoragePolicy
   }
   return {
     userConfirmed: true,
+    ...(input.checkpointCreationMode === undefined ? {} : { checkpointCreationMode: input.checkpointCreationMode as 'always' | 'git-aware' }),
     ...(input.compressionEnabledOnNextStart === undefined ? {} : { compressionEnabledOnNextStart: input.compressionEnabledOnNextStart as boolean }),
     ...(input.automaticCheckpointRetention === undefined ? {} : { automaticCheckpointRetention: input.automaticCheckpointRetention as boolean }),
     ...(input.auditPruneWithoutBackup === undefined ? {} : { auditPruneWithoutBackup: input.auditPruneWithoutBackup as boolean }),

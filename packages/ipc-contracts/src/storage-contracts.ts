@@ -1,5 +1,6 @@
 /** Storage maintenance is explicit-only. All sizes are SQLite byte counts. */
 export interface StoragePolicy {
+  readonly checkpointCreationMode: 'always' | 'git-aware';
   readonly compressionEnabledOnNextStart: boolean;
   readonly automaticCheckpointRetention: boolean;
   readonly auditPruneWithoutBackup: boolean;
@@ -17,6 +18,7 @@ export interface StorageOverview {
 }
 export interface SetStoragePolicyRequest {
   readonly userConfirmed: true;
+  readonly checkpointCreationMode?: 'always' | 'git-aware';
   readonly compressionEnabledOnNextStart?: boolean;
   readonly automaticCheckpointRetention?: boolean;
   readonly auditPruneWithoutBackup?: boolean;

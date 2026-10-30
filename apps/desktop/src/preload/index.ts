@@ -1244,7 +1244,9 @@ function storagePolicy(value: unknown): StoragePolicy {
   if (!isRecord(value)) throw new Error('Invalid storage policy response');
   const days = integerField(value, 'routineAuditRetentionDays');
   if (days < 1 || days > 3650) throw new Error('Invalid retention response');
+  if (value.checkpointCreationMode !== 'always' && value.checkpointCreationMode !== 'git-aware') throw new Error('Invalid checkpoint mode response');
   return {
+    checkpointCreationMode: value.checkpointCreationMode,
     compressionEnabledOnNextStart: booleanField(value, 'compressionEnabledOnNextStart'),
     automaticCheckpointRetention: booleanField(value, 'automaticCheckpointRetention'),
     auditPruneWithoutBackup: booleanField(value, 'auditPruneWithoutBackup'),
@@ -1278,6 +1280,9 @@ function getStorageOverview(): Promise<StorageOverview> {
 }
 function setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStoragePolicyResult> {
   if (!isRecord(request) || request.userConfirmed !== true) return Promise.reject(new Error('Storage policy confirmation required'));
+  if (request.checkpointCreationMode !== undefined && request.checkpointCreationMode !== 'always' && request.checkpointCreationMode !== 'git-aware') {
+    return Promise.reject(new Error('Invalid checkpoint mode'));
+  }
   for (const key of ['compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup'] as const) {
     if (request[key] !== undefined && typeof request[key] !== 'boolean') return Promise.reject(new Error('Invalid storage policy'));
   }

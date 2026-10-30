@@ -17,7 +17,7 @@ describe('Desktop storage-maintenance backend', () => {
     const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41) });
     try {
       expect(runtime.storageMaintenance.getPolicy()).toEqual({
-        compressionEnabledOnNextStart: false, automaticCheckpointRetention: false,
+        checkpointCreationMode: 'always', compressionEnabledOnNextStart: false, automaticCheckpointRetention: false,
         auditPruneWithoutBackup: false, routineAuditRetentionDays: 90,
       });
       expect(() => runtime.storageMaintenance.configurePolicy({
@@ -32,6 +32,17 @@ describe('Desktop storage-maintenance backend', () => {
       expect(() => runtime.storageMaintenance.configurePolicy({
         userConfirmed: true, compressionEnabledOnNextStart: true,
       })).toThrow(/older Portable builds corrupt v2/);
+      expect(() => runtime.storageMaintenance.configurePolicy({
+        userConfirmed: true, checkpointCreationMode: 'unsupported' as 'git-aware',
+      })).toThrow(/Invalid checkpoint creation mode/);
+      expect(runtime.storageMaintenance.configurePolicy({
+        userConfirmed: true, checkpointCreationMode: 'git-aware',
+      })).toEqual({ restartRequired: false });
+      expect(runtime.storageMaintenance.getPolicy().checkpointCreationMode).toBe('git-aware');
+      expect(runtime.storageMaintenance.configurePolicy({
+        userConfirmed: true, checkpointCreationMode: 'always',
+      })).toEqual({ restartRequired: false });
+      expect(runtime.storageMaintenance.getPolicy().checkpointCreationMode).toBe('always');
       expect(runtime.storageMaintenance.configurePolicy({
         userConfirmed: true, auditPruneWithoutBackup: true, routineAuditRetentionDays: 7,
       })).toEqual({ restartRequired: false });
