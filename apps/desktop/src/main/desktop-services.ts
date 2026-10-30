@@ -1215,11 +1215,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       ? configuredRetentionDays : 90;
     const cutoffIso = new Date(now - retentionDays * 24 * 60 * 60 * 1000).toISOString();
     auditRetentionSweep = (async (): Promise<void> => {
-      // Probe the indexed timestamp before creating a large backup.
-      const oldest = database.connection.prepare(
-        'SELECT timestamp FROM audit_events ORDER BY timestamp ASC LIMIT 1',
-      ).get() as { timestamp: string } | undefined;
-      if (oldest === undefined || oldest.timestamp >= cutoffIso) return;
+      // Avoid backup I/O when expired rows are all protected evidence.
+      if (!auditRepository.hasExpiredRoutineReadCandidates(cutoffIso)) return;
       if (!pruneWithoutBackup) {
         if (readSettings().autoBackupEnabled !== true) return;
         const created = await backupService.ensureRecent();

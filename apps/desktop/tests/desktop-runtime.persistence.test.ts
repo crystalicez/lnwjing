@@ -344,6 +344,36 @@ describe('DesktopRuntime persistence', () => {
     expect(manifests).toEqual(expect.arrayContaining([expect.objectContaining({ reason: 'daily' })]));
   });
 
+  it('skips retention backup checks when only protected old audit evidence exists', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-protected-only-'));
+    temporaryRoots.push(root);
+    enableAutomaticBackups(root);
+    const seed = new SqliteDatabase(path.join(root, 'lnwjing.sqlite'));
+    try {
+      await new SqliteAuditRepository(seed).insert({
+        id: 'protected-old-mutation', timestamp: '2024-01-01T00:00:00.000Z',
+        actorId: 'test', actorName: 'test', action: 'mcp_tool:edit_file',
+        resultCode: 'SUCCESS', durationMs: 1, metadata: { mutationReceipt: { path: 'a.ts', action: 'edit_file' } },
+      });
+    } finally {
+      seed.close();
+    }
+    const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent');
+    const probe = vi.spyOn(SqliteAuditRepository.prototype, 'hasExpiredRoutineReadCandidates');
+    const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');
+    const runtime = createDesktopRuntime(await realpath(root));
+    try {
+      await vi.waitFor(() => expect(probe).toHaveBeenCalled(), { timeout: 5_000 });
+      expect(backup).toHaveBeenCalledTimes(1);
+      expect(purge).not.toHaveBeenCalled();
+    } finally {
+      await runtime.close();
+      probe.mockRestore();
+      backup.mockRestore();
+      purge.mockRestore();
+    }
+  }, RUNTIME_TEST_TIMEOUT_MS);
+
   it('does not delete audit records after repeated startup backup failures', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-runtime-retention-backup-fail-'));
     temporaryRoots.push(root);

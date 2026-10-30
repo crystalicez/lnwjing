@@ -70,6 +70,33 @@ function parseAuditCallCursor(cursor: string): { timestamp: string; id: string }
 
 const AUDIT_SELECT = 'SELECT id, timestamp, actor_id, actor_name, workspace_id, session_id, action, target_summary, permission_decision, result_code, duration_ms, metadata_json FROM audit_events';
 
+const EXPIRED_ROUTINE_READ_CONDITION = `
+candidate.timestamp < ?
+  AND candidate.action IN (
+    'mcp_tool:read_file', 'mcp_tool:read_files',
+    'mcp_tool:list_files', 'mcp_tool:list_directory', 'mcp_tool:search_files',
+    'mcp_tool:search_text', 'mcp_tool:read_file_page', 'mcp_tool:git_status', 'mcp_tool:git_log',
+    'mcp_tool:workspace_index_status', 'mcp_tool:process_status', 'mcp_tool:process_logs'
+  )
+  AND candidate.result_code IN ('STARTED', 'SUCCESS')
+  AND json_type(candidate.metadata_json, '$.goalId') IS NULL
+  AND json_type(candidate.metadata_json, '$.mutationReceipt') IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_events related
+    WHERE json_type(candidate.metadata_json, '$.callId') = 'text'
+      AND related.action = candidate.action
+      AND related.workspace_id IS candidate.workspace_id
+      AND related.session_id IS candidate.session_id
+      AND json_extract(related.metadata_json, '$.callId') = json_extract(candidate.metadata_json, '$.callId')
+      AND (
+        related.timestamp >= ?
+        OR related.result_code NOT IN ('STARTED', 'SUCCESS')
+        OR json_type(related.metadata_json, '$.goalId') IS NOT NULL
+        OR json_type(related.metadata_json, '$.mutationReceipt') IS NOT NULL
+      )
+  )
+`;
+
 export class SqliteAuditRepository implements AuditEventRepository {
   public constructor(private readonly database: SqliteDatabase) {}
 
@@ -94,36 +121,23 @@ export class SqliteAuditRepository implements AuditEventRepository {
     );
   }
 
+  /** Check the exact retention predicate without writing or preparing a backup. */
+  public hasExpiredRoutineReadCandidates(cutoffIso: string): boolean {
+    if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Invalid audit retention cutoff');
+    const connection = this.database.connection;
+    if (connection.prepare('SELECT 1 FROM audit_events WHERE timestamp < ? LIMIT 1').get(cutoffIso) === undefined) return false;
+    return connection.prepare(`
+      SELECT 1 FROM audit_events candidate WHERE ${EXPIRED_ROUTINE_READ_CONDITION} LIMIT 1
+    `).get(cutoffIso, cutoffIso) !== undefined;
+  }
+
   /** Drop only expired routine reads. Mutations, goal evidence and receipts stay durable. */
   public async purgeExpiredRoutineReads(cutoffIso: string, limit = 500): Promise<number> {
     if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Invalid audit retention cutoff');
     const boundedLimit = Number.isInteger(limit) && limit > 0 && limit <= 500 ? limit : 500;
     const result = this.database.connection.prepare(`
       DELETE FROM audit_events WHERE id IN (
-        SELECT candidate.id FROM audit_events candidate WHERE candidate.timestamp < ?
-          AND candidate.action IN (
-            'mcp_tool:read_file', 'mcp_tool:read_files',
-            'mcp_tool:list_files', 'mcp_tool:list_directory', 'mcp_tool:search_files',
-            'mcp_tool:search_text', 'mcp_tool:read_file_page', 'mcp_tool:git_status', 'mcp_tool:git_log',
-            'mcp_tool:workspace_index_status', 'mcp_tool:process_status', 'mcp_tool:process_logs'
-          )
-          AND candidate.result_code IN ('STARTED', 'SUCCESS')
-          AND json_type(candidate.metadata_json, '$.goalId') IS NULL
-          AND json_type(candidate.metadata_json, '$.mutationReceipt') IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM audit_events related
-            WHERE json_type(candidate.metadata_json, '$.callId') = 'text'
-              AND related.action = candidate.action
-              AND related.workspace_id IS candidate.workspace_id
-              AND related.session_id IS candidate.session_id
-              AND json_extract(related.metadata_json, '$.callId') = json_extract(candidate.metadata_json, '$.callId')
-              AND (
-                related.timestamp >= ?
-                OR related.result_code NOT IN ('STARTED', 'SUCCESS')
-                OR json_type(related.metadata_json, '$.goalId') IS NOT NULL
-                OR json_type(related.metadata_json, '$.mutationReceipt') IS NOT NULL
-              )
-          )
+        SELECT candidate.id FROM audit_events candidate WHERE ${EXPIRED_ROUTINE_READ_CONDITION}
         ORDER BY candidate.timestamp ASC LIMIT ?
       )
     `).run(cutoffIso, cutoffIso, boundedLimit);

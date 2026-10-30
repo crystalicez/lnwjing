@@ -80,6 +80,39 @@ describe('SqliteAuditRepository', () => {
     }
   });
 
+  it('probes exactly the purgeable rows without changing audit evidence', async () => {
+    const database = new SqliteDatabase(':memory:');
+    const repository = new SqliteAuditRepository(database);
+    const cutoff = '2026-09-01T00:00:00.000Z';
+    const add = (id: string, action: string, metadata: AuditEvent['metadata'] = {}, resultCode = 'SUCCESS',
+      timestamp = '2026-01-01T00:00:00.000Z'): Promise<void> => repository.insert({
+      id, timestamp, actorId: 'test', actorName: 'test', workspaceId: 'ws', sessionId: 'session',
+      action, resultCode, durationMs: 1, metadata,
+    });
+    try {
+      expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(false);
+      await add('mutation', 'mcp_tool:edit_file');
+      await add('goal', 'mcp_tool:read_file', { goalId: 'protected' });
+      await add('receipt', 'mcp_tool:search_text', { mutationReceipt: { action: 'edit_file', path: 'a.ts' } });
+      await add('start-failed', 'mcp_tool:read_files', { callId: 'failed' }, 'STARTED');
+      await add('failed', 'mcp_tool:read_files', { callId: 'failed' }, 'CONFLICT');
+      await add('start-recent', 'mcp_tool:read_file_page', { callId: 'recent' }, 'STARTED');
+      await add('recent', 'mcp_tool:read_file_page', { callId: 'recent' }, 'SUCCESS', '2026-10-20T00:00:00.000Z');
+      expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(false);
+      expect((await repository.list(100))).toHaveLength(7);
+      expect(await repository.purgeExpiredRoutineReads(cutoff)).toBe(0);
+      await add('routine', 'mcp_tool:search_files');
+      expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(true);
+      expect((await repository.list(100))).toHaveLength(8);
+      expect(await repository.purgeExpiredRoutineReads(cutoff)).toBe(1);
+      expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(false);
+      expect((await repository.list(100)).map((event) => event.id)).not.toContain('routine');
+      expect(() => repository.hasExpiredRoutineReadCandidates('invalid')).toThrow('Invalid audit retention cutoff');
+    } finally {
+      database.close();
+    }
+  });
+
   it('prunes expired routine reads in batches but preserves goal, mutation and recent evidence', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-retention-'));
     temporaryRoots.push(root);
