@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -359,6 +359,9 @@ describe('FileService writes', () => {
     await expect(service.editFile(actor, workspace.id, {
       path: '.env', oldText: 'before', newText: 'after',
     })).resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_REQUIRED' } });
+    await expect(service.editFile(actor, workspace.id, {
+      path: '.env', oldText: 'before', newText: 'before',
+    })).resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_REQUIRED' } });
     expect(checkpoints.calls).toEqual([]);
     await expect(readFile(target, 'utf8')).resolves.toBe('API_URL=before\n');
 
@@ -417,6 +420,23 @@ describe('FileService writes', () => {
     expect(result).toMatchObject({ ok: true, value: { path: path.join('src', 'file.txt'), replacements: 1, checkpointId: 'checkpoint-1' } });
     expect(checkpoints.calls).toEqual([[path.join('src', 'file.txt')]]);
     await expect(readFile(target, 'utf8')).resolves.toBe('alpha\nfixed\ngamma\n');
+  });
+
+  it('avoids checkpoint and filesystem writes when an authorized exact edit changes no bytes', async () => {
+    const workspace = await createWorkspace();
+    const checkpoints = checkpointService();
+    const target = path.join(workspace.rootPath, 'src', 'file.txt');
+    await writeFile(target, 'alpha\nbeta\ngamma\n', 'utf8');
+    const before = await stat(target, { bigint: true });
+    const service = new FileService(repository(workspace), undefined, undefined, { checkpointService: checkpoints });
+
+    const result = await service.editFile(actor, workspace.id, {
+      path: path.join('src', 'file.txt'), oldText: 'beta', newText: 'beta', expectedOccurrences: 1,
+    });
+    expect(result).toEqual({ ok: true, value: { path: path.join('src', 'file.txt'), replacements: 1, bytesWritten: 0 } });
+    expect(checkpoints.calls).toEqual([]);
+    expect((await stat(target, { bigint: true })).mtimeNs).toBe(before.mtimeNs);
+    await expect(readFile(target, 'utf8')).resolves.toBe('alpha\nbeta\ngamma\n');
   });
 
   it('leaves the file unchanged when an exact edit precondition does not match', async () => {

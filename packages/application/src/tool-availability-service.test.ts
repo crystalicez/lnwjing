@@ -52,6 +52,35 @@ describe('ToolAvailabilityService', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it('avoids repeated JSON parsing while the cross-process setting is unchanged', () => {
+    const settings = new MemorySettings();
+    settings.set(USER_SETTING_KEYS.toolAvailability, JSON.stringify({
+      version: 1, generation: 3, overrides: { read_file: 'enabled' },
+    }));
+    const service = new ToolAvailabilityService(settings);
+    const listener = vi.fn();
+    service.subscribe(listener);
+    const parseSpy = vi.spyOn(JSON, 'parse');
+    try {
+      for (let tick = 0; tick < 50; tick += 1) expect(service.refreshFromStore()).toBe(false);
+      expect(parseSpy).not.toHaveBeenCalled();
+
+      settings.set(USER_SETTING_KEYS.toolAvailability, JSON.stringify({
+        version: 1, generation: 4, overrides: { read_file: 'disabled' },
+      }));
+      expect(service.refreshFromStore()).toBe(true);
+      expect(parseSpy).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      service.setToolEnabled('git', false);
+      expect(service.refreshFromStore()).toBe(false);
+      expect(parseSpy).toHaveBeenCalledTimes(1);
+      expect(service.snapshot()).toMatchObject({ generation: 5, overrides: { read_file: 'disabled', git: 'disabled' } });
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
   it('provides a bounded unrefd watcher that can be stopped cleanly', () => {
     vi.useFakeTimers();
     const settings = new MemorySettings();

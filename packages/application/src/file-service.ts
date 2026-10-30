@@ -542,10 +542,17 @@ export class FileService {
     if (occurrences !== expectedOccurrences) {
       return err(exactEditConflict(content, request.oldText, expectedOccurrences, occurrences));
     }
-    const nextContent = content.split(request.oldText).join(request.newText);
-    if (Buffer.byteLength(nextContent, 'utf8') > MAX_FILE_WRITE_BYTES) return err(appError('FILE_TOO_LARGE', 'Edited file exceeds the maximum write size'));
+    // Avoid allocating another full-size string on an identical replacement.
+    const noChange = request.oldText === request.newText;
+    const nextContent = noChange ? content : content.split(request.oldText).join(request.newText);
+    if (!noChange && Buffer.byteLength(nextContent, 'utf8') > MAX_FILE_WRITE_BYTES) return err(appError('FILE_TOO_LARGE', 'Edited file exceeds the maximum write size'));
     const permission = this.decide(workspace.id, 'edit_file', 'WRITE', resolved.value.relativePath, false, applicationApproved, authorization);
     if (!permission.ok) return permission;
+    if (isAborted(signal)) return cancelledFileMutation();
+    // No new rollback snapshot or file write when the exact edit is a no-op.
+    if (noChange) {
+      return ok({ path: resultPath(resolved.value), replacements: occurrences, bytesWritten: 0 });
+    }
     let checkpointId: string | undefined;
     if (resolved.value.outsideWorkspace !== true) {
       const checkpoint = await this.createCheckpoint(actor, workspace.id, [resolved.value.relativePath]);

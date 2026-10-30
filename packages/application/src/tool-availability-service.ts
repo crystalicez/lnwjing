@@ -17,10 +17,12 @@ export type ToolAvailabilityListener = (snapshot: ToolAvailabilitySnapshot) => v
 
 export class ToolAvailabilityService {
   private current: ToolAvailabilitySnapshot;
+  private lastStoredValue: string | null;
   private readonly listeners = new Set<ToolAvailabilityListener>();
 
   public constructor(private readonly settings: ToolAvailabilitySettingsPort) {
-    this.current = parseToolAvailabilitySnapshot(settings.get(USER_SETTING_KEYS.toolAvailability));
+    this.lastStoredValue = settings.get(USER_SETTING_KEYS.toolAvailability);
+    this.current = parseToolAvailabilitySnapshot(this.lastStoredValue);
   }
 
   public snapshot(): ToolAvailabilitySnapshot {
@@ -62,7 +64,12 @@ export class ToolAvailabilityService {
   }
 
   public refreshFromStore(): boolean {
-    const next = parseToolAvailabilitySnapshot(this.settings.get(USER_SETTING_KEYS.toolAvailability));
+    const stored = this.settings.get(USER_SETTING_KEYS.toolAvailability);
+    // STDIO checks this every 250 ms. Unchanged text needs no JSON.parse,
+    // allocations, sorting, or serializing the override map.
+    if (stored === this.lastStoredValue) return false;
+    const next = parseToolAvailabilitySnapshot(stored);
+    this.lastStoredValue = stored;
     if (sameSnapshot(this.current, next)) return false;
     this.current = next;
     this.emit();
@@ -97,7 +104,9 @@ export class ToolAvailabilityService {
       generation: this.current.generation + 1,
       overrides: Object.freeze({ ...overrides }),
     };
-    this.settings.set(USER_SETTING_KEYS.toolAvailability, serializeToolAvailabilitySnapshot(next));
+    const serialized = serializeToolAvailabilitySnapshot(next);
+    this.settings.set(USER_SETTING_KEYS.toolAvailability, serialized);
+    this.lastStoredValue = serialized;
     this.current = next;
     this.emit();
     return next;
