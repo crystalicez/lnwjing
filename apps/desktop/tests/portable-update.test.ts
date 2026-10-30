@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, stat, unlink, utimes, writeFile, symlink } from 'node:fs/promises';
 import os from 'node:os';
@@ -198,6 +199,29 @@ describe('Windows distribution-aware auto updater', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it.skipIf(process.platform !== 'win32')('restores the original Portable EXE when a staged update fails to launch', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-portable-rollback-'));
+    const source = path.join(root, 'new-invalid.exe');
+    const target = path.join(root, 'old-invalid.exe');
+    const script = path.join(root, 'replace.ps1');
+    try {
+      await writeFile(source, 'not-a-valid-updated-executable');
+      await writeFile(target, 'original-executable-bytes');
+      await writeFile(script, portableReplacementScript());
+      const result = spawnSync('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', script, '-CurrentPid', '2147483646', '-Source', source, '-Target', target,
+      ], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 35_000 });
+      expect(result.error).toBeUndefined();
+      expect(result.status).not.toBe(0);
+      expect(await readFile(target, 'utf8')).toBe('original-executable-bytes');
+      await expect(readFile(target + '.lnwjing-update-backup')).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await readFile(target + '.lnwjing-update-failures.log', 'utf8')).toContain('Portable update failed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 40_000);
 
   it('uses a wait, rollback backup, in-place replacement, restart, and script self-cleanup for portable installs', () => {
     const script = portableReplacementScript();
