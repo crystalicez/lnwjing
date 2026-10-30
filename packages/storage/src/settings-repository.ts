@@ -1,12 +1,22 @@
+import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import type { SqliteDatabase } from './database.js';
 
 const UPSERT_SETTING_SQL = 'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE settings.value IS NOT excluded.value';
+const GET_SETTING_SQL = 'SELECT value FROM settings WHERE key = ?';
 
 export class SqliteSettingsRepository {
+  private cachedGet: { readonly connection: DatabaseSync; readonly statement: StatementSync } | null = null;
+
   public constructor(private readonly database: SqliteDatabase) {}
 
   public get(key: string): string | null {
-    const row = this.database.connection.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    // The connection can be replaced after a verified offline restore.
+    // Cache the hot prepared read query only for the current connection.
+    const connection = this.database.connection;
+    if (this.cachedGet?.connection !== connection) {
+      this.cachedGet = { connection, statement: connection.prepare(GET_SETTING_SQL) };
+    }
+    const row = this.cachedGet.statement.get(key);
     if (typeof row !== 'object' || row === null || !('value' in row) || typeof row.value !== 'string') return null;
     return row.value;
   }

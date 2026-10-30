@@ -1,7 +1,7 @@
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SqliteDatabase } from './database.js';
 import { SqliteSettingsRepository } from './settings-repository.js';
 
@@ -76,6 +76,43 @@ describe('SqliteSettingsRepository disk writes', () => {
       expect(settings.get('second')).toBeNull();
     } finally {
       database.close();
+    }
+  });
+
+  it('reuses the hot settings read query without preparing it on every poll', () => {
+    const database = new SqliteDatabase(':memory:');
+    const settings = new SqliteSettingsRepository(database);
+    const prepare = vi.spyOn(database.connection, 'prepare');
+    try {
+      settings.set('enabled', 'true');
+      for (let index = 0; index < 100; index += 1) {
+        expect(settings.get('enabled')).toBe('true');
+      }
+      expect(prepare.mock.calls.filter(([sql]) => sql === 'SELECT value FROM settings WHERE key = ?')).toHaveLength(1);
+    } finally {
+      prepare.mockRestore();
+      database.close();
+    }
+  });
+
+  it('uses a fresh prepared statement when the canonical SQLite connection is reopened', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-settings-reopen-'));
+    const filename = path.join(root, 'settings.sqlite');
+    let identity = 'first';
+    const database = new SqliteDatabase(filename, { fileIdentityProvider: (): string => identity });
+    const settings = new SqliteSettingsRepository(database);
+    try {
+      settings.set('enabled', 'first');
+      expect(settings.get('enabled')).toBe('first');
+      const original = database.connection;
+      identity = 'second';
+      expect(database.connection === original).toBe(false);
+      expect(settings.get('enabled')).toBe('first');
+      settings.set('enabled', 'second');
+      expect(settings.get('enabled')).toBe('second');
+    } finally {
+      database.close();
+      await rm(root, { recursive: true, force: true });
     }
   });
 

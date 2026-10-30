@@ -353,7 +353,8 @@ export class FileService {
     if (typeof request?.path !== 'string' || typeof request.content !== 'string' || (request.mode !== undefined && request.mode !== 'create_new') || (request.mode === 'create_new' && request.overwriteExisting === true)) {
       return err(appError('INVALID_INPUT', 'Write request is invalid'));
     }
-    if (Buffer.byteLength(request.content, 'utf8') > MAX_FILE_WRITE_BYTES) {
+    const contentBytes = Buffer.byteLength(request.content, 'utf8');
+    if (contentBytes > MAX_FILE_WRITE_BYTES) {
       return err(appError('FILE_TOO_LARGE', 'File exceeds the maximum write size'));
     }
     if (isAborted(signal)) return cancelledFileMutation();
@@ -379,6 +380,29 @@ export class FileService {
     }
     const permission = this.decide(workspace.id, 'write_file', 'WRITE', resolved.value.relativePath, false, applicationApproved, authorization);
     if (!permission.ok) return permission;
+    const validateDestination = createGuardedWriteValidator(this.guard, workspace, request.path, resolved.value, authorization);
+
+    // Only compare small existing files: avoid rereading multi-megabyte targets
+    // on ordinary overwrites just to discover a rare no-op.
+    const targetPath = resolved.value.realPath ?? resolved.value.absolutePath;
+    if (existing.value && contentBytes <= 4 * 1024) {
+      try {
+        const info = await lstat(targetPath);
+        if (info.isFile() && info.size === contentBytes) {
+          const previous = await readFsFile(targetPath);
+          if (previous.equals(Buffer.from(request.content, 'utf8'))) {
+            if (isAborted(signal)) return cancelledFileMutation();
+            const validated = await validateDestination();
+            if (!validated.ok) return validated;
+            if (isAborted(signal)) return cancelledFileMutation();
+            return ok({ path: resultPath(resolved.value), bytesWritten: 0 });
+          }
+        }
+      } catch {
+        // A concurrent removal or inaccessible target still takes the regular
+        // checkpoint/write path and its existing error handling.
+      }
+    }
 
     let checkpointId: string | undefined;
     if (existing.value && resolved.value.outsideWorkspace !== true) {
@@ -388,12 +412,11 @@ export class FileService {
       checkpointId = checkpoint.value.id;
     }
     if (isAborted(signal)) return cancelledFileMutation();
-    const validateDestination = createGuardedWriteValidator(this.guard, workspace, request.path, resolved.value, authorization);
     const writeResult = await this.writer.write(resolved.value.realPath ?? resolved.value.absolutePath, request.content, { validateDestination, createNew: request.mode === 'create_new' || request.overwriteExisting === false });
     if (!writeResult.ok) return writeResult;
     return ok({
       path: resultPath(resolved.value),
-      bytesWritten: Buffer.byteLength(request.content, 'utf8'),
+      bytesWritten: contentBytes,
       ...(checkpointId === undefined ? {} : { checkpointId }),
     });
   }
@@ -467,6 +490,32 @@ export class FileService {
     if (!permission.ok) return permission;
     if (existingTargets > 0 && !applicationApproved) {
       return err(appError('PERMISSION_REQUIRED', 'Replacing existing file content with apply_patch requires explicit user confirmation; prefer edit_file for narrow repairs'));
+    }
+    // All-no-op patches need neither an encrypted checkpoint nor atomic rewrites.
+    // Keep comparisons bounded so this never adds work to large patch batches.
+    if (rollbackBytes <= 64 * 1024 && resolvedFiles.length > 0
+      && resolvedFiles.every(({ rollbackContent, patch }) => rollbackContent !== null
+        && rollbackContent.equals(Buffer.from(patch.content, 'utf8')))) {
+      let stillUnchanged = true;
+      for (const resolved of resolvedFiles) {
+        if (isAborted(signal)) return cancelledFileMutation();
+        const valid = await resolved.validateDestination();
+        if (!valid.ok) return valid;
+        try {
+          const current = await readFsFile(resolved.absolutePath);
+          if (!current.equals(resolved.rollbackContent!)) {
+            stillUnchanged = false;
+            break;
+          }
+        } catch {
+          stillUnchanged = false;
+          break;
+        }
+      }
+      if (stillUnchanged) {
+        if (isAborted(signal)) return cancelledFileMutation();
+        return ok({ paths: resolvedFiles.map(({ path }) => path) });
+      }
     }
     let checkpointId: string | undefined;
     if (checkpointPaths.length > 0) {

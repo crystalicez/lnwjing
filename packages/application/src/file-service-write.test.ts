@@ -154,6 +154,40 @@ describe('FileService writes', () => {
     }
   });
 
+  it('skips an authorized identical small overwrite without a checkpoint or disk write', async () => {
+    const workspace = await createWorkspace();
+    const checkpoints = checkpointService();
+    const relative = path.join('src', 'file.txt');
+    const target = path.join(workspace.rootPath, relative);
+    const content = 'unchanged content\\n'.repeat(64);
+    await writeFile(target, content, 'utf8');
+    const before = await stat(target, { bigint: true });
+    const service = new FileService(repository(workspace), undefined, undefined, { checkpointService: checkpoints });
+    const result = await service.writeFile(actor, workspace.id, {
+      path: relative, content, overwriteExisting: true, userConfirmed: true,
+    });
+    expect(result).toEqual({ ok: true, value: { path: relative, bytesWritten: 0 } });
+    expect(checkpoints.calls).toEqual([]);
+    expect((await stat(target, { bigint: true })).mtimeNs).toBe(before.mtimeNs);
+    expect(await readFile(target, 'utf8')).toBe(content);
+    // No-op detection cannot override explicit exclusive-create semantics.
+    await expect(service.writeFile(actor, workspace.id, { path: relative, content, mode: 'create_new' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+  });
+
+  it('does not skip permission checks for an identical overwrite', async () => {
+    const workspace = await createWorkspace();
+    const relative = path.join('src', 'file.txt');
+    const target = path.join(workspace.rootPath, relative);
+    await writeFile(target, 'same', 'utf8');
+    const service = new FileService(repository(workspace), undefined, undefined, {
+      checkpointService: checkpointService(), profile: permissionProfiles.safe,
+    });
+    await expect(service.writeFile(actor, workspace.id, { path: relative, content: 'same', overwriteExisting: true }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_REQUIRED' } });
+    expect(await readFile(target, 'utf8')).toBe('same');
+  });
+
   it('captures a checkpoint before atomically overwriting an existing file', async () => {
     const workspace = await createWorkspace();
     const checkpoints = checkpointService();
@@ -210,6 +244,36 @@ describe('FileService writes', () => {
       files: [{ path: path.join('src', 'file.txt'), content: 'after' }], userConfirmed: true,
     })).resolves.toMatchObject({ ok: true, value: { checkpointId: 'checkpoint-1' } });
     await expect(readFile(target, 'utf8')).resolves.toBe('after');
+  });
+
+  it('does not create redundant recovery snapshots for an all-no-op apply_patch', async () => {
+    const workspace = await createWorkspace();
+    const checkpoints = checkpointService();
+    const one = path.join(workspace.rootPath, 'src', 'one.txt');
+    const two = path.join(workspace.rootPath, 'src', 'two.txt');
+    await writeFile(one, 'one');
+    await writeFile(two, 'two');
+    const beforeOne = (await stat(one, { bigint: true })).mtimeNs;
+    const beforeTwo = (await stat(two, { bigint: true })).mtimeNs;
+    const service = new FileService(repository(workspace), undefined, undefined, { checkpointService: checkpoints });
+    const files = [
+      { path: path.join('src', 'one.txt'), content: 'one' },
+      { path: path.join('src', 'two.txt'), content: 'two' },
+    ];
+    await expect(service.applyPatch(actor, workspace.id, { files }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_REQUIRED' } });
+    await expect(service.applyPatch(actor, workspace.id, { files, userConfirmed: true }))
+      .resolves.toEqual({ ok: true, value: { paths: files.map((file) => file.path) } });
+    expect(checkpoints.calls).toEqual([]);
+    expect((await stat(one, { bigint: true })).mtimeNs).toBe(beforeOne);
+    expect((await stat(two, { bigint: true })).mtimeNs).toBe(beforeTwo);
+
+    await expect(service.applyPatch(actor, workspace.id, {
+      files: [files[0]!, { ...files[1]!, content: 'changed' }], userConfirmed: true,
+    })).resolves.toMatchObject({ ok: true, value: { checkpointId: 'checkpoint-1' } });
+    expect(checkpoints.calls).toEqual([[path.join('src', 'one.txt'), path.join('src', 'two.txt')]]);
+    expect(await readFile(one, 'utf8')).toBe('one');
+    expect(await readFile(two, 'utf8')).toBe('changed');
   });
 
   it('rolls back earlier apply_patch writes when a later write fails', async () => {
