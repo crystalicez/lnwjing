@@ -6,6 +6,7 @@ import { backup, DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { isForeignAbsolutePath } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
+import { DEFAULT_SQLITE_HARD_LIMIT_MIB, parseSqliteHardLimitMiB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import { assertNoActiveSqliteClientsSync } from './sqlite-client-lease.js';
 
 export type BackupReason = 'daily' | 'manual' | 'pre-update' | 'pre-migration';
@@ -71,6 +72,8 @@ export interface SqliteBackupServiceOptions {
   readonly weeklyRetention?: number;
   readonly manualRetention?: number;
   readonly migrationRetention?: number;
+  /** Optional test override; production derives the budget from the persisted main DB page cap. */
+  readonly automaticBackupBudgetBytes?: number;
 }
 
 export interface SqliteRestoreOptions {
@@ -112,11 +115,14 @@ export class SqliteBackupService {
   private readonly migrationRetention: number;
   private readonly platform: NodeJS.Platform;
   private readonly arch: string;
+  private readonly databaseFilename: string;
+  private readonly automaticBackupBudgetOverrideBytes: number | undefined;
 
   public constructor(private readonly database: SqliteDatabase, options: SqliteBackupServiceOptions) {
     this.backupDirectory = path.resolve(options.backupDirectory);
     // Resolve here so a malformed configuration fails at construction rather than during restore.
-    path.resolve(options.databaseFilename);
+    this.databaseFilename = path.resolve(options.databaseFilename);
+    this.automaticBackupBudgetOverrideBytes = options.automaticBackupBudgetBytes;
     this.now = options.now ?? ((): Date => new Date());
     this.dailyRetention = boundedRetention(options.dailyRetention, 7);
     this.weeklyRetention = boundedRetention(options.weeklyRetention, 4);
@@ -126,8 +132,79 @@ export class SqliteBackupService {
     this.arch = options.arch ?? process.arch;
   }
 
+  /**
+   * Metadata-only bound for automatic daily snapshots: main SQLite + WAL +
+   * active/archived SQLite backups + one projected snapshot. Never reads
+   * backup contents and never automatically deletes a recovery copy.
+   */
+  public async inspectAutomaticBackupBudget(): Promise<{
+    readonly budgetBytes: number;
+    readonly usedBytes: number;
+    readonly projectedNextBytes: number;
+    readonly blocked: boolean;
+  }> {
+    const connection = this.database.connection;
+    const settings = connection.prepare('SELECT value FROM settings WHERE key = ?')
+      .get(SQLITE_HARD_LIMIT_SETTING_KEY) as { value?: string } | undefined;
+    const maxMiB = parseSqliteHardLimitMiB(settings?.value ?? null);
+    const budgetBytes = this.automaticBackupBudgetOverrideBytes
+      ?? 3 * (maxMiB || DEFAULT_SQLITE_HARD_LIMIT_MIB) * 1024 ** 2;
+    if (!Number.isSafeInteger(budgetBytes) || budgetBytes <= 0) throw new Error('Invalid automatic backup budget');
+    const pages = (connection.prepare('PRAGMA page_count').get() as { page_count: number }).page_count;
+    const pageSize = (connection.prepare('PRAGMA page_size').get() as { page_size: number }).page_size;
+    const projectedNextBytes = pages * pageSize;
+    const checkedSize = async (filename: string): Promise<number> => {
+      try {
+        const info = await lstat(filename);
+        if (!info.isFile() || info.isSymbolicLink()) throw new Error('SQLite backup budget path is redirected');
+        return info.size;
+      } catch (error: unknown) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return 0;
+        throw error;
+      }
+    };
+    let usedBytes = await checkedSize(this.databaseFilename);
+    usedBytes += await checkedSize(this.databaseFilename + '-wal');
+    for (const directory of [this.backupDirectory, retentionArchiveDirectory(this.backupDirectory)]) {
+      try {
+        const dirInfo = await lstat(directory);
+        if (!dirInfo.isDirectory() || dirInfo.isSymbolicLink()) {
+          throw new Error('SQLite backup budget directory is redirected');
+        }
+      } catch (error: unknown) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') continue;
+        throw error;
+      }
+      let entries: string[];
+      try { entries = await readdir(directory); }
+      catch (error: unknown) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') continue;
+        throw error;
+      }
+      // No deep scan of a large or attacker-controlled backup hierarchy.
+      if (entries.length > 512) throw new Error('Too many SQLite backup entries to verify a bounded snapshot');
+      for (const name of entries) {
+        if (!name.endsWith('.sqlite')) continue;
+        usedBytes += await checkedSize(path.join(directory, name));
+      }
+    }
+    // In-memory test DBs lack a disk main file; still count the pages.
+    usedBytes = Math.max(usedBytes, projectedNextBytes);
+    if (![usedBytes, projectedNextBytes].every(Number.isSafeInteger)) throw new Error('SQLite backup budget overflow');
+    return { budgetBytes, usedBytes, projectedNextBytes,
+      blocked: usedBytes + projectedNextBytes > budgetBytes };
+  }
+
   public async create(reason: BackupReason): Promise<BackupSummary> {
     await mkdir(this.backupDirectory, { recursive: true });
+    // Daily automatic snapshots must not silently consume unbounded disk.
+    // Manual/pre-migration snapshots are separate explicit recovery operations.
+    if (reason === 'daily') {
+      const budget = await this.inspectAutomaticBackupBudget();
+      if (budget.blocked) {
+        throw new Error('Automatic SQLite backup budget exhausted; no backup was written. Increase the main DB limit or review old backups in Storage Management.');
+      }
+    }
     const createdAt = this.now().toISOString();
     const id = backupId(createdAt);
     const databaseFile = id + '.sqlite';
@@ -140,6 +217,15 @@ export class SqliteBackupService {
     let manifest: BackupManifest;
     try {
       await backup(this.database.connection, destination);
+      // A concurrent writer can grow the source during SQLite's incremental
+      // backup. Recheck actual bytes before publishing the new daily copy;
+      // a rejected snapshot is removed by the catch block below.
+      if (reason === 'daily') {
+        const after = await this.inspectAutomaticBackupBudget();
+        if (after.usedBytes > after.budgetBytes) {
+          throw new Error('Automatic SQLite backup exceeded its storage budget during creation');
+        }
+      }
       validateDatabase(destination);
       manifest = {
         schemaVersion: 1,

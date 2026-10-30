@@ -25,6 +25,32 @@ describe('SQLite backup disk preflight', () => {
 });
 
 describe('SqliteBackupService', { timeout: 30_000 }, () => {
+  it('fails closed on an automatic backup budget without deleting older copies or blocking explicit manual recovery', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const database = new SqliteDatabase(filename);
+    try {
+      const service = new SqliteBackupService(database, {
+        databaseFilename: filename, backupDirectory, automaticBackupBudgetBytes: 1,
+      });
+      const budget = await service.inspectAutomaticBackupBudget();
+      expect(budget.blocked).toBe(true);
+      expect(budget.usedBytes).toBeGreaterThan(1);
+      expect(budget.projectedNextBytes).toBeGreaterThan(0);
+      await expect(service.create('daily')).rejects.toThrow(/Automatic SQLite backup budget exhausted/);
+      expect((await readdir(backupDirectory)).filter((entry) => entry.endsWith('.sqlite'))).toEqual([]);
+      const manual = await service.create('manual');
+      expect(await service.verifyBackupForCleanup(manual.id)).toBe(true);
+      // The automatic daily path remains fail-closed and never deletes manual backups.
+      await expect(service.create('daily')).rejects.toThrow(/budget exhausted/);
+      expect(await service.verifyBackupForCleanup(manual.id)).toBe(true);
+    } finally {
+      database.close();
+    }
+  });
+
+
   it.each([null, '2026-09-01'])('treats foreign workspace paths as runtime authority only when not archived (%s)', async (archivedAt) => {
     const root = await temporaryRoot();
     const databaseFile = path.join(root, 'lnwjing.sqlite');

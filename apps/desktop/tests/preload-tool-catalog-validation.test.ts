@@ -61,6 +61,27 @@ const userSettingsFixture: UserSettings = {
 describe('preload Tool Catalog validation', () => {
   beforeAll(async () => { await import('../src/preload/index.js'); });
 
+  it('validates automatic SQLite backup budget from the IPC bridge', async () => {
+    const overview = {
+      policy: { checkpointCreationMode: 'git-aware', sqliteHardLimitMiB: 4096,
+        compressionEnabledOnNextStart: false, automaticCheckpointRetention: false,
+        auditPruneWithoutBackup: false, routineAuditRetentionDays: 90 },
+      sqliteAllocatedBytes: 4096, sqliteFreeBytes: 0, sqliteWalBytes: 4096,
+      sqliteEffectiveHardLimitBytes: 4096 * 1024 ** 2,
+      sqliteOverBudget: false, sqlitePressureHigh: false,
+      compactRecommended: false, compactionRequiresOffline: true,
+      automaticBackupBudget: { budgetBytes: 12 * 1024 ** 3, usedBytes: 4096,
+        projectedNextBytes: 4096, blocked: false },
+    };
+    electron.invoke.mockResolvedValueOnce(overview);
+    await expect(electron.exposed!.getStorageOverview()).resolves.toMatchObject({
+      automaticBackupBudget: { budgetBytes: 12 * 1024 ** 3, blocked: false },
+    });
+    electron.invoke.mockResolvedValueOnce({ ...overview,
+      automaticBackupBudget: { ...overview.automaticBackupBudget, usedBytes: -1 } });
+    await expect(electron.exposed!.getStorageOverview()).rejects.toThrow(/budget sizes/);
+  });
+
   it('preserves ECC opt-in state through the preload settings parser', async () => {
     const enabled = { ...userSettingsFixture, eccEnabled: true };
     electron.invoke.mockResolvedValueOnce({ settings: enabled, restartRequired: false });

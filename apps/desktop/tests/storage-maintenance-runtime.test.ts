@@ -46,6 +46,8 @@ describe('Desktop storage-maintenance backend', () => {
       expect(limited.sqliteEffectiveHardLimitBytes).toBe(1024 ** 3);
       expect(limited.sqliteOverBudget).toBe(false);
       expect(limited.sqlitePressureHigh).toBe(false);
+      expect(limited.automaticBackupBudget).toMatchObject({ budgetBytes: 3 * 1024 ** 3, blocked: false });
+      expect(limited.automaticBackupBudgetUnknown).toBeUndefined();
       expect(runtime.storageMaintenance.configurePolicy({
         userConfirmed: true, checkpointCreationMode: 'always',
       })).toEqual({ restartRequired: false });

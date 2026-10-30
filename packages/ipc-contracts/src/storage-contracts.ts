@@ -17,6 +17,14 @@ export interface StorageOverview {
   readonly sqliteEffectiveHardLimitBytes: number;
   readonly sqliteOverBudget: boolean;
   readonly sqlitePressureHigh: boolean;
+  /** Bounded automatic daily backup budget; manual recovery snapshots are explicit. */
+  readonly automaticBackupBudget?: {
+    readonly budgetBytes: number;
+    readonly usedBytes: number;
+    readonly projectedNextBytes: number;
+    readonly blocked: boolean;
+  };
+  readonly automaticBackupBudgetUnknown?: boolean;
   readonly compactRecommended: boolean;
   readonly hasCompressedV2?: boolean;
   readonly checkpointMetadataIncomplete?: boolean;

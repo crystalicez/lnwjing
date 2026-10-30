@@ -1979,7 +1979,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     getStorageOverview: async () => storageOverview(),
     setStoragePolicy: async (request) => {
       const changed = storageMaintenance.configurePolicy(request);
-      return { ...changed, overview: storageOverview() };
+      return { ...changed, overview: await storageOverview() };
     },
     previewCheckpointCleanup: async (request) => {
       await checkpointRepository.prepareStorageMetadata();
@@ -2527,7 +2527,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   // Reuse read-only directory metadata for 30s while Settings is open.
   let checkpointCleanupRunning = false;
   let storageCategoryCache: { at: number; entries: readonly { category: string; bytes: number; inspectedEntries: number; truncated: boolean }[] } | null = null;
-  function storageOverview(): Awaited<ReturnType<DesktopIpcServices['getStorageOverview']>> {
+  async function storageOverview(): Promise<Awaited<ReturnType<DesktopIpcServices['getStorageOverview']>>> {
     const now = Date.now();
     if (storageCategoryCache === null || now - storageCategoryCache.at > 30_000) {
       const entries = ['backups', 'background-tasks', 'native-managed-git', 'native-managed-processes', 'workspace-index', 'logs']
@@ -2545,7 +2545,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     catch (error: unknown) {
       if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error;
     }
+    const automaticBackupBudget = await backupService.inspectAutomaticBackupBudget().catch(() => null);
     return { ...storageMaintenance.inspect(), sqliteWalBytes, sqliteEffectiveHardLimitBytes: limit.effectiveBytes,
+      ...(automaticBackupBudget === null
+        ? { automaticBackupBudgetUnknown: true }
+        : { automaticBackupBudget }),
       sqliteOverBudget: limit.allocatedBytes > limit.requestedBytes,
       sqlitePressureHigh: sqliteLimitPressure(limit.allocatedBytes, limit.freeBytes, limit.requestedBytes),
       usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete,

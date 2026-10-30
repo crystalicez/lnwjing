@@ -51,6 +51,36 @@ describe('Git-aware automatic checkpoint policy', () => {
     expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt', 'src/second.txt'])).toBe(false);
   });
 
+  it('pins an exact pre-edit commit across branch rewrites and Git garbage collection', async () => {
+    const { root } = await fixture();
+    await writeFile(path.join(root, 'src/tracked.txt'), 'version-b\n');
+    await run('git', ['-C', root, 'add', '--', 'src/tracked.txt']);
+    await run('git', ['-C', root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'version-b']);
+    const { stdout: head } = await run('git', ['-C', root, 'rev-parse', 'HEAD']);
+    const commit = head.trim();
+    expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(true);
+    expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(true);
+    const ref = 'refs/lnwjing/recovery/' + commit;
+    const { stdout: pinned } = await run('git', ['-C', root, 'rev-parse', ref]);
+    expect(pinned.trim()).toBe(commit);
+    await run('git', ['-C', root, 'reset', '--hard', 'HEAD~1']);
+    await run('git', ['-C', root, 'reflog', 'expire', '--expire=now', '--all']);
+    await run('git', ['-C', root, 'gc', '--prune=now']);
+    const { stdout: recovered } = await run('git', ['-C', root, 'show', ref + ':src/tracked.txt']);
+    expect(recovered).toBe('version-b\n');
+  });
+
+  it('falls back to encrypted checkpoints once the bounded Git recovery ref set is full', async () => {
+    const { root } = await fixture();
+    const { stdout: head } = await run('git', ['-C', root, 'rev-parse', 'HEAD']);
+    for (let i = 0; i < 64; i += 1) {
+      await run('git', ['-C', root, 'update-ref', 'refs/lnwjing/recovery/reserved-' + i, head.trim()]);
+    }
+    expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(false);
+    await expect(run('git', ['-C', root, 'rev-parse', '--verify',
+      'refs/lnwjing/recovery/' + head.trim()])).rejects.toThrow();
+  });
+
   it('defaults to Git-aware when no per-instance provider is configured', async () => {
     const { root, workspace } = await fixture();
     let snapshots = 0;

@@ -1271,11 +1271,25 @@ function storageOverview(value: unknown): StorageOverview {
   }
   if (value.hasCompressedV2 !== undefined && typeof value.hasCompressedV2 !== 'boolean') throw new Error('Invalid compressed checkpoint status');
   if (value.checkpointMetadataIncomplete !== undefined && typeof value.checkpointMetadataIncomplete !== 'boolean') throw new Error('Invalid checkpoint metadata status');
+  let automaticBackupBudget: StorageOverview['automaticBackupBudget'];
+  if (value.automaticBackupBudget !== undefined) {
+    const budget = value.automaticBackupBudget;
+    if (!isRecord(budget) || typeof budget.blocked !== 'boolean') throw new Error('Invalid automatic backup budget');
+    const budgetBytes = integerField(budget, 'budgetBytes');
+    const usedBytes = integerField(budget, 'usedBytes');
+    const projectedNextBytes = integerField(budget, 'projectedNextBytes');
+    if (budgetBytes <= 0 || usedBytes < 0 || projectedNextBytes < 0) throw new Error('Invalid backup budget sizes');
+    automaticBackupBudget = { budgetBytes, usedBytes, projectedNextBytes, blocked: budget.blocked };
+  }
+  if (value.automaticBackupBudgetUnknown !== undefined && typeof value.automaticBackupBudgetUnknown !== 'boolean')
+    throw new Error('Invalid automatic backup budget verification status');
   const sqliteEffectiveHardLimitBytes = integerField(value, 'sqliteEffectiveHardLimitBytes');
   if (sqliteEffectiveHardLimitBytes < 0) throw new Error('Invalid SQLite hard limit');
   return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes, sqliteWalBytes, sqliteEffectiveHardLimitBytes,
     sqliteOverBudget: booleanField(value, 'sqliteOverBudget'),
     sqlitePressureHigh: booleanField(value, 'sqlitePressureHigh'),
+    ...(automaticBackupBudget === undefined ? {} : { automaticBackupBudget }),
+    ...(value.automaticBackupBudgetUnknown === undefined ? {} : { automaticBackupBudgetUnknown: value.automaticBackupBudgetUnknown as boolean }),
     ...(value.hasCompressedV2 === undefined ? {} : { hasCompressedV2: value.hasCompressedV2 as boolean }),
     ...(value.checkpointMetadataIncomplete === undefined ? {} : { checkpointMetadataIncomplete: value.checkpointMetadataIncomplete as boolean }),
     compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true,

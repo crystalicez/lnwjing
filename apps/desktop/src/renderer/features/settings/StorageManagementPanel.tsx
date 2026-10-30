@@ -182,6 +182,17 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
             <p className="hint">{t('storagePanel.effectiveLimit')}: {sizeLabel(overview.sqliteEffectiveHardLimitBytes)}</p>
             {overview.sqliteOverBudget ? <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.overBudget')}</StatusMessage> : null}
             {overview.sqlitePressureHigh ? <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.nearLimit')}</StatusMessage> : null}
+            {overview.automaticBackupBudget === undefined ? null : (
+              <p className="hint">{t('storagePanel.autoBackupBudget')}:
+                {' '}{sizeLabel(overview.automaticBackupBudget.usedBytes)} / {sizeLabel(overview.automaticBackupBudget.budgetBytes)}
+              </p>
+            )}
+            {overview.automaticBackupBudget?.blocked === true ? (
+              <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.autoBackupBudgetBlocked')}</StatusMessage>
+            ) : null}
+            {overview.automaticBackupBudgetUnknown === true ? (
+              <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.autoBackupBudgetUnknown')}</StatusMessage>
+            ) : null}
           </div>
           <SettingSwitch label={t('storagePanel.autoRetention')}
             description={t('storagePanel.autoRetentionNote')}
