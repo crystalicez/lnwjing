@@ -69,6 +69,54 @@ describe('TunnelRuntimeSupervisor', () => {
     }
   });
 
+  it('waits for an active native reconciliation before stopping the runtime', async () => {
+    let finishReconcile: ((value: TunnelReconcileResult) => void) | undefined;
+    const sequence: string[] = [];
+    const pending = new Promise<TunnelReconcileResult>((resolve) => { finishReconcile = resolve; });
+    const reconciler = {
+      reconcile: vi.fn(() => pending.then((value) => { sequence.push('reconciled'); return value; })),
+      stop: vi.fn(async () => { sequence.push('stopped'); return result('disabled', { state: 'stopped' }); }),
+      snapshot: vi.fn(() => snapshot()),
+    };
+    const supervisor = new TunnelRuntimeSupervisor({ reconciler, enabled: (): boolean => true });
+    const connecting = supervisor.start();
+    const stopping = supervisor.stopRuntime();
+    try {
+      await Promise.resolve();
+      expect(reconciler.stop).not.toHaveBeenCalled();
+      finishReconcile?.(result('connected'));
+      await Promise.all([connecting, stopping]);
+      expect(sequence).toEqual(['reconciled', 'stopped']);
+      expect(supervisor.diagnostics().restartScheduled).toBe(false);
+      expect(reconciler.stop).toHaveBeenCalledTimes(1);
+    } finally {
+      supervisor.dispose();
+    }
+  });
+
+  it('still stops the native runtime if its previous reconciliation rejects', async () => {
+    let failReconcile: ((error: Error) => void) | undefined;
+    const pending = new Promise<TunnelReconcileResult>((_resolve, reject) => { failReconcile = reject; });
+    const reconciler = {
+      reconcile: vi.fn(() => pending),
+      stop: vi.fn(async () => result('disabled', { state: 'stopped' })),
+      snapshot: vi.fn(() => snapshot()),
+    };
+    const supervisor = new TunnelRuntimeSupervisor({ reconciler, enabled: (): boolean => true });
+    const connecting = supervisor.start().catch((error: unknown) => error);
+    const stopping = supervisor.stopRuntime();
+    try {
+      expect(reconciler.stop).not.toHaveBeenCalled();
+      failReconcile?.(new Error('failed health probe'));
+      expect(await connecting).toBeInstanceOf(Error);
+      expect(await stopping).toMatchObject({ action: 'disabled' });
+      expect(reconciler.stop).toHaveBeenCalledTimes(1);
+      expect(supervisor.diagnostics().restartScheduled).toBe(false);
+    } finally {
+      supervisor.dispose();
+    }
+  });
+
   it('does not tight-retry auth failures and resumes only when explicitly kicked after repair', async () => {
     vi.useFakeTimers();
     try {

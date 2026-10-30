@@ -69,6 +69,9 @@ export class TunnelRuntimeSupervisor {
     this.running = false;
     this.clearTimer();
     this.nextReconnectAt = null;
+    if (this.reconcileInFlight !== null) {
+      await this.reconcileInFlight.catch(() => null);
+    }
     const result = await this.options.reconciler.stop();
     this.publish(result.snapshot);
     return result;

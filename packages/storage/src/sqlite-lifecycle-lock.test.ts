@@ -56,6 +56,57 @@ describe('SQLite lifecycle lock ownership', () => {
     expect(Number(stdout)).toBeGreaterThanOrEqual(200);
   }, 10_000);
 
+  it('serializes three competing Windows processes without overlapping lock ownership', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-life-three-processes-'));
+    roots.push(root);
+    const journal = path.join(root, 'ordered.txt');
+    const moduleUrl = new URL('./sqlite-lifecycle-lock.ts', import.meta.url).href;
+    const childCode = `import { appendFileSync } from 'node:fs';
+      import { withSqliteLifecycleLockSync } from ${JSON.stringify(moduleUrl)};
+      const sleep = new Int32Array(new SharedArrayBuffer(4));
+      withSqliteLifecycleLockSync(process.argv[1], () => {
+        appendFileSync(process.argv[2], process.argv[3] + ':enter\\n');
+        Atomics.wait(sleep, 0, 0, 35);
+        appendFileSync(process.argv[2], process.argv[3] + ':leave\\n');
+      });`;
+    const children = ['one', 'two', 'three'].map((name) => {
+      const child = spawn(process.execPath, ['--input-type=module', '-e', childCode, root, journal, name], {
+        stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true,
+      });
+      let stderr = '';
+      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      const finished = new Promise<void>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`Lock contender ${name} exited ${code}: ${stderr}`));
+        });
+      });
+      return { child, finished };
+    });
+    try {
+      await Promise.all(children.map((item) => item.finished));
+      const lines = (await readFile(journal, 'utf8')).trim().split(/\r?\n/);
+      expect(lines).toHaveLength(6);
+      let active: string | null = null;
+      for (const line of lines) {
+        const [name, phase] = line.split(':');
+        if (phase === 'enter') {
+          expect(active).toBeNull();
+          active = name ?? null;
+        } else {
+          expect(phase).toBe('leave');
+          expect(name).toBe(active);
+          active = null;
+        }
+      }
+      expect(active).toBeNull();
+      expect(existsSync(path.join(root, SQLITE_LIFECYCLE_LOCK_FILENAME))).toBe(false);
+    } finally {
+      for (const { child } of children) if (child.exitCode === null) child.kill();
+    }
+  }, 12_000);
+
   it('does not release a successor lock if the original pathname was replaced', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-life-owner-'));
     roots.push(root);
