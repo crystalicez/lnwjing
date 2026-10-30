@@ -1258,7 +1258,8 @@ function storageOverview(value: unknown): StorageOverview {
   if (!isRecord(value) || value.compactionRequiresOffline !== true) throw new Error('Invalid storage overview response');
   const sqliteAllocatedBytes = integerField(value, 'sqliteAllocatedBytes');
   const sqliteFreeBytes = integerField(value, 'sqliteFreeBytes');
-  if (sqliteAllocatedBytes < 0 || sqliteFreeBytes < 0 || sqliteFreeBytes > sqliteAllocatedBytes) throw new Error('Invalid SQLite sizes');
+  const sqliteWalBytes = integerField(value, 'sqliteWalBytes');
+  if (sqliteAllocatedBytes < 0 || sqliteFreeBytes < 0 || sqliteWalBytes < 0 || sqliteFreeBytes > sqliteAllocatedBytes) throw new Error('Invalid SQLite sizes');
   let usageCategories: StorageOverview['usageCategories'];
   if (Array.isArray(value.usageCategories)) {
     if (value.usageCategories.length > 12 || value.usageCategories.some((row: unknown) =>
@@ -1272,7 +1273,7 @@ function storageOverview(value: unknown): StorageOverview {
   if (value.checkpointMetadataIncomplete !== undefined && typeof value.checkpointMetadataIncomplete !== 'boolean') throw new Error('Invalid checkpoint metadata status');
   const sqliteEffectiveHardLimitBytes = integerField(value, 'sqliteEffectiveHardLimitBytes');
   if (sqliteEffectiveHardLimitBytes < 0) throw new Error('Invalid SQLite hard limit');
-  return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes, sqliteEffectiveHardLimitBytes,
+  return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes, sqliteWalBytes, sqliteEffectiveHardLimitBytes,
     sqliteOverBudget: booleanField(value, 'sqliteOverBudget'),
     sqlitePressureHigh: booleanField(value, 'sqlitePressureHigh'),
     ...(value.hasCompressedV2 === undefined ? {} : { hasCompressedV2: value.hasCompressedV2 as boolean }),

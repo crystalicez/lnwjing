@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { SqliteDatabase } from './database.js';
 import { applySqliteHardLimit, inspectSqliteHardLimit, sqliteLimitPressure,
-  DEFAULT_SQLITE_HARD_LIMIT_MIB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
+  DEFAULT_SQLITE_HARD_LIMIT_MIB, SQLITE_HARD_LIMIT_SETTING_KEY, sqliteMutationAdmissionPressure } from './sqlite-hard-limit.js';
 
 describe('SQLite main database hard limit', () => {
   it('defaults to four GiB, persists custom limits and reapplies after reopening', async () => {
@@ -12,6 +12,7 @@ describe('SQLite main database hard limit', () => {
     const filename = path.join(root, 'main.sqlite');
     const db = new SqliteDatabase(filename);
     const peer = new SqliteDatabase(filename);
+    const passive = new SqliteDatabase(filename);
     try {
       const initial = inspectSqliteHardLimit(db.connection, DEFAULT_SQLITE_HARD_LIMIT_MIB);
       expect(initial.requestedBytes).toBe(4 * 1024 ** 3);
@@ -23,12 +24,18 @@ describe('SQLite main database hard limit', () => {
       expect(configured.allocatedBytes).toBeLessThan(configured.effectiveBytes);
       // An already-open process still has its original connection-local cap.
       expect(inspectSqliteHardLimit(peer.connection, 1024).effectiveBytes).toBe(4 * 1024 ** 3);
+      // A new mutation must use the persisted limit immediately, without
+      // waiting for passive read-only connections' 10-second poll.
+      expect(peer.mutationAdmissionMessage()).toBeNull();
+      expect(inspectSqliteHardLimit(peer.connection, 1024).effectiveBytes).toBe(1024 ** 3);
+      expect(inspectSqliteHardLimit(passive.connection, 1024).effectiveBytes).toBe(4 * 1024 ** 3);
       const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11_000);
       try {
-        const peerLimit = inspectSqliteHardLimit(peer.connection, 1024);
-        expect(peerLimit.effectiveBytes).toBe(1024 ** 3);
+        expect(inspectSqliteHardLimit(passive.connection, 1024).effectiveBytes).toBe(1024 ** 3);
       } finally { clock.mockRestore(); }
-    } finally { peer.close(); db.close(); }
+      expect((db.connection.prepare('PRAGMA journal_size_limit').get() as { journal_size_limit: number }).journal_size_limit)
+        .toBe(16 * 1024 * 1024);
+    } finally { passive.close(); peer.close(); db.close(); }
     const reopened = new SqliteDatabase(filename);
     try {
       expect(inspectSqliteHardLimit(reopened.connection, 1024).effectiveBytes).toBe(1024 ** 3);
@@ -54,6 +61,15 @@ describe('SQLite main database hard limit', () => {
       expect(db.connection.prepare('SELECT payload FROM sentinel').get()).toEqual({ payload: 'keep' });
       expect(applySqliteHardLimit(db.connection, 512).effectiveBytes).toBe(512 * 1024 ** 2);
     } finally { db.close(); }
+  });
+
+  it('reserves audit headroom and accounts for WAL bytes when admitting mutations', () => {
+    const cap = 512 * 1024 * 1024;
+    expect(sqliteMutationAdmissionPressure(100 * 1024 ** 2, 0, 0, cap)).toBe(false);
+    expect(sqliteMutationAdmissionPressure(470 * 1024 ** 2, 0, 0, cap)).toBe(false);
+    expect(sqliteMutationAdmissionPressure(470 * 1024 ** 2, 0, 20 * 1024 ** 2, cap)).toBe(true);
+    expect(sqliteMutationAdmissionPressure(490 * 1024 ** 2, 80 * 1024 ** 2, 0, cap)).toBe(false);
+    expect(sqliteMutationAdmissionPressure(100, 0, Number.NaN, cap)).toBe(true);
   });
 
   it('considers reusable free pages before signaling storage pressure', () => {

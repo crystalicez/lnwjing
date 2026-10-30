@@ -143,6 +143,8 @@ export interface ToolRegistryOptions {
   readonly authorizationModeProvider?: () => AuthorizationMode;
   /** Optional transport/runtime guard checked before every tool dispatch. Return a message to fail closed. */
   readonly invocationGuardProvider?: () => string | null | undefined;
+  /** Host storage-pressure gate: evaluated only after permission classification and before any mutation. */
+  readonly mutationAdmissionGuardProvider?: () => string | null | undefined;
   /** Legacy compatibility. New callers should supply destructivePolicyProvider. */
   readonly allowAiDeleteProvider?: () => boolean;
   /** Fine-grained local destructive auto-approval policy. */
@@ -241,6 +243,7 @@ export class ToolRegistry {
   private readonly profileProvider: () => PermissionProfile;
   private readonly authorizationModeProvider: () => AuthorizationMode;
   private readonly invocationGuardProvider: (() => string | null | undefined) | undefined;
+  private readonly mutationAdmissionGuardProvider: (() => string | null | undefined) | undefined;
   private readonly destructivePolicyProvider: () => DestructiveAutoApprovalPolicy;
   private readonly ponytailModeProvider: () => PonytailMode;
   private readonly ponytailActivation: PonytailActivationLedger;
@@ -265,6 +268,7 @@ export class ToolRegistry {
     this.profileProvider = options.profileProvider ?? ((): PermissionProfile => permissionProfiles.full);
     this.authorizationModeProvider = options.authorizationModeProvider ?? ((): AuthorizationMode => 'standard');
     this.invocationGuardProvider = options.invocationGuardProvider;
+    this.mutationAdmissionGuardProvider = options.mutationAdmissionGuardProvider;
     this.destructivePolicyProvider = options.destructivePolicyProvider ?? ((): DestructiveAutoApprovalPolicy => legacyDeletePolicy(options.allowAiDeleteProvider?.() === true));
     this.ponytailModeProvider = options.ponytailModeProvider ?? ((): PonytailMode => DEFAULT_PONYTAIL_MODE);
     this.ponytailActivation = options.ponytailActivationLedger ?? new PonytailActivationLedger();
@@ -587,6 +591,22 @@ export class ToolRegistry {
         const response = mapError(appError(code, message, permissionDecision === 'ASK'));
         await this.activity.end(callId, code, Date.now() - started, message);
         return response;
+      }
+      if (mutationDecision.kind !== 'read' && !this.activity.isAuditPersistenceHealthy()) {
+        const message = 'Durable SQLite audit recording failed; mutations are paused until audit evidence can be written again';
+        const response = mapError(appError('CONFLICT', message, true));
+        await this.activity.end(callId, 'CONFLICT', Date.now() - started, message);
+        return response;
+      }
+      if (mutationDecision.kind !== 'read' && this.mutationAdmissionGuardProvider !== undefined) {
+        let storageGuardMessage: string | null | undefined;
+        try { storageGuardMessage = this.mutationAdmissionGuardProvider(); }
+        catch { storageGuardMessage = 'Storage quota could not be verified; mutation is paused to preserve recovery evidence'; }
+        if (typeof storageGuardMessage === 'string' && storageGuardMessage.length > 0) {
+          const response = mapError(appError('CONFLICT', storageGuardMessage, true));
+          await this.activity.end(callId, 'CONFLICT', Date.now() - started, storageGuardMessage);
+          return response;
+        }
       }
       if (tool.name === 'finish_goal' && isRecord(activeRoutedInput) && activeRoutedInput.status === 'completed') {
         const finishGoalId = readTrimmedString(activeRoutedInput.goalId);

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createPreMigrationBackupSync } from './backup-service.js';
-import { applySqliteHardLimit, parseSqliteHardLimitMiB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
+import { applySqliteHardLimit, inspectSqliteHardLimit, parseSqliteHardLimitMiB, sqliteMutationAdmissionPressure, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import { registerSqliteClientSync, releaseSqliteClientSync, type SqliteClientLease } from './sqlite-client-lease.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 import { AUDIT_MIGRATION_SQL } from './migrations/audit-migration.js';
@@ -77,6 +77,7 @@ export class SqliteDatabase {
   private clientLease: SqliteClientLease | null = null;
   private appliedHardLimitMiB: number | null = null;
   private lastHardLimitCheckAt = 0;
+  private lastMutationQuotaCheck: { readonly at: number; readonly message: string | null } | null = null;
 
   public constructor(private readonly filename: string, private readonly options: SqliteDatabaseOptions = {}) {
     const openCanonical = (): void => {
@@ -146,7 +147,42 @@ export class SqliteDatabase {
     const result = applySqliteHardLimit(this._connection, limitMiB);
     this.appliedHardLimitMiB = limitMiB;
     this.lastHardLimitCheckAt = Date.now();
+    this.lastMutationQuotaCheck = null;
     return result;
+  }
+
+  /**
+   * Low-cost preflight for host-owned MCP mutations. Reserve capacity for
+   * start/completion audit receipts instead of letting a file mutation succeed
+   * while its durable audit insert fails with SQLITE_FULL.
+   *
+   * A per-process admission guard, NOT a global disk quota: other writers,
+   * backup files, and pinned WAL transactions remain independently managed.
+   */
+  public mutationAdmissionMessage(): string | null {
+    const now = Date.now();
+    const cached = this.lastMutationQuotaCheck;
+    if (cached !== null && now >= cached.at && now - cached.at < 1_000) return cached.message;
+    const connection = this.connection;
+    // Unlike read-only calls, mutation admission must observe another
+    // process's changed limit promptly, without per-call SQL polling.
+    const setting = connection.prepare('SELECT value FROM settings WHERE key = ?')
+      .get(SQLITE_HARD_LIMIT_SETTING_KEY) as { value?: string } | undefined;
+    const limitMiB = parseSqliteHardLimitMiB(setting?.value ?? null);
+    if (limitMiB !== this.appliedHardLimitMiB) this.syncHardLimit();
+    const snapshot = inspectSqliteHardLimit(connection, limitMiB);
+    let walBytes = 0;
+    if (this.filename !== ':memory:') {
+      try { walBytes = statSync(this.filename + '-wal').size; }
+      catch (error: unknown) {
+        if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error;
+      }
+    }
+    const message = sqliteMutationAdmissionPressure(snapshot.allocatedBytes, snapshot.freeBytes, walBytes, snapshot.requestedBytes)
+      ? 'SQLite storage budget is nearly exhausted (including WAL); new MCP mutations are paused to preserve audit receipts. Raise SQLite Hard Limit in Storage Settings or safely reclaim space.'
+      : null;
+    this.lastMutationQuotaCheck = { at: now, message };
+    return message;
   }
 
   private ensureDirectory(): void {
@@ -181,6 +217,9 @@ export class SqliteDatabase {
     conn.exec('PRAGMA journal_mode = WAL;');
     conn.exec('PRAGMA busy_timeout = 5000;');
     conn.exec('PRAGMA foreign_keys = ON;');
+    // Trim the idle WAL after successful checkpoints. This is NOT a bound
+    // while readers pin old WAL frames, so mutation admission checks both.
+    conn.exec('PRAGMA journal_size_limit = 16777216;');
   }
 
   private readCanonicalFileIdentity(): string | null {

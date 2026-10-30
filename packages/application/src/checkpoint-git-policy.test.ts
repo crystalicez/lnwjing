@@ -39,6 +39,18 @@ describe('Git-aware automatic checkpoint policy', () => {
     expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(true);
   });
 
+  it('batches multiple tracked blobs and refuses missing Git objects without a checkpoint bypass', async () => {
+    const { root } = await fixture();
+    await writeFile(path.join(root, 'src', 'second.txt'), 'second\\n');
+    await run('git', ['-C', root, 'add', '--', 'src/second.txt']);
+    await run('git', ['-C', root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'more']);
+    expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt', 'src/second.txt'])).toBe(true);
+    const { stdout } = await run('git', ['-C', root, 'rev-parse', 'HEAD:src/tracked.txt']);
+    const objectId = stdout.trim();
+    await rm(path.join(root, '.git', 'objects', objectId.slice(0, 2), objectId.slice(2)));
+    expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt', 'src/second.txt'])).toBe(false);
+  });
+
   it('defaults to Git-aware when no per-instance provider is configured', async () => {
     const { root, workspace } = await fixture();
     let snapshots = 0;

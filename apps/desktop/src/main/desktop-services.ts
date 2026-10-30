@@ -299,6 +299,7 @@ export interface DesktopRuntime {
   readonly activityTracker: ActivityTracker;
   readonly logHub: LogHub;
   readonly toolAvailabilityService: ToolAvailabilityService;
+  mutationAdmissionMessage(): string | null;
   getLocale(): UiLocale;
   getUserSettings(): UserSettings;
   getDestructivePolicy(): DestructiveAutoApprovalPolicy;
@@ -892,6 +893,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       services: mcpServices,
       actor: mcpActor,
       activityTracker,
+      mutationAdmissionGuardProvider: () => database.mutationAdmissionMessage(),
       profileProvider: activePermissionProfile,
       authorizationModeProvider: (): 'standard' | 'full_bypass' => desktopFullBypassEnabled() ? 'full_bypass' : 'standard',
       allowAiDeleteProvider,
@@ -1205,14 +1207,14 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   let auditRetentionSweep: Promise<void> | null = null;
   let auditRetentionClosing = false;
 
-  function sweepAuditRetention(): void {
+  function sweepAuditRetention(options: { readonly force?: boolean; readonly maxBatches?: number; readonly existingBackupOnly?: boolean } = {}): void {
     const now = Date.now();
     const hasAutomaticBackup = readSettings().autoBackupEnabled === true;
     // This backend-only opt-in will become a user setting after the retention
     // and recovery checks are validated. Default remains fail-closed.
     const pruneWithoutBackup = settingsRepository.get('audit_routine_prune_without_backup_v1') === 'true';
     if (auditRetentionClosing || (!hasAutomaticBackup && !pruneWithoutBackup)
-      || auditRetentionSweep !== null || now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
+      || auditRetentionSweep !== null || (!options.force && now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs)) return;
     lastAuditRetentionSweepAt = now;
     const configuredRetentionDays = Number(settingsRepository.get('audit_routine_retention_days_v1') ?? '90');
     const retentionDays = Number.isSafeInteger(configuredRetentionDays) && configuredRetentionDays >= 1 && configuredRetentionDays <= 3650
@@ -1223,7 +1225,9 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (!auditRepository.hasExpiredRoutineReadCandidates(cutoffIso)) return;
       if (!pruneWithoutBackup) {
         if (readSettings().autoBackupEnabled !== true) return;
-        const created = await backupService.ensureRecent();
+        // Pressure sweeps must not create a multi-GB backup just to reclaim
+        // pages; use an already existing verified daily backup or do nothing.
+        const created = options.existingBackupOnly ? null : await backupService.ensureRecent();
         const candidates = created === null ? await backupService.list() : [created];
         const verifiedAt = Date.now();
         let hasVerifiedDaily = false;
@@ -1239,7 +1243,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         if (!hasVerifiedDaily) return;
       }
       let totalDeleted = 0;
-      for (let batch = 0; batch < 20; batch += 1) {
+      for (let batch = 0; batch < (options.maxBatches ?? 20); batch += 1) {
         if (!pruneWithoutBackup && readSettings().autoBackupEnabled !== true) break;
         const deleted = await auditRepository.purgeExpiredRoutineReads(cutoffIso);
         totalDeleted += deleted;
@@ -1254,11 +1258,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
 
   const auditRetentionTimer = setInterval(sweepAuditRetention, recoveryRetentionSweepIntervalMs);
   auditRetentionTimer.unref?.();
-  void startupBackup.then(sweepAuditRetention);
+  void startupBackup.then(() => sweepAuditRetention());
 
-  // Pressure-only cleanup: strictly old, routine read-only audit rows without
-  // Goal or mutation references. No checkpoint deletion without the existing
-  // opt-in, verified-backup retention path; no online VACUUM or large backup.
+  // Pressure-only audit cleanup delegates to ordinary backup/opt-in gates.
+  // Never force recovery-trash or archived-backup sweeps here.
   let lastPressureSweepAt = 0;
   let pressureSweep: Promise<void> | null = null;
   const pressureSweepIntervalMs = 15 * 60 * 1000;
@@ -1266,31 +1269,19 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     const now = Date.now();
     if (auditRetentionClosing || pressureSweep !== null || now - lastPressureSweepAt < pressureSweepIntervalMs) return;
     lastPressureSweepAt = now;
-    const limitMiB = parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY));
-    const snapshot = inspectSqliteHardLimit(database.connection, limitMiB);
-    if (!sqliteLimitPressure(snapshot.allocatedBytes, snapshot.freeBytes, snapshot.requestedBytes)) return;
-    const days = parseIntegerSetting(settingsRepository.get('audit_routine_retention_days_v1') ?? undefined, 90, 1, 3650);
-    const cutoff = new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
-    pressureSweep = (async (): Promise<void> => {
-      const hasRoutine = auditRepository.hasExpiredRoutineReadCandidates(cutoff);
-      let deletedTotal = 0;
-      // Each batch releases SQLite write locks and yields to MCP writers.
-      for (let batch = 0; hasRoutine && batch < 8; batch += 1) {
-        if (auditRetentionClosing) break;
-        const deleted = await auditRepository.purgeExpiredRoutineReads(cutoff);
-        deletedTotal += deleted;
-        if (deleted < 500) break;
-        await new Promise<void>((resolve) => setImmediate(resolve));
-      }
-      if (deletedTotal > 0) console.log('[storage] hard-limit pressure pruned ' + deletedTotal + ' expired routine reads');
-      // Checkpoints are only eligible under the existing user-enabled
-      // retention policy with verified automatic backups and reference fences.
-      if (!auditRetentionClosing && settingsRepository.get('checkpoint_auto_retention_v1') === 'true'
-        && readSettings().autoBackupEnabled === true) {
-        await sweepRecoveryRetention(true);
-      }
-    })().catch((error: unknown) => {
-      console.error('SQLite pressure cleanup failed: ' + (error instanceof Error ? error.message : String(error)));
+    // Defer ALL SQLite access to the caught promise: a restore/swap can make
+    // the connection temporarily unavailable even from a timer callback.
+    pressureSweep = Promise.resolve().then((): void => {
+      if (auditRetentionClosing) return;
+      const limitMiB = parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY));
+      const snapshot = inspectSqliteHardLimit(database.connection, limitMiB);
+      if (!sqliteLimitPressure(snapshot.allocatedBytes, snapshot.freeBytes, snapshot.requestedBytes)) return;
+      // Reuse exactly the ordinary audit retention authorization and evidence
+      // fences. Never delete without opt-in or a verified existing backup.
+      // Do not force recovery-trash or archived-backup cleanup during pressure.
+      sweepAuditRetention({ force: true, maxBatches: 8, existingBackupOnly: true });
+    }).catch((error: unknown) => {
+      console.error('SQLite pressure check failed: ' + (error instanceof Error ? error.message : String(error)));
     }).finally(() => { pressureSweep = null; });
   }
   const hardLimitTimer = setInterval(sweepHardLimitPressure, pressureSweepIntervalMs);
@@ -2549,7 +2540,12 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     const hasCompressedV2 = checkpointStatus.hasCompressedV2;
     const checkpointMetadataIncomplete = !checkpointStatus.complete;
     const limit = inspectSqliteHardLimit(database.connection, parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)));
-    return { ...storageMaintenance.inspect(), sqliteEffectiveHardLimitBytes: limit.effectiveBytes,
+    let sqliteWalBytes = 0;
+    try { sqliteWalBytes = statSync(databaseFilename + '-wal').size; }
+    catch (error: unknown) {
+      if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error;
+    }
+    return { ...storageMaintenance.inspect(), sqliteWalBytes, sqliteEffectiveHardLimitBytes: limit.effectiveBytes,
       sqliteOverBudget: limit.allocatedBytes > limit.requestedBytes,
       sqlitePressureHigh: sqliteLimitPressure(limit.allocatedBytes, limit.freeBytes, limit.requestedBytes),
       usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete,
@@ -2605,8 +2601,6 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           throw error;
         }
         database.syncHardLimit();
-        lastPressureSweepAt = 0;
-        sweepHardLimitPressure();
       }
       if (options.automaticCheckpointRetention !== undefined) {
         settingsRepository.set('checkpoint_auto_retention_v1', options.automaticCheckpointRetention ? 'true' : 'false');
@@ -2619,6 +2613,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         settingsRepository.set('audit_routine_retention_days_v1', String(options.routineAuditRetentionDays));
       }
       lastAuditRetentionSweepAt = Date.now(); // policy changes take effect at next bounded sweep
+      if (options.sqliteHardLimitMiB !== undefined) {
+        lastPressureSweepAt = 0;
+        sweepHardLimitPressure();
+      }
       return { restartRequired: false };
     },
     inspect: () => {
@@ -2708,6 +2706,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     activityTracker,
     logHub,
     toolAvailabilityService,
+    mutationAdmissionMessage: (): string | null => database.mutationAdmissionMessage(),
     prepareFactoryReset: (): Promise<void> => tunnelController.prepareFactoryReset(),
     getLocale: (): UiLocale => readLocale(settingsRepository),
     getUserSettings: (): UserSettings => readSettings(),

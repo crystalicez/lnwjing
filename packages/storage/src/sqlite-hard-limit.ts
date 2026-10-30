@@ -39,6 +39,13 @@ export function applySqliteHardLimit(connection: DatabaseSync, limitMiB: number)
   return inspectSqliteHardLimit(connection, limitMiB);
 }
 
+export function sqliteMutationAdmissionPressure(allocatedBytes: number, freeBytes: number, walBytes: number, limitBytes: number): boolean {
+  if (![allocatedBytes, freeBytes, walBytes, limitBytes].every(Number.isFinite)
+    || freeBytes < 0 || walBytes < 0 || limitBytes <= 0) return true;
+  const reserved = Math.max(16 * 1024 * 1024, Math.floor(limitBytes * 0.05));
+  return limitBytes - (allocatedBytes - freeBytes + walBytes) <= reserved;
+}
+
 export function sqliteLimitPressure(allocatedBytes: number, freeBytes: number, limitBytes: number): boolean {
   // Free pages can be reused: a full SQLite file is not necessarily exhausted.
   return allocatedBytes - freeBytes >= limitBytes * 0.85;

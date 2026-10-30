@@ -12,6 +12,8 @@ export interface StorageOverview {
   readonly policy: StoragePolicy;
   readonly sqliteAllocatedBytes: number;
   readonly sqliteFreeBytes: number;
+  /** Actual WAL file bytes; outside main DB max_page_count. */
+  readonly sqliteWalBytes: number;
   readonly sqliteEffectiveHardLimitBytes: number;
   readonly sqliteOverBudget: boolean;
   readonly sqlitePressureHigh: boolean;

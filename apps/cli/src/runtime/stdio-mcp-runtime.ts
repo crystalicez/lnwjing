@@ -82,6 +82,7 @@ export interface StdioMcpRuntime {
   readonly extensions: ExtensionsService;
   readonly activityTracker: ActivityTracker;
   readonly activityReady: Promise<void>;
+  readonly mutationAdmissionGuardProvider: () => string | null;
   readonly profileProvider: () => PermissionProfile;
   readonly persistedSecurityPolicyProvider: () => PersistedStdioSecurityPolicy;
   readonly allowAiDeleteProvider: () => boolean;
@@ -249,6 +250,7 @@ export function createStdioMcpRuntime(
     },
   };
   const durableActivitySink = createFileActivitySink(mcpActivityLogPath(dataPath));
+  let lastActivityEvidenceWarningAt = 0;
   const activityTracker = new ActivityTracker({
     async record(event: ActivitySinkEvent): Promise<void> {
       // Publish starts before slower durable evidence so updater quiet-time
@@ -257,7 +259,16 @@ export function createStdioMcpRuntime(
         ? [sharedActivitySink, durableActivitySink]
         : [durableActivitySink, sharedActivitySink]).record(event);
     },
-  }, undefined, {
+  }, (_error, event): void => {
+    // STDERR is separate from the MCP STDIO protocol. Never print raw error
+    // strings or tool arguments (they may contain secrets).
+    const now = Date.now();
+    if (now - lastActivityEvidenceWarningAt >= 60_000) {
+      lastActivityEvidenceWarningAt = now;
+      process.stderr.write('[lnwjing] Warning: durable MCP activity/audit recording failed (' + event.phase
+        + '). Check SQLite storage and disk space; the tool result may lack a recovery receipt.\n');
+    }
+  }, {
     async record(event: ActivitySinkEvent, detail): Promise<void> {
       await auditService.recordMcpTool({
         actorId: actor.clientId,
@@ -344,6 +355,7 @@ export function createStdioMcpRuntime(
     extensions,
     activityTracker,
     activityReady,
+    mutationAdmissionGuardProvider: () => database.mutationAdmissionMessage(),
     profileProvider,
     persistedSecurityPolicyProvider,
     allowAiDeleteProvider,

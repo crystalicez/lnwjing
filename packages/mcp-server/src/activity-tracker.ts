@@ -99,6 +99,7 @@ export class ActivityTracker {
   private readonly listeners = new Set<ActivityEventListener>();
   private readonly completedTelemetry: Array<{ readonly toolName: string; readonly resultCode: string; readonly durationMs: number; readonly partialFailure: boolean }> = [];
   private activityRevision = 0;
+  private auditPersistenceHealthy = true;
   private readonly maxTelemetryEntries = 4096;
 
   public constructor(
@@ -119,6 +120,11 @@ export class ActivityTracker {
 
   public revision(): number {
     return this.activityRevision;
+  }
+
+  /** Mutations must not proceed after a failed durable audit insert. */
+  public isAuditPersistenceHealthy(): boolean {
+    return this.auditPersistenceHealthy;
   }
 
   public telemetrySnapshot(): ActivityTelemetrySnapshot {
@@ -298,7 +304,9 @@ export class ActivityTracker {
       if (record === undefined) continue;
       try {
         await record();
+        if (record === auditRecord) this.auditPersistenceHealthy = true;
       } catch (error: unknown) {
+        if (record === auditRecord) this.auditPersistenceHealthy = false;
       // Activity recording must never fail tool execution, but failures must remain observable.
         try {
           this.onRecordError?.(error, event);

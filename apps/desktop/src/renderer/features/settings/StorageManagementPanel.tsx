@@ -129,6 +129,7 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
         <strong>{t('storagePanel.sqliteTitle')}</strong>
         <p>{overview === null ? (t('storagePanel.notLoaded')) :
           `${sizeLabel(overview.sqliteAllocatedBytes)} · ${t('storagePanel.freePages')} ${sizeLabel(overview.sqliteFreeBytes)}`}</p>
+        {overview === null ? null : <p>{t('storagePanel.walUsage')}: {sizeLabel(overview.sqliteWalBytes)}</p>}
         <p className="hint">{t('storagePanel.sqliteNote')}</p>
         {overview?.compactRecommended === true ? <p className="hint">{t('storagePanel.compactionNote')}</p> : null}
       </div>

@@ -278,6 +278,58 @@ describe('MCP tool registry', () => {
   });
 
 
+  it('blocks a mutation on host storage-pressure admission, preserving read-only tools and skipping file writes', async () => {
+    let edits = 0;
+    let reads = 0;
+    const registry = new ToolRegistry({ file: {
+      async editFile(): Promise<ReturnType<typeof ok>> { edits += 1; return ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 }); },
+      async readFile(): Promise<ReturnType<typeof ok>> { reads += 1; return ok({ path: 'file.ts', content: 'safe', truncated: false }); },
+    } as never }, actor, {
+      profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+      mutationAdmissionGuardProvider: (): string => 'SQLite storage budget is nearly exhausted',
+    });
+    const blocked = await registry.invoke('edit_file', { workspaceId: 'workspace-a', path: 'file.ts', oldText: 'a', newText: 'b' });
+    expect(blocked).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    expect(edits).toBe(0);
+    const read = await registry.invoke('read_file', { workspaceId: 'workspace-a', path: 'file.ts' });
+    expect(read.isError).not.toBe(true);
+    expect(reads).toBe(1);
+  });
+
+  it('blocks subsequent mutations after SQLITE_FULL audit failure until durable audit recovers', async () => {
+    let auditWritable = false;
+    let edits = 0;
+    const tracker = new ActivityTracker(undefined, (): void => {}, {
+      async record(): Promise<void> {
+        if (!auditWritable) throw new Error('SQLITE_FULL');
+      },
+    });
+    const registry = new ToolRegistry({ file: {
+      async editFile(): Promise<ReturnType<typeof ok>> {
+        edits += 1;
+        return ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 });
+      },
+      async readFile(): Promise<ReturnType<typeof ok>> {
+        return ok({ path: 'file.ts', content: 'before', truncated: false });
+      },
+    } as never }, actor, {
+      activityTracker: tracker,
+      profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+    });
+    const patch = { workspaceId: 'workspace-a', path: 'file.ts', oldText: 'a', newText: 'b' };
+    const blocked = await registry.invoke('edit_file', patch);
+    expect(blocked).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    expect(edits).toBe(0);
+    expect(tracker.isAuditPersistenceHealthy()).toBe(false);
+    auditWritable = true;
+    expect((await registry.invoke('read_file', { workspaceId: 'workspace-a', path: 'file.ts' })).isError).not.toBe(true);
+    expect(tracker.isAuditPersistenceHealthy()).toBe(true);
+    expect((await registry.invoke('edit_file', patch)).isError).not.toBe(true);
+    expect(edits).toBe(1);
+  });
+
   it('fails closed before dispatch when a runtime invocation guard reports stale security policy', async () => {
     let executed = false;
     const registry = new ToolRegistry({ capabilities: { async execute(): Promise<ReturnType<typeof ok>> {

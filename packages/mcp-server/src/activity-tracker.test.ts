@@ -52,6 +52,28 @@ describe('ActivityTracker', () => {
     ]);
   });
 
+  it('marks missing completion receipts unhealthy and recovers after a later durable audit insert', async () => {
+    let auditWritable = true;
+    const failures: string[] = [];
+    const tracker = new ActivityTracker(undefined, (error): void => {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }, {
+      async record(): Promise<void> {
+        if (!auditWritable) throw new Error('SQLITE_FULL');
+      },
+    });
+    expect(tracker.isAuditPersistenceHealthy()).toBe(true);
+    const callId = await tracker.begin('edit_file', { workspaceId: 'w', path: 'file.ts' });
+    auditWritable = false;
+    await tracker.end(callId, 'SUCCESS', 1);
+    expect(tracker.isAuditPersistenceHealthy()).toBe(false);
+    expect(failures).toEqual(['SQLITE_FULL']);
+    auditWritable = true;
+    const recoveredCall = await tracker.begin('read_file', { workspaceId: 'w', path: 'file.ts' });
+    expect(tracker.isAuditPersistenceHealthy()).toBe(true);
+    await tracker.end(recoveredCall, 'SUCCESS', 1);
+  });
+
   it('publishes sanitized lifecycle events to realtime subscribers and supports unsubscribe', async () => {
     const events: ActivitySinkEvent[] = [];
     const tracker = new ActivityTracker();

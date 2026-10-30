@@ -50,6 +50,7 @@ export interface McpServerOptions {
   readonly authorizationModeProvider?: () => AuthorizationMode;
   /** Optional runtime guard checked before every tool call. Return a message to fail closed. */
   readonly invocationGuardProvider?: () => string | null | undefined;
+  readonly mutationAdmissionGuardProvider?: () => string | null | undefined;
   readonly allowAiDeleteProvider?: () => boolean;
   readonly destructivePolicyProvider?: () => DestructiveAutoApprovalPolicy;
   readonly activeWorkspaceScopeProvider?: () => WorkspaceScope | null | Promise<WorkspaceScope | null>;
@@ -103,6 +104,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     ...(options.profileProvider === undefined ? {} : { profileProvider: options.profileProvider }),
     ...(options.authorizationModeProvider === undefined ? {} : { authorizationModeProvider: options.authorizationModeProvider }),
     ...(options.invocationGuardProvider === undefined ? {} : { invocationGuardProvider: options.invocationGuardProvider }),
+    ...(options.mutationAdmissionGuardProvider === undefined ? {} : { mutationAdmissionGuardProvider: options.mutationAdmissionGuardProvider }),
     ...(options.allowAiDeleteProvider === undefined ? {} : { allowAiDeleteProvider: options.allowAiDeleteProvider }),
     ...(options.destructivePolicyProvider === undefined ? {} : { destructivePolicyProvider: options.destructivePolicyProvider }),
     ...(options.activeWorkspaceScopeProvider === undefined ? {} : { activeWorkspaceScopeProvider: options.activeWorkspaceScopeProvider }),
