@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, unlink, writeFile, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, unlink, utimes, writeFile, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -134,8 +134,17 @@ describe('Windows distribution-aware auto updater', () => {
       expect(await readFile(launcher, 'utf8')).toContain('lnwjing-runtime-v5.8.7-first');
       expect(await readFile(launcher, 'utf8')).toContain('lnwjing-mcp-stdio-bridge.exe');
       expect(await readFile(launcher, 'utf8')).toContain('"%BRIDGE%" "%APP%" --mcp-stdio %*');
+      const olderTimestamp = new Date('2020-01-01T00:00:00.000Z');
+      await utimes(launcher, olderTimestamp, olderTimestamp);
+      const unchangedMtime = (await stat(launcher)).mtimeMs;
+      expect(await ensurePortableMcpStdioLauncher(outer, firstExe)).toBe(launcher);
+      expect((await stat(launcher)).mtimeMs).toBe(unchangedMtime);
       expect(await ensurePortableMcpStdioLauncher(outer, secondExe)).toBe(launcher);
       expect(await readFile(launcher, 'utf8')).toContain('lnwjing-runtime-v5.8.8-second');
+      const managed = await readFile(launcher, 'utf8');
+      await writeFile(launcher, managed + 'echo user customization\r\n');
+      expect(await ensurePortableMcpStdioLauncher(outer, firstExe)).toBeNull();
+      expect(await readFile(launcher, 'utf8')).toBe(managed + 'echo user customization\r\n');
       await writeFile(launcher, '@echo off\r\necho custom user script\r\n');
       expect(await ensurePortableMcpStdioLauncher(outer, firstExe)).toBeNull();
       expect(await readFile(launcher, 'utf8')).toContain('custom user script');

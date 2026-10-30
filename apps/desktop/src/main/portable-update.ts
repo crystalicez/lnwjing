@@ -83,20 +83,10 @@ export function currentPortableExecutablePath(
     : portableExecutable;
 }
 
-/** Keep MCP STDIO client configuration stable across versioned extraction folders. */
-export async function ensurePortableMcpStdioLauncher(
-  outerPath: string = currentPortableExecutablePath(),
-  innerPath: string = process.execPath,
-): Promise<string | null> {
-  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE?.trim()) return null;
-  const outerDirectory = path.dirname(path.resolve(outerPath));
-  const relativeInner = path.relative(outerDirectory, path.resolve(innerPath)).replaceAll('/', '\\');
-  if (!/^lnwjing-runtime-v[0-9A-Za-z._-]+\\lnwjing\.exe$/i.test(relativeInner)) return null;
-  const launcherPath = path.join(outerDirectory, 'lnwjing-mcp-stdio.cmd');
-  const signature = 'REM lnwjing-managed-portable-stdio-v1';
-  const contents = [
+function portableMcpLauncherContents(relativeInner: string): string {
+  return [
     '@echo off',
-    signature,
+    'REM lnwjing-managed-portable-stdio-v1',
     'setlocal',
     `set "APP=%~dp0${relativeInner}"`,
     `set "BRIDGE=%~dp0${path.win32.join(path.win32.dirname(relativeInner), 'lnwjing-mcp-stdio-bridge.exe')}"`,
@@ -112,6 +102,19 @@ export async function ensurePortableMcpStdioLauncher(
     'exit /b %ERRORLEVEL%',
     '',
   ].join('\r\n');
+}
+
+/** Keep MCP STDIO client configuration stable across versioned extraction folders. */
+export async function ensurePortableMcpStdioLauncher(
+  outerPath: string = currentPortableExecutablePath(),
+  innerPath: string = process.execPath,
+): Promise<string | null> {
+  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE?.trim()) return null;
+  const outerDirectory = path.dirname(path.resolve(outerPath));
+  const relativeInner = path.relative(outerDirectory, path.resolve(innerPath)).replaceAll('/', '\\');
+  if (!/^lnwjing-runtime-v[0-9A-Za-z._-]+\\lnwjing\.exe$/i.test(relativeInner)) return null;
+  const launcherPath = path.join(outerDirectory, 'lnwjing-mcp-stdio.cmd');
+  const contents = portableMcpLauncherContents(relativeInner);
   try {
     const current = await lstat(launcherPath).catch((error: unknown): null => {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
@@ -120,8 +123,9 @@ export async function ensurePortableMcpStdioLauncher(
     if (current !== null) {
       if (!current.isFile() || current.isSymbolicLink()) return null;
       const previous = await readFile(launcherPath, 'utf8');
-      if (!previous.startsWith(`@echo off\r\n${signature}\r\n`)) return null;
       if (previous === contents) return launcherPath;
+      const previousInner = previous.match(/(?:^|\r\n)set "APP=%~dp0(lnwjing-runtime-v[0-9A-Za-z._-]+\\lnwjing\.exe)"\r\n/)?.[1];
+      if (previousInner === undefined || previous !== portableMcpLauncherContents(previousInner)) return null;
       const temporaryPath = `${launcherPath}.${randomUUID()}.tmp`;
       try {
         await writeFile(temporaryPath, contents, { encoding: 'utf8', flag: 'wx' });
