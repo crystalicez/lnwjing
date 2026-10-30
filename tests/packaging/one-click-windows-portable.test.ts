@@ -77,6 +77,32 @@ describe('one-click Windows x64 portable build', () => {
     expect(tunnelStager).toContain('process.env.LNWJING_COSIGN_PATH?.trim()');
   });
 
+  it('can build a staged release candidate without touching an existing Portable or rollback pair', async () => {
+    const script = await readFile(path.join(root, 'scripts', 'build-portable-windows-x64.ps1'), 'utf8');
+    expect(script).toContain('[switch]$StageOnly');
+    expect(script).toContain('if (-not $StageOnly -and (');
+    expect(script).toContain('Staged Portable release candidate already exists; refusing to overwrite');
+    expect(script).toContain('STAGED_PORTABLE_VERIFIED:');
+    expect(script.indexOf('if ($StageOnly) {\n        # A release candidate'))
+      .toBeLessThan(script.indexOf('New-Item -ItemType Directory -Path $portableDirectory'));
+    expect(script.indexOf('if ($StageOnly) {\n        foreach ($candidate'))
+      .toBeLessThan(script.indexOf("Invoke-Step 'Install dependencies"));
+    expect(script.indexOf('if ($StageOnly) {\n        # A release candidate'))
+      .toBeLessThan(script.indexOf("Invoke-Step 'Promote verified Portable"));
+  });
+
+  it('keeps staged Portable files safe during explicit intermediate cleanup', async () => {
+    const cleaner = await readFile(path.join(root, 'scripts', 'clean-staged-portable-unpacked.ps1'), 'utf8');
+    expect(cleaner).toContain('[switch]$Apply');
+    expect(cleaner).toContain('WOULD_DELETE_STAGED_UNPACKED=');
+    expect(cleaner).toContain('STAGED_UNPACKED_CLEANED=');
+    expect(cleaner).toContain('Refusing build cleanup with nested symlink/junction');
+    expect(cleaner).toContain('Refusing cleanup while a packaged test executable is running');
+    expect(cleaner).toContain("Remove-Item -LiteralPath $unpacked -Recurse -Force");
+    expect(cleaner).not.toContain('Remove-Item -LiteralPath $candidate');
+    expect(cleaner).not.toContain('Remove-Item -LiteralPath $manifest');
+  });
+
   it('refuses a known existing rollback before expensive packaging I/O', async () => {
     const script = await readFile(path.join(root, 'scripts', 'build-portable-windows-x64.ps1'), 'utf8');
     const preflight = script.indexOf('A previous build rollback already exists; inspect it before starting an expensive build.');

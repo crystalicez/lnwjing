@@ -7,13 +7,16 @@ import { electronExecutablePath } from './electron-runtime.js';
 import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const packagedExecutable = process.env.LNWJING_PACKAGED_EXECUTABLE?.trim() || undefined;
 
 test('real Storage Settings persist Git-aware and SQLite backup budget with isolated profile', async () => {
   test.setTimeout(90_000);
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-storage-e2e-'));
   const app = await _electron.launch({
-    executablePath: electronExecutablePath(desktopRoot),
-    args: ['--user-data-dir=' + dataRoot, path.join(desktopRoot, 'dist', 'main', 'main.js')],
+    executablePath: packagedExecutable ?? electronExecutablePath(desktopRoot),
+    args: packagedExecutable === undefined
+      ? ['--user-data-dir=' + dataRoot, path.join(desktopRoot, 'dist', 'main', 'main.js')]
+      : ['--user-data-dir=' + dataRoot],
     cwd: desktopRoot,
     env: {
       ...process.env,

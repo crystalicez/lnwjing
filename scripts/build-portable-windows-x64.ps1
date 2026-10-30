@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$SkipInstall,
-    [switch]$KeepIntermediates
+    [switch]$KeepIntermediates,
+    [switch]$StageOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -46,9 +47,16 @@ function Invoke-Step {
 try {
     # Promotion preserves an existing rollback pair. Reject before costly
     # staging and packaging to avoid wasted SSD writes on repeat builds.
-    if ((Test-Path -LiteralPath "$artifact.lnwjing-build-previous") -or
-        (Test-Path -LiteralPath (Join-Path $portableDirectory 'portable.yml.lnwjing-build-previous'))) {
+    if (-not $StageOnly -and ((Test-Path -LiteralPath "$artifact.lnwjing-build-previous") -or
+        (Test-Path -LiteralPath (Join-Path $portableDirectory 'portable.yml.lnwjing-build-previous')))) {
         throw 'A previous build rollback already exists; inspect it before starting an expensive build.'
+    }
+    if ($StageOnly) {
+        foreach ($candidate in @($stagedArtifact, $stagedManifest)) {
+            if (Test-Path -LiteralPath $candidate) {
+                throw "Staged Portable release candidate already exists; refusing to overwrite: $candidate"
+            }
+        }
     }
     if (-not $SkipInstall) {
         # A double-click build must never block on pnpm's purge/reinstall question.
@@ -140,6 +148,16 @@ try {
     $stagedFile = Get-Item -LiteralPath $stagedArtifact
     if ($stagedFile.Length -le 0) { throw 'Portable executable has zero bytes.' }
 
+    if ($StageOnly) {
+        # A release candidate is verified in staging, never moved into portable/.
+        # Preserve win-unpacked so packaged Electron acceptance can run against
+        # exactly this release payload before a separate, deliberate promotion.
+        Write-Host "STAGED_PORTABLE_VERIFIED: $stagedArtifact" -ForegroundColor Green
+        Write-Host "STAGED_MANIFEST: $stagedManifest"
+        Write-Host "SHA256: $artifactSha256"
+        return
+    }
+
     # Rename on the same volume instead of copying ~270 MiB. This output folder
     # is generated/ignored; do not touch runtime directories from prior launches.
     New-Item -ItemType Directory -Path $portableDirectory -Force | Out-Null
@@ -155,6 +173,7 @@ try {
             }
         }
     }
+
     # Promote atomically with SHA-512 manifest verification and keep the old
     # EXE + manifest as rollback files until actual user acceptance. Never
     # overwrite a running Portable or silently destroy the prior version.
