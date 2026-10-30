@@ -127,13 +127,14 @@ describe('one-click Windows x64 portable build', () => {
     const portable = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-cleanup-fixture-'));
     const current = 'lnwjing-runtime-v5.8.9-current';
     const old = 'lnwjing-runtime-v5.8.7-old';
+    const fresh = 'lnwjing-runtime-v5.8.8-recent';
     const malformed = 'lnwjing-runtime-v5.8.6-forged';
     const missingExe = 'lnwjing-runtime-v5.8.5-incomplete';
     const script = path.join(root, 'scripts', 'clean-portable-runtime-cache.ps1');
     try {
       await writeFile(path.join(portable, 'lnwjing-mcp-stdio.cmd'),
         `@echo off\r\nREM lnwjing-managed-portable-stdio-v1\r\nset "APP=%~dp0${current}\\lnwjing.exe"\r\n`);
-      for (const name of [current, old, malformed, missingExe]) {
+      for (const name of [current, fresh, old, malformed, missingExe]) {
         const folder = path.join(portable, name);
         await mkdir(folder);
         const match = /^lnwjing-runtime-v(.+)$/.exec(name);
@@ -144,6 +145,8 @@ describe('one-click Windows x64 portable build', () => {
       await writeFile(path.join(portable, malformed, '.lnwjing-ready'), 'forged');
       const aged = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000);
       for (const name of [old, malformed, missingExe]) await utimes(path.join(portable, name), aged, aged);
+      const recent = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      await utimes(path.join(portable, fresh), recent, recent);
       const run = (apply: boolean): string => execFileSync('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
         '-File', script, '-PortableDirectory', portable, '-RetainReadyCount', '1',
@@ -153,11 +156,12 @@ describe('one-click Windows x64 portable build', () => {
       expect(preview).toContain('CANDIDATES=1');
       expect(preview).toContain('WOULD_DELETE=' + old);
       expect(preview).not.toContain('WOULD_DELETE=' + malformed);
+      expect(preview).not.toContain('WOULD_DELETE=' + fresh);
       expect(preview).not.toContain('WOULD_DELETE=' + missingExe);
       const applied = run(true);
       expect(applied).toContain('DELETED=' + old);
       await expect(stat(path.join(portable, old))).rejects.toMatchObject({ code: 'ENOENT' });
-      for (const name of [current, malformed, missingExe]) {
+      for (const name of [current, fresh, malformed, missingExe]) {
         expect((await stat(path.join(portable, name))).isDirectory()).toBe(true);
       }
     } finally {

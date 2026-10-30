@@ -7,6 +7,7 @@ Never follows reparse points, deletes unrecognized directories, or touches user 
 param(
   [string]$PortableDirectory = '',
   [ValidateRange(1, 10)][int]$RetainReadyCount = 2,
+  [ValidateRange(1, 365)][int]$MinimumAgeDays = 7,
   [switch]$Apply
 )
 
@@ -47,7 +48,10 @@ foreach ($folder in $all) {
   if ($launcherContents.Contains($folder.Name)) { $preserved += $folder.Name }
 }
 $preserved = @($preserved | Select-Object -Unique)
-$candidates = @($all | Where-Object { $preserved -notcontains $_.Name })
+$now = [DateTime]::UtcNow
+$candidates = @($all | Where-Object {
+  ($preserved -notcontains $_.Name) -and (($now - $_.LastWriteTimeUtc).TotalDays -ge $MinimumAgeDays)
+})
 if ($Apply) {
   $prefix = $portable.TrimEnd('\') + '\'
   $running = @(Get-CimInstance Win32_Process | Where-Object {
@@ -60,6 +64,9 @@ Write-Output ('RETAINED=' + ($preserved -join ','))
 Write-Output ('CANDIDATES=' + $candidates.Count)
 foreach ($folder in $candidates) {
   if ($Apply) {
+    if (([DateTime]::UtcNow - (Get-Item -LiteralPath $folder.FullName -Force).LastWriteTimeUtc).TotalDays -lt $MinimumAgeDays) {
+      throw ('Runtime age changed during cleanup; refusing deletion of ' + $folder.Name)
+    }
     # Validate nested links only for directories explicitly selected for deletion.
     if (@(Get-ChildItem -LiteralPath $folder.FullName -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop).Count -gt 0) {
       throw ('Reparse point inside cache; refusing cleanup of ' + $folder.Name)

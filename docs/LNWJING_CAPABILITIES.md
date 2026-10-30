@@ -215,7 +215,7 @@ index สามารถ rebuild ได้ เมื่อ continuation เก�
 
 สำหรับ project ใหญ่ แนะนำเรียก `workspace_index_status` พร้อม `summaryOnly: true` ซึ่งคืน `snapshotEntryCount` และ `snapshotEntriesOmitted` โดยไม่ส่ง entries หลายหมื่นรายการ และอ่าน metadata sidecar ที่ผูกกับ identity ของ JSON snapshot แทนการ parse ทั้งก้อนทุกครั้ง; ค่า default ยังเป็นผลลัพธ์แบบเต็มเพื่อคง compatibility. เปิด watcher เฉพาะ project ที่กำลังทำงาน และเลือก debounce ประมาณ 1,000 ms; เมื่อทำ build/checkout ที่เปลี่ยนไฟล์หลายพันรายการควรหยุด watcher ชั่วคราวแล้วสั่ง refresh เมื่อไฟล์นิ่ง. **ยังไม่มีเพดาน MB/s สำหรับ Physical Disk I/O:** ไฟล์เล็กจำนวนมากยังต้องอ่านเมื่อ Full Index ครั้งแรก แม้ heavy scans จะใช้ lease ข้าม process แล้ว จึงควรวัด real disk I/O บนเครื่องและ workload จริงก่อนรับรอง 20 GB+ ทุกกรณี.
 
-**Portable cache:** ตรวจรายชื่อ runtime สะสมด้วย `powershell -NoProfile -File scripts/clean-portable-runtime-cache.ps1` (dry-run เท่านั้น) และเรียกพร้อม `-Apply` หลังปิด Portable ทุก process หากต้องการ cleanup อย่างตั้งใจ; script รักษา runtime ที่ launcher อ้างถึง ปฏิเสธ reparse point และไม่แตะ user profile.
+**Portable cache:** ตรวจรายชื่อ runtime สะสมด้วย `powershell -NoProfile -File scripts/clean-portable-runtime-cache.ps1` (dry-run เท่านั้น) และเรียกพร้อม `-Apply` หลังปิด Portable ทุก process หากต้องการ cleanup อย่างตั้งใจ; script รักษา runtime ที่ launcher อ้างถึง เก็บอย่างน้อย 2 runtime ล่าสุด และไม่ลบ runtime ที่มีอายุน้อยกว่า 7 วัน (ปรับด้วย `-MinimumAgeDays` ได้); ตรวจเนื้อหา `.lnwjing-ready` ให้ตรงกับ version/build ID ปฏิเสธ reparse point และไม่แตะ user profile.
 
 ### File mutation
 
