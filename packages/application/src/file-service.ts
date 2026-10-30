@@ -239,7 +239,7 @@ export class FileService {
     this.writerAdmission = dependencies.writerAdmission;
     this.patchApplier = dependencies.patchApplier ?? new PatchApplier();
     this.checkpointService = dependencies.checkpointService;
-    this.checkpointModeProvider = dependencies.checkpointModeProvider ?? ((): 'always' | 'git-aware' => 'always');
+    this.checkpointModeProvider = dependencies.checkpointModeProvider ?? ((): 'always' | 'git-aware' => 'git-aware');
     this.permissionEngine = dependencies.permissionEngine ?? new DefaultPermissionEngine();
     this.profileProvider = dependencies.profileProvider ?? ((): PermissionProfile => dependencies.profile ?? permissionProfiles.balanced);
     this.unboundedReader = dependencies.unboundedReader ?? new UnboundedFileReader();

@@ -1,6 +1,8 @@
 /** Storage maintenance is explicit-only. All sizes are SQLite byte counts. */
 export interface StoragePolicy {
   readonly checkpointCreationMode: 'always' | 'git-aware';
+  /** Maximum allocated main-database size, excluding WAL and backups. */
+  readonly sqliteHardLimitMiB: number;
   readonly compressionEnabledOnNextStart: boolean;
   readonly automaticCheckpointRetention: boolean;
   readonly auditPruneWithoutBackup: boolean;
@@ -10,6 +12,9 @@ export interface StorageOverview {
   readonly policy: StoragePolicy;
   readonly sqliteAllocatedBytes: number;
   readonly sqliteFreeBytes: number;
+  readonly sqliteEffectiveHardLimitBytes: number;
+  readonly sqliteOverBudget: boolean;
+  readonly sqlitePressureHigh: boolean;
   readonly compactRecommended: boolean;
   readonly hasCompressedV2?: boolean;
   readonly checkpointMetadataIncomplete?: boolean;
@@ -19,6 +24,7 @@ export interface StorageOverview {
 export interface SetStoragePolicyRequest {
   readonly userConfirmed: true;
   readonly checkpointCreationMode?: 'always' | 'git-aware';
+  readonly sqliteHardLimitMiB?: number;
   readonly compressionEnabledOnNextStart?: boolean;
   readonly automaticCheckpointRetention?: boolean;
   readonly auditPruneWithoutBackup?: boolean;

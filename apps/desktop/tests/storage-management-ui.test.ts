@@ -30,6 +30,8 @@ describe('storage IPC guards', () => {
     expect(parseSetStoragePolicyRequest({ userConfirmed: true, checkpointCreationMode: 'git-aware' })).toEqual({ userConfirmed: true, checkpointCreationMode: 'git-aware' });
     expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, checkpointCreationMode: 'off' })).toThrow(/Invalid checkpoint/);
     expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, checkpointCreationMode: null })).toThrow(/Invalid checkpoint/);
+    expect(parseSetStoragePolicyRequest({ userConfirmed: true, sqliteHardLimitMiB: 2048 })).toEqual({ userConfirmed: true, sqliteHardLimitMiB: 2048 });
+    expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, sqliteHardLimitMiB: 128 })).toThrow(/Invalid SQLite/);
     expect(() => parseApplyCheckpointCleanup({ ...preview })).toThrow();
     expect(() => parseNativeStorageCleanup({ category: 'tasks', userConfirmed: false })).toThrow();
   });

@@ -178,7 +178,7 @@ export function createStdioMcpRuntime(
   const fileService = new FileService(workspaceRepository, pathGuard, undefined, {
     writerAdmission,
     checkpointService,
-    checkpointModeProvider: (): 'always' | 'git-aware' => settingsRepository.get('checkpoint_creation_mode_v1') === 'git-aware' ? 'git-aware' : 'always',
+    checkpointModeProvider: (): 'always' | 'git-aware' => settingsRepository.get('checkpoint_creation_mode_v1') === 'always' ? 'always' : 'git-aware',
     profileProvider,
     unrestricted: effectiveUnrestricted,
     trustedWorkspaceAccess: !strictRoots,

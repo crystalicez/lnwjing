@@ -169,6 +169,19 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
             </select>
             <p className="hint">{t('storagePanel.checkpointModeNote')}</p>
           </div>
+          <div className="setting-field">
+            <label htmlFor="storage-sqlite-hard-limit">{t('storagePanel.hardLimit')}</label>
+            <select id="storage-sqlite-hard-limit" disabled={pending} value={overview.policy.sqliteHardLimitMiB}
+              onChange={(event) => { void updatePolicy({ sqliteHardLimitMiB: Number(event.target.value) }); }}>
+              {[512, 1024, 2048, 4096, 8192, 16384].map((size) => <option key={size} value={size}>{size >= 1024 ? size / 1024 + ' GiB' : size + ' MiB'}</option>)}
+              {![512, 1024, 2048, 4096, 8192, 16384].includes(overview.policy.sqliteHardLimitMiB)
+                ? <option value={overview.policy.sqliteHardLimitMiB}>{overview.policy.sqliteHardLimitMiB} MiB</option> : null}
+            </select>
+            <p className="hint">{t('storagePanel.hardLimitNote')}</p>
+            <p className="hint">{t('storagePanel.effectiveLimit')}: {sizeLabel(overview.sqliteEffectiveHardLimitBytes)}</p>
+            {overview.sqliteOverBudget ? <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.overBudget')}</StatusMessage> : null}
+            {overview.sqlitePressureHigh ? <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.nearLimit')}</StatusMessage> : null}
+          </div>
           <SettingSwitch label={t('storagePanel.autoRetention')}
             description={t('storagePanel.autoRetentionNote')}
             checked={overview.policy.automaticCheckpointRetention} disabled={pending || (!autoBackupEnabled && !overview.policy.automaticCheckpointRetention)}

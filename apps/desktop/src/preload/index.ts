@@ -1247,6 +1247,7 @@ function storagePolicy(value: unknown): StoragePolicy {
   if (value.checkpointCreationMode !== 'always' && value.checkpointCreationMode !== 'git-aware') throw new Error('Invalid checkpoint mode response');
   return {
     checkpointCreationMode: value.checkpointCreationMode,
+    sqliteHardLimitMiB: integerField(value, 'sqliteHardLimitMiB'),
     compressionEnabledOnNextStart: booleanField(value, 'compressionEnabledOnNextStart'),
     automaticCheckpointRetention: booleanField(value, 'automaticCheckpointRetention'),
     auditPruneWithoutBackup: booleanField(value, 'auditPruneWithoutBackup'),
@@ -1269,7 +1270,11 @@ function storageOverview(value: unknown): StorageOverview {
   }
   if (value.hasCompressedV2 !== undefined && typeof value.hasCompressedV2 !== 'boolean') throw new Error('Invalid compressed checkpoint status');
   if (value.checkpointMetadataIncomplete !== undefined && typeof value.checkpointMetadataIncomplete !== 'boolean') throw new Error('Invalid checkpoint metadata status');
-  return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes,
+  const sqliteEffectiveHardLimitBytes = integerField(value, 'sqliteEffectiveHardLimitBytes');
+  if (sqliteEffectiveHardLimitBytes < 0) throw new Error('Invalid SQLite hard limit');
+  return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes, sqliteEffectiveHardLimitBytes,
+    sqliteOverBudget: booleanField(value, 'sqliteOverBudget'),
+    sqlitePressureHigh: booleanField(value, 'sqlitePressureHigh'),
     ...(value.hasCompressedV2 === undefined ? {} : { hasCompressedV2: value.hasCompressedV2 as boolean }),
     ...(value.checkpointMetadataIncomplete === undefined ? {} : { checkpointMetadataIncomplete: value.checkpointMetadataIncomplete as boolean }),
     compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true,
@@ -1286,6 +1291,8 @@ function setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStorageP
   for (const key of ['compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup'] as const) {
     if (request[key] !== undefined && typeof request[key] !== 'boolean') return Promise.reject(new Error('Invalid storage policy'));
   }
+  if (request.sqliteHardLimitMiB !== undefined && (!Number.isSafeInteger(request.sqliteHardLimitMiB)
+    || request.sqliteHardLimitMiB < 512 || request.sqliteHardLimitMiB > 16384)) return Promise.reject(new Error('Invalid SQLite hard limit'));
   if (request.routineAuditRetentionDays !== undefined &&
     (!Number.isSafeInteger(request.routineAuditRetentionDays) || request.routineAuditRetentionDays < 1 || request.routineAuditRetentionDays > 3650)) {
     return Promise.reject(new Error('Invalid retention'));

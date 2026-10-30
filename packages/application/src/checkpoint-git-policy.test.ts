@@ -39,7 +39,36 @@ describe('Git-aware automatic checkpoint policy', () => {
     expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(true);
   });
 
-  it('keeps Standard as default and skips only Git-recoverable edits when opted in', async () => {
+  it('defaults to Git-aware when no per-instance provider is configured', async () => {
+    const { root, workspace } = await fixture();
+    let snapshots = 0;
+    const workspaces: WorkspaceRepository = {
+      async get(): Promise<Workspace> { return workspace; },
+      async list(): Promise<Workspace[]> { return [workspace]; },
+      async insert(): Promise<void> {}, async delete(): Promise<void> {},
+    };
+    const checkpointService = {
+      async createForFiles(): Promise<Result<Checkpoint>> {
+        snapshots += 1;
+        return ok({ id: 'snapshot', workspaceId: workspace.id, createdAt: new Date(0).toISOString(), files: [] });
+      },
+    };
+    const fileService = new FileService(workspaces, undefined, undefined, { checkpointService });
+    const actor = { clientId: 'fixture', clientName: 'Fixture' };
+    const tracked = await fileService.editFile(actor, workspace.id,
+      { path: 'src/tracked.txt', oldText: 'original', newText: 'first' });
+    expect(tracked).toMatchObject({ ok: true });
+    expect(tracked.ok && ('checkpointId' in tracked.value)).toBe(false);
+    expect(snapshots).toBe(0);
+    await writeFile(path.join(root, 'src', 'tracked.txt'), 'original\\n');
+    await writeFile(path.join(root, 'src', 'untracked.txt'), 'before');
+    const untracked = await fileService.editFile(actor, workspace.id,
+      { path: 'src/untracked.txt', oldText: 'before', newText: 'after' });
+    expect(untracked).toMatchObject({ ok: true, value: { checkpointId: 'snapshot' } });
+    expect(snapshots).toBe(1);
+  });
+
+  it('honors explicit Standard and skips only Git-recoverable edits in Git-aware mode', async () => {
     const { root, workspace } = await fixture();
     const calls: string[][] = [];
     const repository: WorkspaceRepository = {

@@ -130,7 +130,7 @@ import {
   type EngineeringHarnessSettings,
   type EngineeringHarnessWorkspaceOverride,
 } from '@lnwjing/shared';
-import { AesGcmCheckpointCipher, inspectSqliteCompaction, inspectBoundedDirectorySize, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
+import { AesGcmCheckpointCipher, SQLITE_HARD_LIMIT_SETTING_KEY, parseSqliteHardLimitMiB, sqliteLimitPressure, inspectSqliteHardLimit, applySqliteHardLimit, inspectSqliteCompaction, inspectBoundedDirectorySize, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
 import { SqliteGoalRepository } from '@lnwjing/storage';
 import type { Workspace } from '@lnwjing/workspace';
 import { comparableHostPath, isDriveRoot, isMachineRootPath, resolveHostPath, SecretPolicy, WorkspacePathGuard, WorkspaceService } from '@lnwjing/workspace';
@@ -270,13 +270,13 @@ const DEFAULT_WATCHER_PAIRING_PORT = 17891;
 
 export interface StorageMaintenanceBackend {
   getPolicy(): {
-    readonly checkpointCreationMode: 'always' | 'git-aware';
+    readonly checkpointCreationMode: 'always' | 'git-aware'; readonly sqliteHardLimitMiB: number;
     readonly compressionEnabledOnNextStart: boolean; readonly automaticCheckpointRetention: boolean;
     readonly auditPruneWithoutBackup: boolean; readonly routineAuditRetentionDays: number;
   };
   configurePolicy(options: {
     readonly userConfirmed: boolean; readonly compressionEnabledOnNextStart?: boolean;
-    readonly checkpointCreationMode?: 'always' | 'git-aware';
+    readonly checkpointCreationMode?: 'always' | 'git-aware'; readonly sqliteHardLimitMiB?: number;
     readonly automaticCheckpointRetention?: boolean; readonly auditPruneWithoutBackup?: boolean;
     readonly routineAuditRetentionDays?: number;
   }): { readonly restartRequired: boolean };
@@ -582,7 +582,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const fileService = new FileService(workspaceRepository, pathGuard, undefined, {
     writerAdmission,
     checkpointService,
-    checkpointModeProvider: (): 'always' | 'git-aware' => settingsRepository.get(checkpointCreationModeSettingKey) === 'git-aware' ? 'git-aware' : 'always',
+    checkpointModeProvider: (): 'always' | 'git-aware' => settingsRepository.get(checkpointCreationModeSettingKey) === 'always' ? 'always' : 'git-aware',
     profileProvider: activePermissionProfile,
     unrestricted,
     trustedWorkspaceAccess: true,
@@ -1256,11 +1256,55 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   auditRetentionTimer.unref?.();
   void startupBackup.then(sweepAuditRetention);
 
+  // Pressure-only cleanup: strictly old, routine read-only audit rows without
+  // Goal or mutation references. No checkpoint deletion without the existing
+  // opt-in, verified-backup retention path; no online VACUUM or large backup.
+  let lastPressureSweepAt = 0;
+  let pressureSweep: Promise<void> | null = null;
+  const pressureSweepIntervalMs = 15 * 60 * 1000;
+  function sweepHardLimitPressure(): void {
+    const now = Date.now();
+    if (auditRetentionClosing || pressureSweep !== null || now - lastPressureSweepAt < pressureSweepIntervalMs) return;
+    lastPressureSweepAt = now;
+    const limitMiB = parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY));
+    const snapshot = inspectSqliteHardLimit(database.connection, limitMiB);
+    if (!sqliteLimitPressure(snapshot.allocatedBytes, snapshot.freeBytes, snapshot.requestedBytes)) return;
+    const days = parseIntegerSetting(settingsRepository.get('audit_routine_retention_days_v1') ?? undefined, 90, 1, 3650);
+    const cutoff = new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+    pressureSweep = (async (): Promise<void> => {
+      const hasRoutine = auditRepository.hasExpiredRoutineReadCandidates(cutoff);
+      let deletedTotal = 0;
+      // Each batch releases SQLite write locks and yields to MCP writers.
+      for (let batch = 0; hasRoutine && batch < 8; batch += 1) {
+        if (auditRetentionClosing) break;
+        const deleted = await auditRepository.purgeExpiredRoutineReads(cutoff);
+        deletedTotal += deleted;
+        if (deleted < 500) break;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+      if (deletedTotal > 0) console.log('[storage] hard-limit pressure pruned ' + deletedTotal + ' expired routine reads');
+      // Checkpoints are only eligible under the existing user-enabled
+      // retention policy with verified automatic backups and reference fences.
+      if (!auditRetentionClosing && settingsRepository.get('checkpoint_auto_retention_v1') === 'true'
+        && readSettings().autoBackupEnabled === true) {
+        await sweepRecoveryRetention(true);
+      }
+    })().catch((error: unknown) => {
+      console.error('SQLite pressure cleanup failed: ' + (error instanceof Error ? error.message : String(error)));
+    }).finally(() => { pressureSweep = null; });
+  }
+  const hardLimitTimer = setInterval(sweepHardLimitPressure, pressureSweepIntervalMs);
+  hardLimitTimer.unref?.();
+  void startupBackup.then(sweepHardLimitPressure);
+
+  let recoveryRetentionActive = false;
   async function sweepRecoveryRetention(force = false): Promise<void> {
     const retentionDays = readSettings().recoveryRetentionDays;
-    if (retentionDays <= 0) return;
+    if (retentionDays <= 0 || recoveryRetentionActive) return;
     const now = Date.now();
     if (!force && now - lastRecoveryRetentionSweepAt < recoveryRetentionSweepIntervalMs) return;
+    recoveryRetentionActive = true;
+    try {
     const cutoffIso = new Date(now - retentionDays * 24 * 60 * 60 * 1000).toISOString();
     // These two existing bounded cleanup categories do not remove checkpoints.
     const [trashDeleted, archivedBackupsDeleted] = await Promise.all([
@@ -1293,6 +1337,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     if (trashDeleted > 0 || checkpointsDeleted > 0 || archivedBackupsDeleted > 0) {
       console.log('[Recovery] retention=' + retentionDays + 'd purged trash=' + trashDeleted + ' checkpoints=' + checkpointsDeleted + ' archivedBackups=' + archivedBackupsDeleted);
     }
+    } finally { recoveryRetentionActive = false; }
   }
 
   function recordPersistentTunnelStatus(status: TunnelStatus): void {
@@ -2460,6 +2505,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     }
     auditRetentionClosing = true;
     clearInterval(auditRetentionTimer);
+    clearInterval(hardLimitTimer);
     logHub.stop();
     await mcpLifecycle.close();
     debugSessions.close();
@@ -2467,6 +2513,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     await workspaceIndex.close().catch(() => undefined);
     await startupBackup;
     if (auditRetentionSweep !== null) await auditRetentionSweep;
+    if (pressureSweep !== null) await pressureSweep;
     database.close();
   });
 
@@ -2501,13 +2548,18 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     // downgrade is safe until explicit metadata preparation completes.
     const hasCompressedV2 = checkpointStatus.hasCompressedV2;
     const checkpointMetadataIncomplete = !checkpointStatus.complete;
-    return { ...storageMaintenance.inspect(), usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete,
+    const limit = inspectSqliteHardLimit(database.connection, parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)));
+    return { ...storageMaintenance.inspect(), sqliteEffectiveHardLimitBytes: limit.effectiveBytes,
+      sqliteOverBudget: limit.allocatedBytes > limit.requestedBytes,
+      sqlitePressureHigh: sqliteLimitPressure(limit.allocatedBytes, limit.freeBytes, limit.requestedBytes),
+      usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete,
       policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const };
   }
 
   const storageMaintenance: StorageMaintenanceBackend = {
     getPolicy: () => ({
-      checkpointCreationMode: settingsRepository.get(checkpointCreationModeSettingKey) === 'git-aware' ? 'git-aware' : 'always',
+      checkpointCreationMode: settingsRepository.get(checkpointCreationModeSettingKey) === 'always' ? 'always' : 'git-aware',
+      sqliteHardLimitMiB: parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)),
       compressionEnabledOnNextStart: false,
       automaticCheckpointRetention: settingsRepository.get('checkpoint_auto_retention_v1') === 'true',
       auditPruneWithoutBackup: settingsRepository.get('audit_routine_prune_without_backup_v1') === 'true',
@@ -2519,6 +2571,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         (!Number.isSafeInteger(options.routineAuditRetentionDays) ||
           options.routineAuditRetentionDays < 1 || options.routineAuditRetentionDays > 3650)) {
         throw new Error('Invalid audit retention days');
+      }
+      if (options.sqliteHardLimitMiB !== undefined && (!Number.isSafeInteger(options.sqliteHardLimitMiB)
+        || options.sqliteHardLimitMiB < 512 || options.sqliteHardLimitMiB > 16384)) {
+        throw new Error('Invalid SQLite hard limit');
       }
       if (options.checkpointCreationMode !== undefined && options.checkpointCreationMode !== 'always' && options.checkpointCreationMode !== 'git-aware') {
         throw new Error('Invalid checkpoint creation mode');
@@ -2536,6 +2592,21 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       }
       if (options.checkpointCreationMode !== undefined) {
         settingsRepository.set(checkpointCreationModeSettingKey, options.checkpointCreationMode);
+      }
+      if (options.sqliteHardLimitMiB !== undefined) {
+        const previous = parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY));
+        // Raising a full database's cap must work even if persisting the
+        // policy itself would otherwise fail with SQLITE_FULL.
+        if (options.sqliteHardLimitMiB > previous) applySqliteHardLimit(database.connection, options.sqliteHardLimitMiB);
+        try {
+          settingsRepository.set(SQLITE_HARD_LIMIT_SETTING_KEY, String(options.sqliteHardLimitMiB));
+        } catch (error) {
+          database.syncHardLimit();
+          throw error;
+        }
+        database.syncHardLimit();
+        lastPressureSweepAt = 0;
+        sweepHardLimitPressure();
       }
       if (options.automaticCheckpointRetention !== undefined) {
         settingsRepository.set('checkpoint_auto_retention_v1', options.automaticCheckpointRetention ? 'true' : 'false');

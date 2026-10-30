@@ -17,7 +17,7 @@ describe('Desktop storage-maintenance backend', () => {
     const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41) });
     try {
       expect(runtime.storageMaintenance.getPolicy()).toEqual({
-        checkpointCreationMode: 'always', compressionEnabledOnNextStart: false, automaticCheckpointRetention: false,
+        checkpointCreationMode: 'git-aware', sqliteHardLimitMiB: 4096, compressionEnabledOnNextStart: false, automaticCheckpointRetention: false,
         auditPruneWithoutBackup: false, routineAuditRetentionDays: 90,
       });
       expect(() => runtime.storageMaintenance.configurePolicy({
@@ -39,6 +39,13 @@ describe('Desktop storage-maintenance backend', () => {
         userConfirmed: true, checkpointCreationMode: 'git-aware',
       })).toEqual({ restartRequired: false });
       expect(runtime.storageMaintenance.getPolicy().checkpointCreationMode).toBe('git-aware');
+      expect(() => runtime.storageMaintenance.configurePolicy({ userConfirmed: true, sqliteHardLimitMiB: 100 })).toThrow(/Invalid SQLite hard limit/);
+      expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, sqliteHardLimitMiB: 1024 })).toEqual({ restartRequired: false });
+      expect(runtime.storageMaintenance.getPolicy().sqliteHardLimitMiB).toBe(1024);
+      const limited = await runtime.services.getStorageOverview();
+      expect(limited.sqliteEffectiveHardLimitBytes).toBe(1024 ** 3);
+      expect(limited.sqliteOverBudget).toBe(false);
+      expect(limited.sqlitePressureHigh).toBe(false);
       expect(runtime.storageMaintenance.configurePolicy({
         userConfirmed: true, checkpointCreationMode: 'always',
       })).toEqual({ restartRequired: false });

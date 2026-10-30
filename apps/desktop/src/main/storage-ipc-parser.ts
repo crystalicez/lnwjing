@@ -18,7 +18,7 @@ function record(value: unknown, allowed: readonly string[]): Input {
 }
 
 export function parseSetStoragePolicyRequest(payload: unknown): SetStoragePolicyRequest {
-  const fields = ['userConfirmed', 'compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup', 'routineAuditRetentionDays', 'checkpointCreationMode'];
+  const fields = ['userConfirmed', 'compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup', 'routineAuditRetentionDays', 'checkpointCreationMode', 'sqliteHardLimitMiB'];
   const input = record(payload, fields);
   if (input.userConfirmed !== true) throw new Error('Storage policy change requires confirmation');
   for (const name of fields.slice(1, 4)) {
@@ -27,6 +27,10 @@ export function parseSetStoragePolicyRequest(payload: unknown): SetStoragePolicy
   if (input.checkpointCreationMode !== undefined && input.checkpointCreationMode !== 'always' && input.checkpointCreationMode !== 'git-aware') {
     throw new Error('Invalid checkpoint creation mode');
   }
+  if (input.sqliteHardLimitMiB !== undefined && (!Number.isSafeInteger(input.sqliteHardLimitMiB)
+    || (input.sqliteHardLimitMiB as number) < 512 || (input.sqliteHardLimitMiB as number) > 16384)) {
+    throw new Error('Invalid SQLite hard limit');
+  }
   const days = input.routineAuditRetentionDays;
   if (days !== undefined && (!Number.isSafeInteger(days) || (days as number) < 1 || (days as number) > 3650)) {
     throw new Error('Invalid routine audit retention');
@@ -34,6 +38,7 @@ export function parseSetStoragePolicyRequest(payload: unknown): SetStoragePolicy
   return {
     userConfirmed: true,
     ...(input.checkpointCreationMode === undefined ? {} : { checkpointCreationMode: input.checkpointCreationMode as 'always' | 'git-aware' }),
+    ...(input.sqliteHardLimitMiB === undefined ? {} : { sqliteHardLimitMiB: input.sqliteHardLimitMiB as number }),
     ...(input.compressionEnabledOnNextStart === undefined ? {} : { compressionEnabledOnNextStart: input.compressionEnabledOnNextStart as boolean }),
     ...(input.automaticCheckpointRetention === undefined ? {} : { automaticCheckpointRetention: input.automaticCheckpointRetention as boolean }),
     ...(input.auditPruneWithoutBackup === undefined ? {} : { auditPruneWithoutBackup: input.auditPruneWithoutBackup as boolean }),

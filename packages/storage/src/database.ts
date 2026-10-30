@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createPreMigrationBackupSync } from './backup-service.js';
+import { applySqliteHardLimit, parseSqliteHardLimitMiB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import { registerSqliteClientSync, releaseSqliteClientSync, type SqliteClientLease } from './sqlite-client-lease.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 import { AUDIT_MIGRATION_SQL } from './migrations/audit-migration.js';
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS settings (
 `;
 
 const CANONICAL_FILE_IDENTITY_CHECK_INTERVAL_MS = 1_000;
+const HARD_LIMIT_SETTING_SYNC_INTERVAL_MS = 10_000;
 const RESTORE_CLAIM_PREFIX = 'restore-pending.json.claim-';
 
 export class SqliteDatabase {
@@ -73,6 +75,8 @@ export class SqliteDatabase {
   private lastCanonicalIdentityCheckAt = 0;
   private refreshingCanonicalFile = false;
   private clientLease: SqliteClientLease | null = null;
+  private appliedHardLimitMiB: number | null = null;
+  private lastHardLimitCheckAt = 0;
 
   public constructor(private readonly filename: string, private readonly options: SqliteDatabaseOptions = {}) {
     const openCanonical = (): void => {
@@ -84,6 +88,7 @@ export class SqliteDatabase {
         this.assertNoConcurrentRestore();
         this.initPragmas(this._connection);
         this.initializeSchema();
+        this.syncHardLimit();
         this.canonicalFileIdentity = this.readCanonicalFileIdentity();
         if (filename !== ':memory:' && options.backupDirectory !== undefined) {
           this.clientLease = registerSqliteClientSync(options.backupDirectory);
@@ -131,6 +136,17 @@ export class SqliteDatabase {
       { id: '028_checkpoint_rollup_replace_fix', sql: CHECKPOINT_ROLLUP_REPLACE_MIGRATION_SQL },
       { id: '029_checkpoint_count_source_of_truth', sql: CHECKPOINT_COUNT_SOURCE_MIGRATION_SQL },
     ]);
+  }
+
+  /** Reapply after setting changes and canonical DB file replacements. */
+  public syncHardLimit(): ReturnType<typeof applySqliteHardLimit> {
+    const row = this._connection.prepare('SELECT value FROM settings WHERE key = ?')
+      .get(SQLITE_HARD_LIMIT_SETTING_KEY) as { value?: string } | undefined;
+    const limitMiB = parseSqliteHardLimitMiB(row?.value ?? null);
+    const result = applySqliteHardLimit(this._connection, limitMiB);
+    this.appliedHardLimitMiB = limitMiB;
+    this.lastHardLimitCheckAt = Date.now();
+    return result;
   }
 
   private ensureDirectory(): void {
@@ -201,6 +217,7 @@ export class SqliteDatabase {
       this.refreshingCanonicalFile = true;
       try {
         this.initializeSchema();
+        this.syncHardLimit();
       } catch (error) {
         this._connection = previous;
         this.preMigrationBackupCreated = previousBackupState;
@@ -221,6 +238,17 @@ export class SqliteDatabase {
   public get connection(): DatabaseSync {
     if (this.isClosed) throw new Error('SqliteDatabase is closed');
     this.refreshCanonicalConnectionIfNeeded();
+    // max_page_count is connection-local. Other live Desktop/STDIO clients
+    // must notice settings changes without reading SQLite every tool call.
+    const now = Date.now();
+    if (!this.refreshingCanonicalFile && this.appliedHardLimitMiB !== null
+      && now - this.lastHardLimitCheckAt >= HARD_LIMIT_SETTING_SYNC_INTERVAL_MS) {
+      this.lastHardLimitCheckAt = now;
+      const row = this._connection.prepare('SELECT value FROM settings WHERE key = ?')
+        .get(SQLITE_HARD_LIMIT_SETTING_KEY) as { value?: string } | undefined;
+      const updated = parseSqliteHardLimitMiB(row?.value ?? null);
+      if (updated !== this.appliedHardLimitMiB) this.syncHardLimit();
+    }
     return this._connection;
   }
 
