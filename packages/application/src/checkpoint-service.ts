@@ -36,6 +36,14 @@ export interface CheckpointSummary {
   }[];
 }
 
+/** Do not expose the cached objects to consumers that may mutate IPC results. */
+function copyCheckpointSummaries(summaries: readonly CheckpointSummary[]): CheckpointSummary[] {
+  return summaries.map((summary) => ({
+    ...summary,
+    files: summary.files.map((file) => ({ ...file })),
+  }));
+}
+
 export interface CheckpointServiceDependencies {
   readonly guard?: WorkspacePathGuard;
   readonly writer?: AtomicFileWriter;
@@ -52,6 +60,14 @@ export class CheckpointService implements CheckpointServicePort {
   private readonly permissionEngine: PermissionEngine;
   private readonly profileProvider: () => PermissionProfile;
   private readonly platform: NodeJS.Platform;
+  // One workspace only; this stores safe metadata, never file payloads.
+  private cachedRecoveryList: {
+    readonly workspaceId: string;
+    readonly limit: number;
+    readonly revision: number;
+    readonly connectionIdentity: object;
+    readonly summaries: readonly CheckpointSummary[];
+  } | null = null;
 
   public constructor(
     private readonly workspaces: WorkspaceRepository,
@@ -93,8 +109,16 @@ export class CheckpointService implements CheckpointServicePort {
   public async list(workspaceId: string, limit = 100): Promise<Result<readonly CheckpointSummary[]>> {
     const workspace = await this.getWorkspace(workspaceId);
     if (!workspace.ok) return workspace;
-    const checkpoints = await this.repository.list(workspaceId, limit);
-    return ok(checkpoints.map((checkpoint) => ({
+    const boundedLimit = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 500) : 100;
+    const before = this.repository.revisionSnapshot?.();
+    const cached = this.cachedRecoveryList;
+    if (before !== undefined && cached !== null && cached.workspaceId === workspaceId
+      && cached.limit === boundedLimit && cached.revision === before.revision
+      && cached.connectionIdentity === before.connectionIdentity) {
+      return ok(copyCheckpointSummaries(cached.summaries));
+    }
+    const checkpoints = await this.repository.list(workspaceId, boundedLimit);
+    const summaries = checkpoints.map((checkpoint) => ({
       id: checkpoint.id,
       workspaceId: checkpoint.workspaceId,
       createdAt: checkpoint.createdAt,
@@ -103,7 +127,16 @@ export class CheckpointService implements CheckpointServicePort {
         contentSha256: file.contentSha256,
         size: file.size,
       })),
-    })));
+    }));
+    const after = this.repository.revisionSnapshot?.();
+    // No cached results when a different writer modified checkpoint state
+    // during this read. A later dashboard request will fetch authoritative data.
+    this.cachedRecoveryList = before !== undefined && after !== undefined
+      && before.revision === after.revision && before.connectionIdentity === after.connectionIdentity
+      ? { workspaceId, limit: boundedLimit, revision: after.revision,
+        connectionIdentity: after.connectionIdentity, summaries }
+      : null;
+    return ok(copyCheckpointSummaries(summaries));
   }
 
   public async restore(

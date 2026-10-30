@@ -18,6 +18,17 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     readonly revision: number;
   } | null = null;
 
+  /** Invalidate metadata-only recovery lists across writers and DB restores. */
+  public revisionSnapshot(): { readonly connectionIdentity: object; readonly revision: number } {
+    const connection = this.database.connection;
+    const revision = (connection.prepare('SELECT revision FROM checkpoint_storage_revision WHERE id = 1')
+      .get() as { revision: number } | undefined)?.revision;
+    if (revision === undefined || !Number.isSafeInteger(revision)) {
+      throw new Error('Checkpoint revision is unavailable or invalid');
+    }
+    return { connectionIdentity: connection, revision };
+  }
+
   private checkpointByteState(): { readonly bytes: number; readonly revision: number } {
     const connection = this.database.connection;
     // SQLite triggers increment this one-row stamp only for checkpoint-table

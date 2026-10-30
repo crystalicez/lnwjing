@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { appError, err, type Result } from '@lnwjing/domain';
 import { AtomicFileWriter, type AtomicWriteOptions } from '@lnwjing/filesystem';
 import { permissionProfiles, type PermissionProfile, type PermissionProfileName } from '@lnwjing/permissions';
@@ -104,6 +104,50 @@ describe('CheckpointService', () => {
       files: [{ path: path.join('src', 'file.txt'), size: Buffer.byteLength('secret-before-content'), contentSha256: expect.any(String) }],
     }] });
     expect(JSON.stringify(listed)).not.toContain('secret-before-content');
+  });
+
+  it('caches only recovery metadata until checkpoint revision or connection identity changes', async () => {
+    const { workspace } = await setup();
+    class VersionedCheckpoints extends MemoryCheckpointRepository {
+      public generation: object = {};
+      public version = 0;
+      public revisionSnapshot(): { readonly connectionIdentity: object; readonly revision: number } {
+        return { connectionIdentity: this.generation, revision: this.version };
+      }
+      public override async insert(value: Checkpoint): Promise<void> {
+        await super.insert(value);
+        this.version += 1;
+      }
+    }
+    const checkpoints = new VersionedCheckpoints();
+    const makeCheckpoint = (id: string): Checkpoint => ({
+      id, workspaceId: workspace.id, createdAt: new Date(0).toISOString(),
+      files: [{ path: 'src/file.txt', content: 'private payload', contentSha256: 'hash', size: 15 }],
+    });
+    await checkpoints.insert(makeCheckpoint('first'));
+    const fetch = vi.spyOn(checkpoints, 'list');
+    const service = new CheckpointService(workspaces(workspace), checkpoints);
+    const first = await service.list(workspace.id);
+    expect(first).toMatchObject({ ok: true, value: [{ id: 'first' }] });
+    expect(JSON.stringify(first)).not.toContain('private payload');
+    if (first.ok && first.value[0]) {
+      (first.value[0] as { id: string }).id = 'caller-mutation';
+      const firstFile = first.value[0].files[0];
+      if (firstFile) (firstFile as { path: string }).path = 'caller-mutated-path';
+    }
+    const secondRead = await service.list(workspace.id);
+    expect(secondRead).toMatchObject({ ok: true, value: [{ id: 'first', files: [{ path: 'src/file.txt' }] }] });
+    await service.list(workspace.id);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await checkpoints.insert(makeCheckpoint('second'));
+    expect(await service.list(workspace.id)).toMatchObject({ ok: true, value: [{ id: 'first' }, { id: 'second' }] });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    checkpoints.generation = {};
+    await service.list(workspace.id);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    await service.list(workspace.id, 1);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
   it('uses the current permission profile when restoring without an explicit override', async () => {

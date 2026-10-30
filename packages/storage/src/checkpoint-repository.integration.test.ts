@@ -552,6 +552,29 @@ describe('SqliteCheckpointRepository', () => {
     } finally { db.close(); }
   });
 
+  it('exposes a cheap revision token that follows raw writes but not unrelated settings', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repository = new SqliteCheckpointRepository(database);
+      const first = repository.revisionSnapshot();
+      database.connection.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('unrelated', 'value');
+      const unchanged = repository.revisionSnapshot();
+      expect(unchanged.revision).toBe(first.revision);
+      expect(unchanged.connectionIdentity).toBe(first.connectionIdentity);
+      const checkpoint = fixtureCheckpoint('token-example');
+      await repository.insert(checkpoint);
+      const inserted = repository.revisionSnapshot();
+      expect(inserted.revision).toBeGreaterThan(unchanged.revision);
+      expect(inserted.connectionIdentity).toBe(first.connectionIdentity);
+      const row = database.connection.prepare('SELECT files_json AS payload FROM checkpoints WHERE id = ?')
+        .get(checkpoint.id) as { payload: string };
+      database.connection.prepare('UPDATE checkpoints SET files_json = ? WHERE id = ?')
+        .run(row.payload, checkpoint.id);
+      expect(repository.revisionSnapshot().revision).toBeGreaterThan(inserted.revision);
+    } finally { database.close(); }
+  });
+
   it('encrypts checkpoint file content at rest with AES-256-GCM', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));

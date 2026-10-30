@@ -35,6 +35,8 @@ export interface Checkpoint {
 }
 
 export interface CheckpointRepository {
+  /** Optional durable revision token for cache-safe metadata-only recovery lists. */
+  revisionSnapshot?(): { readonly connectionIdentity: object; readonly revision: number };
   insert(checkpoint: Checkpoint): Promise<void>;
   get(id: string): Promise<Checkpoint | null>;
   list(workspaceId: WorkspaceId, limit?: number): Promise<Checkpoint[]>;
