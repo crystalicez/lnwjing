@@ -38,7 +38,10 @@ async function readPackagedProcessCounters(executable: string): Promise<ProcessR
 test('packaged Windows Desktop stays bounded during an isolated idle interval', async () => {
   test.skip(process.platform !== 'win32' || !packagedExecutable
     || process.env.LNWJING_MEASURE_IDLE_RESOURCES !== '1', 'Explicit packaged Windows idle benchmark opt-in required');
-  test.setTimeout(90_000);
+  const requestedSampleSeconds = Number(process.env.LNWJING_IDLE_SAMPLE_SECONDS ?? '10');
+  const sampleSeconds = Number.isFinite(requestedSampleSeconds)
+    ? Math.min(120, Math.max(5, Math.floor(requestedSampleSeconds))) : 10;
+  test.setTimeout(80_000 + sampleSeconds * 1_000);
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-idle-e2e-'));
   let app: ElectronApplication | undefined;
   try {
@@ -57,7 +60,7 @@ test('packaged Windows Desktop stays bounded during an isolated idle interval', 
     const before = await readPackagedProcessCounters(packagedExecutable!);
     expect(before.length).toBeGreaterThan(0);
     const started = Date.now();
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    await new Promise((resolve) => setTimeout(resolve, sampleSeconds * 1_000));
     const duration = (Date.now() - started) / 1000;
     const after = await readPackagedProcessCounters(packagedExecutable!);
     const previous = new Map(before.map((row) => [row.pid, row]));
