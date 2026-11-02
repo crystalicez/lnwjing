@@ -1696,7 +1696,10 @@ function searchActivityTargetDetails(request: SearchActivityTargetDetailsRequest
   }
   const candidates = request.candidates.map((candidate) => {
     if (!isRecord(candidate) || typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 1_024 || (candidate.detailRef !== null && typeof candidate.detailRef !== 'string')) throw new Error('Invalid IPC request');
-    return { id: candidate.id, detailRef: candidate.detailRef };
+    if (candidate.workspaceId !== undefined && candidate.workspaceId !== null
+      && (typeof candidate.workspaceId !== 'string' || candidate.workspaceId.length === 0 || candidate.workspaceId.length > 4_096)) throw new Error('Invalid IPC request');
+    return { id: candidate.id, detailRef: candidate.detailRef,
+      ...(candidate.workspaceId === undefined ? {} : { workspaceId: candidate.workspaceId }) };
   });
   return invoke(ipcChannels.searchActivityTargetDetails, { query: request.query.trim(), candidates }).then((value: unknown) => {
     if (!isRecord(value)) throw new Error('Invalid IPC response');

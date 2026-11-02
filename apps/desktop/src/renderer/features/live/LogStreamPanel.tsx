@@ -107,7 +107,7 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
       const candidates = searchCandidates.flatMap((line) => {
         const detailRef = detailRefForLine(line);
         if (detailRef === null || line.text.toLocaleLowerCase().includes(query)) return [];
-        return [{ id: liveLineIdentity(line), detailRef }];
+        return [{ id: liveLineIdentity(line), detailRef, workspaceId: line.workspaceId }];
       });
       if (candidates.length === 0) {
         dispatchDetailSearch({ type: 'success', generation, query, matchingIds: [] });

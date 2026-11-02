@@ -397,6 +397,105 @@ export class SqliteAuditRepository implements AuditEventRepository {
     return toActivityEvent(row);
   }
 
+  /**
+   * Exact Work Log event lookups use the audit_events PRIMARY KEY instead of
+   * scanning the entire historical audit table. The result distinguishes an
+   * event with retained detail (even if it does not match) from a missing or
+   * legacy event whose call reference needs the fallback lookup.
+   */
+  public async activityTargetEventIdsMatching(events: readonly { readonly id: string; readonly detailRef: string }[], query: string): Promise<{
+    readonly checked: ReadonlySet<string>;
+    readonly matched: ReadonlySet<string>;
+  }> {
+    const needle = query.trim().toLocaleLowerCase();
+    const requested = [...new Map(events.filter((event) => event.id.length > 0 && event.id.length <= 512)
+      .map((event) => [event.id, event] as const)).values()];
+    const checked = new Set<string>();
+    const matched = new Set<string>();
+    if (needle.length === 0 || needle.length > 512) return { checked, matched };
+    const statement = this.database.connection.prepare(
+      `SELECT id, workspace_id, json_extract(metadata_json, '$.callId') AS call_id,
+         json_type(metadata_json, '$.activityTargetDetail.items') AS item_type,
+         EXISTS (
+           SELECT 1 FROM json_each(metadata_json, '$.activityTargetDetail.items') AS item
+           WHERE typeof(item.value) = 'text' AND instr(lower(item.value), ?) > 0
+         ) AS is_match
+       FROM audit_events WHERE id IN (SELECT value FROM json_each(?))`,
+    );
+    const related = this.database.connection.prepare(
+      `SELECT 1 FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation
+       WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?
+         AND json_extract(metadata_json, '$.phase') = ?
+         AND EXISTS (
+           SELECT 1 FROM json_each(metadata_json, '$.activityTargetDetail.items') AS item
+           WHERE typeof(item.value) = 'text' AND instr(lower(item.value), ?) > 0
+         ) LIMIT 1`,
+    );
+    const refById = new Map(requested.map((event) => [event.id, event.detailRef]));
+    for (let offset = 0; offset < requested.length; offset += 100) {
+      const rows = statement.all(needle, JSON.stringify(requested.slice(offset, offset + 100).map((event) => event.id)));
+      for (const row of rows) {
+        if (!isRecord(row) || typeof row.id !== 'string') continue;
+        if (row.item_type === 'array') {
+          checked.add(row.id);
+          if (row.is_match === 1) matched.add(row.id);
+          continue;
+        }
+        // Completion rows may point to the started event's retained detail.
+        // The existing workspace+callId expression index resolves them without
+        // a historical audit scan or any new persistent index.
+        const detailRef = refById.get(row.id);
+        const callId = typeof row.call_id === 'string' ? row.call_id : null;
+        const workspaceId = typeof row.workspace_id === 'string' || row.workspace_id === null
+          ? row.workspace_id : undefined;
+        if (detailRef === undefined || callId === null || workspaceId === undefined) continue;
+        const phase = detailRef.endsWith(':completed') ? 'completed' : 'started';
+        checked.add(row.id);
+        if (related.get(workspaceId, callId, phase, needle) !== undefined) matched.add(row.id);
+      }
+      if (offset + 100 < requested.length) await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    return { checked, matched };
+  }
+
+  /**
+   * Resolve in-flight / live log references through the existing
+   * workspace+callId index. Never scan every audit row on the UI's text input.
+   * Return renderer-owned IDs, not call IDs, to keep scopes isolated.
+   */
+  public async activityTargetScopedRefsMatching(
+    candidates: readonly { readonly id: string; readonly detailRef: string; readonly workspaceId: string | null }[],
+    query: string,
+  ): Promise<ReadonlySet<string>> {
+    const needle = query.trim().toLocaleLowerCase();
+    const matches = new Set<string>();
+    if (!needle || needle.length > 512) return matches;
+    const statement = this.database.connection.prepare(
+      `SELECT 1 FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation
+       WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?
+         AND json_extract(metadata_json, '$.phase') = ?
+         AND EXISTS (
+           SELECT 1 FROM json_each(metadata_json, '$.activityTargetDetail.items') AS item
+           WHERE typeof(item.value) = 'text' AND instr(lower(item.value), ?) > 0
+         ) LIMIT 1`,
+    );
+    for (let i = 0; i < candidates.length; i += 1) {
+      const candidate = candidates[i]!;
+      const suffix = ':completed';
+      const phase = candidate.detailRef.endsWith(suffix) ? 'completed' : 'started';
+      const callId = phase === 'completed'
+        ? candidate.detailRef.slice(0, -suffix.length) : candidate.detailRef;
+      if (callId && statement.get(candidate.workspaceId, callId, phase, needle) !== undefined) {
+        matches.add(candidate.id);
+      }
+      // Yield to the Electron event loop before another bounded index batch.
+      if ((i + 1) % 32 === 0 && i + 1 < candidates.length) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+    return matches;
+  }
+
   /** Searches full retained items in SQLite and returns no detail content to the caller. */
   public async activityTargetDetailMatches(detailRef: string, query: string): Promise<boolean> {
     return (await this.activityTargetDetailsMatching([detailRef], query)).has(detailRef);

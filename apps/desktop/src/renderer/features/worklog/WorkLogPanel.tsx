@@ -104,19 +104,22 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
     () => newestFirstWorkLogRows(feed.entries, feed.inFlight, props.filter, '', scope, feed.workspaces),
     [feed, props.filter, scope],
   );
+  const searchableCandidates = useMemo(() => candidates.map((row) => ({ row, searchText: workLogSearchText(row) })), [candidates]);
   useEffect(() => {
     const query = normalizeDetailSearchQuery(deferredSearch);
     const generation = ++detailSearchGeneration.current;
-    if (query.length === 0 || props.onSearchTargetDetails === undefined) {
+    // A single character filters cached summaries immediately; deep SQLite
+    // search starts after two characters to prevent broad first-key I/O.
+    if (query.length < 2 || props.onSearchTargetDetails === undefined) {
       dispatchDetailSearch({ type: 'reset', generation });
       return;
     }
     dispatchDetailSearch({ type: 'start', generation, query });
     const timeout = window.setTimeout(() => {
-      const searchCandidates = candidates.flatMap((row) => {
+      const searchCandidates = searchableCandidates.flatMap(({ row, searchText }) => {
         const detailRef = row.item.targetDetail.detailRef;
-        if (detailRef === null || workLogSearchText(row).includes(query)) return [];
-        return [{ id: workLogRowIdentity(row), detailRef }];
+        if (detailRef === null || searchText.includes(query)) return [];
+        return [{ id: workLogRowIdentity(row), detailRef, workspaceId: row.item.workspaceId }];
       });
       if (searchCandidates.length === 0) {
         dispatchDetailSearch({ type: 'success', generation, query, matchingIds: [] });
@@ -129,12 +132,15 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
       });
     }, 180);
     return (): void => window.clearTimeout(timeout);
-  }, [candidates, props.onSearchTargetDetails, deferredSearch]);
+  }, [searchableCandidates, props.onSearchTargetDetails, deferredSearch]);
   const hiddenMatches = activeDetailMatchIds(detailSearchState, deferredSearch);
-  const rows = useMemo(
-    () => newestFirstWorkLogRows(feed.entries, feed.inFlight, props.filter, deferredSearch, scope, feed.workspaces, hiddenMatches),
-    [feed, props.filter, deferredSearch, scope, hiddenMatches],
-  );
+  // Reuse the already-sorted candidates. A keypress never sorts the audit feed.
+  const rows = useMemo(() => {
+    const needle = normalizeDetailSearchQuery(deferredSearch);
+    if (!needle) return candidates;
+    return searchableCandidates.filter(({ row, searchText }) =>
+      searchText.includes(needle) || hiddenMatches.has(workLogRowIdentity(row))).map(({ row }) => row);
+  }, [candidates, searchableCandidates, deferredSearch, hiddenMatches]);
   useEffect(() => setVisibleCount(PROGRESSIVE_PAGE_SIZE), [props.filter, search, workspaceId, sessionId]);
   const visible = props.compact ? rows.slice(0, 40) : rows.slice(0, visibleCount);
   const resolvedTargets = useMemo(() => completedTargetByCallId(feed.entries), [feed]);

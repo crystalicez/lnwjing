@@ -265,6 +265,11 @@ describe('production desktop IPC acceptance', () => {
     await expect(requiredHandler(ipcChannels.clearLogBuffer)(trusted, { source: 'mcp', sessionId: '' })).rejects.toThrow(/sessionId/);
     await expect(requiredHandler(ipcChannels.resolveActivityTargetDetail)(trusted, { detailRef: 'call-9' })).resolves.toEqual({ status: 'unavailable', detail: null });
     await expect(requiredHandler(ipcChannels.searchActivityTargetDetails)(trusted, { query: 'needle', candidates: [{ id: 'audit:event-9', detailRef: 'call-9' }] })).resolves.toEqual({ matchingIds: [] });
+    await expect(requiredHandler(ipcChannels.searchActivityTargetDetails)(trusted, { query: 'needle', candidates: [{ id: 'inflight:call-9', detailRef: 'call-9', workspaceId: 'ws-a' }] })).resolves.toEqual({ matchingIds: [] });
+    expect(services.searchActivityTargetDetails).toHaveBeenCalledWith([
+      { id: 'inflight:call-9', detailRef: 'call-9', workspaceId: 'ws-a' },
+    ], 'needle');
+    await expect(requiredHandler(ipcChannels.searchActivityTargetDetails)(trusted, { query: 'needle', candidates: [{ id: 'inflight:call-9', detailRef: 'call-9', workspaceId: '' }] })).rejects.toThrow(/workspaceId/);
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, { source: 'mcp', filePath: '', workspaceId: 'ws-a', sessionId: 'session-a', query: 'needle', lines: [{ lineId: 9, correlationRef: 'call-9' }, { lineId: 4, correlationRef: null }] })).resolves.toEqual({ exported: false });
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, { source: 'mcp', filePath: '', workspaceId: '' })).rejects.toThrow(/workspaceId/);
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, { source: 'mcp', filePath: '', lines: [{ lineId: 0, correlationRef: null }] })).rejects.toThrow(/lines/);

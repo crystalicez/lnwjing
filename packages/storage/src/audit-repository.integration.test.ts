@@ -314,6 +314,48 @@ describe('SqliteAuditRepository', () => {
     database.close();
   });
 
+  it('uses indexed event IDs and the existing workspace-call index to search Work Log details', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-index-search-'));
+    temporaryRoots.push(root);
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repository = new SqliteAuditRepository(database);
+      const base = {
+        actorId: 'test', actorName: 'test', workspaceId: 'workspace-a',
+        action: 'mcp_tool:read_file', resultCode: 'SUCCESS', durationMs: 0,
+      } as const;
+      await repository.insert({
+        ...base, id: 'started-indexed', timestamp: '2026-08-20T00:00:00.000Z',
+        metadata: { callId: 'same-call', phase: 'started',
+          activityTargetDetail: { kind: 'files', items: ['secret-index-needle.ts'] } },
+      });
+      await repository.insert({
+        ...base, id: 'completed-indexed', timestamp: '2026-08-20T00:00:01.000Z',
+        metadata: { callId: 'same-call', phase: 'completed' },
+      });
+      const scoped = await repository.activityTargetScopedRefsMatching([
+        { id: 'inflight:scoped-a', detailRef: 'same-call', workspaceId: 'workspace-a' },
+        { id: 'inflight:wrong-scope', detailRef: 'same-call', workspaceId: 'workspace-b' },
+      ], 'secret-index');
+      expect(scoped).toEqual(new Set(['inflight:scoped-a']));
+      const matches = await repository.activityTargetEventIdsMatching([
+        { id: 'started-indexed', detailRef: 'same-call' },
+        { id: 'completed-indexed', detailRef: 'same-call' },
+        { id: 'not-present', detailRef: 'missing' },
+      ], 'secret-index');
+      expect(matches.checked).toEqual(new Set(['started-indexed', 'completed-indexed']));
+      expect(matches.matched).toEqual(new Set(['started-indexed', 'completed-indexed']));
+      const plan = database.connection.prepare(
+        "EXPLAIN QUERY PLAN SELECT id FROM audit_events WHERE id IN (SELECT value FROM json_each(?))",
+      ).all(JSON.stringify(['started-indexed'])) as { detail: string }[];
+      expect(plan.some((row) => /SEARCH audit_events USING INDEX|SEARCH audit_events USING COVERING INDEX/.test(row.detail))).toBe(true);
+      const secondaryPlan = database.connection.prepare(
+        "EXPLAIN QUERY PLAN SELECT 1 FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?",
+      ).all('workspace-a', 'same-call') as { detail: string }[];
+      expect(secondaryPlan.some((row) => row.detail.includes('idx_audit_calls_workspace_correlation'))).toBe(true);
+    } finally { database.close(); }
+  });
+
   it('batch-searches retained target detail by call id, event id, and completed reference', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-detail-search-db-'));
     temporaryRoots.push(root);

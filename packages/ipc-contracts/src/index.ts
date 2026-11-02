@@ -449,6 +449,8 @@ export interface ActivityTargetSearchCandidate {
   /** Renderer-owned stable row/line identity; returned verbatim on a match. */
   readonly id: string;
   readonly detailRef: string | null;
+  /** Present for indexed lookups without historical audit-table scans. */
+  readonly workspaceId?: string | null;
 }
 
 export interface SearchActivityTargetDetailsRequest {

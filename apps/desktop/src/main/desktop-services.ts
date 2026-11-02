@@ -3592,10 +3592,32 @@ export async function searchActivityTargetDetails(
 ): Promise<readonly string[]> {
   const needle = query.trim();
   if (needle.length === 0) return [];
-  const detailRefs = [...new Set(candidates.flatMap((candidate) => candidate.detailRef === null ? [] : [candidate.detailRef]))];
-  if (detailRefs.length === 0) return [];
-  const matchingRefs = await repository.activityTargetDetailsMatching(detailRefs, needle);
-  return candidates.flatMap((candidate) => candidate.detailRef !== null && matchingRefs.has(candidate.detailRef) ? [candidate.id] : []);
+  // Work Log audit IDs address exact retained events. Resolve those using the
+  // audit_events PRIMARY KEY instead of a full-table JSON scan on every key.
+  const exact = candidates.filter((candidate) => candidate.id.startsWith('audit:') && candidate.detailRef !== null);
+  const found = exact.length > 0 && typeof repository.activityTargetEventIdsMatching === 'function'
+    ? await repository.activityTargetEventIdsMatching(exact.map((candidate) => ({
+      id: candidate.id.slice('audit:'.length), detailRef: candidate.detailRef!,
+    })), needle)
+    : { checked: new Set<string>(), matched: new Set<string>() };
+  const fallback = candidates.filter((candidate) => candidate.detailRef !== null
+    && !found.checked.has(candidate.id.slice('audit:'.length)));
+  const scoped = fallback.filter((candidate): candidate is ActivityTargetSearchCandidate & {
+    readonly detailRef: string; readonly workspaceId: string | null;
+  } => candidate.detailRef !== null && candidate.workspaceId !== undefined);
+  const matchingScopedIds = scoped.length === 0 ? new Set<string>()
+    : await repository.activityTargetScopedRefsMatching(scoped, needle);
+  // Old senders without a workspace scope retain backward-compatible search.
+  // All current Work Log / MCP Live Logs send scopes and take indexed paths.
+  const unscoped = fallback.filter((candidate) => candidate.workspaceId === undefined);
+  const detailRefs = [...new Set(unscoped.flatMap((candidate) => candidate.detailRef === null ? [] : [candidate.detailRef]))];
+  const matchingRefs = detailRefs.length === 0
+    ? new Set<string>() : await repository.activityTargetDetailsMatching(detailRefs, needle);
+  return candidates.flatMap((candidate) => (
+    found.matched.has(candidate.id.slice('audit:'.length))
+    || matchingScopedIds.has(candidate.id)
+    || (candidate.workspaceId === undefined && candidate.detailRef !== null && matchingRefs.has(candidate.detailRef))
+  ) ? [candidate.id] : []);
 }
 
 export async function resolveWorkLogExportRows(

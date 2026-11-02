@@ -47,6 +47,28 @@ describe('complete log detail resolution and export', () => {
     fixture.database.close();
   });
 
+  it('uses primary-key Work Log lookup and avoids the expensive legacy JSON scan for retained events', async () => {
+    const search = (desktopServices as unknown as { searchActivityTargetDetails?: SearchTargetDetails }).searchActivityTargetDetails!;
+    const calls: string[] = [];
+    const repository = {
+      activityTargetEventIdsMatching: async (events: readonly { id: string; detailRef: string }[]): Promise<{
+        checked: ReadonlySet<string>; matched: ReadonlySet<string>;
+      }> => {
+        calls.push('indexed:' + events.length);
+        return { checked: new Set(events.map((event) => event.id)), matched: new Set(['event-3']) };
+      },
+      activityTargetDetailsMatching: async (): Promise<ReadonlySet<string>> => {
+        calls.push('legacy-full-scan');
+        return new Set();
+      },
+    } as unknown as SqliteAuditRepository;
+    const matches = await search(repository, Array.from({ length: 500 }, (_, index) => ({
+      id: `audit:event-${index}`, detailRef: `call-${index}`,
+    })), 'needle');
+    expect(matches).toEqual(['audit:event-3']);
+    expect(calls).toEqual(['indexed:500']);
+  });
+
   it('searches a large candidate set with one batched repository operation instead of one SQLite lookup per row', async () => {
     const search = (desktopServices as unknown as { searchActivityTargetDetails?: SearchTargetDetails }).searchActivityTargetDetails;
     expect(typeof search).toBe('function');

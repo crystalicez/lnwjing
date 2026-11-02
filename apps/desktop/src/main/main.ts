@@ -1190,7 +1190,10 @@ function parseSearchActivityTargetDetailsRequest(payload: unknown): { readonly q
   const candidates = payload.candidates.map((candidate): ActivityTargetSearchCandidate => {
     if (!isRecord(candidate)) throw new Error('Invalid IPC payload: candidates');
     const detailRef = candidate.detailRef === null ? null : boundedNonEmptyString(candidate.detailRef, 'detailRef', 512);
-    return { id: boundedNonEmptyString(candidate.id, 'id', 1_024), detailRef };
+    const workspaceId = candidate.workspaceId === undefined ? undefined : candidate.workspaceId === null
+      ? null : boundedNonEmptyString(candidate.workspaceId, 'workspaceId', 4_096);
+    return { id: boundedNonEmptyString(candidate.id, 'id', 1_024), detailRef,
+      ...(workspaceId === undefined ? {} : { workspaceId }) };
   });
   return { query, candidates };
 }

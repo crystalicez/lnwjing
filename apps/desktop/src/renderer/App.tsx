@@ -31,6 +31,7 @@ import { WorkflowsPage } from './features/workflows/WorkflowsPage.js';
 import { GlobalInstallProgressModal } from './features/shell/GlobalInstallProgressModal.js';
 import { ControlCenterPage } from './features/home/ControlCenterPage.js';
 import { ProjectsPage } from './features/projects/ProjectsPage.js';
+import { ActiveProjectsPage } from './features/projects/ActiveProjectsPage.js';
 import { GitPage } from './features/git/GitPage.js';
 import { WorkLogPage } from './features/worklog/WorkLogPage.js';
 import { LiveLogsPage } from './features/live/LiveLogsPage.js';
@@ -58,6 +59,9 @@ const MAX_CLIENT_LOG_LINES = 30_000;
 
 export function App(): ReactElement {
   const [screen, setScreen] = useState<Screen>('home');
+  const activeProjectsVisibleRef = useRef(false);
+  const activeProjectsRefreshTimer = useRef<number | null>(null);
+  const refreshActiveProjectsRef = useRef<() => void>(() => undefined);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
   const [workspaces, setWorkspaces] = useState<readonly WorkspaceSummary[]>([]);
   const [doctor, setDoctor] = useState<DoctorReport | null>(null);
@@ -171,6 +175,15 @@ export function App(): ReactElement {
     const unsubscribe = window.lnwjing.onLogEvent((line) => {
       appendLogLine(line);
       if (line.source === 'tunnel') setTunnelLogExists(true);
+      // Refresh Running/Recent status on observed MCP events only while the
+      // Active Projects view is open; no new timer-based disk polling.
+      if (activeProjectsVisibleRef.current && line.correlation?.kind === 'mcp'
+        && activeProjectsRefreshTimer.current === null) {
+        activeProjectsRefreshTimer.current = window.setTimeout(() => {
+          activeProjectsRefreshTimer.current = null;
+          if (activeProjectsVisibleRef.current) refreshActiveProjectsRef.current();
+        }, 750);
+      }
     });
     return (): void => {
       disposed = true;
@@ -180,6 +193,10 @@ export function App(): ReactElement {
         logFlushTimer.current = null;
       }
       pendingLogLines.current = [];
+      if (activeProjectsRefreshTimer.current !== null) {
+        window.clearTimeout(activeProjectsRefreshTimer.current);
+        activeProjectsRefreshTimer.current = null;
+      }
     };
   }, [appendLogLine]);
 
@@ -287,6 +304,8 @@ export function App(): ReactElement {
       refreshBusyRef.current = false;
     }
   }, [locale]);
+  refreshActiveProjectsRef.current = (): void => { void refresh(); };
+  useEffect(() => { activeProjectsVisibleRef.current = screen === 'active-projects'; }, [screen]);
 
   useEffect(() => {
     if (updateStatus?.phase === 'installing') {
@@ -942,7 +961,7 @@ export function App(): ReactElement {
         const target = startupDoctorNavigationTarget(startupDoctorReady, nextScreen);
         if (target === 'settings') setRequestedSettingsSection(undefined);
         setScreen(target);
-        if (target === 'worklog') void refresh();
+        if (target === 'worklog' || target === 'active-projects') void refresh();
         if (target === 'tools') void loadToolCatalog(['external_mcp_connection']);
       }}
       onLocaleChange={(next) => { void changeLocale(next); }}
@@ -990,6 +1009,10 @@ export function App(): ReactElement {
           onSetWorkspaceArchived={setWorkspaceArchived}
           onDeleteWorkspace={deleteWorkspace}
         />
+      ) : null}
+      {screen === 'active-projects' ? (
+        <ActiveProjectsPage locale={locale} dashboard={dashboard} workspaces={workspaces}
+          onSelectWorkspace={selectWorkspace} onOpenProjects={() => setScreen('projects')} />
       ) : null}
       {screen === 'tools' ? (
         <ToolsPage

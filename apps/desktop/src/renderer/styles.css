@@ -842,6 +842,26 @@ button.titlebar-whats-new {
   letter-spacing: 0.05em;
 }
 
+/* Active Projects: passive view of enabled MCP scopes and in-flight calls. */
+.active-projects-overview { min-height: 0; }
+.active-projects-running-total { color: var(--gold-bright); font-weight: 700; }
+.active-projects-list { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
+.active-projects-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: rgba(7, 12, 18, .55); }
+.active-projects-info { min-width: 0; }
+.active-projects-info p { margin: 5px 0; color: var(--muted); overflow-wrap: anywhere; }
+.active-projects-info small { color: var(--muted); }
+.active-projects-name { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.active-projects-name > strong { overflow-wrap: anywhere; }
+.active-projects-state { font-size: 12px; border-radius: 999px; padding: 3px 8px; background: rgba(100, 120, 140, .11); display: inline-flex; align-items: center; gap: 6px; }
+.active-projects-dot { width: 7px; height: 7px; border-radius: 50%; background: #8193a6; }
+.active-projects-state.running { color: #70d8ff; }
+.active-projects-state.running .active-projects-dot { background: #45bdf5; }
+.active-projects-state.recent { color: #78dfa8; }
+.active-projects-state.recent .active-projects-dot { background: #55d895; }
+.active-projects-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
+.active-projects-empty { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+@media (max-width: 750px) { .active-projects-item { align-items: flex-start; flex-direction: column; } }
+
 /* Work Log & Terminal Stream */
 .worklog-panel {
   display: flex;
