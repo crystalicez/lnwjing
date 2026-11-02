@@ -10,7 +10,7 @@ import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('Work Log first keystroke remains responsive and Active Projects shows real active scopes', async () => {
+test('Work Log first keystroke remains responsive and Running Projects shows real active scopes', async () => {
   test.setTimeout(90_000);
   const data = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-search-speed-'));
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-search-workspace-'));
@@ -67,8 +67,8 @@ test('Work Log first keystroke remains responsive and Active Projects shows real
     });
     const page = await app.firstWindow();
     await settleFirstRunAndOpenHome(page);
-    await page.getByRole('button', { name: 'Active Projects' }).click();
-    await expect(page.getByRole('heading', { name: 'Active Projects' })).toBeVisible();
+    await page.getByRole('button', { name: 'Running Projects' }).click();
+    await expect(page.getByRole('heading', { name: 'Running Projects' })).toBeVisible();
     await expect(page.locator('.active-projects-list .active-projects-item')).toHaveCount(1);
     await expect(page.locator('.active-projects-name')).toContainText(/Running|Recent|Ready/);
     await page.locator('.sidebar-nav button').filter({ hasText: /บันทึกการทำงาน|Work Log/ }).click();

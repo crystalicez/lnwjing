@@ -68,7 +68,7 @@ describe('Active Projects dashboard', () => {
       onLocaleChange: () => {}, onUpdateAction: () => {},
       children: createElement('div', null, page),
     }));
-    expect(shell).toContain('Active Projects');
+    expect(shell).toContain('Running Projects');
     expect(shell).toContain('nav-item active');
     vi.useRealTimers();
   });
