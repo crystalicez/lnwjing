@@ -30,6 +30,27 @@ describe('SqliteCheckpointRepository', () => {
     } finally { database.close(); }
   });
 
+  it('does not consume the remaining SQLite audit headroom for a quota-admitted checkpoint', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      database.connection.exec('CREATE TABLE protected_payload (payload BLOB NOT NULL)');
+      database.connection.prepare('INSERT INTO protected_payload VALUES (zeroblob(?))').run(1024 ** 2);
+      const pageCount = Number(database.connection.prepare('PRAGMA page_count').get()?.page_count);
+      database.connection.exec('PRAGMA max_page_count = ' + (Math.ceil(pageCount * 4 / 3) + 4));
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => 256n * 1024n ** 2n });
+      quota.configure({ limitBytes: 8 * 1024 ** 2, criticalReserveBytes: 1024 });
+      const repository = new SqliteCheckpointRepository(database, undefined, () => quota);
+      const checkpoint = fixtureCheckpoint('x'.repeat(64 * 1024));
+
+      await expect(repository.insert(checkpoint)).rejects.toThrow(/audit/i);
+      await expect(repository.get(checkpoint.id)).resolves.toBeNull();
+      expect(quota.status()?.activeReservations).toBe(0);
+      expect(database.connection.prepare('SELECT length(payload) AS bytes FROM protected_payload').get())
+        .toEqual({ bytes: 1024 ** 2 });
+    } finally { database.close(); }
+  });
+
   it('round-trips bounded checkpoint metadata and content', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));

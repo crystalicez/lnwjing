@@ -115,9 +115,10 @@ independent.
 File Undo checkpoint inserts in Desktop and STDIO also reserve profile space
 when quota is enabled. Each attempt estimates main database and WAL growth
 from the encoded checkpoint and SQLite page size, then releases the
-reservation after the insert settles. A denied reservation leaves the original
-file intact. This estimate covers the checkpoint insert. Audit writes and
-SQLite recovery workers still use separate admission and cleanup rules.
+reservation after the insert settles. Before committing the insert, SQLite
+checks that enough main pages remain for audit. If the check or reservation
+fails, the original file stays intact. Audit writes and SQLite recovery workers
+still use separate admission and cleanup rules.
 
 An opt-in pressure-reclaim stage runs after a *complete* inventory when
 projected use reaches 75% of the ordinary budget or the volume is low on space.

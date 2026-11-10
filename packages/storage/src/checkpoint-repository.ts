@@ -9,6 +9,10 @@ import type { GlobalQuotaReservation, GlobalStorageQuotaReservations } from './g
 
 type CheckpointQuota = Pick<GlobalStorageQuotaReservations, 'reserve' | 'release'>;
 
+function checkpointAuditReserveBytes(cap: number): number {
+  return Math.min(Math.floor(cap / 4), Math.max(16 * 1024 ** 2, Math.floor(cap * 0.05)));
+}
+
 interface CheckpointRow {
   readonly id: string;
   readonly workspace_id: string;
@@ -186,8 +190,31 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       if (reservation !== undefined && (this.database.connection !== connection || connection.isTransaction)) {
         throw new CheckpointStorageAdmissionError('SQLite changed while admitting the file Undo checkpoint');
       }
-      connection.prepare('INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)')
-        .run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, payload);
+      const write = (): void => {
+        connection.prepare('INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)')
+          .run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, payload);
+      };
+      if (reservation === undefined) {
+        write();
+      } else {
+        // Verify the remaining main pages under the same writer lock as the insert.
+        connection.exec('BEGIN IMMEDIATE');
+        try {
+          write();
+          const setting = connection.prepare('SELECT value FROM settings WHERE key = ?')
+            .get(SQLITE_HARD_LIMIT_SETTING_KEY)?.value;
+          const limitMiB = parseSqliteHardLimitMiB(typeof setting === 'string' ? setting : null);
+          const pages = inspectSqliteHardLimit(connection, limitMiB);
+          const cap = Math.min(pages.requestedBytes, pages.effectiveBytes);
+          if (cap - (pages.allocatedBytes - pages.freeBytes) <= checkpointAuditReserveBytes(cap)) {
+            throw new CheckpointStorageAdmissionError('SQLite needs the remaining space for durable audit before saving file Undo');
+          }
+          connection.exec('COMMIT');
+        } catch (error) {
+          rollbackCheckpointTransaction(connection);
+          throw error;
+        }
+      }
       this.cachedByteCount = null;
     } finally {
       if (quota !== null && reservation !== undefined) quota.release(reservation);
@@ -210,7 +237,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       inspectSqliteHardLimit(this.database.connection, limitMiB);
     const initial = footprint();
     const cap = Math.min(initial.requestedBytes, initial.effectiveBytes);
-    const reserve = Math.min(Math.floor(cap / 4), Math.max(16 * 1024 ** 2, Math.floor(cap * 0.05)));
+    const reserve = checkpointAuditReserveBytes(cap);
     const overhead = Math.min(1024 ** 2, Math.floor(cap * 0.02));
     const requiredFree = Buffer.byteLength(payload, 'utf8') + reserve + overhead;
     // One checkpoint larger than the empty-db budget cannot fit; do not
