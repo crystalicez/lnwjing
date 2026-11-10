@@ -111,7 +111,7 @@ import {
 import { ripgrepAdmissionSnapshot } from '@lnwjing/search';
 import { readSharedActivitySnapshot, startMcpStdio, inspectWorkflowFile, inspectWorkflowProjectVersion, inspectWorkflowGitBranches, generateWorkflowReportMapping, type EccRuntimeOptions, type HostMutationApprovalRequest } from '@lnwjing/mcp-server';
 import { createExplicitKeySecretProtector, DEFAULT_DISPLAY_TIME_ZONE, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, formatDisplayDateTime, formatOffsetIsoTimestamp, normalizeMcpAllowedHostname, resolveLnwjingDataPath, type SecretProtector } from '@lnwjing/shared';
-import { applyPendingSqliteRestoreSync, CheckpointKeyStore, type CheckpointPayloadCipher } from '@lnwjing/storage';
+import { applyPendingSqliteRestoreSync, assertNoPendingProfileResetSync, CheckpointKeyStore, type CheckpointPayloadCipher } from '@lnwjing/storage';
 import { createDesktopRuntime, formatCompleteTargetDetail, formatIncompleteLegacyHistory, writeSerializedLogRows, type DesktopRuntime } from './desktop-services.js';
 import { parseSetStoragePolicyRequest, parseCheckpointCleanupPreview, parseApplyCheckpointCleanup, parseNativeStorageCleanup } from './storage-ipc-parser.js';
 import { resolveTunnelProfileDirectory, TUNNEL_SECRET_FILE_NAME } from './tunnel-controller.js';
@@ -148,7 +148,7 @@ import { CrashDiagnosticsRecorder, RendererRecoveryBarrier, RendererRecoveryPoli
 import { DesktopSessionDiagnostics } from './desktop-session-diagnostics.js';
 import { configureNativeCrashDiagnostics, pruneNativeCrashDumpsForDataPath } from './native-crash-diagnostics.js';
 import { RuntimeDiagnosticsHistoryRecorder, type RuntimeDiagnosticsSample } from './runtime-diagnostics-history.js';
-import { FACTORY_RESET_APPLY_ARG, applyPendingFactoryResetSync, clearFactoryResetBootstrapSync, clearFactoryResetStageSync, factoryResetBootstrapUserDataPath, stageFactoryResetSync } from './factory-reset.js';
+import { FACTORY_RESET_APPLY_ARG, applyPendingFactoryResetSync, clearFactoryResetBootstrapSync, clearFactoryResetStageSync, factoryResetBootstrapUserDataPath, factoryResetMarkerPath, stageFactoryResetSync } from './factory-reset.js';
 import { decryptV3WindowsSafeStorageSecretIfPresent, isV3WindowsSafeStorageEnvelope } from './checkpoint-key-compat.js';
 import { mutationApprovalDialogOptions } from './mutation-approval.js';
 import { prependBundledRuntimeToolsToPath } from './runtime-tools.js';
@@ -3303,6 +3303,7 @@ function configureUserDataPath(): string {
 
 function configureDataPath(configuredDataPath?: string): string {
   const dataPath = configuredDataPath ?? configureUserDataPath();
+  assertNoPendingProfileResetSync(dataPath);
   configureCrashRecovery(dataPath);
   recordDesktopStartup('data-path:configured');
   recordDesktopStartup('restore:begin');
@@ -3354,6 +3355,23 @@ if (factoryResetApplyRequested) {
   const gotInstanceLock = holdsSingleInstanceLock ? app.requestSingleInstanceLock() : true;
   if (!gotInstanceLock) {
     app.quit();
+  } else if (configuredUserDataPath !== undefined && existsSync(factoryResetMarkerPath(configuredUserDataPath))) {
+    // A crashed reset must finish before Chromium, secret migration or SQLite
+    // initialization can create replacement state over the preserved snapshot.
+    try {
+      if (!applyPendingFactoryResetSync(configuredUserDataPath, resolveTunnelProfileDirectory())) {
+        throw new Error('Pending reset marker disappeared during startup');
+      }
+      const args = process.argv.slice(1).filter((argument) =>
+        argument !== FACTORY_RESET_APPLY_ARG && !argument.startsWith('--user-data-dir='));
+      app.relaunch({ args });
+      app.exit(0);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'unknown resume error';
+      console.error(`Pending lnwjing reset could not resume safely: ${message}`);
+      try { dialog.showErrorBox('lnwjing reset resume blocked', message); } catch { /* stderr stays available. */ }
+      app.exit(1);
+    }
   } else {
     if (configuredUserDataPath !== undefined) {
       configureCrashRecovery(configuredUserDataPath);

@@ -2,6 +2,7 @@ export * from './audit-repository.js';
 export * from './checkpoint-repository.js';
 export * from './database.js';
 export { assertNoActiveSqliteClientsSync } from './sqlite-client-lease.js';
+export { assertNoPendingProfileResetSync } from './pending-profile-reset.js';
 export * from './storage-maintenance.js';
 export * from './profile-storage-inventory.js';
 export * from './windows-profile-allocation.js';

@@ -47,6 +47,18 @@ afterEach(async () => {
 }, STDIO_RUNTIME_HOOK_TIMEOUT_MS);
 
 describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => {
+  it('refuses direct STDIO startup while an offline profile reset is pending without creating SQLite', async () => {
+    const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-reset-guard-'));
+    temporaryRoots.push(dataPath);
+    const marker = path.join(path.dirname(dataPath), `.${path.basename(dataPath)}.factory-reset.pending`);
+    try {
+      await writeFile(marker, JSON.stringify({ version: 2, mode: 'preserve-settings', nonce: '00000000-0000-4000-8000-000000000001' }));
+      expect(() => createStdioMcpRuntime(dataPath, workspace)).toThrow(/profile reset is pending/i);
+      await expect(readFile(path.join(dataPath, 'lnwjing.sqlite'))).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally { await rm(marker, { force: true }); }
+  });
+
+
   it('defaults Ponytail to OFF and loads a persisted mode for direct STDIO', async () => {
     const defaultDataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-ponytail-default-'));
     const persistedDataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-ponytail-persisted-'));

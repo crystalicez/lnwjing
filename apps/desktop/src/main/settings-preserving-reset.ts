@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { GlobalStorageQuotaReservations, assertNoActiveSqliteClientsSync } from '@lnwjing/storage';
@@ -143,7 +143,8 @@ function snapshotProfileSettings(profile: string, destination: string, nonce: st
     if ((source.prepare('PRAGMA quick_check').get() as Record<string, string>).quick_check !== 'ok') {
       throw new Error('Cannot preserve settings from an unhealthy database');
     }
-    const rows = source.prepare('SELECT key,value FROM settings').all() as Array<{ key: unknown; value: unknown }>;
+    assertNoRegisteredProjectInsideProfile(source, profile);
+    const rows = source.prepare('SELECT key,value FROM settings').iterate() as Iterable<{ key: unknown; value: unknown }>;
     const saved = new DatabaseSync(destination);
     try {
       saved.exec('CREATE TABLE settings(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);'
@@ -178,6 +179,41 @@ function snapshotProfileSettings(profile: string, destination: string, nonce: st
   } finally { source.close(); }
 }
 
+function assertNoRegisteredProjectInsideProfile(database: DatabaseSync, profile: string): void {
+  const profileReal = realpathSync(profile);
+  const rows = database.prepare('SELECT root_path, real_root_path FROM workspaces').iterate() as
+    Iterable<{ root_path: unknown; real_root_path: unknown }>;
+  for (const row of rows) {
+    for (const candidate of [row.root_path, row.real_root_path]) {
+      if (typeof candidate !== 'string' || !path.isAbsolute(candidate)) {
+        throw new Error('Unsafe registered project root prevents profile reset');
+      }
+      if (isWithinDirectory(profile, candidate)) {
+        throw new Error('Cannot clear profile: a registered project directory is inside the profile');
+      }
+      try {
+        if (isWithinDirectory(profileReal, realpathSync(candidate))) {
+          throw new Error('Cannot clear profile: a registered project directory is inside the profile');
+        }
+      } catch (error: unknown) {
+        if (!isMissingPath(error)) throw error;
+      }
+    }
+  }
+}
+
+function isWithinDirectory(parent: string, candidate: string): boolean {
+  const root = process.platform === 'win32' ? path.resolve(parent).toLowerCase() : path.resolve(parent);
+  const target = process.platform === 'win32' ? path.resolve(candidate).toLowerCase() : path.resolve(candidate);
+  const relative = path.relative(root, target);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+function isMissingPath(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error
+    && (error as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
 function verifySnapshot(directory: string, nonce: string): SnapshotManifest {
   const marker = path.join(directory, 'manifest.json');
   const info = lstatSync(marker);
@@ -193,6 +229,9 @@ function verifySnapshot(directory: string, nonce: string): SnapshotManifest {
   }
   const manifest = raw as unknown as SnapshotManifest;
   const dbFile = safeRelativeFile(directory, 'settings.sqlite');
+  for (const suffix of ['-wal', '-shm', '-journal']) {
+    if (existsSync(dbFile + suffix)) throw new Error('Settings snapshot has an unverified SQLite journal');
+  }
   if (!existsSync(dbFile) || !lstatSync(dbFile).isFile() || digest(readFileSync(dbFile)) !== manifest.databaseSha256) {
     throw new Error('Settings snapshot integrity failure; profile was not erased');
   }

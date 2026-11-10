@@ -61,6 +61,7 @@ import {
   SqliteCheckpointRepository,
   SqliteDatabase,
   GlobalStorageQuotaReservations,
+  assertNoPendingProfileResetSync,
   IdleWalMaintenance,
   SqliteGoalRepository,
   SqliteSettingsRepository,
@@ -121,6 +122,7 @@ export function createStdioMcpRuntime(
   unrestricted: boolean = false,
   options: StdioMcpRuntimeOptions = {},
 ): StdioMcpRuntime {
+  assertNoPendingProfileResetSync(dataPath);
   const checkpointKey = resolveStdioCheckpointKey(options.checkpointEncryptionKey);
   const databaseFilename = path.join(dataPath, 'lnwjing.sqlite');
   const globalQuota = new GlobalStorageQuotaReservations(dataPath);

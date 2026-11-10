@@ -1,10 +1,10 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { GlobalStorageQuotaReservations } from '@lnwjing/storage';
+import { GlobalStorageQuotaReservations, assertNoPendingProfileResetSync } from '@lnwjing/storage';
 import { applyPendingFactoryResetSync, clearFactoryResetStageSync, factoryResetMarkerPath, stageFactoryResetSync } from '../src/main/factory-reset.js';
 
 async function fixture(): Promise<{ parent: string; profile: string; tunnel: string; external: string; dispose: () => Promise<void> }> {
@@ -19,7 +19,7 @@ async function fixture(): Promise<{ parent: string; profile: string; tunnel: str
 function settingsDatabase(profile: string): DatabaseSync {
   const db = new DatabaseSync(path.join(profile, 'lnwjing.sqlite'));
   db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);'
-    + 'CREATE TABLE workspaces(id TEXT PRIMARY KEY, root_path TEXT NOT NULL);'
+    + 'CREATE TABLE workspaces(id TEXT PRIMARY KEY, root_path TEXT NOT NULL, real_root_path TEXT NOT NULL);'
     + 'CREATE TABLE audit_events(id TEXT PRIMARY KEY);');
   return db;
 }
@@ -34,7 +34,7 @@ describe('settings-preserving reset (isolated offline profile only)', () => {
       db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('selected_workspace_id', 'old-project');
       db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('active_workspace_ids', '["old-project"]');
       db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('mcp_http_port', '19999');
-      db.prepare('INSERT INTO workspaces(id,root_path) VALUES (?,?)').run('old-project', external);
+      db.prepare('INSERT INTO workspaces(id,root_path,real_root_path) VALUES (?,?,?)').run('old-project', external, external);
       db.prepare('INSERT INTO audit_events(id) VALUES (?)').run('historical-call');
       db.close();
       const quota = new GlobalStorageQuotaReservations(profile);
@@ -176,6 +176,96 @@ describe('settings-preserving reset (isolated offline profile only)', () => {
       try {
         expect(original.prepare("SELECT value FROM settings WHERE key='ui_locale'").get()).toMatchObject({ value: 'th' });
       } finally { original.close(); }
+    } finally { await dispose(); }
+  });
+
+  it('never erases a registered user project stored inside a custom profile location', async () => {
+    const { profile, tunnel, dispose } = await fixture();
+    try {
+      const project = path.join(profile, 'nested-user-project');
+      await mkdir(project);
+      await writeFile(path.join(project, 'important-code.ts'), 'export const userData = true;');
+      const db = settingsDatabase(profile);
+      db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'en');
+      db.prepare('INSERT INTO workspaces(id,root_path,real_root_path) VALUES (?,?,?)')
+        .run('nested-project', project, project);
+      db.close();
+      stageFactoryResetSync(profile, 'preserve-settings');
+      expect(() => applyPendingFactoryResetSync(profile, tunnel)).toThrow(/registered project|inside.*profile/i);
+      expect(await readFile(path.join(project, 'important-code.ts'), 'utf8')).toBe('export const userData = true;');
+    } finally { await dispose(); }
+  });
+
+  it('does not trust a settings snapshot with unverified SQLite WAL sidecars', async () => {
+    const { profile, tunnel, parent, dispose } = await fixture();
+    try {
+      const db = settingsDatabase(profile);
+      db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'th');
+      db.close();
+      const pending = stageFactoryResetSync(profile, 'preserve-settings');
+      const marker = JSON.parse(await readFile(pending, 'utf8')) as { nonce: string };
+      const stage = path.join(parent, '.data.factory-reset-settings');
+      await mkdir(stage);
+      const stagingDb = path.join(stage, 'settings.sqlite');
+      const snapshot = new DatabaseSync(stagingDb);
+      snapshot.exec('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT);'
+        + 'CREATE TABLE reset_meta(nonce TEXT NOT NULL);'
+        + 'CREATE TABLE quota_policy(limit_bytes INTEGER NOT NULL,reserve_bytes INTEGER NOT NULL);');
+      snapshot.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'th');
+      snapshot.prepare('INSERT INTO reset_meta(nonce) VALUES (?)').run(marker.nonce);
+      snapshot.close();
+      const hash = createHash('sha256').update(await readFile(stagingDb)).digest('hex');
+      await writeFile(path.join(stage, 'manifest.json'), JSON.stringify({
+        version: 1, nonce: marker.nonce, databaseSha256: hash, files: [],
+      }));
+      await writeFile(stagingDb + '-wal', 'untrusted-sidecar');
+      expect(() => applyPendingFactoryResetSync(profile, tunnel)).toThrow(/unverified SQLite journal|snapshot integrity/i);
+      const original = new DatabaseSync(path.join(profile, 'lnwjing.sqlite'), { readOnly: true });
+      try {
+        expect(original.prepare("SELECT value FROM settings WHERE key='ui_locale'").get())
+          .toMatchObject({ value: 'th' });
+      } finally { original.close(); }
+    } finally { await dispose(); }
+  });
+
+  it('blocks independent MCP/database startup while reset is pending, before creating secrets', async () => {
+    const { profile, dispose } = await fixture();
+    try {
+      const db = settingsDatabase(profile);
+      db.close();
+      stageFactoryResetSync(profile, 'preserve-settings');
+      expect(() => assertNoPendingProfileResetSync(profile)).toThrow(/profile reset is pending/i);
+      expect(await readFile(factoryResetMarkerPath(profile), 'utf8')).toContain('preserve-settings');
+      clearFactoryResetStageSync(profile);
+      expect(() => assertNoPendingProfileResetSync(profile)).not.toThrow();
+    } finally { await dispose(); }
+  });
+
+  it('never follows an unrelated cache junction into an external user project', async () => {
+    const { profile, tunnel, external, dispose } = await fixture();
+    try {
+      const db = settingsDatabase(profile);
+      db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'en');
+      db.close();
+      await writeFile(path.join(external, 'source.ts'), 'keep-external-data');
+      await symlink(external, path.join(profile, 'cache-link'), process.platform === 'win32' ? 'junction' : 'dir');
+      stageFactoryResetSync(profile, 'preserve-settings');
+      expect(applyPendingFactoryResetSync(profile, tunnel)).toBe(true);
+      expect(await readFile(path.join(external, 'source.ts'), 'utf8')).toBe('keep-external-data');
+    } finally { await dispose(); }
+  });
+
+  it('rejects symlinked Settings dependency directories without deleting their targets', async () => {
+    const { profile, tunnel, external, dispose } = await fixture();
+    try {
+      const db = settingsDatabase(profile);
+      db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'en');
+      db.close();
+      await writeFile(path.join(external, 'oauth-state.secret'), 'protected-external-secret');
+      await symlink(external, path.join(profile, 'remote-mcp'), process.platform === 'win32' ? 'junction' : 'dir');
+      stageFactoryResetSync(profile, 'preserve-settings');
+      expect(() => applyPendingFactoryResetSync(profile, tunnel)).toThrow(/redirected|direct directory/);
+      expect(await readFile(path.join(external, 'oauth-state.secret'), 'utf8')).toBe('protected-external-secret');
     } finally { await dispose(); }
   });
 

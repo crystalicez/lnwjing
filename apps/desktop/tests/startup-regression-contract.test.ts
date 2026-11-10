@@ -101,6 +101,19 @@ describe('desktop packaged startup regression contract', () => {
     expect(resetRequest).toContain('FACTORY_RESET_APPLY_ARG');
   });
 
+  it('resumes a pending reset before ordinary GUI startup and blocks MCP on the same profile', () => {
+    const desktop = section('if (!gotInstanceLock)', 'if (wantsMcpStdio');
+    expect(desktop).toContain('factoryResetMarkerPath(configuredUserDataPath)');
+    expect(desktop).toContain('applyPendingFactoryResetSync(configuredUserDataPath, resolveTunnelProfileDirectory())');
+    expect(desktop).toContain('app.relaunch({ args })');
+    expect(desktop.indexOf('applyPendingFactoryResetSync('))
+      .toBeLessThan(desktop.indexOf('configureCrashRecovery(configuredUserDataPath);'));
+    const configure = section('function configureDataPath', 'const factoryResetApplyRequested');
+    expect(configure).toContain('assertNoPendingProfileResetSync(dataPath);');
+    expect(configure.indexOf('assertNoPendingProfileResetSync(dataPath);'))
+      .toBeLessThan(configure.indexOf('configureCrashRecovery(dataPath);'));
+  });
+
   it('selects the configured user-data path before acquiring the instance lock', () => {
     const instances = section('const holdsSingleInstanceLock', 'if (!gotInstanceLock');
     expect(instances.indexOf('configureUserDataPath()')).toBeLessThan(instances.indexOf('app.requestSingleInstanceLock()'));
