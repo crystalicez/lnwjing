@@ -45,9 +45,19 @@ an API building block, not a default policy or a complete Global Hard Limit.
 - `reserve(bytes)` uses a *complete*, bounded, read-only profile inventory and
   an atomic `BEGIN IMMEDIATE` reservation journal. A changed ledger revision
   during the inventory causes a retry, while an incomplete scan rejects admission.
-- `release(proof)` requires the owning PID and a private reservation token. A
-  reservation abandoned by a dead PID can be reconciled; ambiguous PID liveness
-  fails closed. There is no time-only eviction of a live writer.
+- `release(proof)` requires the owning PID and a private reservation token.
+  When the OS probe succeeds, newly created Windows reservations also persist
+  the OS process creation timestamp (100-ns .NET ticks), mitigating stale
+  ownership from PID reuse. If the probe is unavailable, the new reservation
+  retains the conservative legacy PID-only liveness behavior. Before an admission, at most eight distinct recorded owner generations
+  are checked **outside** the SQLite write lock, and only a verified gone
+  process or a live PID with a different creation timestamp can be removed
+  inside `BEGIN IMMEDIATE`. The previous PID-only dead-owner recovery remains
+  for legacy records (the ledger is migrated additively). Unverifiable owner
+  identities remain reserved; no clock-age-based expiry can delete an active
+  lease. This mitigates PID reuse on Windows but does not replace transactional
+  owner identity checks for every possible writer or guarantee that a blocked
+  cross-user process is recoverable.
 - `inspect()` reports **logical used**, active reserved bytes and ordinary
   available bytes separately. A critical reserve remains unavailable to ordinary
   reservations. Inventory treats the ledger and its SQLite sidecars as protected.
@@ -99,8 +109,12 @@ Limitations before production enforcement: the inventory is logical-byte based
 on Windows (not NTFS allocated-byte accounting), scans only the profile root,
 and requires a full walk per reservation. Noncooperating writers, journal/WAL
 growth during a write, OS temp/Portable/Tunnel/Electron caches outside the
-profile, PID reuse and files changed without holding a reservation are not
-fully controlled. Outside the opted-in backup writer, Desktop, MCP STDIO,
+profile, legacy/unverifiable PID ownership and files changed without
+holding a reservation are not fully controlled. Windows process-start proofs
+are stored when verified, but only a bounded set of owner generations
+is verified per admission; POSIX and legacy reservations still fall back to
+definitely-dead PID detection. Outside the opted-in backup writer, Desktop,
+MCP STDIO,
 native helpers, workspace index and routine SQLite mutations do **not** yet use
 a unified pre-write quota. No automatic deletion of Backup, Undo,
 Recovery Trash, Index or user source code is enabled. Never advertise this as

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { inspectProfileStorageOffMain, type ProfileStorageInventory } from './profile-storage-inventory.js';
 import { reclaimExpiredDisposableFiles, type DisposableReclaimResult } from './global-storage-reclaim.js';
+import { probeQuotaProcessIdentity, validQuotaProcessStart, type QuotaProcessIdentity } from './quota-process-identity.js';
 
 /**
  * Opt-in foundation for a future app-managed quota. This ledger serializes
@@ -44,8 +45,10 @@ export interface GlobalQuotaSnapshot {
 }
 
 interface QuotaStateRow { revision: number; limit_bytes: number; reserve_bytes: number }
-interface ReservationRow { id: string; token_hash: string; owner_pid: number; bytes: number }
+interface ReservationRow { id: string; token_hash: string; owner_pid: number; bytes: number; owner_started_at: string | null }
 const MAX_RESERVATIONS = 2048;
+const MAX_IDENTITY_PROBES_PER_ADMISSION = 8;
+let cachedOwnProcessIdentity: Promise<QuotaProcessIdentity> | null = null;
 const MAX_SCAN_ATTEMPTS = 4;
 /** Maximum 8 × 128 verified old disposable files per pressure event. */
 const MAX_PRESSURE_RECLAIM_BATCHES = 8;
@@ -56,6 +59,8 @@ const MIN_VOLUME_RESERVE_BYTES = 64 * 1024 * 1024;
 /** For deterministic fake-volume tests; production always reads the real OS volume. */
 export interface GlobalQuotaVolumeOptions {
   readonly availableVolumeBytes?: () => bigint;
+  /** Test seam. Production uses verified OS process creation identity on Windows. */
+  readonly probeProcessIdentity?: (pid: number) => Promise<QuotaProcessIdentity>;
 }
 
 function realVolumeFreeBytes(root: string): bigint {
@@ -115,12 +120,15 @@ export class GlobalStorageQuotaReservations {
   private readonly root: string;
   private readonly ledgerFilename: string;
   private readonly getAvailableVolumeBytes: () => bigint;
+  private readonly probeProcessIdentity: (pid: number) => Promise<QuotaProcessIdentity>;
+  private ownerIdentityPromise: Promise<string | null> | null = null;
 
   public constructor(profileRoot: string, options: GlobalQuotaVolumeOptions = {}) {
     if (!path.isAbsolute(profileRoot)) throw new Error('Global quota profile root must be absolute');
     this.root = path.resolve(profileRoot);
     this.ledgerFilename = path.join(this.root, LEDGER_FILE);
     this.getAvailableVolumeBytes = options.availableVolumeBytes ?? ((): bigint => realVolumeFreeBytes(this.root));
+    this.probeProcessIdentity = options.probeProcessIdentity ?? probeQuotaProcessIdentity;
     // Never reject legacy or redirected profile paths merely because the
     // optional quota feature has not been enabled. Validate before any ledger I/O.
   }
@@ -225,6 +233,9 @@ export class GlobalStorageQuotaReservations {
    */
   public async reserve(bytes: number): Promise<GlobalQuotaReservation> {
     if (!safeBytes(bytes) || bytes === 0) throw new Error('Invalid quota reservation size');
+    // Probe outside SQLite transactions. Never block the ledger write lock on PowerShell.
+    await this.reconcileStaleIdentities();
+    const ownerStart = await this.currentOwnerStart();
     let reclaimAttempted = false;
     for (let attempt = 0; attempt < MAX_SCAN_ATTEMPTS; attempt++) {
       const initial = this.transaction((db) => {
@@ -269,7 +280,7 @@ export class GlobalStorageQuotaReservations {
         if (this.reapDeadOwners(db)) return 'retry';
         const state = this.state(db);
         if (state?.revision !== initial.revision) return 'retry';
-        const rows = db.prepare('SELECT id,token_hash,owner_pid,bytes FROM quota_reservations').all() as unknown as ReservationRow[];
+        const rows = db.prepare('SELECT id,token_hash,owner_pid,bytes,owner_started_at FROM quota_reservations').all() as unknown as ReservationRow[];
         if (rows.length >= MAX_RESERVATIONS) throw new Error('Global quota has too many active reservations');
         const reserved = rows.reduce((sum, row) => sum + row.bytes, 0);
         const planned = inventory.logicalBytes + reserved + bytes + state.reserve_bytes;
@@ -283,8 +294,8 @@ export class GlobalStorageQuotaReservations {
         if (BigInt(bytes) > volumeHeadroom(freeBytes, reserved, state.reserve_bytes)) {
           throw new Error('Global storage quota has insufficient physical volume headroom');
         }
-        db.prepare('INSERT INTO quota_reservations (id,token_hash,owner_pid,bytes) VALUES (?,?,?,?)')
-          .run(id, hashToken(token), process.pid, bytes);
+        db.prepare('INSERT INTO quota_reservations (id,token_hash,owner_pid,bytes,owner_started_at) VALUES (?,?,?,?,?)')
+          .run(id, hashToken(token), process.pid, bytes, ownerStart);
         db.prepare('UPDATE quota_state SET revision=revision+1 WHERE id=1').run();
         return 'admitted';
       });
@@ -298,7 +309,7 @@ export class GlobalStorageQuotaReservations {
     if (!reservation || typeof reservation.id !== 'string' || typeof reservation.token !== 'string'
       || !safeBytes(reservation.bytes)) throw new Error('Invalid global quota reservation proof');
     this.transaction((db) => {
-      const row = db.prepare('SELECT id,token_hash,owner_pid,bytes FROM quota_reservations WHERE id=?')
+      const row = db.prepare('SELECT id,token_hash,owner_pid,bytes,owner_started_at FROM quota_reservations WHERE id=?')
         .get(reservation.id) as ReservationRow | undefined;
       if (row === undefined || row.owner_pid !== process.pid || row.bytes !== reservation.bytes
         || !sameToken(row.token_hash, reservation.token)) {
@@ -342,6 +353,63 @@ export class GlobalStorageQuotaReservations {
     throw new Error('Global quota inventory changed during inspection');
   }
 
+  /**
+   * Probe identities *outside* the SQLite write transaction, then delete
+   * only unchanged, verified-stale owner generations under BEGIN IMMEDIATE.
+   * A failed/slow probe must not delete a live or unverifiable writer lease.
+   *
+   * The cap avoids launching an unbounded number of Windows process probes
+   * during one backup admission.
+   */
+  private async reconcileStaleIdentities(): Promise<void> {
+    const rows = this.withDatabase((db) => db.prepare(`
+      SELECT DISTINCT owner_pid, owner_started_at
+        FROM quota_reservations
+       WHERE owner_started_at IS NOT NULL
+       ORDER BY owner_started_at ASC LIMIT ${MAX_IDENTITY_PROBES_PER_ADMISSION}
+    `).all() as Array<{ owner_pid: number; owner_started_at: string }>);
+    const stale: Array<{ owner_pid: number; owner_started_at: string }> = [];
+    for (const row of rows) {
+      if (!validQuotaProcessStart(row.owner_started_at)) {
+        throw new Error('Global quota reservation has an invalid process identity');
+      }
+      // Avoid spawning a native probe for owners already provably dead:
+      // the existing in-transaction ESRCH reaper will handle those rows.
+      if (ownerDefinitelyDead(row.owner_pid)) continue;
+      const observed = row.owner_pid === process.pid
+        ? await this.currentOwnerStart().then((startedAt): QuotaProcessIdentity => startedAt === null
+          ? { state: 'unverifiable' } : { state: 'live', startedAt })
+        : await this.probeProcessIdentity(row.owner_pid);
+      if (observed.state === 'gone'
+        || observed.state === 'live' && observed.startedAt !== row.owner_started_at) {
+        stale.push(row);
+      }
+    }
+    if (stale.length === 0) return;
+    this.transaction((db) => {
+      const remove = db.prepare('DELETE FROM quota_reservations WHERE owner_pid=? AND owner_started_at=?');
+      let deleted = 0;
+      for (const row of stale) {
+        const result = remove.run(row.owner_pid, row.owner_started_at);
+        deleted += Number(result.changes);
+      }
+      if (deleted > 0) db.prepare('UPDATE quota_state SET revision=revision+1 WHERE id=1').run();
+    });
+  }
+
+  private async currentOwnerStart(): Promise<string | null> {
+    if (this.ownerIdentityPromise === null) {
+      const probe = this.probeProcessIdentity === probeQuotaProcessIdentity
+        ? (cachedOwnProcessIdentity ??= probeQuotaProcessIdentity(process.pid))
+        : this.probeProcessIdentity(process.pid);
+      this.ownerIdentityPromise = probe.then((observed) =>
+        observed.state === 'live' && validQuotaProcessStart(observed.startedAt)
+          ? observed.startedAt : null,
+      );
+    }
+    return this.ownerIdentityPromise;
+  }
+
   private async completeInventory(): Promise<ProfileStorageInventory> {
     const inventory = await inspectProfileStorageOffMain(this.root, {
       maxEntries: 200_000, maxDurationMs: 15_000,
@@ -376,8 +444,20 @@ export class GlobalStorageQuotaReservations {
         limit_bytes INTEGER NOT NULL, reserve_bytes INTEGER NOT NULL
       ); CREATE TABLE IF NOT EXISTS quota_reservations (
         id TEXT PRIMARY KEY NOT NULL, token_hash TEXT NOT NULL,
-        owner_pid INTEGER NOT NULL, bytes INTEGER NOT NULL CHECK(bytes > 0)
+        owner_pid INTEGER NOT NULL, bytes INTEGER NOT NULL CHECK(bytes > 0),
+        owner_started_at TEXT
       );`);
+      // Online additive migration: legacy reservations remain valid and are
+      // reaped only by definitely-dead PID, never guessed from a timestamp.
+      const columns = db.prepare('PRAGMA table_info(quota_reservations)').all() as Array<{ name: string }>;
+      if (!columns.some((column) => column.name === 'owner_started_at')) {
+        try { db.exec('ALTER TABLE quota_reservations ADD COLUMN owner_started_at TEXT'); }
+        catch (error) {
+          // Another process may have performed the same additive upgrade.
+          const after = db.prepare('PRAGMA table_info(quota_reservations)').all() as Array<{ name: string }>;
+          if (!after.some((column) => column.name === 'owner_started_at')) throw error;
+        }
+      }
       return callback(db);
     } finally { db.close(); }
   }
