@@ -102,6 +102,10 @@ export function applySettingsPreservingResetSync(profile: string, nonce: string)
   if (sourceExists) {
     assertNoActiveSqliteClientsSync(path.join(profile, 'backups'));
     assertNoActiveQuotaReservations(profile);
+    // A complete stage can survive a crash while another writer registers a
+    // project inside the profile. Re-check the current source immediately
+    // before deletion, not only while the original snapshot was created.
+    assertNoCurrentRegisteredProjectInsideProfile(profile);
     rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
   mkdirSync(profile, { recursive: true });
@@ -177,6 +181,25 @@ function snapshotProfileSettings(profile: string, destination: string, nonce: st
       saved.exec('COMMIT');
     } finally { saved.close(); }
   } finally { source.close(); }
+}
+
+function assertNoCurrentRegisteredProjectInsideProfile(profile: string): void {
+  const databaseFile = safeRelativeFile(profile, 'lnwjing.sqlite');
+  if (!existsSync(databaseFile)) {
+    // A partially removed profile cannot prove that another writer did not
+    // register user-owned source after the original snapshot was committed.
+    throw new Error('Cannot safely erase a profile with a missing workspace database');
+  }
+  const database = new DatabaseSync(databaseFile, { readOnly: true, timeout: 3000 });
+  try {
+    const workspacesTable = database.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'workspaces'",
+    ).get();
+    // A previous interrupted restore may have rebuilt only the Settings table.
+    if (workspacesTable !== undefined) assertNoRegisteredProjectInsideProfile(database, profile);
+  } finally {
+    database.close();
+  }
 }
 
 function assertNoRegisteredProjectInsideProfile(database: DatabaseSync, profile: string): void {

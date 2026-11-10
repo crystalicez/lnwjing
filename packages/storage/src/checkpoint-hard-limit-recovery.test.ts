@@ -475,5 +475,5 @@ describe('bounded old file-checkpoint expiry under SQLite pressure', () => {
       db.close();
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });

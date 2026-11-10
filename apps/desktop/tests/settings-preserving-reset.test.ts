@@ -196,6 +196,125 @@ describe('settings-preserving reset (isolated offline profile only)', () => {
     } finally { await dispose(); }
   });
 
+  it('rejects a newly registered nested project when replaying an already completed snapshot', async () => {
+    const { profile, tunnel, parent, dispose } = await fixture();
+    try {
+      const db = settingsDatabase(profile);
+      db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'en');
+      db.close();
+
+      // Simulate a crash after the immutable snapshot was committed but before
+      // the old profile was removed. Another writer may have added a project
+      // despite the pending marker: the replay must not erase that project.
+      const pending = stageFactoryResetSync(profile, 'preserve-settings');
+      const marker = JSON.parse(await readFile(pending, 'utf8')) as { nonce: string };
+      const stage = path.join(parent, '.data.factory-reset-settings');
+      await mkdir(stage);
+      const savedDb = path.join(stage, 'settings.sqlite');
+      const snapshot = new DatabaseSync(savedDb);
+      try {
+        snapshot.exec('CREATE TABLE settings(key TEXT PRIMARY KEY NOT NULL,value TEXT NOT NULL);'
+          + 'CREATE TABLE reset_meta(nonce TEXT NOT NULL);'
+          + 'CREATE TABLE quota_policy(limit_bytes INTEGER NOT NULL,reserve_bytes INTEGER NOT NULL);');
+        snapshot.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'en');
+        snapshot.prepare('INSERT INTO reset_meta(nonce) VALUES (?)').run(marker.nonce);
+      } finally { snapshot.close(); }
+      const sha256 = createHash('sha256').update(await readFile(savedDb)).digest('hex');
+      await writeFile(path.join(stage, 'manifest.json'), JSON.stringify({
+        version: 1, nonce: marker.nonce, databaseSha256: sha256, files: [],
+      }));
+
+      const project = path.join(profile, 'late-registered-project');
+      await mkdir(project);
+      await writeFile(path.join(project, 'keep-source.ts'), 'export const keep = true;');
+      const changed = new DatabaseSync(path.join(profile, 'lnwjing.sqlite'));
+      try {
+        changed.prepare('INSERT INTO workspaces(id,root_path,real_root_path) VALUES (?,?,?)')
+          .run('late-project', project, project);
+      } finally { changed.close(); }
+
+      expect(() => applyPendingFactoryResetSync(profile, tunnel))
+        .toThrow('Cannot clear profile: a registered project directory is inside the profile');
+      expect(await readFile(path.join(project, 'keep-source.ts'), 'utf8')).toBe('export const keep = true;');
+      expect(await readFile(pending, 'utf8')).toContain('preserve-settings');
+    } finally { await dispose(); }
+  });
+
+  it('replays a verified snapshot after a failed restore wrote only the Settings table', async () => {
+    const { profile, tunnel, parent, dispose } = await fixture();
+    try {
+      const db = settingsDatabase(profile);
+      db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'th');
+      db.close();
+      const marker = stageFactoryResetSync(profile, 'preserve-settings');
+      const { nonce } = JSON.parse(await readFile(marker, 'utf8')) as { nonce: string };
+      const stage = path.join(parent, '.data.factory-reset-settings');
+      await mkdir(stage);
+      const stagedDb = path.join(stage, 'settings.sqlite');
+      const snapshot = new DatabaseSync(stagedDb);
+      try {
+        snapshot.exec('CREATE TABLE settings(key TEXT PRIMARY KEY NOT NULL,value TEXT NOT NULL);'
+          + 'CREATE TABLE reset_meta(nonce TEXT NOT NULL);'
+          + 'CREATE TABLE quota_policy(limit_bytes INTEGER NOT NULL,reserve_bytes INTEGER NOT NULL);');
+        snapshot.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'th');
+        snapshot.prepare('INSERT INTO reset_meta(nonce) VALUES (?)').run(nonce);
+      } finally { snapshot.close(); }
+      const databaseSha256 = createHash('sha256').update(await readFile(stagedDb)).digest('hex');
+      await writeFile(path.join(stage, 'manifest.json'), JSON.stringify({
+        version: 1, nonce, databaseSha256, files: [],
+      }));
+      // The earlier process crashed after deleting the source and creating the
+      // minimal Settings-only database but before clearing its pending marker.
+      await rm(profile, { recursive: true });
+      await mkdir(profile);
+      const partial = new DatabaseSync(path.join(profile, 'lnwjing.sqlite'));
+      partial.exec('CREATE TABLE settings(key TEXT PRIMARY KEY NOT NULL,value TEXT NOT NULL)');
+      partial.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'wrong-partial-value');
+      partial.close();
+
+      expect(applyPendingFactoryResetSync(profile, tunnel)).toBe(true);
+      const restored = new DatabaseSync(path.join(profile, 'lnwjing.sqlite'), { readOnly: true });
+      try {
+        expect(restored.prepare("SELECT value FROM settings WHERE key = 'ui_locale'").get())
+          .toMatchObject({ value: 'th' });
+      } finally { restored.close(); }
+      expect(applyPendingFactoryResetSync(profile, tunnel)).toBe(false);
+    } finally { await dispose(); }
+  });
+
+  it('refuses an incomplete profile with no current workspace database rather than deleting unknown files', async () => {
+    const { profile, tunnel, parent, dispose } = await fixture();
+    try {
+      const db = settingsDatabase(profile);
+      db.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'th');
+      db.close();
+      const marker = stageFactoryResetSync(profile, 'preserve-settings');
+      const { nonce } = JSON.parse(await readFile(marker, 'utf8')) as { nonce: string };
+      const stage = path.join(parent, '.data.factory-reset-settings');
+      await mkdir(stage);
+      const stagedDb = path.join(stage, 'settings.sqlite');
+      const snapshot = new DatabaseSync(stagedDb);
+      try {
+        snapshot.exec('CREATE TABLE settings(key TEXT PRIMARY KEY NOT NULL,value TEXT NOT NULL);'
+          + 'CREATE TABLE reset_meta(nonce TEXT NOT NULL);'
+          + 'CREATE TABLE quota_policy(limit_bytes INTEGER NOT NULL,reserve_bytes INTEGER NOT NULL);');
+        snapshot.prepare('INSERT INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'th');
+        snapshot.prepare('INSERT INTO reset_meta(nonce) VALUES (?)').run(nonce);
+      } finally { snapshot.close(); }
+      const databaseSha256 = createHash('sha256').update(await readFile(stagedDb)).digest('hex');
+      await writeFile(path.join(stage, 'manifest.json'), JSON.stringify({
+        version: 1, nonce, databaseSha256, files: [],
+      }));
+      await rm(path.join(profile, 'lnwjing.sqlite'));
+      await writeFile(path.join(profile, 'unrelated-user-code.ts'), 'export const doNotDelete = true;');
+      expect(() => applyPendingFactoryResetSync(profile, tunnel))
+        .toThrow('Cannot safely erase a profile with a missing workspace database');
+      expect(await readFile(path.join(profile, 'unrelated-user-code.ts'), 'utf8'))
+        .toBe('export const doNotDelete = true;');
+      expect(await readFile(marker, 'utf8')).toContain('preserve-settings');
+    } finally { await dispose(); }
+  });
+
   it('does not trust a settings snapshot with unverified SQLite WAL sidecars', async () => {
     const { profile, tunnel, parent, dispose } = await fixture();
     try {
