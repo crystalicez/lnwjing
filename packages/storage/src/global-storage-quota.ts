@@ -3,6 +3,7 @@ import { existsSync, lstatSync, realpathSync, statfsSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { inspectProfileStorageOffMain, type ProfileStorageInventory } from './profile-storage-inventory.js';
+import { coalesceQuotaInventory } from './global-quota-inventory-coalescer.js';
 import { reclaimExpiredDisposableFiles, type DisposableReclaimResult } from './global-storage-reclaim.js';
 import { probeQuotaProcessIdentity, validQuotaProcessStart, type QuotaProcessIdentity } from './quota-process-identity.js';
 
@@ -61,6 +62,8 @@ export interface GlobalQuotaVolumeOptions {
   readonly availableVolumeBytes?: () => bigint;
   /** Test seam. Production uses verified OS process creation identity on Windows. */
   readonly probeProcessIdentity?: (pid: number) => Promise<QuotaProcessIdentity>;
+  /** Deterministic test seam. Production always uses the off-main bounded profile inventory worker. */
+  readonly scanProfileInventory?: () => Promise<ProfileStorageInventory>;
 }
 
 function realVolumeFreeBytes(root: string): bigint {
@@ -121,6 +124,7 @@ export class GlobalStorageQuotaReservations {
   private readonly ledgerFilename: string;
   private readonly getAvailableVolumeBytes: () => bigint;
   private readonly probeProcessIdentity: (pid: number) => Promise<QuotaProcessIdentity>;
+  private readonly scanProfileInventory: () => Promise<ProfileStorageInventory>;
   private ownerIdentityPromise: Promise<string | null> | null = null;
 
   public constructor(profileRoot: string, options: GlobalQuotaVolumeOptions = {}) {
@@ -129,6 +133,9 @@ export class GlobalStorageQuotaReservations {
     this.ledgerFilename = path.join(this.root, LEDGER_FILE);
     this.getAvailableVolumeBytes = options.availableVolumeBytes ?? ((): bigint => realVolumeFreeBytes(this.root));
     this.probeProcessIdentity = options.probeProcessIdentity ?? probeQuotaProcessIdentity;
+    this.scanProfileInventory = options.scanProfileInventory ?? ((): Promise<ProfileStorageInventory> => inspectProfileStorageOffMain(this.root, {
+      maxEntries: 200_000, maxDurationMs: 15_000,
+    }));
     // Never reject legacy or redirected profile paths merely because the
     // optional quota feature has not been enabled. Validate before any ledger I/O.
   }
@@ -207,7 +214,10 @@ export class GlobalStorageQuotaReservations {
       this.reapDeadOwners(db);
       const count = (db.prepare('SELECT COUNT(*) AS count FROM quota_reservations').get() as { count: number }).count;
       if (count > 0) throw new Error('Active global quota reservations must finish before disabling');
-      db.prepare('DELETE FROM quota_state WHERE id=1').run();
+      // Preserve the monotonic generation across OFF -> ON transitions.
+      // Deleting this row allowed a concurrent admission to observe revision
+      // N before and after a disable/re-enable, falsely accepting a stale scan.
+      db.prepare('UPDATE quota_state SET revision=revision+1,limit_bytes=0,reserve_bytes=0 WHERE id=1').run();
     });
   }
 
@@ -215,7 +225,11 @@ export class GlobalStorageQuotaReservations {
   public configure(policy: GlobalQuotaPolicy): void {
     assertPolicy(policy);
     this.transaction((db) => {
-      const previous = this.state(db);
+      const previous = this.rawState(db);
+      if (previous !== undefined && (!safeBytes(previous.revision)
+        || previous.revision >= Number.MAX_SAFE_INTEGER)) {
+        throw new Error('Global quota revision is invalid');
+      }
       db.prepare(`INSERT INTO quota_state (id,revision,limit_bytes,reserve_bytes)
         VALUES (1,?,?,?) ON CONFLICT(id) DO UPDATE SET
         revision=excluded.revision,limit_bytes=excluded.limit_bytes,reserve_bytes=excluded.reserve_bytes`)
@@ -247,7 +261,9 @@ export class GlobalStorageQuotaReservations {
         if (!safeBytes(reserved)) throw new Error('Invalid global quota reserved size');
         return { ...state, reserved };
       });
-      const inventory = await this.completeInventory();
+      // Shared only while a revision-matched scan is actively running.
+      // Never reuse across a release, a new writer, or a policy change.
+      const inventory = await this.completeInventory(initial.revision);
       // Only after a complete inventory, and only for old disposable logs.
       // A second inventory is required if any file is actually removed.
       const physicalPressure = volumeHeadroom(
@@ -410,10 +426,10 @@ export class GlobalStorageQuotaReservations {
     return this.ownerIdentityPromise;
   }
 
-  private async completeInventory(): Promise<ProfileStorageInventory> {
-    const inventory = await inspectProfileStorageOffMain(this.root, {
-      maxEntries: 200_000, maxDurationMs: 15_000,
-    });
+  private async completeInventory(revision?: number): Promise<ProfileStorageInventory> {
+    const inventory = revision === undefined
+      ? await this.scanProfileInventory()
+      : await coalesceQuotaInventory(this.root, revision, this.scanProfileInventory);
     if (inventory.incomplete || inventory.allocatedBytes !== null && !safeBytes(inventory.allocatedBytes)) {
       throw new Error('Global quota cannot admit writes without a complete profile inventory');
     }
@@ -476,9 +492,14 @@ export class GlobalStorageQuotaReservations {
     });
   }
 
-  private state(db: DatabaseSync): QuotaStateRow | undefined {
+  private rawState(db: DatabaseSync): QuotaStateRow | undefined {
     return db.prepare('SELECT revision,limit_bytes,reserve_bytes FROM quota_state WHERE id=1')
       .get() as QuotaStateRow | undefined;
+  }
+
+  private state(db: DatabaseSync): QuotaStateRow | undefined {
+    const state = this.rawState(db);
+    return state !== undefined && state.limit_bytes > 0 ? state : undefined;
   }
 
   private reapDeadOwners(db: DatabaseSync): boolean {

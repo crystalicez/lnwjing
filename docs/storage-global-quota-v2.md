@@ -45,6 +45,17 @@ an API building block, not a default policy or a complete Global Hard Limit.
 - `reserve(bytes)` uses a *complete*, bounded, read-only profile inventory and
   an atomic `BEGIN IMMEDIATE` reservation journal. A changed ledger revision
   during the inventory causes a retry, while an incomplete scan rejects admission.
+  Concurrent callers **in the same Node process** which observed the *same*
+  ledger revision now share only the running inventory Worker, reducing duplicate
+  full-profile stat walks. The result is discarded immediately after completion;
+  no future admission reuses a cached scan. A completed reservation, release or
+  policy update increments the revision and forces an independent new scan.
+  Cross-process callers still scan independently before SQLite serializes
+  the final admission, and no non-cooperating writer can be fenced by this rule.
+  Disabling Quota retains a zero-limit, disabled ledger row with a monotonically
+  increasing revision instead of deleting the row. This prevents an ABA race
+  in which disable/re-enable could recycle the old revision while a scan was
+  active and let a new write use pre-reconfiguration inventory.
 - `release(proof)` requires the owning PID and a private reservation token.
   When the OS probe succeeds, newly created Windows reservations also persist
   the OS process creation timestamp (100-ns .NET ticks), mitigating stale
@@ -81,9 +92,11 @@ fails, no staging snapshot is written and the previous complete index is
 preserved. Any successful/failed atomic write releases the reservation after
 staging cleanup. When quota is on, an index metadata *read* does not regenerate
 an unreserved sidecar; the next successful index save publishes it. Opt-out
-keeps the historical path unchanged. This adds one metadata-only profile
-inventory per index save **while opted in**; the disk I/O impact of frequent
-watcher updates still needs large-profile performance acceptance. The optional
+keeps the historical path unchanged. Each sequential index save still needs
+its own metadata-only profile inventory **while opted in**; only overlapping
+same-process admissions at one ledger revision can share an ongoing scan.
+The disk I/O impact of frequent watcher updates still needs large-profile
+performance acceptance. The optional
 SQLite workspace-index preview remains **uncovered** because its WAL growth
 requires separate bounded admission. SQLite's original main-page cap remains
 independent.
