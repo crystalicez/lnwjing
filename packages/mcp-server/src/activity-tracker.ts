@@ -78,10 +78,6 @@ export interface ActivityAuditSink {
 export type ActivityRecordErrorHandler = (error: unknown, event: ActivitySinkEvent) => void;
 export type ActivityEventListener = (event: ActivitySinkEvent) => void;
 
-const FILE_MUTATIONS = new Set([
-  'write_file', 'edit_file', 'apply_patch', 'move_file', 'copy_file', 'delete_file',
-  'restore_deleted_file', 'restore_checkpoint',
-]);
 const MAX_RESERVED_RESULT_DETAIL_BYTES = 256 * 1024;
 const MAX_RESERVED_RESULT_MESSAGE_CHARS = 16 * 1024;
 
@@ -117,7 +113,7 @@ export class ActivityTracker {
     private readonly sink?: ActivitySink,
     private readonly onRecordError?: ActivityRecordErrorHandler,
     private readonly auditSink?: ActivityAuditSink,
-    private readonly reserveFileAudit?: (estimateMetadataBytes: () => number) => Promise<(() => void) | null>,
+    private readonly reserveAudit?: (estimateMetadataBytes: () => number) => Promise<(() => void) | null>,
   ) {}
 
   public listInFlight(): readonly InFlightToolCall[] {
@@ -245,9 +241,11 @@ export class ActivityTracker {
     };
     this.inflight.set(callId, entry);
     this.activityRevision += 1;
-    if (this.reserveFileAudit !== undefined && FILE_MUTATIONS.has(toolName)) {
+    // All tools persist SQLite lifecycle rows. A non-file call's audit must
+    // never consume space promised to an already-admitted file mutation.
+    if (this.reserveAudit !== undefined) {
       try {
-        const release = await this.reserveFileAudit(() => {
+        const release = await this.reserveAudit(() => {
           const eventBytes = Buffer.byteLength(JSON.stringify(event));
           const detailBytes = describedTarget.detail === undefined ? 0 : Buffer.byteLength(JSON.stringify(describedTarget.detail));
           return 2 * eventBytes + detailBytes;
@@ -256,7 +254,7 @@ export class ActivityTracker {
       } catch (cause) {
         this.inflight.delete(callId);
         this.activityRevision += 1;
-        throw new ActivityAuditAdmissionError('Profile storage quota could not reserve space for file mutation audit', { cause });
+        throw new ActivityAuditAdmissionError('Profile storage quota could not reserve space for MCP activity audit', { cause });
       }
     }
     if (!await this.safeRecord(event, describedTarget.detail)) this.failedAuditStarts.add(callId);

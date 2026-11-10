@@ -119,13 +119,27 @@ reservation after the insert settles. Before committing the insert, SQLite
 checks that enough main pages remain for audit. If the check or reservation
 fails, the original file stays intact.
 
-Direct MCP file mutations reserve estimated space for both STARTED and terminal
-SQLite audit before dispatch. The host sizes the prepared STARTED event and
-adds capacity for terminal metadata and SQLite overhead. The reservation stays
+All MCP tool calls (including read-only calls) now reserve estimated space
+for both STARTED and terminal SQLite audit before dispatch when quota is
+enabled; otherwise non-file audit writers could consume space reserved for an
+active edit. The host sizes the prepared STARTED event and adds 2 MiB for
+terminal metadata, SQLite main/WAL and page overhead. The reservation stays
 active through terminal recording, including when a cancelled request has work
-still settling. If admission fails, the host returns a retryable conflict before
-creating a STARTED record. Oversized optional result detail is replaced with an
-omission notice. The terminal outcome and mutation receipt remain in the audit.
+still settling. Admission may first reclaim only verified old disposable data.
+If admission fails, the host returns a retryable conflict before creating a
+STARTED record or executing that tool. A refused call does not take another
+call's lease. Oversized optional result detail is replaced with an omission
+notice. The terminal outcome and mutation receipt remain in the audit.
+
+This is an intentionally conservative admission boundary, NOT a physical quota
+for independently writing SQLite services: other non-MCP database writers,
+native helpers, cache and temporary files can still grow without this ledger.
+Each new MCP call while the option is enabled performs a bounded inventory,
+including read-only calls; large profiles can therefore incur metadata-I/O
+latency or fail closed on incomplete scans. The fixed per-call estimate cannot
+guarantee that arbitrarily large SQLite audit rows or WAL growth fit. Global
+system-enforced physical hard limits and fully incremental accounting remain
+future release gates.
 
 An opt-in pressure-reclaim stage runs after a *complete* inventory when
 projected use reaches 75% of the ordinary budget or the volume is low on space.

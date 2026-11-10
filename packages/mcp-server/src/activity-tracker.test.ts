@@ -217,6 +217,39 @@ describe('ActivityTracker', () => {
     expect(auditDetails[1]).toEqual(resultDetail);
   });
 
+  it('keeps non-file SQLite activity reservations alive until terminal recording settles beside an active edit', async () => {
+    const releases: string[] = [];
+    let entered!: () => void;
+    let finish!: () => void;
+    const completedAuditEntered = new Promise<void>((resolve) => { entered = resolve; });
+    const completedAuditGate = new Promise<void>((resolve) => { finish = resolve; });
+    const recorded: ActivitySinkEvent[] = [];
+    const tracker = new ActivityTracker(undefined, undefined, {
+      async record(event): Promise<void> {
+        recorded.push(event);
+        if (event.toolName === 'read_file' && event.phase === 'completed') {
+          entered();
+          await completedAuditGate;
+        }
+      },
+    }, async (): Promise<() => void> => {
+      const index = releases.length + tracker.listInFlight().length;
+      return () => { releases.push(String(index)); };
+    });
+    const editing = await tracker.begin('edit_file', { workspaceId: 'ws', path: 'src/a.ts' });
+    const reading = await tracker.begin('read_file', { workspaceId: 'ws', path: 'src/a.ts' });
+    expect(recorded.filter((event) => event.phase === 'started')).toHaveLength(2);
+    const pendingReadCompletion = tracker.end(reading, 'SUCCESS', 1);
+    await completedAuditEntered;
+    expect(releases).toHaveLength(0);
+    await tracker.end(editing, 'SUCCESS', 2);
+    expect(releases).toHaveLength(1);
+    finish();
+    await pendingReadCompletion;
+    expect(releases).toHaveLength(2);
+    expect(tracker.listInFlight()).toEqual([]);
+  });
+
   it('marks only meaningful generic diagnostics as expandable', async () => {
     const workspaceId = '372e9384-9628-43be-b766-661cdb591383';
     const events: ActivitySinkEvent[] = [];

@@ -63,4 +63,72 @@ describe('Desktop global quota for file Undo', () => {
       } finally { await runtime.close(); }
     } finally { await rm(root, { recursive: true, force: true }); }
   });
+
+  it('keeps an admitted edit alive while a competing non-file SQLite audit is refused near the cap', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-writer-race-'));
+    let unblockEdit!: () => void;
+    try {
+      const source = path.join(root, 'source');
+      const profile = path.join(root, 'profile');
+      await mkdir(source);
+      const target = path.join(source, 'L.07.md');
+      await writeFile(target, '# Before');
+      const runtime = createDesktopRuntime(profile, { checkpointEncryptionKey: Buffer.alloc(32, 91) });
+      try {
+        const workspaceId = await runtime.ensureDefaultWorkspace(source);
+        const originalFile = runtime.mcpServices.file;
+        if (originalFile === undefined) throw new Error('File tools are unavailable');
+        let entered!: () => void;
+        const editEntered = new Promise<void>((resolve) => { entered = resolve; });
+        const editGate = new Promise<void>((resolve) => { unblockEdit = resolve; });
+        const calls = { read: 0 };
+        const registry = new ToolRegistry({
+          ...runtime.mcpServices,
+          file: {
+            editFile: async (...args: Parameters<typeof originalFile.editFile>) => {
+              entered();
+              await editGate;
+              return originalFile.editFile(...args);
+            },
+            readFile: async (...args: Parameters<typeof originalFile.readFile>) => {
+              calls.read += 1;
+              return originalFile.readFile(...args);
+            },
+          } as never,
+        }, runtime.mcpActor, {
+          activityTracker: runtime.activityTracker,
+          profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+          authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+        });
+        const quota = new GlobalStorageQuotaReservations(profile);
+        quota.configure({ limitBytes: 8 * 1024 ** 2, criticalReserveBytes: 1024 });
+        const baseline = (await quota.inspect()).logicalUsedBytes;
+        quota.configure({ limitBytes: baseline + 3 * 1024 ** 2, criticalReserveBytes: 1024 });
+
+        const editing = registry.invoke('edit_file', {
+          workspaceId, path: 'L.07.md', oldText: '# Before', newText: '# After',
+        });
+        await editEntered;
+        expect(quota.status()?.activeReservations).toBe(1);
+        const denied = await registry.invoke('read_file', { workspaceId, path: 'L.07.md' });
+        expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+        expect(calls.read).toBe(0);
+        expect(await readFile(target, 'utf8')).toBe('# Before');
+        expect(quota.status()?.activeReservations).toBe(1);
+
+        unblockEdit();
+        const completed = await editing;
+        expect(completed.isError).not.toBe(true);
+        expect(await readFile(target, 'utf8')).toBe('# After');
+        expect(quota.status()?.activeReservations).toBe(0);
+        const retry = await registry.invoke('read_file', { workspaceId, path: 'L.07.md' });
+        expect(retry.isError).not.toBe(true);
+        expect(calls.read).toBe(1);
+        expect(quota.status()?.activeReservations).toBe(0);
+      } finally {
+        unblockEdit?.();
+        await runtime.close();
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }, 30_000);
 });

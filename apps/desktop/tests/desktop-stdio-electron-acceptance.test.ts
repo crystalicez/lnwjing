@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, writeFile, rm, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -12,6 +12,7 @@ import {
   type JSONRPCResponse,
 } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { GlobalStorageQuotaReservations } from '@lnwjing/storage';
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(desktopRoot, '../..');
@@ -310,6 +311,94 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
       }
     }, 45_000);
     }
+
+    it.skipIf(packagedExe === undefined || process.env.LNWJING_RUN_L07_PORTABLE_SIMULATION !== '1')(
+      'retries an L.07 markdown + Index/_progress workflow after reclaiming old profile diagnostics in packaged MCP', async () => {
+        const root = await mkdtemp(path.join(privateRoot, 'portable-l07-'));
+        const workspace = path.join(root, 'workspace');
+        const data = path.join(root, 'data');
+        const roaming = path.join(root, 'roaming');
+        const local = path.join(root, 'local');
+        const temp = path.join(root, 'temp');
+        await Promise.all([workspace, data, roaming, local, temp].map(p => mkdir(p, { recursive: true })));
+        const markdown = path.join(workspace, 'L.07.md');
+        const index = path.join(workspace, 'Index.md');
+        const progress = path.join(workspace, '_progress.md');
+        // This is synthetic material, never the user's real course/workspace.
+        await writeFile(path.join(workspace, 'L.07.html'), '<h1>synthetic L.07</h1>\n');
+        await writeFile(path.join(workspace, 'L.07.test.ts'), 'export const syntheticL07 = true;\n');
+        await writeFile(index, 'L.07: pending\n');
+        await writeFile(progress, 'L.07: pending\n');
+        const env = {
+          ...process.env, LNWJING_DATA_PATH: data, LNWJING_WORKSPACE: workspace,
+          APPDATA: roaming, LOCALAPPDATA: local, TEMP: temp, TMP: temp,
+          LNWJING_INDEX_SQLITE_PREVIEW: '0',
+          PATH: path.join(desktopRoot, 'build', 'runtime-tools', 'ripgrep') + path.delimiter + (process.env.PATH ?? ''),
+        };
+        delete env.ELECTRON_RUN_AS_NODE;
+        const transport = new StdioClientTransport({
+          command: path.join(path.dirname(electron), 'lnwjing-mcp-stdio-bridge.exe'),
+          args: [electron, '--mcp-stdio', '--workspace', workspace, '--disable-gpu', '--disable-background-networking'],
+          cwd: desktopRoot, env, stderr: 'pipe',
+        });
+        let diagnostics = '';
+        transport.stderr?.on('data', (chunk: Buffer) => { diagnostics = (diagnostics + String(chunk)).slice(-2000); });
+        let requestId = 10;
+        const call = async (name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> =>
+          responseData(await request(transport, requestId++, 'tools/call', { name, arguments: args }));
+        try {
+          await transport.start();
+          const catalog = responseData(await request(transport, 1, 'tools/list', {}));
+          expect((catalog.tools as Array<{ name: string }>).map(tool => tool.name)).toContain('write_file');
+          const quota = new GlobalStorageQuotaReservations(data);
+          const mib = 1024 ** 2;
+          quota.configure({ limitBytes: 128 * mib, criticalReserveBytes: 512 * 1024 });
+          const baseline = (await quota.inspect()).logicalUsedBytes;
+          quota.configure({ limitBytes: baseline + mib, criticalReserveBytes: 512 * 1024 });
+          const lesson = '# Synthetic L.07\n\n## Key concepts\nProfile quota recovery verified.\n';
+          const denied = await call('write_file', { path: markdown, content: lesson, userConfirmed: true });
+          expect(denied).toMatchObject({ isError: true });
+          await expect(readFile(markdown, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+          expect(quota.status()?.activeReservations).toBe(0);
+
+          // Verified-old app diagnostics are the only reclaim candidate;
+          // already saved HTML, test script, Index and progress are protected.
+          const diagnosticsDir = path.join(data, 'diagnostics');
+          await mkdir(diagnosticsDir);
+          const old = path.join(diagnosticsDir, 'expired-l07.log');
+          await writeFile(old, Buffer.alloc(4 * mib));
+          const expiredAt = new Date('2020-01-01T00:00:00.000Z');
+          await utimes(old, expiredAt, expiredAt);
+          const withOld = (await quota.inspect()).logicalUsedBytes;
+          quota.configure({ limitBytes: withOld + 2 * mib, criticalReserveBytes: 512 * 1024 });
+
+          const savedLesson = await call('write_file', { path: markdown, content: lesson, userConfirmed: true });
+          expect(savedLesson.isError).not.toBe(true);
+          const savedIndex = await call('edit_file', {
+            path: index, oldText: 'L.07: pending', newText: 'L.07: complete', userConfirmed: true,
+          });
+          expect(savedIndex.isError).not.toBe(true);
+          const savedProgress = await call('edit_file', {
+            path: progress, oldText: 'L.07: pending', newText: 'L.07: complete', userConfirmed: true,
+          });
+          expect(savedProgress.isError).not.toBe(true);
+          expect(await readFile(markdown, 'utf8')).toBe(lesson);
+          expect(await readFile(index, 'utf8')).toContain('L.07: complete');
+          expect(await readFile(progress, 'utf8')).toContain('L.07: complete');
+          expect(await readFile(path.join(workspace, 'L.07.html'), 'utf8')).toContain('synthetic L.07');
+          await expect(readFile(old)).rejects.toMatchObject({ code: 'ENOENT' });
+          expect(quota.status()?.activeReservations).toBe(0);
+        } catch (error) {
+          throw new Error('Packaged synthetic L.07 profile quota simulation failed: ' + String(error)
+            + '; diagnostics: ' + diagnostics, { cause: error });
+        } finally {
+          await Promise.race([
+            transport.close().catch(() => undefined),
+            new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
+          ]);
+          await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 200 });
+        }
+      }, 60_000);
 
     it('refuses an unresolved restore before creating a new checkpoint key', async () => {
       const root = await mkdtemp(path.join(privateRoot, 'electron-restore-refusal-'));

@@ -13,7 +13,7 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_PORTABLE
   () => {
     it('extracts a verified runtime and initializes MCP without using the live profile', async () => {
       const preexisting = new Set((await readdir(portable, { withFileTypes: true }))
-        .filter(item => item.isDirectory() && /^lnwjing-runtime-v5\\.8\\.7-[A-Za-z0-9_-]+$/.test(item.name))
+        .filter(item => item.isDirectory() && /^lnwjing-runtime-v5\.8\.7-[A-Za-z0-9_-]+$/.test(item.name))
         .map(item => item.name));
       const auditRoot = path.join(root, '.audit');
       await mkdir(auditRoot, { recursive: true });
@@ -79,7 +79,7 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_PORTABLE
           // touch an existing release cache or the user's installed profile.
           for (const item of await readdir(portable, { withFileTypes: true })) {
             if (!item.isDirectory() || preexisting.has(item.name) ||
-              !/^lnwjing-runtime-v5\\.8\\.7-[A-Za-z0-9_-]+$/.test(item.name)) continue;
+              !/^lnwjing-runtime-v5\.8\.7-[A-Za-z0-9_-]+$/.test(item.name)) continue;
             const folder = path.join(portable, item.name);
             const marker = await readFile(path.join(folder, '.lnwjing-ready'), 'utf8').catch(() => '');
             if (marker.trim() !== item.name.replace('lnwjing-runtime-', 'lnwjing-')) continue;

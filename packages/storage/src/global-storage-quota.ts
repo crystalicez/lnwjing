@@ -330,12 +330,19 @@ export class GlobalStorageQuotaReservations {
     throw new Error('Global quota admission changed during inventory; retry when writers are idle');
   }
 
-  /** Reserve estimated main/WAL growth for STARTED and terminal file-tool audit. */
-  public async reserveFileMutationAudit(estimateMetadataBytes: () => number): Promise<(() => void) | null> {
+  /** Reserve estimated main/WAL growth for both lifecycle rows of ANY MCP call.
+   * The estimate is held through terminal audit, not merely until tool dispatch.
+   * Admission can reclaim verified old disposable data before a new call starts.
+   */
+  public async reserveMcpActivityAudit(estimateMetadataBytes: () => number): Promise<(() => void) | null> {
     if (this.status() === null) return null;
-    // Allow for main and WAL growth, terminal details, indexes and page overhead.
     const reservation = await this.reserve(2 * estimateMetadataBytes() + 2 * 1024 ** 2);
     return () => this.release(reservation);
+  }
+
+  /** Compatibility for older callers that enrolled file mutations only. */
+  public reserveFileMutationAudit(estimateMetadataBytes: () => number): Promise<(() => void) | null> {
+    return this.reserveMcpActivityAudit(estimateMetadataBytes);
   }
 
   /** Release only AFTER the associated write has stopped and reached a terminal state. */

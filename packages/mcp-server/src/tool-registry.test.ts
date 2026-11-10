@@ -344,6 +344,24 @@ describe('MCP tool registry', () => {
     expect(activityTracker.listInFlight()).toEqual([]);
   });
 
+  it('refuses a non-file MCP call before any SQLite audit when its profile quota reservation fails', async () => {
+    const readFile = vi.fn(async () => ok({ path: 'file.ts', content: 'safe', truncated: false }));
+    const record = vi.fn();
+    const reserve = vi.fn(async (): Promise<never> => { throw new Error('profile storage exhausted'); });
+    const tracker = new ActivityTracker(undefined, undefined, { record }, reserve);
+    const registry = new ToolRegistry({ file: { readFile } as never }, actor, {
+      activityTracker: tracker,
+      profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+    });
+    await expect(registry.invoke('read_file', { workspaceId: 'workspace-a', path: 'file.ts' }))
+      .resolves.toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    expect(readFile).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+    expect(reserve).toHaveBeenCalledTimes(1);
+    expect(tracker.listInFlight()).toEqual([]);
+  });
+
   it('holds the file mutation audit reservation through deferred settlement and terminal audit', async () => {
     let entered!: () => void;
     let finishEdit!: () => void;
