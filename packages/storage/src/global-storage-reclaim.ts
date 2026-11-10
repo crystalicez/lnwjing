@@ -4,7 +4,9 @@ import { lstatSync, realpathSync } from 'node:fs';
 
 /**
  * Conservative disposable-only profile reclaim. Never walks user repositories
- * or deletes SQLite, backups, checkpoints, recovery trash, index or active logs.
+ * or deletes SQLite, backups, checkpoints, recovery trash, authoritative
+ * workspace indexes or active logs. Abandoned *staging* index files are eligible
+ * only after an age and verified-dead writer-PID check.
  */
 export interface DisposableReclaimResult {
   readonly inspected: number;
@@ -21,8 +23,10 @@ export interface DisposableReclaimOptions {
   readonly maxRemovals?: number;
 }
 
-const SUBDIRECTORIES = ['logs', 'diagnostics', 'crash-dumps'] as const;
+const SUBDIRECTORIES = ['logs', 'diagnostics', 'crash-dumps', 'workspace-index'] as const;
 const ALLOWED_EXTENSIONS = /\.(?:log|txt|jsonl|ndjson|trace|dmp|gz)$/i;
+/** The exact JsonWorkspaceIndexStore atomic staging filename shapes only. */
+const INDEX_STAGING_NAME = /^.+\.json(?:\.meta\.json)?\.([1-9]\d{0,9})\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tmp$/i;
 const DEFAULT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 2048;
 const MAX_REMOVALS = 128;
@@ -45,6 +49,14 @@ interface Candidate {
   readonly ino: number;
   readonly parentDev: number;
   readonly parentIno: number;
+  readonly writerPid: number | null;
+}
+
+/** Only ESRCH establishes dead ownership. EPERM and other errors preserve files. */
+function ownerDefinitelyGone(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || pid > 2_147_483_647) return false;
+  try { process.kill(pid, 0); return false; }
+  catch (error: unknown) { return (error as NodeJS.ErrnoException).code === 'ESRCH'; }
 }
 
 export async function reclaimExpiredDisposableFiles(
@@ -84,15 +96,21 @@ export async function reclaimExpiredDisposableFiles(
     for await (const entry of dir) {
       if (inspected >= entryLimit) { truncated = true; break; }
       inspected++;
-      if (!entry.isFile() || !ALLOWED_EXTENSIONS.test(entry.name)) continue;
+      if (!entry.isFile()) continue;
+      const writerPid = directoryName === 'workspace-index'
+        ? Number(INDEX_STAGING_NAME.exec(entry.name)?.[1] ?? 0) : null;
+      if (directoryName === 'workspace-index'
+        ? writerPid === null || writerPid === 0
+        : !ALLOWED_EXTENSIONS.test(entry.name)) continue;
       const filename = path.join(directory, entry.name);
       try {
         const stat = await lstat(filename);
         if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1
           || stat.dev !== rootStat.dev || !Number.isSafeInteger(stat.size)
-          || stat.size < 0 || stat.mtimeMs >= cutoff) continue;
+          || stat.size < 0 || stat.mtimeMs >= cutoff
+          || writerPid !== null && !ownerDefinitelyGone(writerPid)) continue;
         candidates.push({ filename, size: stat.size, mtimeMs: stat.mtimeMs, dev: stat.dev, ino: stat.ino,
-          parentDev: info.dev, parentIno: info.ino });
+          parentDev: info.dev, parentIno: info.ino, writerPid });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
@@ -123,7 +141,8 @@ export async function reclaimExpiredDisposableFiles(
     });
     if (stat === null || !stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1
       || stat.dev !== candidate.dev || stat.ino !== candidate.ino || stat.size !== candidate.size
-      || stat.mtimeMs !== candidate.mtimeMs || stat.mtimeMs >= cutoff) continue;
+      || stat.mtimeMs !== candidate.mtimeMs || stat.mtimeMs >= cutoff
+      || candidate.writerPid !== null && !ownerDefinitelyGone(candidate.writerPid)) continue;
     try {
       await unlink(candidate.filename);
       removed++;

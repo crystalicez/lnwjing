@@ -92,6 +92,17 @@ An opt-in pressure-reclaim stage runs only after a *complete* inventory and at
 75% projected use, on a quota policy change, or under low physical volume
 headroom. It unlinks verified, single-link files older than seven days in
 exact profile-owned `logs`, `diagnostics` and `crash-dumps` directories.
+The same conservative sweep may also remove **only unpublished JSON workspace-index
+staging files** directly inside the profile-owned `workspace-index/` folder,
+whose basename exactly matches the app's `<workspace>.json.<PID>.<UUID>.tmp`
+or `<workspace>.json.meta.json.<PID>.<UUID>.tmp` format. The staging file
+must be more than seven days old and its writer PID must be **confirmed gone**
+using an existence probe, checked once at discovery and again before unlink.
+A PID that has been reused by a live process is conservatively kept. Unknown,
+active or recently modified temporary files, authoritative `.json` snapshots,
+metadata sidecars, SQLite index/WAL, `.locks`, hardlinks, symlink/junction
+paths and files outside the owned profile are never deleted. This does not
+remove old *published* indexes, which require a coordinated retention policy.
 The sweep is capped at **8 batches of 128 files**, with no more than 2,048
 entries inspected per batch, and stops early once estimated logical pressure
 and volume headroom have recovered. A writer attempting admission likewise
@@ -130,7 +141,7 @@ MCP STDIO,
 native helpers, the opt-in SQLite workspace-index preview, JSON-index file
 deletions/metadata maintenance outside a successful save, and routine SQLite
 mutations do **not** yet use a unified pre-write quota. No automatic deletion of Backup, Undo,
-Recovery Trash, Index or user source code is enabled. Never advertise this as
+Recovery Trash, authoritative Index or user source code is enabled. Never advertise this as
 a 100% global quota or enable it by default until incremental accounting,
 writer coverage and crash/physical-disk tests pass.
 
