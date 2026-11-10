@@ -462,6 +462,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     throw new Error('Desktop runtime requires a resolved checkpoint encryption key or fail-closed checkpoint cipher before startup');
   }
   const databaseFilename = path.join(dataPath, 'lnwjing.sqlite');
+  const globalQuota = new GlobalStorageQuotaReservations(dataPath);
   const backupDirectory = path.join(dataPath, 'backups');
   const database = new SqliteDatabase(databaseFilename, {
     backupDirectory,
@@ -475,7 +476,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const indexDirectory = path.join(dataPath, 'workspace-index');
   const workspaceIndex = new WorkspaceIndexService(workspaceRepository,
     process.env.LNWJING_INDEX_SQLITE_PREVIEW === '1'
-      ? new SqliteWorkspaceIndexStore(indexDirectory) : new JsonWorkspaceIndexStore(indexDirectory));
+      ? new SqliteWorkspaceIndexStore(indexDirectory)
+      : new JsonWorkspaceIndexStore(indexDirectory, () => globalQuota.status() === null ? null : globalQuota));
   const settingsRepository = new SqliteSettingsRepository(database);
   let watcherAccessToken = '';
   let watcherAccessTokenOperation: Promise<string> | null = null;
@@ -535,7 +537,6 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     throw new Error('Desktop runtime requires a checkpoint encryption key resolved by the Electron composition root');
   }
   const checkpointRepository = new SqliteCheckpointRepository(database, checkpointCipher);
-  const globalQuota = new GlobalStorageQuotaReservations(dataPath);
   const backupService = new SqliteBackupService(database, {
     backupDirectory, databaseFilename, platform: process.platform, arch: process.arch,
     globalQuota: (): GlobalStorageQuotaReservations | null => globalQuota.status() === null ? null : globalQuota,

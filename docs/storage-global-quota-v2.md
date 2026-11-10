@@ -74,7 +74,19 @@ requires a confirmation that coverage is limited. The UI displays in-flight
 reserved bytes and critical reserve, while full logical usage still requires
 the on-demand inventory scan. The optional backup provider is resolved at
 snapshot start, so an enabled budget applies to ordinary manual and daily
-asynchronous snapshots. SQLite's original main-page cap remains independent.
+asynchronous snapshots. **Default JSON workspace-index writes** in Desktop
+and CLI/STDIO now also reserve the full serialized atomic temporary snapshot
+plus 64 KiB for its optional metadata sidecar before writing. If admission
+fails, no staging snapshot is written and the previous complete index is
+preserved. Any successful/failed atomic write releases the reservation after
+staging cleanup. When quota is on, an index metadata *read* does not regenerate
+an unreserved sidecar; the next successful index save publishes it. Opt-out
+keeps the historical path unchanged. This adds one metadata-only profile
+inventory per index save **while opted in**; the disk I/O impact of frequent
+watcher updates still needs large-profile performance acceptance. The optional
+SQLite workspace-index preview remains **uncovered** because its WAL growth
+requires separate bounded admission. SQLite's original main-page cap remains
+independent.
 
 An opt-in pressure-reclaim stage runs only after a *complete* inventory and at
 75% projected use, on a quota policy change, or under low physical volume
@@ -115,8 +127,9 @@ are stored when verified, but only a bounded set of owner generations
 is verified per admission; POSIX and legacy reservations still fall back to
 definitely-dead PID detection. Outside the opted-in backup writer, Desktop,
 MCP STDIO,
-native helpers, workspace index and routine SQLite mutations do **not** yet use
-a unified pre-write quota. No automatic deletion of Backup, Undo,
+native helpers, the opt-in SQLite workspace-index preview, JSON-index file
+deletions/metadata maintenance outside a successful save, and routine SQLite
+mutations do **not** yet use a unified pre-write quota. No automatic deletion of Backup, Undo,
 Recovery Trash, Index or user source code is enabled. Never advertise this as
 a 100% global quota or enable it by default until incremental accounting,
 writer coverage and crash/physical-disk tests pass.

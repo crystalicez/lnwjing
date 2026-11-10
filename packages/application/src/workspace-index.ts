@@ -110,10 +110,33 @@ export interface WorkspaceIndexStore {
   isInternalPath?(absolutePath: string): boolean;
 }
 
+/**
+ * Optional, low-frequency admission for persisted JSON index and its
+ * atomic staging file. The index is rebuildable, but writing it must still
+ * honor a user-enabled profile budget. Never touches repository source.
+ */
+export interface WorkspaceIndexQuotaReservation {
+  readonly id: string;
+  readonly token: string;
+  readonly bytes: number;
+}
+
+export interface WorkspaceIndexQuota {
+  reserve(bytes: number): Promise<WorkspaceIndexQuotaReservation>;
+  release(reservation: WorkspaceIndexQuotaReservation): void;
+}
+
+export type WorkspaceIndexQuotaProvider = () => WorkspaceIndexQuota | null;
+
+const INDEX_METADATA_RESERVE_BYTES = 64 * 1024;
+
 export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
   private cached: { readonly workspaceId: string; readonly identity: string; readonly snapshot: WorkspaceIndexSnapshot } | null = null;
 
-  public constructor(private readonly directory: string = path.join(os.tmpdir(), 'lnwjing', 'index')) {}
+  public constructor(
+    private readonly directory: string = path.join(os.tmpdir(), 'lnwjing', 'index'),
+    private readonly quotaProvider?: WorkspaceIndexQuotaProvider,
+  ) {}
 
   public isInternalPath(absolutePath: string): boolean {
     return isHostPathWithin(path.resolve(this.directory), path.resolve(absolutePath));
@@ -172,15 +195,28 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
       return this.loadMetadata(workspaceId, retry + 1);
     }
     const metadata = snapshotMetadata(snapshot, identity, (entry) => !this.isInternalPath(path.resolve(snapshot.rootPath, entry.relativePath)));
-    await this.writeMetadata(metadata).catch(() => undefined);
+    // A status/read request must not create an unreserved disposable sidecar
+    // while global quota is enabled. The next successful save publishes one.
+    let mayRebuildSidecar = this.quotaProvider === undefined;
+    if (!mayRebuildSidecar) {
+      // A malformed ledger may prevent admission, but must not prevent
+      // reading the already-persisted index.
+      try { mayRebuildSidecar = this.quotaProvider?.() === null; }
+      catch { mayRebuildSidecar = false; }
+    }
+    if (mayRebuildSidecar) await this.writeMetadata(metadata).catch(() => undefined);
     return metadata;
   }
 
-  private async writeMetadata(metadata: WorkspaceIndexMetadata): Promise<void> {
+  private async writeMetadata(metadata: WorkspaceIndexMetadata, reservedBytes?: number): Promise<void> {
     const target = `${this.filePath(metadata.workspaceId)}.meta.json`;
     const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+    const content = JSON.stringify(metadata);
+    if (reservedBytes !== undefined && Buffer.byteLength(content, 'utf8') > reservedBytes) {
+      throw new Error('Workspace index metadata exceeds reserved byte budget');
+    }
     try {
-      await writeFile(temporary, JSON.stringify(metadata), { encoding: 'utf8', flag: 'wx' });
+      await writeFile(temporary, content, { encoding: 'utf8', flag: 'wx' });
       await rename(temporary, target);
     } finally {
       await rm(temporary, { force: true }).catch(() => undefined);
@@ -204,10 +240,17 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
 
   private async save(snapshot: WorkspaceIndexSnapshot, signal?: AbortSignal): Promise<void> {
     signal?.throwIfAborted();
-    await mkdir(this.directory, { recursive: true });
+
     const temporaryPath = `${this.filePath(snapshot.workspaceId)}.${process.pid}.${randomUUID()}.tmp`;
+    const content = `${JSON.stringify(snapshot)}\n`;
+    const quota = this.quotaProvider?.();
+    const estimatedBytes = Buffer.byteLength(content, 'utf8') + INDEX_METADATA_RESERVE_BYTES;
+    if (!Number.isSafeInteger(estimatedBytes) || estimatedBytes <= 0) throw new Error('Workspace index quota estimate is invalid');
+    const reservation = quota === undefined || quota === null ? null : await quota.reserve(estimatedBytes);
     try {
-      await writeFile(temporaryPath, `${JSON.stringify(snapshot)}\n`, { encoding: 'utf8', flag: 'wx', ...(signal === undefined ? {} : { signal }) });
+      signal?.throwIfAborted();
+      await mkdir(this.directory, { recursive: true });
+      await writeFile(temporaryPath, content, { encoding: 'utf8', flag: 'wx', ...(signal === undefined ? {} : { signal }) });
       signal?.throwIfAborted();
       await rename(temporaryPath, this.filePath(snapshot.workspaceId));
       this.cached = null;
@@ -215,10 +258,12 @@ export class JsonWorkspaceIndexStore implements WorkspaceIndexStore {
       try {
         const identity = indexFileIdentity(await stat(this.filePath(snapshot.workspaceId), { bigint: true }));
         await this.writeMetadata(snapshotMetadata(snapshot, identity, (entry) =>
-          !this.isInternalPath(path.resolve(snapshot.rootPath, entry.relativePath))));
+          !this.isInternalPath(path.resolve(snapshot.rootPath, entry.relativePath))),
+        reservation === null ? undefined : INDEX_METADATA_RESERVE_BYTES);
       } catch { /* A later compact read reconstructs the missing sidecar. */ }
     } finally {
       await rm(temporaryPath, { force: true }).catch(() => undefined);
+      if (reservation !== null) quota!.release(reservation);
     }
   }
 

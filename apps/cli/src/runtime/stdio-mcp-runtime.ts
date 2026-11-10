@@ -60,6 +60,7 @@ import {
   SqliteAuditRepository,
   SqliteCheckpointRepository,
   SqliteDatabase,
+  GlobalStorageQuotaReservations,
   SqliteGoalRepository,
   SqliteSettingsRepository,
   SqliteWorkspaceRepository,
@@ -112,6 +113,7 @@ export function createStdioMcpRuntime(
 ): StdioMcpRuntime {
   const checkpointKey = resolveStdioCheckpointKey(options.checkpointEncryptionKey);
   const databaseFilename = path.join(dataPath, 'lnwjing.sqlite');
+  const globalQuota = new GlobalStorageQuotaReservations(dataPath);
   const database = new SqliteDatabase(databaseFilename, { backupDirectory: path.join(dataPath, 'backups') });
   const rawWorkspaceRepository = new SqliteWorkspaceRepository(database);
   const workspaceRepository = options.strictAllowedRoots === undefined
@@ -122,7 +124,8 @@ export function createStdioMcpRuntime(
   const indexDirectory = path.join(dataPath, 'workspace-index');
   const workspaceIndex = new WorkspaceIndexService(workspaceRepository,
     process.env.LNWJING_INDEX_SQLITE_PREVIEW === '1'
-      ? new SqliteWorkspaceIndexStore(indexDirectory) : new JsonWorkspaceIndexStore(indexDirectory));
+      ? new SqliteWorkspaceIndexStore(indexDirectory)
+      : new JsonWorkspaceIndexStore(indexDirectory, () => globalQuota.status() === null ? null : globalQuota));
   const settingsRepository = new SqliteSettingsRepository(database);
   const toolAvailabilityService = new ToolAvailabilityService(settingsRepository);
   const stopToolAvailabilityWatch = toolAvailabilityService.watch(250);
