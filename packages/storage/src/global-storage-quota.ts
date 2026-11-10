@@ -81,13 +81,14 @@ export class GlobalStorageQuotaReservations {
     if (!path.isAbsolute(profileRoot)) throw new Error('Global quota profile root must be absolute');
     this.root = path.resolve(profileRoot);
     this.ledgerFilename = path.join(this.root, LEDGER_FILE);
-    this.assertRoot();
+    // Never reject legacy or redirected profile paths merely because the
+    // optional quota feature has not been enabled. Validate before any ledger I/O.
   }
 
   /** Cheap metadata-only status. No profile scan and no file creation while disabled. */
   public status(): GlobalQuotaLedgerStatus | null {
-    this.assertRoot();
     if (!existsSync(this.ledgerFilename)) return null;
+    this.assertRoot();
     // A Settings refresh must not open a writer or run CREATE TABLE statements.
     const db = new DatabaseSync(this.ledgerFilename, { readOnly: true, timeout: 250 });
     try {

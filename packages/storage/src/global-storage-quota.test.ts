@@ -45,6 +45,23 @@ function departedOwner(ledger: string, bytes: number): Promise<void> {
 }
 
 describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
+  it('allows an unconfigured redirected legacy profile to start without enabling its unsafe ledger', async () => {
+    const { root, dispose } = await fixture();
+    const outer = await fixture();
+    try {
+      const linked = path.join(outer.root, 'profile-link');
+      try { await symlink(root, linked, process.platform === 'win32' ? 'junction' : 'dir'); }
+      catch (error) {
+        if (['EPERM', 'EACCES'].includes((error as NodeJS.ErrnoException).code ?? '')) return;
+        throw error;
+      }
+      const optional = new GlobalStorageQuotaReservations(linked);
+      expect(optional.status()).toBeNull();
+      expect(() => optional.configure({ limitBytes: MIB, criticalReserveBytes: 1024 }))
+        .toThrow(/non-redirected profile root/);
+    } finally { await outer.dispose(); await dispose(); }
+  });
+
   it('enables and disables explicitly, rejecting disable while a live writer owns a reservation', async () => {
     const { root, dispose } = await fixture();
     try {
