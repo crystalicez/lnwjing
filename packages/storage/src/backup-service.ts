@@ -8,6 +8,7 @@ import type { SqliteDatabase } from './database.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 import { DEFAULT_SQLITE_HARD_LIMIT_MIB, parseSqliteHardLimitMiB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import { assertNoActiveSqliteClientsSync } from './sqlite-client-lease.js';
+import type { GlobalStorageQuotaReservations, GlobalQuotaReservation } from './global-storage-quota.js';
 
 export type BackupReason = 'daily' | 'manual' | 'pre-update' | 'pre-migration';
 
@@ -74,6 +75,8 @@ export interface SqliteBackupServiceOptions {
   readonly migrationRetention?: number;
   /** Optional test override; production derives the budget from the persisted main DB page cap. */
   readonly automaticBackupBudgetBytes?: number;
+  /** Opt-in V2 admission. Not an OS-enforced cap or a default profile policy. */
+  readonly globalQuota?: Pick<GlobalStorageQuotaReservations, 'reserve' | 'release'>;
 }
 
 export interface SqliteRestoreOptions {
@@ -117,12 +120,14 @@ export class SqliteBackupService {
   private readonly arch: string;
   private readonly databaseFilename: string;
   private readonly automaticBackupBudgetOverrideBytes: number | undefined;
+  private readonly globalQuota: SqliteBackupServiceOptions['globalQuota'];
 
   public constructor(private readonly database: SqliteDatabase, options: SqliteBackupServiceOptions) {
     this.backupDirectory = path.resolve(options.backupDirectory);
     // Resolve here so a malformed configuration fails at construction rather than during restore.
     this.databaseFilename = path.resolve(options.databaseFilename);
     this.automaticBackupBudgetOverrideBytes = options.automaticBackupBudgetBytes;
+    this.globalQuota = options.globalQuota;
     this.now = options.now ?? ((): Date => new Date());
     this.dailyRetention = boundedRetention(options.dailyRetention, 7);
     this.weeklyRetention = boundedRetention(options.weeklyRetention, 4);
@@ -212,6 +217,15 @@ export class SqliteBackupService {
     // Fail before writing a potentially multi-GB snapshot if the target
     // volume cannot hold a full SQLite copy plus safety headroom.
     assertBackupFreeSpace(this.database.connection, this.backupDirectory);
+    let quotaReservation: GlobalQuotaReservation | null = null;
+    if (this.globalQuota !== undefined) {
+      const sourcePages = (this.database.connection.prepare('PRAGMA page_count').get() as { page_count: number }).page_count;
+      const pageSize = (this.database.connection.prepare('PRAGMA page_size').get() as { page_size: number }).page_size;
+      const estimate = Math.ceil(sourcePages * pageSize * 1.1) + 256 * 1024;
+      if (!Number.isSafeInteger(estimate) || estimate <= 0) throw new Error('Invalid projected SQLite backup quota');
+      quotaReservation = await this.globalQuota.reserve(estimate);
+    }
+    try {
     const manifestFilename = manifestPath(this.backupDirectory, id);
     const temporaryManifest = manifestFilename + '.tmp-' + randomUUID();
     let manifest: BackupManifest;
@@ -227,6 +241,9 @@ export class SqliteBackupService {
         }
       }
       validateDatabase(destination);
+      if (quotaReservation !== null && (await stat(destination)).size + 128 * 1024 > quotaReservation.bytes) {
+        throw new Error('SQLite backup exceeded its global quota reservation; unpublished copy removed');
+      }
       manifest = {
         schemaVersion: 1,
         id,
@@ -249,6 +266,9 @@ export class SqliteBackupService {
     }
     await this.rotateRetention();
     return summary(manifest, this.platform, this.arch);
+    } finally {
+      if (quotaReservation !== null) this.globalQuota!.release(quotaReservation);
+    }
   }
 
   public async ensureRecent(maxAgeMs = 24 * 60 * 60 * 1000): Promise<BackupSummary | null> {

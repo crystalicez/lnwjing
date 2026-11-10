@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyPendingSqliteRestoreSync, assertBackupCapacity, SqliteBackupService } from './backup-service.js';
 import { SqliteDatabase } from './database.js';
+import { GlobalStorageQuotaReservations } from './global-storage-quota.js';
 
 const temporaryRoots: string[] = [];
 
@@ -25,6 +26,28 @@ describe('SQLite backup disk preflight', () => {
 });
 
 describe('SqliteBackupService', { timeout: 30_000 }, () => {
+  it('reserves shared profile budget before an opted-in snapshot and releases it after success', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const database = new SqliteDatabase(filename);
+    try {
+      const quota = new GlobalStorageQuotaReservations(root);
+      quota.configure({ limitBytes: 128 * 1024, criticalReserveBytes: 1024 });
+      const service = new SqliteBackupService(database, {
+        databaseFilename: filename, backupDirectory: path.join(root, 'backups'), globalQuota: quota,
+      });
+      await expect(service.create('manual')).rejects.toThrow(/insufficient unreserved/);
+      expect((await quota.inspect()).reservedBytes).toBe(0);
+      expect((await readdir(path.join(root, 'backups'))).filter((entry) => entry.endsWith('.sqlite'))).toEqual([]);
+      quota.configure({ limitBytes: 8 * 1024 ** 2, criticalReserveBytes: 256 * 1024 });
+      const summary = await service.create('manual');
+      expect(await service.verifyBackupForCleanup(summary.id)).toBe(true);
+      expect((await quota.inspect()).reservedBytes).toBe(0);
+      expect((await quota.inspect()).logicalUsedBytes).toBeGreaterThan(summary.sizeBytes);
+    } finally {
+      database.close();
+    }
+  });
   it('fails closed on an automatic backup budget without deleting older copies or blocking explicit manual recovery', async () => {
     const root = await temporaryRoot();
     const filename = path.join(root, 'lnwjing.sqlite');
