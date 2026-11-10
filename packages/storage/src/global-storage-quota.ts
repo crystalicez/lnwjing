@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { inspectProfileStorageOffMain, type ProfileStorageInventory } from './profile-storage-inventory.js';
 import { coalesceQuotaInventory } from './global-quota-inventory-coalescer.js';
 import { reclaimExpiredDisposableFiles, type DisposableReclaimResult } from './global-storage-reclaim.js';
-import { probeQuotaProcessIdentity, validQuotaProcessStart, type QuotaProcessIdentity } from './quota-process-identity.js';
+import { probeQuotaProcessIdentities, probeQuotaProcessIdentity, validQuotaProcessStart, type QuotaProcessIdentity } from './quota-process-identity.js';
 
 /**
  * Opt-in foundation for a future app-managed quota. This ledger serializes
@@ -64,6 +64,8 @@ export interface GlobalQuotaVolumeOptions {
   readonly probeProcessIdentity?: (pid: number) => Promise<QuotaProcessIdentity>;
   /** Deterministic test seam. Production always uses the off-main bounded profile inventory worker. */
   readonly scanProfileInventory?: () => Promise<ProfileStorageInventory>;
+  /** Test-only liveness seam; production never assumes a PID is dead without ESRCH. */
+  readonly ownerDefinitelyDead?: (pid: number) => boolean;
 }
 
 function realVolumeFreeBytes(root: string): bigint {
@@ -125,6 +127,9 @@ export class GlobalStorageQuotaReservations {
   private readonly getAvailableVolumeBytes: () => bigint;
   private readonly probeProcessIdentity: (pid: number) => Promise<QuotaProcessIdentity>;
   private readonly scanProfileInventory: () => Promise<ProfileStorageInventory>;
+  private readonly isOwnerDefinitelyDead: (pid: number) => boolean;
+  /** Advances past verified live owners so later recycled PID leases cannot starve. */
+  private identityProbeCursor: { readonly owner_pid: number; readonly owner_started_at: string } | null = null;
   private ownerIdentityPromise: Promise<string | null> | null = null;
 
   public constructor(profileRoot: string, options: GlobalQuotaVolumeOptions = {}) {
@@ -133,6 +138,7 @@ export class GlobalStorageQuotaReservations {
     this.ledgerFilename = path.join(this.root, LEDGER_FILE);
     this.getAvailableVolumeBytes = options.availableVolumeBytes ?? ((): bigint => realVolumeFreeBytes(this.root));
     this.probeProcessIdentity = options.probeProcessIdentity ?? probeQuotaProcessIdentity;
+    this.isOwnerDefinitelyDead = options.ownerDefinitelyDead ?? ownerDefinitelyDead;
     this.scanProfileInventory = options.scanProfileInventory ?? ((): Promise<ProfileStorageInventory> => inspectProfileStorageOffMain(this.root, {
       maxEntries: 200_000, maxDurationMs: 15_000,
     }));
@@ -378,24 +384,52 @@ export class GlobalStorageQuotaReservations {
    * during one backup admission.
    */
   private async reconcileStaleIdentities(): Promise<void> {
-    const rows = this.withDatabase((db) => db.prepare(`
-      SELECT DISTINCT owner_pid, owner_started_at
-        FROM quota_reservations
-       WHERE owner_started_at IS NOT NULL
-       ORDER BY owner_started_at ASC LIMIT ${MAX_IDENTITY_PROBES_PER_ADMISSION}
-    `).all() as Array<{ owner_pid: number; owner_started_at: string }>);
-    const stale: Array<{ owner_pid: number; owner_started_at: string }> = [];
+    type OwnerGeneration = { owner_pid: number; owner_started_at: string };
+    const cursor = this.identityProbeCursor;
+    const rows = this.withDatabase((db): OwnerGeneration[] => {
+      const prefix = 'SELECT DISTINCT owner_pid, owner_started_at FROM quota_reservations WHERE owner_started_at IS NOT NULL';
+      const order = ' ORDER BY owner_started_at ASC, owner_pid ASC LIMIT ?';
+      if (cursor === null) {
+        return db.prepare(prefix + order).all(MAX_IDENTITY_PROBES_PER_ADMISSION) as OwnerGeneration[];
+      }
+      // Keyset pagination rather than repeatedly taking the oldest eight:
+      // if those owners are alive, later recycled PID generations must still
+      // be probed on a subsequent admission. The wrap query cannot overlap.
+      const after = db.prepare(prefix
+        + ' AND (owner_started_at > ? OR (owner_started_at = ? AND owner_pid > ?))'
+        + order).all(cursor.owner_started_at, cursor.owner_started_at, cursor.owner_pid,
+        MAX_IDENTITY_PROBES_PER_ADMISSION) as OwnerGeneration[];
+      if (after.length >= MAX_IDENTITY_PROBES_PER_ADMISSION) return after;
+      const wrapped = db.prepare(prefix
+        + ' AND (owner_started_at < ? OR (owner_started_at = ? AND owner_pid <= ?))'
+        + order).all(cursor.owner_started_at, cursor.owner_started_at, cursor.owner_pid,
+        MAX_IDENTITY_PROBES_PER_ADMISSION - after.length) as OwnerGeneration[];
+      return [...after, ...wrapped];
+    });
+    const last = rows.at(-1);
+    this.identityProbeCursor = last === undefined ? null : last;
     for (const row of rows) {
       if (!validQuotaProcessStart(row.owner_started_at)) {
         throw new Error('Global quota reservation has an invalid process identity');
       }
-      // Avoid spawning a native probe for owners already provably dead:
-      // the existing in-transaction ESRCH reaper will handle those rows.
-      if (ownerDefinitelyDead(row.owner_pid)) continue;
+    }
+    // A single PowerShell launch can probe all eight selected PIDs. Custom
+    // probes remain per-PID for deterministic tests and alternate hosts.
+    // ESRCH owners are left for the existing atomic transaction reaper.
+    const foreign = rows.filter((row) => row.owner_pid !== process.pid
+      && !this.isOwnerDefinitelyDead(row.owner_pid));
+    const observedBatch = this.probeProcessIdentity === probeQuotaProcessIdentity
+      ? await probeQuotaProcessIdentities(foreign.map((row) => row.owner_pid))
+      : null;
+    const stale: OwnerGeneration[] = [];
+    for (const row of rows) {
+      if (this.isOwnerDefinitelyDead(row.owner_pid)) continue;
       const observed = row.owner_pid === process.pid
         ? await this.currentOwnerStart().then((startedAt): QuotaProcessIdentity => startedAt === null
           ? { state: 'unverifiable' } : { state: 'live', startedAt })
-        : await this.probeProcessIdentity(row.owner_pid);
+        : observedBatch !== null
+          ? observedBatch.get(row.owner_pid) ?? { state: 'unverifiable' }
+          : await this.probeProcessIdentity(row.owner_pid);
       if (observed.state === 'gone'
         || observed.state === 'live' && observed.startedAt !== row.owner_started_at) {
         stale.push(row);
@@ -504,7 +538,7 @@ export class GlobalStorageQuotaReservations {
 
   private reapDeadOwners(db: DatabaseSync): boolean {
     const rows = db.prepare('SELECT id,owner_pid FROM quota_reservations').all() as Array<{ id: string; owner_pid: number }>;
-    const dead = rows.filter((row) => ownerDefinitelyDead(row.owner_pid));
+    const dead = rows.filter((row) => this.isOwnerDefinitelyDead(row.owner_pid));
     if (dead.length === 0) return false;
     const remove = db.prepare('DELETE FROM quota_reservations WHERE id=? AND owner_pid=?');
     for (const row of dead) remove.run(row.id, row.owner_pid);

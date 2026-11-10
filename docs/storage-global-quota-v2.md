@@ -60,15 +60,26 @@ an API building block, not a default policy or a complete Global Hard Limit.
   When the OS probe succeeds, newly created Windows reservations also persist
   the OS process creation timestamp (100-ns .NET ticks), mitigating stale
   ownership from PID reuse. If the probe is unavailable, the new reservation
-  retains the conservative legacy PID-only liveness behavior. Before an admission, at most eight distinct recorded owner generations
-  are checked **outside** the SQLite write lock, and only a verified gone
-  process or a live PID with a different creation timestamp can be removed
-  inside `BEGIN IMMEDIATE`. The previous PID-only dead-owner recovery remains
+  retains the conservative legacy PID-only liveness behavior. Before an
+  admission, at most eight distinct recorded owner generations are checked
+  **outside** the SQLite write lock. Probes now advance through the sorted
+  owner generations with a per-process rotating keyset cursor, wrapping at
+  the end, so eight indefinitely live owners cannot permanently starve later
+  stale leases. A native Windows admission batches the selected foreign PIDs
+  into **one bounded PowerShell process**, rather than launching up to eight
+  separate processes. Unknown, inaccessible, malformed or timed-out probes
+  remain reserved (fail closed), and the batch never increases the eight-owner
+  limit. Only a verified gone process or a live PID with a different creation
+  timestamp can be removed inside `BEGIN IMMEDIATE`. The previous PID-only
+  dead-owner recovery remains
   for legacy records (the ledger is migrated additively). Unverifiable owner
   identities remain reserved; no clock-age-based expiry can delete an active
   lease. This mitigates PID reuse on Windows but does not replace transactional
   owner identity checks for every possible writer or guarantee that a blocked
-  cross-user process is recoverable.
+  cross-user process is recoverable. Cursor progress lives only in the active
+  runtime, not on disk; a fresh process starts at the earliest owner again.
+  A quota admission can still be refused until a later attempt has inspected
+  a stale lease beyond the current eight-owner batch.
 - `inspect()` reports **logical used**, active reserved bytes and ordinary
   available bytes separately. A critical reserve remains unavailable to ordinary
   reservations. Inventory treats the ledger and its SQLite sidecars as protected.

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { GlobalStorageQuotaReservations } from './global-storage-quota.js';
-import { probeQuotaProcessIdentity } from './quota-process-identity.js';
+import { probeQuotaProcessIdentities, probeQuotaProcessIdentity } from './quota-process-identity.js';
 
 const MIB = 1024 * 1024;
 const CURRENT_START = '639037120000000000';
@@ -120,6 +120,47 @@ describe('quota reservation process-generation crash reconciliation', () => {
     } finally { await dispose(); }
   });
 
+  it('rotates past eight live owners to reclaim a later recycled PID without unbounded probes', async () => {
+    const { root, ledger, dispose } = await fixture();
+    try {
+      const livePids = Array.from({ length: 9 }, (_, i) => 300_000 + i);
+      const probes: number[] = [];
+      const creationFor = (i: number): string => String(BigInt(STALE_START) + BigInt(i * 100));
+      const quota = new GlobalStorageQuotaReservations(root, {
+        // Deterministic liveness: exercise cursor pagination without launching
+        // eight extra child processes or assuming any particular host PID.
+        ownerDefinitelyDead: (): boolean => false,
+        probeProcessIdentity: async (pid): Promise<{ state: 'live'; startedAt: string }> => {
+          if (pid === process.pid) return { state: 'live', startedAt: CURRENT_START };
+          probes.push(pid);
+          const i = livePids.indexOf(pid);
+          return { state: 'live', startedAt: i === 8 ? CURRENT_START : creationFor(i) };
+        },
+      });
+      quota.configure({ limitBytes: 680 * 1024, criticalReserveBytes: 64 * 1024 });
+      for (let i = 0; i < livePids.length; i++) {
+        injectReservation(ledger, creationFor(i), 60 * 1024, livePids[i]);
+      }
+
+      // The first eight owners really are live and match their stored start.
+      // The ninth entry represents a reused PID with an obsolete generation.
+      await expect(quota.reserve(70 * 1024)).rejects.toThrow(/insufficient unreserved/);
+      expect(probes).toEqual(livePids.slice(0, 8));
+      expect(quota.status()?.reservedBytes).toBe(9 * 60 * 1024);
+
+      const accepted = await quota.reserve(70 * 1024);
+      // The next eight-probe batch starts with the previously starved owner,
+      // then wraps around; only the verified recycled generation is removed.
+      expect(probes.slice(8, 16)[0]).toBe(livePids[8]);
+      expect(probes).toHaveLength(16);
+      expect(quota.status()).toMatchObject({
+        reservedBytes: 8 * 60 * 1024 + 70 * 1024, activeReservations: 9,
+      });
+      quota.release(accepted);
+      expect(quota.status()?.reservedBytes).toBe(8 * 60 * 1024);
+    } finally { await dispose(); }
+  }, 20_000);
+
   it('holds a real live child reservation, then frees its claim after the child crashes', async () => {
     if (process.platform !== 'win32') return;
     const { root, ledger, dispose } = await fixture();
@@ -149,6 +190,36 @@ describe('quota reservation process-generation crash reconciliation', () => {
       await dispose();
     }
   }, 25_000);
+
+  it('probes multiple Windows processes in one native invocation and fails closed for invalid PIDs', async () => {
+    const invalid = await probeQuotaProcessIdentities([0, -1]);
+    expect(invalid.get(0)).toEqual({ state: 'unverifiable' });
+    expect(invalid.get(-1)).toEqual({ state: 'unverifiable' });
+    if (process.platform !== 'win32') return;
+
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'],
+      { stdio: 'ignore', windowsHide: true });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.once('spawn', () => resolve());
+        child.once('error', reject);
+      });
+      const live = await probeQuotaProcessIdentities([process.pid, child.pid!, process.pid, 0]);
+      expect(live.get(process.pid)?.state).toBe('live');
+      expect(live.get(child.pid!)?.state).toBe('live');
+      expect(live.get(0)?.state).toBe('unverifiable');
+      if (live.get(child.pid!)?.state === 'live') {
+        expect(live.get(child.pid!)).toEqual(await probeQuotaProcessIdentity(child.pid!));
+      }
+      child.kill();
+      await new Promise<void>((resolve) => child.once('close', () => resolve()));
+      const gone = await probeQuotaProcessIdentities([child.pid!, process.pid]);
+      expect(gone.get(child.pid!)).toEqual({ state: 'gone' });
+      expect(gone.get(process.pid)?.state).toBe('live');
+    } finally {
+      if (child.exitCode === null) child.kill();
+    }
+  }, 20_000);
 
   it('probes the current Windows process creation identity without guessing a wall clock', async () => {
     expect(await probeQuotaProcessIdentity(0)).toEqual({ state: 'unverifiable' });
