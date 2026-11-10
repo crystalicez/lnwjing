@@ -131,7 +131,7 @@ import {
   type EngineeringHarnessWorkspaceOverride,
 } from '@lnwjing/shared';
 import { AesGcmCheckpointCipher, SQLITE_HARD_LIMIT_SETTING_KEY, parseSqliteHardLimitMiB, sqliteLimitPressure, inspectSqliteHardLimit, applySqliteHardLimit, inspectSqliteCompaction, inspectBoundedDirectorySize, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
-import { SqliteGoalRepository, GlobalStorageQuotaReservations, inspectProfileStorageOffMain } from '@lnwjing/storage';
+import { SqliteGoalRepository, GlobalStorageQuotaReservations, inspectProfileStorageWithPhysicalOffMain } from '@lnwjing/storage';
 import type { Workspace } from '@lnwjing/workspace';
 import { comparableHostPath, isDriveRoot, isMachineRootPath, resolveHostPath, SecretPolicy, WorkspacePathGuard, WorkspaceService } from '@lnwjing/workspace';
 import {
@@ -1982,10 +1982,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     createBackup: async (): Promise<IpcBackupSummary> => toIpcBackupSummary(await backupService.create('manual')),
     getStorageOverview: async () => storageOverview(),
     getProfileStorageInventory: (() => {
-      let inFlight: ReturnType<typeof inspectProfileStorageOffMain> | null = null;
-      return (): ReturnType<typeof inspectProfileStorageOffMain> => {
+      let inFlight: ReturnType<typeof inspectProfileStorageWithPhysicalOffMain> | null = null;
+      return (): ReturnType<typeof inspectProfileStorageWithPhysicalOffMain> => {
         if (inFlight !== null) return inFlight;
-        const task = inspectProfileStorageOffMain(dataPath);
+        const task = inspectProfileStorageWithPhysicalOffMain(dataPath);
         inFlight = task;
         void task.finally(() => {
           if (inFlight === task) inFlight = null;

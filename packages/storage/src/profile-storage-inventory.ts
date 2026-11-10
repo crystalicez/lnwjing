@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+import { inspectWindowsProfileAllocatedBytes } from './windows-profile-allocation.js';
 
 /** Read-only profile scan. This is NOT an enforced disk quota or a snapshot of
  * files concurrently written by another process. It never scans user repos. */
@@ -14,7 +15,7 @@ export interface ProfileStorageInventory {
   readonly scope: 'profile';
   readonly scannedAt: string;
   readonly logicalBytes: number;
-  /** null on platforms with no reliable per-file allocated-block metadata. */
+  /** null unless an independent, bounded native scan verifies a conservative regular-file allocation estimate. */
   readonly allocatedBytes: number | null;
   readonly files: number;
   readonly directories: number;
@@ -147,6 +148,25 @@ function run() {
 try {parentPort.postMessage({ok:true,inventory:run()});}
 catch(error) {parentPort.postMessage({ok:false,error:String(error && error.message||error)});}
 `;
+
+/**
+ * Explicit UI-only diagnostic. Never use this path for hot reservations:
+ * it performs a second, independently validated native Windows metadata scan.
+ * The normal worker inventory remains available and responsive by default.
+ */
+export async function inspectProfileStorageWithPhysicalOffMain(
+  profileRoot: string,
+  options: { readonly maxEntries?: number; readonly maxDurationMs?: number } = {},
+): Promise<ProfileStorageInventory> {
+  const inventory = await inspectProfileStorageOffMain(profileRoot, options);
+  if (inventory.incomplete || process.platform !== 'win32') return inventory;
+  const allocatedBytes = await inspectWindowsProfileAllocatedBytes(profileRoot, {
+    files: inventory.files,
+    logicalBytes: inventory.logicalBytes,
+    visitedEntries: inventory.visitedEntries,
+  });
+  return allocatedBytes === null ? inventory : { ...inventory, allocatedBytes };
+}
 
 export function inspectProfileStorageOffMain(
   profileRoot: string,

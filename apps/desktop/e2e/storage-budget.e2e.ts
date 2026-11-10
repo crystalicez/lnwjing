@@ -52,6 +52,11 @@ test('real Storage Settings persist Git-aware and SQLite backup budget with isol
       .globalQuota?.limitBytes).toBe(512 * 1024 ** 2);
     await expect(globalInput).toHaveValue('512');
     await expect(page.locator('[data-testid="global-quota-volume-free"]')).toBeVisible();
+    // Real Electron IPC must be able to run the opt-in physical metadata
+    // diagnostic without blocking the settings page or changing the policy.
+    await page.locator('[data-testid="profile-storage-inventory"] button').click();
+    await expect(page.locator('[data-testid="profile-storage-inventory"]'))
+      .toContainText(/ข้อมูลที่พบ|found/, { timeout: 30_000 });
     await globalInput.fill('0');
     await globalApply.click();
     await expect.poll(async () => (await page.evaluate(() => window.lnwjing.getStorageOverview()))
