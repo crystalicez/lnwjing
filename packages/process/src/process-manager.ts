@@ -276,9 +276,12 @@ export class ProcessManager {
 
   private acceptNativeReceipt(record: ManagedRecord, receipt: WindowsContainmentReceipt): void {
     if (!isTerminal(record.state)) {
-      const state = record.stopRequested === 'timed_out' || receipt.outcome === 'timed_out'
+      // The kernel-backed receipt records what actually happened. A host stop
+      // or timeout request can race with an already-completed native job and
+      // must not relabel that successful/failed completion as cancellation.
+      const state = receipt.outcome === 'timed_out'
         ? 'timed_out'
-        : record.stopRequested === 'stopped' || receipt.outcome === 'cancelled'
+        : receipt.outcome === 'cancelled'
           ? 'stopped' : receipt.exitCode === 0 ? 'exited' : 'failed';
       this.finish(record, state);
     }

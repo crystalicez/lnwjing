@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ProcessManager } from './process-manager.js';
+import { readWindowsContainmentReceipt } from './windows-contained-launch.js';
 
 describe.skipIf(process.platform !== 'win32')('native contained ProcessManager', () => {
   it('accepts zero-active native proof when the close notification is missing', async () => {
@@ -38,6 +39,48 @@ describe.skipIf(process.platform !== 'win32')('native contained ProcessManager',
       await rm(root, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 });
     }
   }, 20000);
+
+  it.each(['stopped', 'timed_out'] as const)(
+    'preserves an already-completed native result when a host %s request races its receipt',
+    async (request) => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-native-late-stop-'));
+      try {
+        const containedRoot = path.join(root, 'managed-processes');
+        await mkdir(containedRoot);
+        const manager = new ProcessManager(undefined, undefined, undefined, undefined, containedRoot);
+        const result = await manager.start({
+          executable: process.execPath, args: ['-e', "console.log('TARGET_FINISHED')"],
+          cwd: root, timeoutMs: 16000,
+        });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const processId = result.value.processId;
+        const record = (manager as unknown as { records: Map<string, {
+          child: { removeAllListeners(event: string): void };
+        }> }).records.get(processId);
+        expect(record).toBeDefined();
+        // Hold host event delivery until the native OS proof is already on disk.
+        // This makes the race repeatable without depending on wall-clock timing.
+        record?.child.removeAllListeners('exit');
+        record?.child.removeAllListeners('close');
+        const receiptPath = path.join(containedRoot, processId, 'containment.receipt.json');
+        await expect.poll(async () => readWindowsContainmentReceipt(receiptPath), {
+          timeout: 12000,
+        }).toMatchObject({ outcome: 'completed', activeProcesses: 0, exitCode: 0 });
+        if (request === 'stopped') {
+          await manager.stop(processId);
+        } else {
+          await (manager as unknown as { timeout(record: unknown): Promise<void> }).timeout(record);
+        }
+        expect(manager.status(processId)).toMatchObject({
+          ok: true, value: { state: 'exited', exitCode: 0 },
+        });
+      } finally {
+        await rm(root, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 });
+      }
+    },
+    20000,
+  );
 
   it.each([0, 1] as const)('finalizes nested PowerShell output with the original exit code %i', async (code) => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-managed-exit-'));
