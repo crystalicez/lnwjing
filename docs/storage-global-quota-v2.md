@@ -67,12 +67,18 @@ snapshot start, so an enabled budget applies to ordinary manual and daily
 asynchronous snapshots. SQLite's original main-page cap remains independent.
 
 An opt-in pressure-reclaim stage runs only after a *complete* inventory and at
-75% projected use or on a quota policy change. It unlinks up to 128 individual,
-verified, single-link files older than seven days in exact profile-owned
-`logs`, `diagnostics` and `crash-dumps` directories. It never recursively
-purges unknown directories, symlink/junction targets or user repositories.
-Each candidate's identity, size and modification time are rechecked before
-unlinking. A refusal or incomplete scan is not bypassed. Deleted bytes are
+75% projected use, on a quota policy change, or under low physical volume
+headroom. It unlinks verified, single-link files older than seven days in
+exact profile-owned `logs`, `diagnostics` and `crash-dumps` directories.
+The sweep is capped at **8 batches of 128 files**, with no more than 2,048
+entries inspected per batch, and stops early once estimated logical pressure
+and volume headroom have recovered. A writer attempting admission likewise
+may reclaim several batches and then **re-inventories** before admitting a
+write. It never recursively purges unknown directories, symlink/junction
+targets or user repositories. Each candidate's identity, size, parent
+directory identity and modification time are rechecked before unlinking.
+A refusal or incomplete scan is not bypassed; exhaustion of the bounded
+sweep does not relax the quota or override protected data. Deleted bytes are
 reported as **logical bytes**, never claimed as proven NTFS physical savings.
 
 Additional physical-volume admission (2026-11-10): every opted-in reservation

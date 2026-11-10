@@ -47,6 +47,8 @@ interface QuotaStateRow { revision: number; limit_bytes: number; reserve_bytes: 
 interface ReservationRow { id: string; token_hash: string; owner_pid: number; bytes: number }
 const MAX_RESERVATIONS = 2048;
 const MAX_SCAN_ATTEMPTS = 4;
+/** Maximum 8 × 128 verified old disposable files per pressure event. */
+const MAX_PRESSURE_RECLAIM_BATCHES = 8;
 const LEDGER_FILE = 'global-quota-reservations-v2.sqlite';
 /** Space other software, SQLite journaling and native helpers may still need. */
 const MIN_VOLUME_RESERVE_BYTES = 64 * 1024 * 1024;
@@ -164,7 +166,30 @@ export class GlobalStorageQuotaReservations {
     ) < BigInt(MIN_VOLUME_RESERVE_BYTES);
     if (inventory.logicalBytes + current.reservedBytes < current.policy.limitBytes * 0.75
       && !lowVolumeSpace) return null;
-    return reclaimExpiredDisposableFiles(this.root);
+    let removedLogicalBytes = 0;
+    let inspected = 0;
+    let removed = 0;
+    let truncated = false;
+    for (let batch = 0; batch < MAX_PRESSURE_RECLAIM_BATCHES; batch++) {
+      // Re-read the live policy and actual volume capacity between bounded
+      // batches: disabling quota or reaching the target stops deletion.
+      const currentStatus = this.status();
+      if (currentStatus === null || currentStatus.policy.limitBytes !== before.policy.limitBytes
+        || currentStatus.policy.criticalReserveBytes !== before.policy.criticalReserveBytes) break;
+      const physicalPressure = volumeHeadroom(
+        safeVolumeFreeBytes(this.getAvailableVolumeBytes()),
+        currentStatus.reservedBytes, currentStatus.policy.criticalReserveBytes,
+      ) < BigInt(MIN_VOLUME_RESERVE_BYTES);
+      if (inventory.logicalBytes - removedLogicalBytes + currentStatus.reservedBytes
+          < currentStatus.policy.limitBytes * 0.75 && !physicalPressure) break;
+      const result = await reclaimExpiredDisposableFiles(this.root);
+      inspected += result.inspected;
+      removed += result.removed;
+      removedLogicalBytes += result.removedLogicalBytes;
+      truncated ||= result.truncated;
+      if (result.removed === 0 || !result.truncated) break;
+    }
+    return { inspected, removed, removedLogicalBytes, truncated };
   }
 
   /** Disabling is explicit and cannot orphan live reservations. */
@@ -221,8 +246,22 @@ export class GlobalStorageQuotaReservations {
       if (!reclaimAttempted && (inventory.logicalBytes + initial.reserved + bytes >= initial.limit_bytes * 0.75
         || physicalPressure)) {
         reclaimAttempted = true;
-        const reclaimed = await reclaimExpiredDisposableFiles(this.root);
-        if (reclaimed.removed > 0) continue;
+        let removedLogicalBytes = 0;
+        for (let batch = 0; batch < MAX_PRESSURE_RECLAIM_BATCHES; batch++) {
+          // Delete only as much verified old disposable data as necessary to
+          // recover the proactive threshold and requested volume headroom.
+          const volumeAvailable = volumeHeadroom(
+            safeVolumeFreeBytes(this.getAvailableVolumeBytes()),
+            initial.reserved, initial.reserve_bytes,
+          );
+          if (inventory.logicalBytes - removedLogicalBytes + initial.reserved + bytes
+            < initial.limit_bytes * 0.75
+            && volumeAvailable >= BigInt(bytes) + BigInt(MIN_VOLUME_RESERVE_BYTES)) break;
+          const reclaimed = await reclaimExpiredDisposableFiles(this.root);
+          removedLogicalBytes += reclaimed.removedLogicalBytes;
+          if (reclaimed.removed === 0 || !reclaimed.truncated) break;
+        }
+        if (removedLogicalBytes > 0) continue;
       }
       const token = randomUUID() + randomUUID();
       const id = randomUUID();

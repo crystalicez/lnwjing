@@ -113,6 +113,48 @@ describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
     } finally { await dispose(); }
   });
 
+  it('reclaims more than one bounded batch of old diagnostics when a lowered cap still has pressure', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      await mkdir(path.join(root, 'logs'));
+      const old = new Date('2020-01-01T00:00:00Z');
+      for (let i = 0; i < 260; i++) {
+        const file = path.join(root, 'logs', 'historical-' + i + '.log');
+        await writeFile(file, Buffer.alloc(8 * 1024));
+        await utimes(file, old, old);
+      }
+      await mkdir(path.join(root, 'backups'));
+      const important = path.join(root, 'backups', 'recovery.sqlite');
+      await writeFile(important, 'PROTECTED');
+      const quota = new GlobalStorageQuotaReservations(root);
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 64 * 1024 });
+      const result = await quota.reclaimIfPressured();
+      expect(result?.removed).toBeGreaterThan(128);
+      expect(result?.removed).toBeLessThanOrEqual(8 * 128);
+      expect((await quota.inspect()).logicalUsedBytes).toBeLessThan(MIB * 0.75);
+      expect(await readFile(important, 'utf8')).toBe('PROTECTED');
+    } finally { await dispose(); }
+  }, 20_000);
+
+  it('retries a blocked reservation after multiple bounded old-log reclaim batches', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      await mkdir(path.join(root, 'diagnostics'));
+      const old = new Date('2020-01-01T00:00:00Z');
+      for (let i = 0; i < 260; i++) {
+        const file = path.join(root, 'diagnostics', 'historical-' + i + '.trace');
+        await writeFile(file, Buffer.alloc(8 * 1024));
+        await utimes(file, old, old);
+      }
+      const quota = new GlobalStorageQuotaReservations(root);
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 64 * 1024 });
+      const proof = await quota.reserve(200 * 1024);
+      expect(proof.bytes).toBe(200 * 1024);
+      expect((await quota.inspect()).logicalUsedBytes).toBeLessThan(MIB * 0.75);
+      quota.release(proof);
+    } finally { await dispose(); }
+  }, 20_000);
+
   it('allows an unconfigured redirected legacy profile to start without enabling its unsafe ledger', async () => {
     const { root, dispose } = await fixture();
     const outer = await fixture();
