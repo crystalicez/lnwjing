@@ -4,6 +4,7 @@ export * from './database.js';
 export * from './storage-maintenance.js';
 export * from './profile-storage-inventory.js';
 export * from './global-storage-quota.js';
+export * from './global-storage-reclaim.js';
 export * from './sqlite-hard-limit.js';
 export * from './goal-repository.js';
 export * from './migrations/scheduled-continuation-migration.js';

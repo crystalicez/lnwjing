@@ -1,8 +1,9 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { lstatSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { inspectProfileStorageOffMain, type ProfileStorageInventory } from './profile-storage-inventory.js';
+import { reclaimExpiredDisposableFiles, type DisposableReclaimResult } from './global-storage-reclaim.js';
 
 /**
  * Opt-in foundation for a future app-managed quota. This ledger serializes
@@ -20,6 +21,12 @@ export interface GlobalQuotaReservation {
   /** Bearer proof; never log or persist outside the caller. */
   readonly token: string;
   readonly bytes: number;
+}
+
+export interface GlobalQuotaLedgerStatus {
+  readonly policy: GlobalQuotaPolicy;
+  readonly reservedBytes: number;
+  readonly activeReservations: number;
 }
 
 export interface GlobalQuotaSnapshot {
@@ -77,6 +84,53 @@ export class GlobalStorageQuotaReservations {
     this.assertRoot();
   }
 
+  /** Cheap metadata-only status. No profile scan and no file creation while disabled. */
+  public status(): GlobalQuotaLedgerStatus | null {
+    this.assertRoot();
+    if (!existsSync(this.ledgerFilename)) return null;
+    // A Settings refresh must not open a writer or run CREATE TABLE statements.
+    const db = new DatabaseSync(this.ledgerFilename, { readOnly: true, timeout: 250 });
+    try {
+      const state = this.state(db);
+      if (state === undefined) return null;
+      const totals = db.prepare('SELECT COUNT(*) AS count, COALESCE(SUM(bytes),0) AS bytes FROM quota_reservations')
+        .get() as { count: number; bytes: number };
+      if (!safeBytes(totals.bytes) || !safeBytes(totals.count)) throw new Error('Invalid quota ledger totals');
+      return {
+        policy: { limitBytes: state.limit_bytes, criticalReserveBytes: state.reserve_bytes },
+        reservedBytes: totals.bytes,
+        activeReservations: totals.count,
+      };
+    } finally { db.close(); }
+  }
+
+  /**
+   * Bounded proactive maintenance: only old diagnostic/log files are eligible.
+   * Never delete on an incomplete scan or after another process changes policy.
+   * Removing a file only reports logical size; NTFS physical savings remain unknown.
+   */
+  public async reclaimIfPressured(): Promise<DisposableReclaimResult | null> {
+    const before = this.status();
+    if (before === null) return null;
+    const inventory = await this.completeInventory();
+    const current = this.status();
+    if (current === null || current.policy.limitBytes !== before.policy.limitBytes
+      || current.policy.criticalReserveBytes !== before.policy.criticalReserveBytes) return null;
+    if (inventory.logicalBytes + current.reservedBytes < current.policy.limitBytes * 0.75) return null;
+    return reclaimExpiredDisposableFiles(this.root);
+  }
+
+  /** Disabling is explicit and cannot orphan live reservations. */
+  public disable(): void {
+    if (!existsSync(this.ledgerFilename)) return;
+    this.transaction((db) => {
+      this.reapDeadOwners(db);
+      const count = (db.prepare('SELECT COUNT(*) AS count FROM quota_reservations').get() as { count: number }).count;
+      if (count > 0) throw new Error('Active global quota reservations must finish before disabling');
+      db.prepare('DELETE FROM quota_state WHERE id=1').run();
+    });
+  }
+
   /** Explicit opt-in; not wired to the normal SQLite limit or user settings. */
   public configure(policy: GlobalQuotaPolicy): void {
     assertPolicy(policy);
@@ -99,14 +153,25 @@ export class GlobalStorageQuotaReservations {
    */
   public async reserve(bytes: number): Promise<GlobalQuotaReservation> {
     if (!safeBytes(bytes) || bytes === 0) throw new Error('Invalid quota reservation size');
+    let reclaimAttempted = false;
     for (let attempt = 0; attempt < MAX_SCAN_ATTEMPTS; attempt++) {
       const initial = this.transaction((db) => {
         this.reapDeadOwners(db);
         const state = this.state(db);
         if (state === undefined) throw new Error('Global quota not configured');
-        return state;
+        const reserved = (db.prepare('SELECT COALESCE(SUM(bytes),0) AS total FROM quota_reservations')
+          .get() as { total: number }).total;
+        if (!safeBytes(reserved)) throw new Error('Invalid global quota reserved size');
+        return { ...state, reserved };
       });
       const inventory = await this.completeInventory();
+      // Only after a complete inventory, and only for old disposable logs.
+      // A second inventory is required if any file is actually removed.
+      if (!reclaimAttempted && inventory.logicalBytes + initial.reserved + bytes >= initial.limit_bytes * 0.75) {
+        reclaimAttempted = true;
+        const reclaimed = await reclaimExpiredDisposableFiles(this.root);
+        if (reclaimed.removed > 0) continue;
+      }
       const token = randomUUID() + randomUUID();
       const id = randomUUID();
       const decision = this.transaction((db): 'retry' | 'admitted' => {

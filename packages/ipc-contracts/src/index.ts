@@ -1,6 +1,6 @@
 import type { WorkflowPrepareRequest, WorkflowTemplate, WorkflowDraft, CallHistoryRequest, CallHistoryPage, TaskResultSummary, ResourceSnapshotRequest, ResourceSnapshot, RestoreTaskCheckpointRequest, RestoreTaskCheckpointResult, CancelOwnedGoalTaskRequest, CancelOwnedGoalTaskResult } from './workflow-contracts.js';
 export type * from './workflow-contracts.js';
-import type { StorageOverview, SetStoragePolicyRequest, SetStoragePolicyResult, CheckpointCleanupPreviewRequest, CheckpointCleanupPreview, ApplyCheckpointCleanupRequest, ApplyCheckpointCleanupResult, NativeStorageCleanupRequest, NativeStorageCleanupResult } from './storage-contracts.js';
+import type { StorageOverview, ProfileStorageInventory, SetStoragePolicyRequest, SetStoragePolicyResult, CheckpointCleanupPreviewRequest, CheckpointCleanupPreview, ApplyCheckpointCleanupRequest, ApplyCheckpointCleanupResult, NativeStorageCleanupRequest, NativeStorageCleanupResult } from './storage-contracts.js';
 export type * from './storage-contracts.js';
 
 export const APP_NAME = 'lnwjing';
@@ -32,6 +32,7 @@ export const ipcChannels = {
   setStdioPolicy: 'lnwjing:set-stdio-policy',
   createBackup: 'lnwjing:create-backup',
   getStorageOverview: 'lnwjing:storage-overview',
+  getProfileStorageInventory: 'lnwjing:storage-profile-inventory',
   setStoragePolicy: 'lnwjing:storage-set-policy',
   previewCheckpointCleanup: 'lnwjing:storage-checkpoint-preview',
   applyCheckpointCleanup: 'lnwjing:storage-checkpoint-apply',
@@ -1223,6 +1224,7 @@ export interface IpcRequestMap {
   readonly [ipcChannels.setStdioPolicy]: SetStdioPolicyRequest;
   readonly [ipcChannels.createBackup]: undefined;
   readonly [ipcChannels.getStorageOverview]: undefined;
+  readonly [ipcChannels.getProfileStorageInventory]: undefined;
   readonly [ipcChannels.setStoragePolicy]: SetStoragePolicyRequest;
   readonly [ipcChannels.previewCheckpointCleanup]: CheckpointCleanupPreviewRequest;
   readonly [ipcChannels.applyCheckpointCleanup]: ApplyCheckpointCleanupRequest;
@@ -1318,6 +1320,7 @@ export interface IpcResponseMap {
   readonly [ipcChannels.setStdioPolicy]: { readonly profile: PermissionProfileName; readonly strictRoots: boolean; readonly allowedRoots: readonly string[]; readonly restartRequired: boolean };
   readonly [ipcChannels.createBackup]: BackupSummary;
   readonly [ipcChannels.getStorageOverview]: StorageOverview;
+  readonly [ipcChannels.getProfileStorageInventory]: ProfileStorageInventory;
   readonly [ipcChannels.setStoragePolicy]: SetStoragePolicyResult;
   readonly [ipcChannels.previewCheckpointCleanup]: CheckpointCleanupPreview;
   readonly [ipcChannels.applyCheckpointCleanup]: ApplyCheckpointCleanupResult;
@@ -1416,6 +1419,7 @@ export interface LnwjingApi {
   setStdioPolicy(request: SetStdioPolicyRequest): Promise<IpcResponseMap[typeof ipcChannels.setStdioPolicy]>;
   createBackup(): Promise<IpcResponseMap[typeof ipcChannels.createBackup]>;
   getStorageOverview(): Promise<StorageOverview>;
+  getProfileStorageInventory(): Promise<ProfileStorageInventory>;
   setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStoragePolicyResult>;
   previewCheckpointCleanup(request: CheckpointCleanupPreviewRequest): Promise<CheckpointCleanupPreview>;
   applyCheckpointCleanup(request: ApplyCheckpointCleanupRequest): Promise<ApplyCheckpointCleanupResult>;

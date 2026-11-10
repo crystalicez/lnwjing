@@ -41,6 +41,20 @@ test('real Storage Settings persist Git-aware and SQLite backup budget with isol
     await expect(limit).toHaveValue('1024');
     await expect.poll(async () => (await page.evaluate(() => window.lnwjing.getStorageOverview()))
       .automaticBackupBudget?.budgetBytes).toBe(3 * 1024 ** 3);
+    // Opt-in global quota is separate from the legacy SQLite page cap.
+    const globalInput = page.locator('#storage-global-quota');
+    const globalApply = page.locator('[data-testid="global-quota-settings"] button');
+    await expect(globalInput).toHaveValue('0');
+    await globalInput.fill('512');
+    page.once('dialog', async (dialog) => dialog.accept());
+    await globalApply.click();
+    await expect.poll(async () => (await page.evaluate(() => window.lnwjing.getStorageOverview()))
+      .globalQuota?.limitBytes).toBe(512 * 1024 ** 2);
+    await expect(globalInput).toHaveValue('512');
+    await globalInput.fill('0');
+    await globalApply.click();
+    await expect.poll(async () => (await page.evaluate(() => window.lnwjing.getStorageOverview()))
+      .globalQuota).toBeUndefined();
     await mode.selectOption('always');
     await expect(mode).toHaveValue('always');
     page.once('dialog', async (dialog) => dialog.accept());

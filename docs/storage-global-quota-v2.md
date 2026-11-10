@@ -57,16 +57,35 @@ an API building block, not a default policy or a complete Global Hard Limit.
   results, then releases the reservation. This is **not** a hard cap on the
   intermediary SQLite backup file during the copy.
 
+Current Desktop integration (source, not proof of a newly packaged Portable):
+**Settings → Storage Management → Global Storage Quota V2** allows an explicit
+profile-level budget of 512–65,536 MiB, or 0 to disable it. Setting the value
+requires a confirmation that coverage is limited. The UI displays in-flight
+reserved bytes and critical reserve, while full logical usage still requires
+the on-demand inventory scan. The optional backup provider is resolved at
+snapshot start, so an enabled budget applies to ordinary manual and daily
+asynchronous snapshots. SQLite's original main-page cap remains independent.
+
+An opt-in pressure-reclaim stage runs only after a *complete* inventory and at
+75% projected use or on a quota policy change. It unlinks up to 128 individual,
+verified, single-link files older than seven days in exact profile-owned
+`logs`, `diagnostics` and `crash-dumps` directories. It never recursively
+purges unknown directories, symlink/junction targets or user repositories.
+Each candidate's identity, size and modification time are rechecked before
+unlinking. A refusal or incomplete scan is not bypassed. Deleted bytes are
+reported as **logical bytes**, never claimed as proven NTFS physical savings.
+
 Limitations before production enforcement: the inventory is logical-byte based
 on Windows (not NTFS allocated-byte accounting), scans only the profile root,
 and requires a full walk per reservation. Noncooperating writers, journal/WAL
 growth during a write, OS temp/Portable/Tunnel/Electron caches outside the
 profile, PID reuse and files changed without holding a reservation are not
-fully controlled. Only the opted-in backup path uses this API so far; Desktop,
-MCP STDIO, native helpers and all SQLite mutations do **not** yet use a
-unified pre-write quota. No automatic global reclaim or forced deletion is
-enabled. Never advertise this as a 100% global quota or enable it by default
-until incremental accounting, writer coverage and crash/physical-disk tests pass.
+fully controlled. Outside the opted-in backup writer, Desktop, MCP STDIO,
+native helpers, workspace index and routine SQLite mutations do **not** yet use
+a unified pre-write quota. No automatic deletion of Backup, Undo,
+Recovery Trash, Index or user source code is enabled. Never advertise this as
+a 100% global quota or enable it by default until incremental accounting,
+writer coverage and crash/physical-disk tests pass.
 
 Next production gates: explicit owned-root registry, Windows allocated-byte
 accounting, incremental per-writer reconciliation with bounded WAL/temporary

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import type { CheckpointCleanupPreview, NativeStorageCleanupRequest, StorageOverview, StoragePolicy, UiLocale } from '@lnwjing/ipc-contracts';
+import type { CheckpointCleanupPreview, NativeStorageCleanupRequest, ProfileStorageInventory, StorageOverview, StoragePolicy, UiLocale } from '@lnwjing/ipc-contracts';
 import { ActionButton, SettingsCardHeading, StatusMessage } from '../ui/UiPrimitives.js';
 import { SettingSwitch } from './SettingSwitch.js';
 import { createTranslator } from '../../i18n/index.js';
@@ -21,6 +21,8 @@ interface Props {
 export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }: Props): ReactElement {
   const t = createTranslator(locale);
   const [overview, setOverview] = useState<StorageOverview | null>(null);
+  const [inventory, setInventory] = useState<ProfileStorageInventory | null>(null);
+  const [inventoryPending, setInventoryPending] = useState(false);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +31,7 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
   const [preview, setPreview] = useState<CheckpointCleanupPreview | null>(null);
   const [previewRequest, setPreviewRequest] = useState<{ maxBytes: number; deleteBefore: string } | null>(null);
   const [category, setCategory] = useState<NativeCategory>('tasks');
+  const [globalQuotaDraft, setGlobalQuotaDraft] = useState<number | null>(null);
   const [cursors, setCursors] = useState<Partial<Record<NativeCategory, string | null>>>({});
 
   useEffect(() => {
@@ -41,6 +44,20 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     return (): void => { active = false; };
   }, []);
 
+  async function scanProfile(): Promise<void> {
+    if (inventoryPending || pending) return;
+    setInventoryPending(true);
+    setInventory(null);
+    setError(null);
+    try {
+      setInventory(await window.lnwjing.getProfileStorageInventory());
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setInventoryPending(false);
+    }
+  }
+
   async function refresh(): Promise<void> {
     setError(null);
     setPending(true);
@@ -51,10 +68,11 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     } finally { setPending(false); }
   }
 
-  async function updatePolicy(changes: Partial<StoragePolicy>): Promise<void> {
+  async function updatePolicy(changes: Partial<StoragePolicy> & { readonly globalQuotaMiB?: number }): Promise<void> {
     if (pending || overview === null) return;
     const enablingCompression = changes.compressionEnabledOnNextStart === true;
     if (changes.checkpointCreationMode === 'git-aware' && !window.confirm(t('storagePanel.confirmGitAware'))) return;
+    if (changes.globalQuotaMiB !== undefined && changes.globalQuotaMiB > 0 && !window.confirm(t('storagePanel.globalConfirm'))) return;
     const enablingNoBackupAudit = changes.auditPruneWithoutBackup === true;
     const enablingAutomaticRetention = changes.automaticCheckpointRetention === true;
     if (enablingAutomaticRetention && !window.confirm(t('storagePanel.confirmAuto'))) return;
@@ -65,6 +83,7 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
       const result = await window.lnwjing.setStoragePolicy({ userConfirmed: true, ...changes });
       setOverview(result.overview);
       setPreview(null); setPreviewRequest(null);
+      if (changes.globalQuotaMiB !== undefined) setGlobalQuotaDraft(null);
       setNotice(result.restartRequired
         ? (t('storagePanel.restartRequired'))
         : (t('storagePanel.policySaved')));
@@ -125,6 +144,77 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     <section className="panel settings-card settings-card-polished" aria-label={t('storagePanel.title')}>
       <SettingsCardHeading icon="▤" title={t('storagePanel.title')}
         subtitle={t('storagePanel.subtitle')} />
+      <div className="setting-field" data-testid="global-quota-settings">
+        <strong>{t('storagePanel.globalTitle')}</strong>
+        <p className="hint">{t('storagePanel.globalLimitNote')}</p>
+        <div className="inline-actions">
+          <label htmlFor="storage-global-quota">{t('storagePanel.globalLimitMiB')}
+            <input id="storage-global-quota" type="number" min={0} max={65536} step={1}
+              value={globalQuotaDraft ?? (overview?.globalQuota === undefined ? 0 : overview.globalQuota.limitBytes / MIB)}
+              disabled={pending || overview === null}
+              onChange={(event) => setGlobalQuotaDraft(Number(event.target.value))} />
+          </label>
+          <ActionButton type="button" disabled={pending || overview === null || globalQuotaDraft === null
+            || !Number.isSafeInteger(globalQuotaDraft)
+            || (globalQuotaDraft !== 0 && (globalQuotaDraft < 512 || globalQuotaDraft > 65536))}
+            onClick={() => { if (globalQuotaDraft !== null) void updatePolicy({ globalQuotaMiB: globalQuotaDraft }); }}>
+            {t('storagePanel.globalApply')}
+          </ActionButton>
+        </div>
+        {overview?.globalQuota === undefined ? <p className="hint">{t('storagePanel.globalDisabled')}</p> : (
+          <>
+            <p>{t('storagePanel.globalActive', {
+              limit: sizeLabel(overview.globalQuota.limitBytes),
+              reserve: sizeLabel(overview.globalQuota.criticalReserveBytes),
+              pending: sizeLabel(overview.globalQuota.reservedBytes),
+            })}</p>
+            {inventory !== null && !inventory.incomplete ? (
+              <p>{t('storagePanel.globalLogicalUsed', {
+                used: sizeLabel(inventory.logicalBytes),
+                left: sizeLabel(Math.max(0, overview.globalQuota.limitBytes
+                  - inventory.logicalBytes - overview.globalQuota.reservedBytes)),
+              })}</p>
+            ) : <p className="hint">{t('storagePanel.globalNeedScan')}</p>}
+          </>
+        )}
+      </div>
+      <div className="setting-field" data-testid="profile-storage-inventory">
+        <strong>{t('storagePanel.inventoryTitle')}</strong>
+        <p className="hint">{t('storagePanel.inventoryScope')}</p>
+        {inventory === null ? null : (
+          <>
+            <p>{t('storagePanel.inventoryTotal', {
+              size: sizeLabel(inventory.logicalBytes),
+              files: String(inventory.files),
+              directories: String(inventory.directories),
+            })}</p>
+            <p className="hint">{inventory.allocatedBytes === null
+              ? t('storagePanel.inventoryAllocationUnknown')
+              : t('storagePanel.inventoryAllocated', { size: sizeLabel(inventory.allocatedBytes) })}</p>
+            <p className="hint">{t('storagePanel.inventoryCandidates', {
+              size: sizeLabel(inventory.potentiallyReclaimableLogicalBytes),
+              cache: sizeLabel(inventory.rebuildableLogicalBytes),
+            })}</p>
+            {inventory.categories.map((item) => (
+              <p key={item.id}>{item.id}: {sizeLabel(item.logicalBytes)} · {item.files} {t('storagePanel.inventoryFiles')}
+                {' · '}{t(item.retention === 'protected' ? 'storagePanel.inventoryRetentionProtected'
+                  : item.retention === 'managed' ? 'storagePanel.inventoryRetentionManaged'
+                    : item.retention === 'rebuildable' ? 'storagePanel.inventoryRetentionRebuildable'
+                      : 'storagePanel.inventoryRetentionUnknown')}</p>
+            ))}
+            {inventory.incomplete
+              ? <StatusMessage tone="warning" role="alert">{t('storagePanel.inventoryIncomplete', {
+                reason: inventory.reason,
+                scanned: String(inventory.visitedEntries),
+                skipped: String(inventory.skippedLinks + inventory.unreadableEntries),
+              })}</StatusMessage>
+              : <p className="hint">{t('storagePanel.inventoryComplete')}</p>}
+          </>
+        )}
+        <ActionButton type="button" disabled={pending || inventoryPending} onClick={() => { void scanProfile(); }}>
+          {inventoryPending ? t('storagePanel.inventoryScanning') : t('storagePanel.inventoryScan')}
+        </ActionButton>
+      </div>
       <div className="setting-field">
         <strong>{t('storagePanel.sqliteTitle')}</strong>
         <p>{overview === null ? (t('storagePanel.notLoaded')) :

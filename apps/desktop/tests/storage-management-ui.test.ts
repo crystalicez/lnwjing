@@ -9,6 +9,9 @@ describe('Storage Management UI', () => {
     const markup = renderToStaticMarkup(createElement(StorageManagementPanel, { locale: 'en', autoBackupEnabled: false }));
     expect(markup).toContain('Storage Management');
     expect(markup).toContain('SQLite Database');
+    expect(markup).toContain('Global Storage Quota V2');
+    expect(markup).toContain('Profile storage inventory');
+    expect(markup).toContain('Scan entire profile');
     expect(markup).toContain('Preview cleanup');
     expect(markup).toContain('Verified native launcher cleanup');
     expect(markup).not.toContain('VACUUM now');
@@ -32,6 +35,12 @@ describe('storage IPC guards', () => {
     expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, checkpointCreationMode: null })).toThrow(/Invalid checkpoint/);
     expect(parseSetStoragePolicyRequest({ userConfirmed: true, sqliteHardLimitMiB: 2048 })).toEqual({ userConfirmed: true, sqliteHardLimitMiB: 2048 });
     expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, sqliteHardLimitMiB: 128 })).toThrow(/Invalid SQLite/);
+    expect(parseSetStoragePolicyRequest({ userConfirmed: true, globalQuotaMiB: 512 }))
+      .toEqual({ userConfirmed: true, globalQuotaMiB: 512 });
+    expect(parseSetStoragePolicyRequest({ userConfirmed: true, globalQuotaMiB: 0 }))
+      .toEqual({ userConfirmed: true, globalQuotaMiB: 0 });
+    expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, globalQuotaMiB: 256 })).toThrow(/Invalid global/);
+    expect(() => parseSetStoragePolicyRequest({ userConfirmed: true, globalQuotaMiB: 65537 })).toThrow(/Invalid global/);
     expect(() => parseApplyCheckpointCleanup({ ...preview })).toThrow();
     expect(() => parseNativeStorageCleanup({ category: 'tasks', userConfirmed: false })).toThrow();
   });

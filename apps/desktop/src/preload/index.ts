@@ -7,7 +7,7 @@ import {
   type AgentState,
   type BackupRestoreNotice,
   type BackupSummary,
-  type StorageOverview, type StoragePolicy, type SetStoragePolicyRequest, type SetStoragePolicyResult,
+  type StorageOverview, type ProfileStorageInventory, type StoragePolicy, type SetStoragePolicyRequest, type SetStoragePolicyResult,
   type CheckpointCleanupPreviewRequest, type CheckpointCleanupPreview,
   type ApplyCheckpointCleanupRequest, type ApplyCheckpointCleanupResult,
   type NativeStorageCleanupRequest, type NativeStorageCleanupResult,
@@ -1283,6 +1283,18 @@ function storageOverview(value: unknown): StorageOverview {
   }
   if (value.automaticBackupBudgetUnknown !== undefined && typeof value.automaticBackupBudgetUnknown !== 'boolean')
     throw new Error('Invalid automatic backup budget verification status');
+  let globalQuota: StorageOverview['globalQuota'];
+  if (value.globalQuota !== undefined) {
+    if (!isRecord(value.globalQuota) || value.globalQuota.enforcement !== 'partial')
+      throw new Error('Invalid global quota status');
+    const limitBytes = integerField(value.globalQuota, 'limitBytes');
+    const criticalReserveBytes = integerField(value.globalQuota, 'criticalReserveBytes');
+    const reservedBytes = integerField(value.globalQuota, 'reservedBytes');
+    const activeReservations = integerField(value.globalQuota, 'activeReservations');
+    if (limitBytes <= 0 || criticalReserveBytes < 0 || criticalReserveBytes >= limitBytes
+      || reservedBytes < 0 || activeReservations < 0) throw new Error('Invalid global quota counters');
+    globalQuota = { limitBytes, criticalReserveBytes, reservedBytes, activeReservations, enforcement: 'partial' };
+  }
   const sqliteEffectiveHardLimitBytes = integerField(value, 'sqliteEffectiveHardLimitBytes');
   if (sqliteEffectiveHardLimitBytes < 0) throw new Error('Invalid SQLite hard limit');
   return { policy: storagePolicy(value.policy), sqliteAllocatedBytes, sqliteFreeBytes, sqliteWalBytes, sqliteEffectiveHardLimitBytes,
@@ -1292,11 +1304,56 @@ function storageOverview(value: unknown): StorageOverview {
     ...(value.automaticBackupBudgetUnknown === undefined ? {} : { automaticBackupBudgetUnknown: value.automaticBackupBudgetUnknown as boolean }),
     ...(value.hasCompressedV2 === undefined ? {} : { hasCompressedV2: value.hasCompressedV2 as boolean }),
     ...(value.checkpointMetadataIncomplete === undefined ? {} : { checkpointMetadataIncomplete: value.checkpointMetadataIncomplete as boolean }),
+    ...(globalQuota === undefined ? {} : { globalQuota }),
     compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true,
     ...(usageCategories === undefined ? {} : { usageCategories }) };
 }
 function getStorageOverview(): Promise<StorageOverview> {
   return invoke(ipcChannels.getStorageOverview).then(storageOverview);
+}
+function profileStorageInventory(value: unknown): ProfileStorageInventory {
+  if (!isRecord(value) || value.scope !== 'profile' || typeof value.scannedAt !== 'string'
+    || !Number.isFinite(Date.parse(value.scannedAt))
+    || typeof value.reason !== 'string'
+    || !['complete', 'entry-limit', 'time-limit', 'unreadable', 'links-or-mounts'].includes(value.reason)
+    || typeof value.incomplete !== 'boolean' || value.incomplete !== (value.reason !== 'complete')
+    || !Array.isArray(value.categories) || value.categories.length > 20) {
+    throw new Error('Invalid profile storage inventory');
+  }
+  const numericKeys = [
+    'logicalBytes', 'files', 'directories', 'visitedEntries', 'skippedLinks',
+    'unreadableEntries', 'potentiallyReclaimableLogicalBytes', 'rebuildableLogicalBytes',
+  ] as const;
+  for (const key of numericKeys) {
+    if (!Number.isSafeInteger(value[key]) || (value[key] as number) < 0) {
+      throw new Error('Invalid profile storage inventory counters');
+    }
+  }
+  if (value.allocatedBytes !== null && (!Number.isSafeInteger(value.allocatedBytes)
+    || (value.allocatedBytes as number) < 0)) throw new Error('Invalid allocated storage bytes');
+  let counted = 0;
+  for (const category of value.categories) {
+    if (!isRecord(category) || typeof category.id !== 'string' || category.id.length > 40
+      || typeof category.retention !== 'string'
+      || !['protected', 'managed', 'rebuildable', 'unknown'].includes(category.retention)) {
+      throw new Error('Invalid profile storage category');
+    }
+    for (const key of ['logicalBytes', 'files', 'directories'] as const) {
+      if (!Number.isSafeInteger(category[key]) || (category[key] as number) < 0) {
+        throw new Error('Invalid profile storage category counters');
+      }
+    }
+    counted += category.logicalBytes as number;
+  }
+  if (counted !== value.logicalBytes
+    || (value.potentiallyReclaimableLogicalBytes as number) > (value.logicalBytes as number)
+    || (value.rebuildableLogicalBytes as number) > (value.potentiallyReclaimableLogicalBytes as number)) {
+    throw new Error('Invalid profile storage inventory totals');
+  }
+  return value as unknown as ProfileStorageInventory;
+}
+function getProfileStorageInventory(): Promise<ProfileStorageInventory> {
+  return invoke(ipcChannels.getProfileStorageInventory).then(profileStorageInventory);
 }
 function setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStoragePolicyResult> {
   if (!isRecord(request) || request.userConfirmed !== true) return Promise.reject(new Error('Storage policy confirmation required'));
@@ -1305,6 +1362,10 @@ function setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStorageP
   }
   for (const key of ['compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup'] as const) {
     if (request[key] !== undefined && typeof request[key] !== 'boolean') return Promise.reject(new Error('Invalid storage policy'));
+  }
+  if (request.globalQuotaMiB !== undefined && (!Number.isSafeInteger(request.globalQuotaMiB)
+    || (request.globalQuotaMiB !== 0 && (request.globalQuotaMiB < 512 || request.globalQuotaMiB > 65536)))) {
+    return Promise.reject(new Error('Invalid global storage quota'));
   }
   if (request.sqliteHardLimitMiB !== undefined && (!Number.isSafeInteger(request.sqliteHardLimitMiB)
     || request.sqliteHardLimitMiB < 512 || request.sqliteHardLimitMiB > 16384)) return Promise.reject(new Error('Invalid SQLite hard limit'));
@@ -1827,6 +1888,7 @@ const api: LnwjingApi = {
   setStdioPolicy,
   createBackup,
   getStorageOverview,
+  getProfileStorageInventory,
   setStoragePolicy,
   previewCheckpointCleanup,
   applyCheckpointCleanup,

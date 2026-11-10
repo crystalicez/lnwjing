@@ -42,6 +42,21 @@ describe('Desktop storage-maintenance backend', () => {
       expect(() => runtime.storageMaintenance.configurePolicy({ userConfirmed: true, sqliteHardLimitMiB: 100 })).toThrow(/Invalid SQLite hard limit/);
       expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, sqliteHardLimitMiB: 1024 })).toEqual({ restartRequired: false });
       expect(runtime.storageMaintenance.getPolicy().sqliteHardLimitMiB).toBe(1024);
+      expect((await runtime.services.getStorageOverview()).globalQuota).toBeUndefined();
+      expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, globalQuotaMiB: 512 }))
+        .toEqual({ restartRequired: false });
+      expect((await runtime.services.getStorageOverview()).globalQuota).toMatchObject({
+        limitBytes: 512 * 1024 ** 2, criticalReserveBytes: expect.any(Number),
+        reservedBytes: 0, enforcement: 'partial',
+      });
+      expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, globalQuotaMiB: 0 }))
+        .toEqual({ restartRequired: false });
+      expect((await runtime.services.getStorageOverview()).globalQuota).toBeUndefined();
+      const inventory = await runtime.services.getProfileStorageInventory();
+      expect(inventory.scope).toBe('profile');
+      expect(inventory.incomplete).toBe(false);
+      expect(inventory.categories.some((category) => category.id === 'database')).toBe(true);
+      expect(inventory.logicalBytes).toBeGreaterThan(0);
       const limited = await runtime.services.getStorageOverview();
       expect(limited.sqliteEffectiveHardLimitBytes).toBe(1024 ** 3);
       expect(limited.sqliteOverBudget).toBe(false);

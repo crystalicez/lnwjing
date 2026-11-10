@@ -131,7 +131,7 @@ import {
   type EngineeringHarnessWorkspaceOverride,
 } from '@lnwjing/shared';
 import { AesGcmCheckpointCipher, SQLITE_HARD_LIMIT_SETTING_KEY, parseSqliteHardLimitMiB, sqliteLimitPressure, inspectSqliteHardLimit, applySqliteHardLimit, inspectSqliteCompaction, inspectBoundedDirectorySize, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
-import { SqliteGoalRepository } from '@lnwjing/storage';
+import { SqliteGoalRepository, GlobalStorageQuotaReservations, inspectProfileStorageOffMain } from '@lnwjing/storage';
 import type { Workspace } from '@lnwjing/workspace';
 import { comparableHostPath, isDriveRoot, isMachineRootPath, resolveHostPath, SecretPolicy, WorkspacePathGuard, WorkspaceService } from '@lnwjing/workspace';
 import {
@@ -276,7 +276,7 @@ export interface StorageMaintenanceBackend {
   };
   configurePolicy(options: {
     readonly userConfirmed: boolean; readonly compressionEnabledOnNextStart?: boolean;
-    readonly checkpointCreationMode?: 'always' | 'git-aware'; readonly sqliteHardLimitMiB?: number;
+    readonly checkpointCreationMode?: 'always' | 'git-aware'; readonly sqliteHardLimitMiB?: number; readonly globalQuotaMiB?: number;
     readonly automaticCheckpointRetention?: boolean; readonly auditPruneWithoutBackup?: boolean;
     readonly routineAuditRetentionDays?: number;
   }): { readonly restartRequired: boolean };
@@ -535,7 +535,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     throw new Error('Desktop runtime requires a checkpoint encryption key resolved by the Electron composition root');
   }
   const checkpointRepository = new SqliteCheckpointRepository(database, checkpointCipher);
-  const backupService = new SqliteBackupService(database, { backupDirectory, databaseFilename, platform: process.platform, arch: process.arch });
+  const globalQuota = new GlobalStorageQuotaReservations(dataPath);
+  const backupService = new SqliteBackupService(database, {
+    backupDirectory, databaseFilename, platform: process.platform, arch: process.arch,
+    globalQuota: (): GlobalStorageQuotaReservations | null => globalQuota.status() === null ? null : globalQuota,
+  });
   const startupBackup = (readUserSettings(settingsRepository, process.env).autoBackupEnabled === true
     ? backupService.ensureRecent() : Promise.resolve(null)).catch((error: unknown) => {
     console.error(`Automatic database backup failed: ${error instanceof Error ? error.message : 'unknown error'}`);
@@ -1977,6 +1981,18 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     },
     createBackup: async (): Promise<IpcBackupSummary> => toIpcBackupSummary(await backupService.create('manual')),
     getStorageOverview: async () => storageOverview(),
+    getProfileStorageInventory: (() => {
+      let inFlight: ReturnType<typeof inspectProfileStorageOffMain> | null = null;
+      return (): ReturnType<typeof inspectProfileStorageOffMain> => {
+        if (inFlight !== null) return inFlight;
+        const task = inspectProfileStorageOffMain(dataPath);
+        inFlight = task;
+        void task.finally(() => {
+          if (inFlight === task) inFlight = null;
+        }).catch(() => undefined);
+        return task;
+      };
+    })(),
     setStoragePolicy: async (request) => {
       const changed = storageMaintenance.configurePolicy(request);
       return { ...changed, overview: await storageOverview() };
@@ -2546,6 +2562,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error;
     }
     const automaticBackupBudget = await backupService.inspectAutomaticBackupBudget().catch(() => null);
+    const globalQuotaStatus = globalQuota.status();
     return { ...storageMaintenance.inspect(), sqliteWalBytes, sqliteEffectiveHardLimitBytes: limit.effectiveBytes,
       ...(automaticBackupBudget === null
         ? { automaticBackupBudgetUnknown: true }
@@ -2553,6 +2570,13 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       sqliteOverBudget: limit.allocatedBytes > limit.requestedBytes,
       sqlitePressureHigh: sqliteLimitPressure(limit.allocatedBytes, limit.freeBytes, limit.requestedBytes),
       usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete,
+      ...(globalQuotaStatus === null ? {} : { globalQuota: {
+        limitBytes: globalQuotaStatus.policy.limitBytes,
+        criticalReserveBytes: globalQuotaStatus.policy.criticalReserveBytes,
+        reservedBytes: globalQuotaStatus.reservedBytes,
+        activeReservations: globalQuotaStatus.activeReservations,
+        enforcement: 'partial' as const,
+      } }),
       policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const };
   }
 
@@ -2571,6 +2595,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         (!Number.isSafeInteger(options.routineAuditRetentionDays) ||
           options.routineAuditRetentionDays < 1 || options.routineAuditRetentionDays > 3650)) {
         throw new Error('Invalid audit retention days');
+      }
+      if (options.globalQuotaMiB !== undefined && (!Number.isSafeInteger(options.globalQuotaMiB)
+        || (options.globalQuotaMiB !== 0 && (options.globalQuotaMiB < 512 || options.globalQuotaMiB > 65536)))) {
+        throw new Error('Invalid global storage quota limit');
       }
       if (options.sqliteHardLimitMiB !== undefined && (!Number.isSafeInteger(options.sqliteHardLimitMiB)
         || options.sqliteHardLimitMiB < 512 || options.sqliteHardLimitMiB > 16384)) {
@@ -2605,6 +2633,17 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           throw error;
         }
         database.syncHardLimit();
+      }
+      if (options.globalQuotaMiB !== undefined) {
+        if (options.globalQuotaMiB === 0) globalQuota.disable();
+        else {
+          const limitBytes = options.globalQuotaMiB * 1024 ** 2;
+          const reserveBytes = Math.min(Math.floor(limitBytes * 0.1), 512 * 1024 ** 2);
+          globalQuota.configure({ limitBytes, criticalReserveBytes: reserveBytes });
+          void globalQuota.reclaimIfPressured().catch((error: unknown) => {
+            console.warn('Global quota diagnostic cleanup was skipped:', error instanceof Error ? error.message : 'unknown error');
+          });
+        }
       }
       if (options.automaticCheckpointRetention !== undefined) {
         settingsRepository.set('checkpoint_auto_retention_v1', options.automaticCheckpointRetention ? 'true' : 'false');

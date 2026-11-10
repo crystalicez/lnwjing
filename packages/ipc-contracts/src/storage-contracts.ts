@@ -8,6 +8,31 @@ export interface StoragePolicy {
   readonly auditPruneWithoutBackup: boolean;
   readonly routineAuditRetentionDays: number;
 }
+/** Read-only, on-demand logical-file inventory of the owned AppData profile.
+ * This is NOT a hard disk quota; outside-profile paths and racing writers are
+ * not included, and reclaimability still requires a policy/eligibility check. */
+export interface ProfileStorageInventory {
+  readonly scope: 'profile';
+  readonly scannedAt: string;
+  readonly logicalBytes: number;
+  readonly allocatedBytes: number | null;
+  readonly files: number;
+  readonly directories: number;
+  readonly visitedEntries: number;
+  readonly skippedLinks: number;
+  readonly unreadableEntries: number;
+  readonly incomplete: boolean;
+  readonly reason: 'complete' | 'entry-limit' | 'time-limit' | 'unreadable' | 'links-or-mounts';
+  readonly categories: readonly {
+    readonly id: string;
+    readonly retention: 'protected' | 'managed' | 'rebuildable' | 'unknown';
+    readonly logicalBytes: number;
+    readonly files: number;
+    readonly directories: number;
+  }[];
+  readonly potentiallyReclaimableLogicalBytes: number;
+  readonly rebuildableLogicalBytes: number;
+}
 export interface StorageOverview {
   readonly policy: StoragePolicy;
   readonly sqliteAllocatedBytes: number;
@@ -25,6 +50,13 @@ export interface StorageOverview {
     readonly blocked: boolean;
   };
   readonly automaticBackupBudgetUnknown?: boolean;
+  readonly globalQuota?: {
+    readonly limitBytes: number;
+    readonly criticalReserveBytes: number;
+    readonly reservedBytes: number;
+    readonly activeReservations: number;
+    readonly enforcement: 'partial';
+  };
   readonly compactRecommended: boolean;
   readonly hasCompressedV2?: boolean;
   readonly checkpointMetadataIncomplete?: boolean;
@@ -35,6 +67,8 @@ export interface SetStoragePolicyRequest {
   readonly userConfirmed: true;
   readonly checkpointCreationMode?: 'always' | 'git-aware';
   readonly sqliteHardLimitMiB?: number;
+  /** Zero disables opt-in profile reservations. */
+  readonly globalQuotaMiB?: number;
   readonly compressionEnabledOnNextStart?: boolean;
   readonly automaticCheckpointRetention?: boolean;
   readonly auditPruneWithoutBackup?: boolean;

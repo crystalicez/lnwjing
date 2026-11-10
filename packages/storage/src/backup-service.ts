@@ -76,7 +76,8 @@ export interface SqliteBackupServiceOptions {
   /** Optional test override; production derives the budget from the persisted main DB page cap. */
   readonly automaticBackupBudgetBytes?: number;
   /** Opt-in V2 admission. Not an OS-enforced cap or a default profile policy. */
-  readonly globalQuota?: Pick<GlobalStorageQuotaReservations, 'reserve' | 'release'>;
+  readonly globalQuota?: Pick<GlobalStorageQuotaReservations, 'reserve' | 'release'>
+    | (() => Pick<GlobalStorageQuotaReservations, 'reserve' | 'release'> | null);
 }
 
 export interface SqliteRestoreOptions {
@@ -218,12 +219,13 @@ export class SqliteBackupService {
     // volume cannot hold a full SQLite copy plus safety headroom.
     assertBackupFreeSpace(this.database.connection, this.backupDirectory);
     let quotaReservation: GlobalQuotaReservation | null = null;
-    if (this.globalQuota !== undefined) {
+    const quota = typeof this.globalQuota === 'function' ? this.globalQuota() : this.globalQuota;
+    if (quota !== undefined && quota !== null) {
       const sourcePages = (this.database.connection.prepare('PRAGMA page_count').get() as { page_count: number }).page_count;
       const pageSize = (this.database.connection.prepare('PRAGMA page_size').get() as { page_size: number }).page_size;
       const estimate = Math.ceil(sourcePages * pageSize * 1.1) + 256 * 1024;
       if (!Number.isSafeInteger(estimate) || estimate <= 0) throw new Error('Invalid projected SQLite backup quota');
-      quotaReservation = await this.globalQuota.reserve(estimate);
+      quotaReservation = await quota.reserve(estimate);
     }
     try {
     const manifestFilename = manifestPath(this.backupDirectory, id);
@@ -267,7 +269,7 @@ export class SqliteBackupService {
     await this.rotateRetention();
     return summary(manifest, this.platform, this.arch);
     } finally {
-      if (quotaReservation !== null) this.globalQuota!.release(quotaReservation);
+      if (quotaReservation !== null) quota!.release(quotaReservation);
     }
   }
 

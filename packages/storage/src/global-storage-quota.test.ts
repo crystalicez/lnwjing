@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -45,6 +45,44 @@ function departedOwner(ledger: string, bytes: number): Promise<void> {
 }
 
 describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
+  it('enables and disables explicitly, rejecting disable while a live writer owns a reservation', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const quota = new GlobalStorageQuotaReservations(root);
+      expect(quota.status()).toBeNull();
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 128 * 1024 });
+      expect(quota.status()?.policy.limitBytes).toBe(MIB);
+      const lease = await quota.reserve(12 * 1024);
+      expect(quota.status()?.activeReservations).toBe(1);
+      expect(() => quota.disable()).toThrow(/Active global quota reservations/);
+      quota.release(lease);
+      quota.disable();
+      expect(quota.status()).toBeNull();
+      await expect(quota.reserve(1)).rejects.toThrow(/not configured/);
+    } finally { await dispose(); }
+  });
+
+  it('automatically reclaims only verified old diagnostics when a reservation nears the cap', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const quota = new GlobalStorageQuotaReservations(root);
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 96 * 1024 });
+      await mkdir(path.join(root, 'logs'));
+      const oldLog = path.join(root, 'logs', 'old-diagnostic.log');
+      await writeFile(oldLog, Buffer.alloc(720 * 1024));
+      const old = new Date('2020-01-01T00:00:00Z');
+      await utimes(oldLog, old, old);
+      await mkdir(path.join(root, 'backups'));
+      const protectedFile = path.join(root, 'backups', 'keep.sqlite');
+      await writeFile(protectedFile, Buffer.alloc(10 * 1024));
+      const proof = await quota.reserve(350 * 1024);
+      expect(proof.bytes).toBe(350 * 1024);
+      await expect(readFile(oldLog)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect((await readFile(protectedFile)).byteLength).toBe(10 * 1024);
+      quota.release(proof);
+    } finally { await dispose(); }
+  });
+
   it('admits only within a verified complete logical inventory and preserves a critical reserve', async () => {
     const { root, dispose } = await fixture();
     try {

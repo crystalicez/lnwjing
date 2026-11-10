@@ -19,6 +19,7 @@ import {
   type AddWorkspaceRequest,
   type BackupSummary,
   type StorageOverview,
+  type ProfileStorageInventory,
   type SetStoragePolicyRequest,
   type SetStoragePolicyResult,
   type CheckpointCleanupPreviewRequest,
@@ -193,6 +194,7 @@ export interface DesktopIpcServices {
   setStdioPolicy(request: SetStdioPolicyRequest): Promise<{ readonly profile: PermissionProfileName; readonly strictRoots: boolean; readonly allowedRoots: readonly string[]; readonly restartRequired: boolean }>;
   createBackup(): Promise<BackupSummary>;
   getStorageOverview(): Promise<StorageOverview>;
+  getProfileStorageInventory(): Promise<ProfileStorageInventory>;
   setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStoragePolicyResult>;
   previewCheckpointCleanup(request: CheckpointCleanupPreviewRequest): Promise<CheckpointCleanupPreview>;
   applyCheckpointCleanup(request: ApplyCheckpointCleanupRequest): Promise<ApplyCheckpointCleanupResult>;
@@ -389,6 +391,7 @@ const defaultDesktopServices: DesktopIpcServices = {
   }),
   createBackup: async (): Promise<BackupSummary> => ({ id: 'unavailable', createdAt: new Date(0).toISOString(), reason: 'manual', sizeBytes: 0 }),
   getStorageOverview: async (): Promise<StorageOverview> => ({ policy: { checkpointCreationMode: 'git-aware', sqliteHardLimitMiB: 4096, compressionEnabledOnNextStart: false, automaticCheckpointRetention: false, auditPruneWithoutBackup: false, routineAuditRetentionDays: 90 }, sqliteAllocatedBytes: 0, sqliteFreeBytes: 0, sqliteWalBytes: 0, sqliteEffectiveHardLimitBytes: 4096 * 1024 * 1024, sqliteOverBudget: false, sqlitePressureHigh: false, compactRecommended: false, compactionRequiresOffline: true }),
+  getProfileStorageInventory: async (): Promise<ProfileStorageInventory> => { throw new Error('Storage inventory backend unavailable'); },
   setStoragePolicy: async (): Promise<SetStoragePolicyResult> => { throw new Error('Storage backend is unavailable'); },
   previewCheckpointCleanup: async (): Promise<CheckpointCleanupPreview> => { throw new Error('Storage backend is unavailable'); },
   applyCheckpointCleanup: async (): Promise<ApplyCheckpointCleanupResult> => { throw new Error('Storage backend is unavailable'); },
@@ -594,6 +597,11 @@ export function registerIpcHandlers(
     assertTrustedSender(event, getMainWindow());
     assertNoPayload(payload);
     return services.getStorageOverview();
+  });
+  registerHandler(ipcChannels.getProfileStorageInventory, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    assertNoPayload(payload);
+    return services.getProfileStorageInventory();
   });
   registerHandler(ipcChannels.setStoragePolicy, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
