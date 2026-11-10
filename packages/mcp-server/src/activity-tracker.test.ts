@@ -74,6 +74,20 @@ describe('ActivityTracker', () => {
     await tracker.end(recoveredCall, 'SUCCESS', 1);
   });
 
+  it('keeps a failed STARTED audit attached to its call after another call succeeds', async () => {
+    const tracker = new ActivityTracker(undefined, undefined, {
+      async record(event): Promise<void> {
+        if (event.toolName === 'edit_file' && event.phase === 'started') throw new Error('SQLITE_FULL');
+      },
+    });
+    const edit = await tracker.begin('edit_file', { path: 'lesson.md' });
+    const read = await tracker.begin('read_file', { path: 'lesson.md' });
+    await tracker.end(read, 'SUCCESS', 1);
+    expect(tracker.isAuditPersistenceHealthy()).toBe(true);
+    expect(tracker.isAuditPersistenceHealthy(edit)).toBe(false);
+    await tracker.end(edit, 'CONFLICT', 1);
+  });
+
   it('publishes sanitized lifecycle events to realtime subscribers and supports unsubscribe', async () => {
     const events: ActivitySinkEvent[] = [];
     const tracker = new ActivityTracker();

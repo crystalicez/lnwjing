@@ -78,6 +78,15 @@ export interface ActivityAuditSink {
 export type ActivityRecordErrorHandler = (error: unknown, event: ActivitySinkEvent) => void;
 export type ActivityEventListener = (event: ActivitySinkEvent) => void;
 
+const FILE_MUTATIONS = new Set([
+  'write_file', 'edit_file', 'apply_patch', 'move_file', 'copy_file', 'delete_file',
+  'restore_deleted_file', 'restore_checkpoint',
+]);
+const MAX_RESERVED_RESULT_DETAIL_BYTES = 256 * 1024;
+const MAX_RESERVED_RESULT_MESSAGE_CHARS = 16 * 1024;
+
+export class ActivityAuditAdmissionError extends Error {}
+
 export interface InFlightToolCall {
   readonly callId: string;
   readonly toolName: string;
@@ -96,6 +105,8 @@ export interface InFlightToolCall {
 
 export class ActivityTracker {
   private readonly inflight = new Map<string, InFlightToolCall>();
+  private readonly failedAuditStarts = new Set<string>();
+  private readonly auditReservations = new Map<string, () => void>();
   private readonly listeners = new Set<ActivityEventListener>();
   private readonly completedTelemetry: Array<{ readonly toolName: string; readonly resultCode: string; readonly durationMs: number; readonly partialFailure: boolean }> = [];
   private activityRevision = 0;
@@ -106,6 +117,7 @@ export class ActivityTracker {
     private readonly sink?: ActivitySink,
     private readonly onRecordError?: ActivityRecordErrorHandler,
     private readonly auditSink?: ActivityAuditSink,
+    private readonly reserveFileAudit?: (estimateMetadataBytes: () => number) => Promise<(() => void) | null>,
   ) {}
 
   public listInFlight(): readonly InFlightToolCall[] {
@@ -123,8 +135,8 @@ export class ActivityTracker {
   }
 
   /** Mutations must not proceed after a failed durable audit insert. */
-  public isAuditPersistenceHealthy(): boolean {
-    return this.auditPersistenceHealthy;
+  public isAuditPersistenceHealthy(callId?: string): boolean {
+    return this.auditPersistenceHealthy && (callId === undefined || !this.failedAuditStarts.has(callId));
   }
 
   public telemetrySnapshot(): ActivityTelemetrySnapshot {
@@ -214,9 +226,7 @@ export class ActivityTracker {
       ...(trace.baggage === undefined ? {} : { baggage: trace.baggage }),
       ...(authorizationMode === undefined ? {} : { authorizationMode }),
     };
-    this.inflight.set(callId, entry);
-    this.activityRevision += 1;
-    await this.safeRecord({
+    const event: ActivitySinkEvent = {
       callId,
       toolName,
       phase: 'started',
@@ -232,7 +242,24 @@ export class ActivityTracker {
       ...(trace.traceState === undefined ? {} : { traceState: trace.traceState }),
       ...(trace.baggage === undefined ? {} : { baggage: trace.baggage }),
       ...(authorizationMode === undefined ? {} : { authorizationMode }),
-    }, describedTarget.detail);
+    };
+    this.inflight.set(callId, entry);
+    this.activityRevision += 1;
+    if (this.reserveFileAudit !== undefined && FILE_MUTATIONS.has(toolName)) {
+      try {
+        const release = await this.reserveFileAudit(() => {
+          const eventBytes = Buffer.byteLength(JSON.stringify(event));
+          const detailBytes = describedTarget.detail === undefined ? 0 : Buffer.byteLength(JSON.stringify(describedTarget.detail));
+          return 2 * eventBytes + detailBytes;
+        });
+        if (release !== null) this.auditReservations.set(callId, release);
+      } catch (cause) {
+        this.inflight.delete(callId);
+        this.activityRevision += 1;
+        throw new ActivityAuditAdmissionError('Profile storage quota could not reserve space for file mutation audit', { cause });
+      }
+    }
+    if (!await this.safeRecord(event, describedTarget.detail)) this.failedAuditStarts.add(callId);
     return callId;
   }
 
@@ -261,6 +288,9 @@ export class ActivityTracker {
   ): Promise<void> {
     const existing = this.inflight.get(callId);
     this.inflight.delete(callId);
+    this.failedAuditStarts.delete(callId);
+    const release = this.auditReservations.get(callId);
+    this.auditReservations.delete(callId);
     this.activityRevision += 1;
     this.completedTelemetry.push({
       toolName: existing?.toolName ?? 'unknown',
@@ -270,10 +300,15 @@ export class ActivityTracker {
     });
     if (this.completedTelemetry.length > this.maxTelemetryEntries) this.completedTelemetry.splice(0, this.completedTelemetry.length - this.maxTelemetryEntries);
     const timestamp = new Date().toISOString();
-    const targetDetail = resultDetail === undefined
+    const detail: ActivityTargetDetail | undefined = release !== undefined && resultDetail !== undefined
+      && Buffer.byteLength(JSON.stringify(resultDetail)) > MAX_RESERVED_RESULT_DETAIL_BYTES
+      ? { kind: 'details', items: ['Additional result detail exceeded the audit budget'] }
+      : resultDetail;
+    const targetDetail = detail === undefined
       ? existing?.targetDetail ?? activityTargetReference(null, undefined, undefined)
-      : activityTargetReference(`${callId}:completed`, resultDetail, existing?.targetSummary);
-    await this.safeRecord({
+      : activityTargetReference(`${callId}:completed`, detail, existing?.targetSummary);
+    const message = release === undefined ? resultMessage : resultMessage?.slice(0, MAX_RESERVED_RESULT_MESSAGE_CHARS);
+    const event: ActivitySinkEvent = {
       callId,
       toolName: existing?.toolName ?? 'unknown',
       ...(existing?.goalId === undefined ? {} : { goalId: existing.goalId }),
@@ -291,11 +326,18 @@ export class ActivityTracker {
       ...(existing?.traceState === undefined ? {} : { traceState: existing.traceState }),
       ...(existing?.baggage === undefined ? {} : { baggage: existing.baggage }),
       ...(existing?.authorizationMode === undefined ? {} : { authorizationMode: existing.authorizationMode }),
-      ...(resultMessage === undefined || resultMessage.length === 0 ? {} : { resultMessage }),
-    }, resultDetail);
+      ...(message === undefined || message.length === 0 ? {} : { resultMessage: message }),
+    };
+    try {
+      await this.safeRecord(event, detail);
+    } finally {
+      try { release?.(); }
+      catch (error) { this.reportRecordError(error, event); }
+    }
   }
 
-  private async safeRecord(event: ActivitySinkEvent, detail?: ActivityTargetDetail): Promise<void> {
+  private async safeRecord(event: ActivitySinkEvent, detail?: ActivityTargetDetail): Promise<boolean> {
+    let auditRecorded = true;
     const compactRecord = this.sink === undefined ? undefined : (): Promise<void> => this.sink!.record(event);
     const auditRecord = this.auditSink === undefined ? undefined : (): Promise<void> => this.auditSink!.record(event, detail);
     // Publish starts promptly, but do not publish completion/idle until durable audit evidence exists.
@@ -306,18 +348,22 @@ export class ActivityTracker {
         await record();
         if (record === auditRecord) this.auditPersistenceHealthy = true;
       } catch (error: unknown) {
-        if (record === auditRecord) this.auditPersistenceHealthy = false;
-      // Activity recording must never fail tool execution, but failures must remain observable.
-        try {
-          this.onRecordError?.(error, event);
-        } catch {
-          // Diagnostics must not fail tool execution either.
+        if (record === auditRecord) {
+          this.auditPersistenceHealthy = false;
+          auditRecorded = false;
         }
+        this.reportRecordError(error, event);
       }
     }
     for (const listener of this.listeners) {
       try { listener(event); } catch { /* Watcher subscribers must never fail tool execution. */ }
     }
+    return auditRecorded;
+  }
+
+  private reportRecordError(error: unknown, event: ActivitySinkEvent): void {
+    try { this.onRecordError?.(error, event); }
+    catch { /* Diagnostics must not fail tool execution. */ }
   }
 }
 

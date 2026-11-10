@@ -324,6 +324,63 @@ describe('MCP tool registry', () => {
     expect(checks).toBe(1);
   });
 
+  it('refuses a file mutation before STARTED if its audit space cannot be reserved', async () => {
+    const editFile = vi.fn();
+    const record = vi.fn();
+    let pendingCalls = 0;
+    const activityTracker = new ActivityTracker(undefined, undefined, { record }, async (): Promise<never> => {
+      pendingCalls = activityTracker.listInFlight().length;
+      throw new Error('profile storage exhausted');
+    });
+    const registry = new ToolRegistry({ file: { editFile } as never }, actor, {
+      activityTracker, profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+    });
+    await expect(registry.invoke('edit_file', { workspaceId: 'workspace-a', path: 'file.ts', oldText: 'a', newText: 'b' }))
+      .resolves.toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    expect(editFile).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+    expect(pendingCalls).toBe(1);
+    expect(activityTracker.listInFlight()).toEqual([]);
+  });
+
+  it('holds the file mutation audit reservation through deferred settlement and terminal audit', async () => {
+    let entered!: () => void;
+    let finishEdit!: () => void;
+    let auditEntered!: () => void;
+    let finishAudit!: () => void;
+    const editing = new Promise<void>((resolve) => { entered = resolve; });
+    const editGate = new Promise<void>((resolve) => { finishEdit = resolve; });
+    const auditing = new Promise<void>((resolve) => { auditEntered = resolve; });
+    const auditGate = new Promise<void>((resolve) => { finishAudit = resolve; });
+    const release = vi.fn();
+    const audit = { async record(event: ActivitySinkEvent): Promise<void> {
+      if (event.phase === 'completed') { auditEntered(); await auditGate; }
+    } };
+    const reserve = vi.fn(async (): Promise<() => void> => release);
+    const activityTracker = new ActivityTracker(undefined, undefined, audit, reserve);
+    const registry = new ToolRegistry({ file: { async editFile(): Promise<ReturnType<typeof ok>> {
+      entered(); await editGate;
+      return ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 });
+    } } as never }, actor, {
+      activityTracker, profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+    });
+    const abort = new AbortController();
+    const pending = registry.invoke('edit_file', { workspaceId: 'workspace-a', path: 'file.ts', oldText: 'a', newText: 'b' }, undefined, abort.signal);
+    await editing;
+    abort.abort();
+    try {
+      await expect(pending).resolves.toMatchObject({ isError: true });
+      expect(reserve).toHaveBeenCalledTimes(1);
+      expect(release).not.toHaveBeenCalled();
+      finishEdit();
+      await auditing;
+      expect(release).not.toHaveBeenCalled();
+    } finally { finishEdit(); finishAudit(); }
+    await vi.waitFor(() => expect(release).toHaveBeenCalledTimes(1));
+  });
+
   it('fails closed when the asynchronous admission guard rejects', async () => {
     let edits = 0;
     const registry = new ToolRegistry({ file: {

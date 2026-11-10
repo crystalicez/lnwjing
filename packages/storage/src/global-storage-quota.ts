@@ -330,6 +330,14 @@ export class GlobalStorageQuotaReservations {
     throw new Error('Global quota admission changed during inventory; retry when writers are idle');
   }
 
+  /** Reserve estimated main/WAL growth for STARTED and terminal file-tool audit. */
+  public async reserveFileMutationAudit(estimateMetadataBytes: () => number): Promise<(() => void) | null> {
+    if (this.status() === null) return null;
+    // Allow for main and WAL growth, terminal details, indexes and page overhead.
+    const reservation = await this.reserve(2 * estimateMetadataBytes() + 2 * 1024 ** 2);
+    return () => this.release(reservation);
+  }
+
   /** Release only AFTER the associated write has stopped and reached a terminal state. */
   public release(reservation: GlobalQuotaReservation): void {
     if (!reservation || typeof reservation.id !== 'string' || typeof reservation.token !== 'string'

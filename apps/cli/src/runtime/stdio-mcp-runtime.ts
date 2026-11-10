@@ -307,7 +307,7 @@ export function createStdioMcpRuntime(
         timestamp: event.timestamp,
       });
     },
-  });
+  }, (startedBytes) => globalQuota.reserveFileMutationAudit(startedBytes));
   const debugSessions = new DapSessionService();
   const services: McpApplicationServices = {
     platform: process.platform,

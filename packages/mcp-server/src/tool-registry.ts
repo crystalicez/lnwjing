@@ -37,7 +37,7 @@ import {
   type ResolvedPonytailPolicy,
   type ToolAvailabilitySnapshot,
 } from '@lnwjing/shared';
-import { ActivityTracker, describeStructuredResultDetail, summarizeStructuredResultTarget, summarizeToolTarget, type ActivitySink, type TraceContext } from './activity-tracker.js';
+import { ActivityAuditAdmissionError, ActivityTracker, describeStructuredResultDetail, summarizeStructuredResultTarget, summarizeToolTarget, type ActivitySink, type TraceContext } from './activity-tracker.js';
 import { ContextEngine, createScanContinuationStore, type ContextContinuation, type ScanContinuation } from './context-engine.js';
 import { ContextEconomyRuntime } from './context-economy.js';
 import { hasExplicitUserConfirmation } from './destructive-policy.js';
@@ -498,12 +498,18 @@ export class ToolRegistry {
       activityWorkspaceId,
     );
     const activityInput = this.withRememberedActivityTarget(name, workspaceActivityInput);
-    const callId = await this.activity.begin(
-      name,
-      activityInput,
-      { ...(traceContext ?? {}), ...(this.sessionId === undefined ? {} : { sessionId: this.sessionId }) },
-      authorizationMode,
-    );
+    let callId: string;
+    try {
+      callId = await this.activity.begin(
+        name,
+        activityInput,
+        { ...(traceContext ?? {}), ...(this.sessionId === undefined ? {} : { sessionId: this.sessionId }) },
+        authorizationMode,
+      );
+    } catch (error) {
+      if (!(error instanceof ActivityAuditAdmissionError)) throw error;
+      return mapError(appError('CONFLICT', error.message, true));
+    }
     const started = Date.now();
     let fencedMutationEnd: (() => Promise<void>) | undefined;
     let workspaceWriterLeaseEnd: (() => Promise<void>) | undefined;
@@ -624,7 +630,7 @@ export class ToolRegistry {
           return response;
         }
       }
-      if (mutationDecision.kind !== 'read' && !this.activity.isAuditPersistenceHealthy()) {
+      if (mutationDecision.kind !== 'read' && !this.activity.isAuditPersistenceHealthy(callId)) {
         const message = 'Durable SQLite audit recording failed; mutations are paused until audit evidence can be written again';
         const response = mapError(appError('CONFLICT', message, true));
         await this.activity.end(callId, 'CONFLICT', Date.now() - started, message);
@@ -806,9 +812,14 @@ export class ToolRegistry {
         fencedMutationEnd = undefined;
         workspaceWriterLeaseEnd = undefined;
         void execution.deferredSettlement.then(async () => {
-          await endWriterLease?.();
-          await endFence?.();
-          await this.activity.end(callId, resultCode, Date.now() - started, resultMessage, resultDetail, observedMutationReceipt(name, response));
+          try {
+            await endWriterLease?.();
+          } finally {
+            try { await endFence?.(); }
+            finally { await this.activity.end(callId, resultCode, Date.now() - started, resultMessage, resultDetail, observedMutationReceipt(name, response)); }
+          }
+        }).catch((error: unknown) => {
+          sanitizeException(error, this.diagnostic);
         });
       } else {
         await workspaceWriterLeaseEnd?.();

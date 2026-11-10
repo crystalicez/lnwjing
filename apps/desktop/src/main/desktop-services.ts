@@ -887,6 +887,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         activitySessionCatalog.record(loggedEvent);
       },
     },
+    (startedBytes) => globalQuota.reserveFileMutationAudit(startedBytes),
   );
   const mcpPort = readMcpPort(process.env.LNWJING_MCP_PORT ?? settingsRepository.get(USER_SETTING_KEYS.mcpHttpPort) ?? undefined);
   const mcpAllowedHostnames = parseMcpAllowedHostnames(process.env.LNWJING_MCP_ALLOWED_HOSTNAMES ?? settingsRepository.get(USER_SETTING_KEYS.mcpAllowedHostnames) ?? undefined);

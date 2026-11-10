@@ -117,8 +117,15 @@ when quota is enabled. Each attempt estimates main database and WAL growth
 from the encoded checkpoint and SQLite page size, then releases the
 reservation after the insert settles. Before committing the insert, SQLite
 checks that enough main pages remain for audit. If the check or reservation
-fails, the original file stays intact. Audit writes and SQLite recovery workers
-still use separate admission and cleanup rules.
+fails, the original file stays intact.
+
+Direct MCP file mutations reserve estimated space for both STARTED and terminal
+SQLite audit before dispatch. The host sizes the prepared STARTED event and
+adds capacity for terminal metadata and SQLite overhead. The reservation stays
+active through terminal recording, including when a cancelled request has work
+still settling. If admission fails, the host returns a retryable conflict before
+creating a STARTED record. Oversized optional result detail is replaced with an
+omission notice. The terminal outcome and mutation receipt remain in the audit.
 
 An opt-in pressure-reclaim stage runs after a *complete* inventory when
 projected use reaches 75% of the ordinary budget or the volume is low on space.
@@ -174,7 +181,9 @@ definitely-dead PID detection. Outside the opted-in backup writer, Desktop,
 MCP STDIO,
 native helpers, the opt-in SQLite workspace-index preview, JSON-index file
 deletions/metadata maintenance outside a successful save, and SQLite writes
-other than file Undo inserts do **not** yet use a unified pre-write quota. Global Quota does not expire Backup, Undo,
+outside file Undo and direct file-mutation audit do **not** yet use a unified
+pre-write quota. Compact activity log rotation and SQLite recovery workers also
+remain outside the ledger. Global Quota does not expire Backup, Undo,
 Recovery Trash, authoritative Index or user source code is enabled. Never advertise this as
 a 100% global quota or enable it by default until incremental accounting,
 writer coverage and crash/physical-disk tests pass.
