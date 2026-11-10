@@ -538,7 +538,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   if (checkpointCipher === undefined) {
     throw new Error('Desktop runtime requires a checkpoint encryption key resolved by the Electron composition root');
   }
-  const checkpointRepository = new SqliteCheckpointRepository(database, checkpointCipher);
+  const checkpointRepository = new SqliteCheckpointRepository(database, checkpointCipher,
+    () => globalQuota.status() === null ? null : globalQuota);
   const backupService = new SqliteBackupService(database, {
     backupDirectory, databaseFilename, platform: process.platform, arch: process.arch,
     globalQuota: (): GlobalStorageQuotaReservations | null => globalQuota.status() === null ? null : globalQuota,

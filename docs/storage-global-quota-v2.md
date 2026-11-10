@@ -112,6 +112,13 @@ SQLite workspace-index preview remains **uncovered** because its WAL growth
 requires separate bounded admission. SQLite's original main-page cap remains
 independent.
 
+File Undo checkpoint inserts in Desktop and STDIO also reserve profile space
+when quota is enabled. Each attempt estimates main database and WAL growth
+from the encoded checkpoint and SQLite page size, then releases the
+reservation after the insert settles. A denied reservation leaves the original
+file intact. This estimate covers the checkpoint insert. Audit writes and
+SQLite recovery workers still use separate admission and cleanup rules.
+
 An opt-in pressure-reclaim stage runs after a *complete* inventory when
 projected use reaches 75% of the ordinary budget or the volume is low on space.
 The ordinary budget excludes the critical reserve. Quota configuration also
@@ -165,8 +172,8 @@ is verified per admission; POSIX and legacy reservations still fall back to
 definitely-dead PID detection. Outside the opted-in backup writer, Desktop,
 MCP STDIO,
 native helpers, the opt-in SQLite workspace-index preview, JSON-index file
-deletions/metadata maintenance outside a successful save, and routine SQLite
-mutations do **not** yet use a unified pre-write quota. No automatic deletion of Backup, Undo,
+deletions/metadata maintenance outside a successful save, and SQLite writes
+other than file Undo inserts do **not** yet use a unified pre-write quota. Global Quota does not expire Backup, Undo,
 Recovery Trash, authoritative Index or user source code is enabled. Never advertise this as
 a 100% global quota or enable it by default until incremental accounting,
 writer coverage and crash/physical-disk tests pass.

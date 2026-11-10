@@ -6,6 +6,7 @@ import type { Checkpoint } from '@lnwjing/workspace';
 import { AesGcmCheckpointCipher } from './checkpoint-cipher.js';
 import { SqliteCheckpointRepository } from './checkpoint-repository.js';
 import { SqliteDatabase } from './database.js';
+import { GlobalStorageQuotaReservations } from './global-storage-quota.js';
 
 const temporaryRoots: string[] = [];
 
@@ -14,6 +15,21 @@ afterEach(async () => {
 });
 
 describe('SqliteCheckpointRepository', () => {
+  it('releases the profile quota reservation when SQLite rejects an insert', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => 256n * 1024n ** 2n });
+      quota.configure({ limitBytes: 8 * 1024 ** 2, criticalReserveBytes: 1024 });
+      const repository = new SqliteCheckpointRepository(database, undefined, () => quota);
+      const checkpoint = fixtureCheckpoint('original');
+      await repository.insert(checkpoint);
+      await expect(repository.insert(checkpoint)).rejects.toThrow(/constraint/i);
+      expect(quota.status()?.activeReservations).toBe(0);
+      await expect(repository.get(checkpoint.id)).resolves.toEqual(checkpoint);
+    } finally { database.close(); }
+  });
+
   it('round-trips bounded checkpoint metadata and content', async () => {
     const root = await temporaryRoot();
     const database = new SqliteDatabase(path.join(root, 'state.db'));

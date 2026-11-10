@@ -141,7 +141,9 @@ export function createStdioMcpRuntime(
   const stopToolAvailabilityWatch = toolAvailabilityService.watch(250);
   const auditRepository = new SqliteAuditRepository(database);
   const auditService = new AuditService(auditRepository);
-  const checkpointRepository = new SqliteCheckpointRepository(database, new AesGcmCheckpointCipher(checkpointKey, { compressionEnabled: false }));
+  const checkpointRepository = new SqliteCheckpointRepository(database,
+    new AesGcmCheckpointCipher(checkpointKey, { compressionEnabled: false }),
+    () => globalQuota.status() === null ? null : globalQuota);
   const workspaceService = new WorkspaceService(workspaceRepository);
   const persistedSecurityPolicyProvider = (): PersistedStdioSecurityPolicy => {
     const persistedProfile = parseStdioPermissionProfile(settingsRepository.get(STDIO_PERMISSION_PROFILE_SETTING_KEY), 'full');

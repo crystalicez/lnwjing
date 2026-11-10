@@ -810,7 +810,9 @@ export class FileService {
       let checkpointId: string | undefined;
       if (resolved.value.outsideWorkspace !== true && !target.isDirectory() && this.checkpointService !== undefined) {
         const checkpoint = await this.checkpointService.createForFiles(actor, workspaceResult.value.id, [resolved.value.relativePath]);
+        if (isAborted(signal)) return cancelledFileMutation();
         if (checkpoint.ok) checkpointId = checkpoint.value.id;
+        else if (checkpoint.error.code === 'CONFLICT') return checkpoint;
       }
 
       if (resolved.value.outsideWorkspace !== true && this.recoverableDelete() && this.recoveryTrashRoot !== undefined) {

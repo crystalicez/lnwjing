@@ -34,6 +34,8 @@ export interface Checkpoint {
   readonly files: readonly CheckpointFile[];
 }
 
+export class CheckpointStorageAdmissionError extends Error {}
+
 export interface CheckpointRepository {
   /** Optional durable revision token for cache-safe metadata-only recovery lists. */
   revisionSnapshot?(): { readonly connectionIdentity: object; readonly revision: number };

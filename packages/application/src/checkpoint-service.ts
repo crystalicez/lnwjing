@@ -3,7 +3,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import { AtomicFileWriter, MAX_FILE_WRITE_BYTES } from '@lnwjing/filesystem';
 import { DefaultPermissionEngine, permissionProfiles, type PermissionEngine, type PermissionProfile } from '@lnwjing/permissions';
-import { WorkspacePathGuard, type Checkpoint, type CheckpointFile, type CheckpointRepository, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
+import { CheckpointStorageAdmissionError, WorkspacePathGuard, type Checkpoint, type CheckpointFile, type CheckpointRepository, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 import { createGuardedWriteValidator } from './guarded-write.js';
 import { runMutationTransaction } from './mutation-transaction.js';
@@ -102,7 +102,12 @@ export class CheckpointService implements CheckpointServicePort {
       files.push(file.value);
     }
     const checkpoint: Checkpoint = { id: randomUUID(), workspaceId, createdAt: new Date().toISOString(), files };
-    await this.repository.insert(checkpoint);
+    try {
+      await this.repository.insert(checkpoint);
+    } catch (error) {
+      if (!(error instanceof CheckpointStorageAdmissionError)) throw error;
+      return err(appError('CONFLICT', error.message, true));
+    }
     return ok(checkpoint);
   }
 

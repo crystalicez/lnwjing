@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 import { pruneExpiredFileCheckpointsOffMain } from './checkpoint-hard-limit-recovery.js';
 import { inspectSqliteHardLimit, parseSqliteHardLimitMiB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Checkpoint, CheckpointFile, CheckpointRepository } from '@lnwjing/workspace';
+import { CheckpointStorageAdmissionError, type Checkpoint, type CheckpointFile, type CheckpointRepository } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import type { CheckpointPayloadCipher } from './checkpoint-cipher.js';
+import type { GlobalQuotaReservation, GlobalStorageQuotaReservations } from './global-storage-quota.js';
+
+type CheckpointQuota = Pick<GlobalStorageQuotaReservations, 'reserve' | 'release'>;
 
 interface CheckpointRow {
   readonly id: string;
@@ -133,6 +136,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
   public constructor(
     private readonly database: SqliteDatabase,
     private readonly cipher?: CheckpointPayloadCipher,
+    private readonly quotaProvider?: () => CheckpointQuota | null,
   ) {
     this.encryptLegacyRowsAtRest();
   }
@@ -141,17 +145,11 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     // A large encrypted snapshot may exceed the reserve MCP checked before
     // reading the old file. Recycle expired file Undo before inserting it.
     const payload = this.encodeFiles(checkpoint.files);
-    const write = (): void => {
-      this.database.connection.prepare(
-        'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
-      ).run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, payload);
-      this.cachedByteCount = null;
-    };
     if (!this.database.connection.isTransaction) await this.reclaimBeforeCheckpointInsert(payload);
     let retries = 0;
     while (true) {
       try {
-        write();
+        await this.insertWithQuota(checkpoint, payload);
         return;
       } catch (error) {
         if (!(error instanceof Error) || !/SQLITE_FULL|database or disk is full/i.test(error.message)
@@ -162,6 +160,37 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
         if (!reclaimed) throw error;
         retries += 1;
       }
+    }
+  }
+
+  private async insertWithQuota(checkpoint: Checkpoint, payload: string): Promise<void> {
+    const connection = this.database.connection;
+    let quota: CheckpointQuota | null;
+    let reservation: GlobalQuotaReservation | undefined;
+    try {
+      quota = this.quotaProvider?.() ?? null;
+      if (quota !== null) {
+        if (connection.isTransaction) throw new Error('Cannot reserve inside an existing SQLite transaction');
+        const pageSize = Number(connection.prepare('PRAGMA page_size').get()?.page_size);
+        const rowBytes = Buffer.byteLength(payload) + Buffer.byteLength(checkpoint.id)
+          + Buffer.byteLength(checkpoint.workspaceId) + Buffer.byteLength(checkpoint.createdAt);
+        // Budget overflow pages plus index, metadata and pager overhead. A page
+        // can appear both in WAL and in the main file after a checkpoint.
+        const pages = Math.ceil(rowBytes / (pageSize - 4)) + 64;
+        reservation = await quota.reserve(pages * (2 * pageSize + 24) + 32);
+      }
+    } catch (cause) {
+      throw new CheckpointStorageAdmissionError('Profile storage quota could not admit the file Undo checkpoint', { cause });
+    }
+    try {
+      if (reservation !== undefined && (this.database.connection !== connection || connection.isTransaction)) {
+        throw new CheckpointStorageAdmissionError('SQLite changed while admitting the file Undo checkpoint');
+      }
+      connection.prepare('INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)')
+        .run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, payload);
+      this.cachedByteCount = null;
+    } finally {
+      if (quota !== null && reservation !== undefined) quota.release(reservation);
     }
   }
 
