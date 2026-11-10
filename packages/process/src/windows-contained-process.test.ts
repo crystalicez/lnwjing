@@ -26,7 +26,7 @@ describe.skipIf(process.platform !== 'win32')('Windows contained process', () =>
     await writeFile(path.join(root, 'job.cs'), windowsContainedProcessSource);
     await writeFile(path.join(root, 'child.cjs'), [
       "const {spawn}=require('node:child_process');",
-      "const code=\"setTimeout(()=>require('node:fs').writeFileSync(process.argv[1],'finished'),500)\";",
+      "const code=\"setTimeout(()=>require('node:fs').writeFileSync(process.argv[1],'finished'),900)\";",
       "spawn(process.execPath,['-e',code,process.argv[2]],{detached:true,stdio:'ignore'}).unref();",
     ].join('\n'));
     const script = path.join(root, 'run.ps1');
@@ -37,6 +37,10 @@ describe.skipIf(process.platform !== 'win32')('Windows contained process', () =>
       '$arguments=@((Join-Path $Root "child.cjs"),(Join-Path $Root "descendant.txt"))',
       '$job=[ContainedProcess]::Start($Node,$arguments,$Root)',
       'try {',
+      ' $rootExitDeadline=[DateTime]::UtcNow.AddSeconds(5)',
+      ' while(-not $job.RootExited){if([DateTime]::UtcNow -ge $rootExitDeadline){throw "Root did not exit"};Start-Sleep -Milliseconds 10}',
+      ' if([IO.File]::Exists((Join-Path $Root "descendant.txt"))){throw "Descendant completed before protected-child check"}',
+      ' if($job.TryDrainOrphanedConsoleHosts()){throw "Protected descendant was incorrectly terminated"}',
       ' $code=$job.WaitForExit(10000)',
       ' if($code -ne 0){throw "Root failed"}',
       ' if($job.ActiveProcesses -ne 0){throw "Descendants still active"}',

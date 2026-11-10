@@ -21,6 +21,9 @@ public sealed class ContainedProcess : IDisposable {
  [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateProcess(IntPtr process,uint code);
  [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateJobObject(IntPtr job,uint code);
  [DllImport("kernel32.dll",SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr process,out uint code);
+ [DllImport("kernel32.dll",EntryPoint="QueryInformationJobObject",SetLastError=true)] static extern bool QueryJobProcessIdList(IntPtr job,int infoClass,IntPtr buffer,uint size,IntPtr length);
+ [DllImport("kernel32.dll",SetLastError=true)] static extern IntPtr OpenProcess(uint rights,bool inherit,uint pid);
+ [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool QueryFullProcessImageName(IntPtr process,uint flags,StringBuilder name,ref uint size);
  [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr handle,uint milliseconds);
  [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int handle);
  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
@@ -77,6 +80,71 @@ public sealed class ContainedProcess : IDisposable {
    if(!QueryInformationJobObject(job,1,out info,(uint)Marshal.SizeOf(typeof(Accounting)),IntPtr.Zero))throw new IOException("CONTAINMENT_UNVERIFIED");
    return info.ActiveProcesses;
   }
+ }
+ // Root completion alone is not a verified tree completion: Windows can keep
+ // its headless console host in the job after the console client exits.
+ public bool RootExited {
+  get {
+   if(disposed)throw new ObjectDisposedException("ContainedProcess");
+   uint state=WaitForSingleObject(process,0);
+   if(state==0)return true;
+   if(state==258)return false;
+   throw new IOException("CONTAINMENT_ROOT_WAIT_UNAVAILABLE");
+  }
+ }
+ private uint[] ActiveProcessIds() {
+  if(disposed)throw new ObjectDisposedException("ContainedProcess");
+  for(int capacity=8;capacity<=128;capacity*=2) {
+   int bytes=checked(8+capacity*IntPtr.Size);
+   IntPtr buffer=Marshal.AllocHGlobal(bytes);
+   try {
+    if(QueryJobProcessIdList(job,3,buffer,(uint)bytes,IntPtr.Zero)) {
+     int assigned=Marshal.ReadInt32(buffer,0),count=Marshal.ReadInt32(buffer,4);
+     if(assigned>capacity)continue;
+     if(assigned<0||count<0||count>assigned||count>capacity)throw new IOException("CONTAINMENT_PID_LIST_INVALID");
+     var ids=new uint[count];
+     for(int i=0;i<count;i++) {
+      long pid=Marshal.ReadIntPtr(buffer,8+i*IntPtr.Size).ToInt64();
+      if(pid<=0||pid>UInt32.MaxValue)throw new IOException("CONTAINMENT_PID_LIST_INVALID");
+      ids[i]=(uint)pid;
+     }
+     return ids;
+    }
+    if(Marshal.GetLastWin32Error()!=234)throw new IOException("CONTAINMENT_PID_LIST_UNAVAILABLE");
+   } finally { Marshal.FreeHGlobal(buffer); }
+  }
+  throw new IOException("CONTAINMENT_PID_LIST_TOO_LARGE");
+ }
+ // After the root is already gone, only an OS-owned System32 conhost.exe can
+ // be reaped. Never terminate an arbitrary job descendant or an unverified PID.
+ // The caller waits several seconds to permit normal console shutdown first.
+ public bool TryDrainOrphanedConsoleHosts() {
+  if(!RootExited)return false;
+  uint[] ids;
+  try { ids=ActiveProcessIds(); }
+  catch { return false; }
+  if(ids.Length==0||ids.Length>8||ActiveProcesses!=(uint)ids.Length)return false;
+  var handles=new IntPtr[ids.Length];
+  try {
+   string expected=Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"conhost.exe"));
+   for(int i=0;i<ids.Length;i++) {
+    handles[i]=OpenProcess(0x1001,false,ids[i]); // QUERY_LIMITED_INFORMATION | TERMINATE
+    if(handles[i]==IntPtr.Zero)return false;
+    var pathBuffer=new StringBuilder(32768);
+    uint size=(uint)pathBuffer.Capacity;
+    if(!QueryFullProcessImageName(handles[i],0,pathBuffer,ref size)||
+       !string.Equals(Path.GetFullPath(pathBuffer.ToString()),expected,StringComparison.OrdinalIgnoreCase))return false;
+   }
+   // A job PID list is a snapshot. Require the same members and a terminated
+   // root immediately before touching each validated process object handle.
+   var current=ActiveProcessIds();
+   if(current.Length!=ids.Length||!RootExited)return false;
+   Array.Sort(ids);Array.Sort(current);
+   for(int i=0;i<ids.Length;i++)if(ids[i]!=current[i])return false;
+   for(int i=0;i<handles.Length;i++)if(!TerminateProcess(handles[i],0))return false;
+   return true;
+  } catch { return false; }
+  finally { foreach(var handle in handles)if(handle!=IntPtr.Zero)CloseHandle(handle); }
  }
  public int WaitForExit(int timeoutMilliseconds) {
   var end=DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);

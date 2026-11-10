@@ -7,6 +7,50 @@ import { describe, expect, it } from 'vitest';
 import { prepareWindowsContainedLaunch, pruneVerifiedWindowsContainmentInputs, pruneVerifiedWindowsContainmentRoot, readWindowsContainmentReceipt } from './windows-contained-launch.js';
 
 describe.skipIf(process.platform !== 'win32')('contained launch receipt', () => {
+  it('forwards PowerShell host and Console standard output when contained', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-powershell-stdio-'));
+    try {
+      const powershell = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+      const invocation = await prepareWindowsContainedLaunch({
+        directory: root, executable: powershell, cwd: root, timeoutMs: 10_000,
+        args: ['-NoProfile', '-NonInteractive', '-Command',
+          'Write-Output "POWERSHELL_HOST_OUTPUT"; [Console]::Out.WriteLine("CONSOLE_OUTPUT"); exit 0'],
+      });
+      const child = spawn(invocation.executable, [...invocation.args], { windowsHide: true });
+      let stdout = '';
+      child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      const [code] = await once(child, 'close') as [number | null];
+      expect(code).toBe(0);
+      expect(stdout).toContain('POWERSHELL_HOST_OUTPUT');
+      expect(stdout).toContain('CONSOLE_OUTPUT');
+      expect(await readWindowsContainmentReceipt(invocation.receiptPath))
+        .toMatchObject({ outcome: 'completed', activeProcesses: 0, exitCode: 0 });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }, 15_000);
+
+  it('finishes a nested PowerShell build-like command with a zero-active receipt', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-nested-build-job-'));
+    try {
+      const powershell = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32',
+        'WindowsPowerShell', 'v1.0', 'powershell.exe');
+      const invocation = await prepareWindowsContainedLaunch({
+        directory: root, executable: powershell, cwd: root, timeoutMs: 12_000,
+        args: ['-NoProfile', '-NonInteractive', '-Command',
+          '& powershell.exe -NoProfile -NonInteractive -Command "Write-Output NESTED_STEP"; Write-Output READY_PORTABLE; exit $LASTEXITCODE'],
+      });
+      const child = spawn(invocation.executable, [...invocation.args], { windowsHide: true });
+      const closed = once(child, 'close');
+      let stdout = '';
+      child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      const [code] = await closed as [number | null];
+      expect(code).toBe(0);
+      expect(stdout).toContain('NESTED_STEP');
+      expect(stdout).toContain('READY_PORTABLE');
+      expect(await readWindowsContainmentReceipt(invocation.receiptPath))
+        .toMatchObject({ outcome: 'completed', exitCode: 0, activeProcesses: 0 });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }, 20_000);
+
   it.each(['completed', 'cancelled'] as const)('publishes verified %s receipt and forwards child output', async (outcome) => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing job receipt '));
     try {

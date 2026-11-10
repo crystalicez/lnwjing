@@ -144,11 +144,27 @@ try {
  $job=[ContainedProcess]::Start([string]$spec.executable,[string[]]@($spec.arguments),[string]$spec.cwd,[bool]$spec.windowsVerbatimArguments)
  $end=[DateTime]::UtcNow.AddMilliseconds([double]$spec.timeoutMs)
  $outcome='completed'
+ $rootExitedAt=[DateTime]::MinValue
+ $lastConsoleDrainAt=[DateTime]::MinValue
  while($true) {
   if([IO.File]::Exists((Join-Path $Directory 'containment.cancel'))) {$outcome='cancelled';$job.Cancel();break}
   if([DateTime]::UtcNow -ge $end) {$outcome='timed_out';$job.Cancel();break}
   try {$exitCode=$job.WaitForExit(100);break} catch {
    if($_.Exception.InnerException -isnot [TimeoutException]) {throw}
+  }
+  if($job.RootExited) {
+   $now=[DateTime]::UtcNow
+   if($rootExitedAt -eq [DateTime]::MinValue) {$rootExitedAt=$now}
+   # A console host normally disappears as soon as its last client exits.
+   # After a two-second grace, inspect job-owned PIDs and drain ONLY a stable
+   # set of verified System32 console hosts. Never touch ordinary descendants
+   # or bypass the kernel's zero-active proof.
+   if($now -ge $rootExitedAt.AddSeconds(2) -and $now -ge $lastConsoleDrainAt.AddMilliseconds(1500)) {
+    $lastConsoleDrainAt=$now
+    if($job.TryDrainOrphanedConsoleHosts()) {
+     [Console]::Error.WriteLine('CONTAINMENT_ORPHANED_CONSOLE_HOST_CLEARED')
+    }
+   }
   }
  }
  if($outcome -ne 'completed') {$exitCode=1}

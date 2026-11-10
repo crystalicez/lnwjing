@@ -13,6 +13,9 @@ import type { LogQuery, ManagedProcess, ManagedProcessStart, ManagedProcessState
 const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
 const MAX_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const START_CANCELLATION_RETRY_MS = 250;
+// Windows may retain a stdio pipe past the wrapper's OS exit. Allow normal
+// buffered output to drain before accepting the independently verified receipt.
+const NATIVE_EXIT_DRAIN_GRACE_MS = 1_000;
 
 export const DEFAULT_MAX_ACTIVE_MANAGED_PROCESSES = 24;
 export const DEFAULT_MAX_RETAINED_TERMINAL_PROCESSES = 32;
@@ -28,6 +31,7 @@ interface ManagedRecord {
   readonly nativeCancelPath?: string;
   readonly onVerifiedNativeTermination?: () => void;
   nativeTerminationNotified?: boolean;
+  nativeCloseObserved?: boolean;
   state: ManagedProcessState;
   finishedAt?: string;
   exitCode?: number;
@@ -122,7 +126,20 @@ export class ProcessManager {
     child.stdout?.on('data', (chunk: Buffer) => record.logs.append('stdout', chunk.toString('utf8')));
     child.stderr?.on('data', (chunk: Buffer) => record.logs.append('stderr', chunk.toString('utf8')));
     child.once('error', (error: Error & { code?: string }) => this.handleError(record, error));
+    child.once('exit', () => {
+      if (record.nativeReceiptPath === undefined) return;
+      // Node's 'close' event waits for stdio EOF, which can outlive the native
+      // wrapper when a console/pipe writer retains an inherited handle. The
+      // kernel Job zero-active receipt is sufficient proof of owned termination.
+      const fallback = setTimeout(() => {
+        if (!record.nativeCloseObserved && !record.nativeTerminationNotified) {
+          void this.handleNativeClose(record, false);
+        }
+      }, NATIVE_EXIT_DRAIN_GRACE_MS);
+      fallback.unref();
+    });
     child.once('close', (exitCode: number | null) => {
+      record.nativeCloseObserved = true;
       if (record.nativeReceiptPath === undefined) this.handleClose(record, exitCode);
       else void this.handleNativeClose(record);
     });
@@ -244,11 +261,13 @@ export class ProcessManager {
     if (record.exitCode === undefined && exitCode !== null) record.exitCode = exitCode;
   }
 
-  private async handleNativeClose(record: ManagedRecord): Promise<void> {
-    if (record.nativeReceiptPath === undefined) return;
+  private async handleNativeClose(record: ManagedRecord, closeObserved = true): Promise<void> {
+    if (record.nativeReceiptPath === undefined || record.nativeTerminationNotified) return;
     const receipt = await readWindowsContainmentReceipt(record.nativeReceiptPath);
     if (receipt === undefined) {
-      this.markTerminationUnverified(record, 'Native process Job Object completion is unverified');
+      // A delayed OS-exit callback is only a rescue path when positive native
+      // proof already exists; it must never downgrade a still-draining child.
+      if (closeObserved) this.markTerminationUnverified(record, 'Native process Job Object completion is unverified');
       return;
     }
     this.acceptNativeReceipt(record, receipt);
