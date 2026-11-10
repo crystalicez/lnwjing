@@ -53,6 +53,7 @@ let cachedOwnProcessIdentity: Promise<QuotaProcessIdentity> | null = null;
 const MAX_SCAN_ATTEMPTS = 4;
 /** Maximum 8 × 128 verified old disposable files per pressure event. */
 const MAX_PRESSURE_RECLAIM_BATCHES = 8;
+const RECLAIM_USAGE_RATIO = 0.75;
 const LEDGER_FILE = 'global-quota-reservations-v2.sqlite';
 /** Space other software, SQLite journaling and native helpers may still need. */
 const MIN_VOLUME_RESERVE_BYTES = 64 * 1024 * 1024;
@@ -181,11 +182,12 @@ export class GlobalStorageQuotaReservations {
     const current = this.status();
     if (current === null || current.policy.limitBytes !== before.policy.limitBytes
       || current.policy.criticalReserveBytes !== before.policy.criticalReserveBytes) return null;
+    const reclaimThreshold = (current.policy.limitBytes - current.policy.criticalReserveBytes) * RECLAIM_USAGE_RATIO;
     const lowVolumeSpace = volumeHeadroom(
       safeVolumeFreeBytes(this.getAvailableVolumeBytes()),
       current.reservedBytes, current.policy.criticalReserveBytes,
     ) < BigInt(MIN_VOLUME_RESERVE_BYTES);
-    if (inventory.logicalBytes + current.reservedBytes < current.policy.limitBytes * 0.75
+    if (inventory.logicalBytes + current.reservedBytes < reclaimThreshold
       && !lowVolumeSpace) return null;
     let removedLogicalBytes = 0;
     let inspected = 0;
@@ -202,7 +204,7 @@ export class GlobalStorageQuotaReservations {
         currentStatus.reservedBytes, currentStatus.policy.criticalReserveBytes,
       ) < BigInt(MIN_VOLUME_RESERVE_BYTES);
       if (inventory.logicalBytes - removedLogicalBytes + currentStatus.reservedBytes
-          < currentStatus.policy.limitBytes * 0.75 && !physicalPressure) break;
+          < reclaimThreshold && !physicalPressure) break;
       const result = await reclaimExpiredDisposableFiles(this.root);
       inspected += result.inspected;
       removed += result.removed;
@@ -270,13 +272,15 @@ export class GlobalStorageQuotaReservations {
       // Shared only while a revision-matched scan is actively running.
       // Never reuse across a release, a new writer, or a policy change.
       const inventory = await this.completeInventory(initial.revision);
+      const ordinaryBudget = initial.limit_bytes - initial.reserve_bytes;
+      const reclaimThreshold = ordinaryBudget * RECLAIM_USAGE_RATIO;
       // Only after a complete inventory, and only for old disposable logs.
       // A second inventory is required if any file is actually removed.
       const physicalPressure = volumeHeadroom(
         safeVolumeFreeBytes(this.getAvailableVolumeBytes()),
         initial.reserved, initial.reserve_bytes,
       ) < BigInt(bytes) + BigInt(MIN_VOLUME_RESERVE_BYTES);
-      if (!reclaimAttempted && (inventory.logicalBytes + initial.reserved + bytes >= initial.limit_bytes * 0.75
+      if (!reclaimAttempted && (inventory.logicalBytes + initial.reserved + bytes >= reclaimThreshold
         || physicalPressure)) {
         reclaimAttempted = true;
         let removedLogicalBytes = 0;
@@ -288,7 +292,7 @@ export class GlobalStorageQuotaReservations {
             initial.reserved, initial.reserve_bytes,
           );
           if (inventory.logicalBytes - removedLogicalBytes + initial.reserved + bytes
-            < initial.limit_bytes * 0.75
+            < reclaimThreshold
             && volumeAvailable >= BigInt(bytes) + BigInt(MIN_VOLUME_RESERVE_BYTES)) break;
           const reclaimed = await reclaimExpiredDisposableFiles(this.root);
           removedLogicalBytes += reclaimed.removedLogicalBytes;

@@ -112,10 +112,12 @@ SQLite workspace-index preview remains **uncovered** because its WAL growth
 requires separate bounded admission. SQLite's original main-page cap remains
 independent.
 
-An opt-in pressure-reclaim stage runs only after a *complete* inventory and at
-75% projected use, on a quota policy change, or under low physical volume
-headroom. It unlinks verified, single-link files older than seven days in
-exact profile-owned `logs`, `diagnostics` and `crash-dumps` directories.
+An opt-in pressure-reclaim stage runs after a *complete* inventory when
+projected use reaches 75% of the ordinary budget or the volume is low on space.
+The ordinary budget excludes the critical reserve. Quota configuration also
+triggers a pressure check. The sweep unlinks verified, single-link files older
+than seven days in exact profile-owned `logs`, `diagnostics` and `crash-dumps`
+directories.
 The same conservative sweep may also remove **only unpublished JSON workspace-index
 staging files** directly inside the profile-owned `workspace-index/` folder,
 whose basename exactly matches the app's `<workspace>.json.<PID>.<UUID>.tmp`

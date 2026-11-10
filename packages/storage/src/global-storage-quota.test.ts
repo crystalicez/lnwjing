@@ -46,6 +46,46 @@ function departedOwner(ledger: string, bytes: number): Promise<void> {
 }
 
 describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
+  it('reclaims proactively before the ordinary budget runs out', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => BigInt(256 * MIB) });
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 128 * 1024 });
+      await mkdir(path.join(root, 'logs'));
+      const oldLog = path.join(root, 'logs', 'old.log');
+      await writeFile(oldLog, Buffer.alloc(690 * 1024));
+      const old = new Date('2020-01-01T00:00:00Z');
+      await utimes(oldLog, old, old);
+
+      await expect(quota.reclaimIfPressured()).resolves.toMatchObject({ removed: 1 });
+      await expect(readFile(oldLog)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally { await dispose(); }
+  });
+
+  it('reclaims for an incoming write while preserving an active reservation', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => BigInt(256 * MIB) });
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 400 * 1024 });
+      const active = await quota.reserve(32 * 1024);
+      await mkdir(path.join(root, 'logs'));
+      const oldLog = path.join(root, 'logs', 'old.log');
+      await writeFile(oldLog, Buffer.alloc(300 * 1024));
+      const old = new Date('2020-01-01T00:00:00Z');
+      await utimes(oldLog, old, old);
+      const protectedFile = path.join(root, 'protected.bin');
+      await writeFile(protectedFile, Buffer.alloc(200 * 1024));
+
+      const proof = await quota.reserve(160 * 1024);
+      quota.release(proof);
+      expect(quota.status()).toMatchObject({ activeReservations: 1, reservedBytes: active.bytes });
+      await writeFile(path.join(root, 'active-output.bin'), Buffer.alloc(active.bytes));
+      quota.release(active);
+      await expect(readFile(oldLog)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect((await readFile(protectedFile)).byteLength).toBe(200 * 1024);
+    } finally { await dispose(); }
+  });
+
   it('atomically honors actual volume free space across competing cooperative reservations', async () => {
     const { root, dispose } = await fixture();
     try {
