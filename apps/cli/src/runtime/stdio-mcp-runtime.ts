@@ -61,9 +61,19 @@ import {
   SqliteCheckpointRepository,
   SqliteDatabase,
   GlobalStorageQuotaReservations,
+  IdleWalMaintenance,
   SqliteGoalRepository,
   SqliteSettingsRepository,
   SqliteWorkspaceRepository,
+  hardLimitRecoveryNeeded,
+  awaitBoundedStorageRecovery,
+  recoverOldestRoutineAuditUnderHardLimit,
+  recoverOldFileCheckpointsUnderHardLimit,
+  pruneExpiredFileCheckpointsOffMain,
+  purgeExpiredRoutineReadsOffMain,
+  inspectSqliteHardLimit,
+  parseSqliteHardLimitMiB,
+  SQLITE_HARD_LIMIT_SETTING_KEY,
 } from '@lnwjing/storage';
 import { isMachineRootPath, SecretPolicy, WorkspacePathGuard, WorkspaceService, type Workspace } from '@lnwjing/workspace';
 import { StrictWorkspaceRepository } from './strict-workspace-repository.js';
@@ -83,7 +93,7 @@ export interface StdioMcpRuntime {
   readonly extensions: ExtensionsService;
   readonly activityTracker: ActivityTracker;
   readonly activityReady: Promise<void>;
-  readonly mutationAdmissionGuardProvider: () => string | null;
+  readonly mutationAdmissionGuardProvider: () => Promise<string | null>;
   readonly profileProvider: () => PermissionProfile;
   readonly persistedSecurityPolicyProvider: () => PersistedStdioSecurityPolicy;
   readonly allowAiDeleteProvider: () => boolean;
@@ -352,13 +362,126 @@ export function createStdioMcpRuntime(
     },
   };
 
+  // Standalone STDIO has no Desktop storage timer. Share the same bounded,
+  // off-main safe audit recovery policy so it cannot permanently deadlock
+  // mutations when the user lowers the cap or legacy history fills it.
+  const autoRecoveryKey = 'sqlite_auto_safe_trim_on_limit_v1';
+  let recoveryPromise: Promise<void> | null = null;
+  let lastExhaustedAt = 0;
+  let lastUrgentRecoveryAt = 0;
+  const storageFootprint = (): ReturnType<typeof inspectSqliteHardLimit> =>
+    inspectSqliteHardLimit(database.connection,
+      parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)));
+  function runBoundedStorageRecovery(urgent = false): Promise<void> {
+    if (recoveryPromise !== null) {
+      if (!urgent) return recoveryPromise;
+      return recoveryPromise.then(async (): Promise<void> => {
+        if (database.mutationAdmissionMessage(true) !== null) {
+          await runBoundedStorageRecovery(true);
+        }
+      });
+    }
+    const now = Date.now();
+    if (settingsRepository.get(autoRecoveryKey) === 'false'
+      || (urgent && now >= lastUrgentRecoveryAt && now - lastUrgentRecoveryAt < 2_000)
+      || (!urgent && now >= lastExhaustedAt && now - lastExhaustedAt < 60_000)) return Promise.resolve();
+    if (urgent) lastUrgentRecoveryAt = now;
+    recoveryPromise = (async (): Promise<void> => {
+      const workerAudit = {
+        purgeExpiredRoutineReads: (cutoff: string, limit: number, completedOnly?: boolean): Promise<number> =>
+          purgeExpiredRoutineReadsOffMain(databaseFilename, cutoff, limit, completedOnly),
+      };
+      for (let round = 0; round < (urgent ? 8 : 3); round += 1) {
+        if (urgent && Date.now() - now > 14_000) break;
+        if (!hardLimitRecoveryNeeded(storageFootprint()) || settingsRepository.get(autoRecoveryKey) === 'false') break;
+        let auditMoreWork = false;
+        const recoverAudit = async (): Promise<void> => {
+          if (!hardLimitRecoveryNeeded(storageFootprint())) return;
+          try {
+            const result = await recoverOldestRoutineAuditUnderHardLimit(workerAudit, storageFootprint, {
+              maxBatches: urgent ? 1 : 4,
+              shouldStop: (): boolean => settingsRepository.get(autoRecoveryKey) === 'false'
+                || (urgent && Date.now() - now > 14_000),
+            });
+            auditMoreWork = result.moreWorkLikely;
+          } catch (error) {
+            // A busy or expensive audit scan must not prevent recovering old
+            // file Undo. Both remain bounded and fail closed independently.
+            process.stderr.write('[lnwjing] Automatic audit trim skipped: '
+              + (error instanceof Error ? error.message : String(error)) + '\n');
+          }
+        };
+        if (!urgent) await recoverAudit();
+        let checkpointMoreWork = false;
+        let deletedCheckpoints = 0;
+        if (hardLimitRecoveryNeeded(storageFootprint())
+          && settingsRepository.get(autoRecoveryKey) !== 'false') {
+          try {
+            const checkpointResult = await recoverOldFileCheckpointsUnderHardLimit({
+              pruneExpired: (cutoff: string, limit: number): Promise<number> =>
+                pruneExpiredFileCheckpointsOffMain(databaseFilename, cutoff, limit),
+            }, storageFootprint, {
+              emergency: urgent, maxBatches: urgent ? 24 : 4,
+              shouldStop: (): boolean => settingsRepository.get(autoRecoveryKey) === 'false'
+                || (urgent && Date.now() - now > 14_000),
+            });
+            deletedCheckpoints = checkpointResult.deleted;
+            checkpointMoreWork = checkpointResult.moreWorkLikely;
+          } catch (error) {
+            process.stderr.write('[lnwjing] Automatic checkpoint trim skipped: '
+              + (error instanceof Error ? error.message : String(error)) + '\n');
+          }
+        }
+        if (deletedCheckpoints > 0) {
+          process.stderr.write('[lnwjing] Expired ' + deletedCheckpoints + ' old file checkpoints to reclaim SQLite pages.\n');
+        }
+        if (urgent && hardLimitRecoveryNeeded(storageFootprint())) await recoverAudit();
+        if (!hardLimitRecoveryNeeded(storageFootprint())) break;
+        if (!auditMoreWork && !checkpointMoreWork) {
+          lastExhaustedAt = Date.now();
+          break;
+        }
+      }
+    })().finally(() => { recoveryPromise = null; });
+    return recoveryPromise;
+  }
+  const walMaintenance = new IdleWalMaintenance(databaseFilename);
+  const storageTimer = setInterval(() => {
+    void walMaintenance.inspect(parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)))
+      .catch(() => { process.stderr.write('[lnwjing] Idle SQLite WAL maintenance could not complete.\n'); });
+    void runBoundedStorageRecovery().catch(() => {
+      lastExhaustedAt = Date.now();
+      process.stderr.write('[lnwjing] Automatic SQLite audit recovery failed; mutation evidence remains protected.\n');
+    });
+  }, 2 * 60_000);
+  storageTimer.unref?.();
+  const initialStorageSweep = setTimeout(() => {
+    void runBoundedStorageRecovery().catch(() => { lastExhaustedAt = Date.now(); });
+  }, 0);
+  initialStorageSweep.unref?.();
+  async function checkMutationAdmissionWithRecovery(): Promise<string | null> {
+    const admission = database.mutationAdmissionMessage();
+    if (admission === null || settingsRepository.get(autoRecoveryKey) === 'false') return admission;
+    if (admission.startsWith('Large SQLite WAL')) {
+      try {
+        await awaitBoundedStorageRecovery(walMaintenance.inspect(
+          parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)),
+        ).then((): void => undefined));
+      } catch { /* keep failing closed if the idle WAL cannot be checkpointed */ }
+      return database.mutationAdmissionMessage(true);
+    }
+    try { await awaitBoundedStorageRecovery(runBoundedStorageRecovery(true), 15_000); }
+    catch { lastExhaustedAt = Date.now(); }
+    return database.mutationAdmissionMessage(true);
+  }
+
   return {
     services,
     actor,
     extensions,
     activityTracker,
     activityReady,
-    mutationAdmissionGuardProvider: () => database.mutationAdmissionMessage(),
+    mutationAdmissionGuardProvider: () => checkMutationAdmissionWithRecovery(),
     profileProvider,
     persistedSecurityPolicyProvider,
     allowAiDeleteProvider,
@@ -369,6 +492,10 @@ export function createStdioMcpRuntime(
     engineeringHarnessSettingsProvider: () => parseEngineeringHarnessSettings(settingsRepository.get(USER_SETTING_KEYS.engineeringHarnessSettings)),
     toolAvailabilityService,
     close: async (): Promise<void> => {
+      clearTimeout(initialStorageSweep);
+      clearInterval(storageTimer);
+      if (recoveryPromise !== null) await recoveryPromise.catch(() => undefined);
+      await walMaintenance.close();
       debugSessions.close();
       stopToolAvailabilityWatch();
       await (await sharedActivityLease)?.close();

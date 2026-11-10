@@ -130,8 +130,8 @@ import {
   type EngineeringHarnessSettings,
   type EngineeringHarnessWorkspaceOverride,
 } from '@lnwjing/shared';
-import { AesGcmCheckpointCipher, SQLITE_HARD_LIMIT_SETTING_KEY, parseSqliteHardLimitMiB, sqliteLimitPressure, inspectSqliteHardLimit, applySqliteHardLimit, inspectSqliteCompaction, inspectBoundedDirectorySize, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
-import { SqliteGoalRepository, GlobalStorageQuotaReservations, inspectProfileStorageWithPhysicalOffMain } from '@lnwjing/storage';
+import { AesGcmCheckpointCipher, awaitBoundedStorageRecovery, hardLimitRecoveryNeeded, recoverOldestRoutineAuditUnderHardLimit, recoverOldFileCheckpointsUnderHardLimit, pruneExpiredFileCheckpointsOffMain, purgeExpiredRoutineReadsOffMain, hasExpiredRoutineReadCandidatesOffMain, SQLITE_HARD_LIMIT_SETTING_KEY, parseSqliteHardLimitMiB, sqliteLimitPressure, sqliteMutationAdmissionPressure, inspectSqliteHardLimit, applySqliteHardLimit, IdleWalMaintenance, inspectSqliteCompaction, inspectBoundedDirectorySize, inspectProfileStorageWithPhysicalOffMain, GlobalStorageQuotaReservations, BACKUP_RESTORE_NOTICE_SETTING_KEY, parseBackupRestoreNotice, SqliteAgentSwarmRepository, SqliteAuditRepository, SqliteAutomationRepository, SqliteBackupService, SqliteCheckpointRepository, SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository, type BackupReason, type BackupRestoreNotice as StorageBackupRestoreNotice, type BackupSummary, type CheckpointPayloadCipher } from '@lnwjing/storage';
+import { SqliteGoalRepository } from '@lnwjing/storage';
 import type { Workspace } from '@lnwjing/workspace';
 import { comparableHostPath, isDriveRoot, isMachineRootPath, resolveHostPath, SecretPolicy, WorkspacePathGuard, WorkspaceService } from '@lnwjing/workspace';
 import {
@@ -255,6 +255,7 @@ const MAX_GIT_DIFF_FALLBACK_BYTES = 2 * 1024 * 1024;
 const MAX_GIT_IMAGE_PREVIEW_BYTES = 4 * 1024 * 1024;
 const permissionSettingKey = 'permission_profile';
 const checkpointCreationModeSettingKey = 'checkpoint_creation_mode_v1';
+const automaticHardLimitRecoverySettingKey = 'sqlite_auto_safe_trim_on_limit_v1';
 const selectedWorkspaceSettingKey = 'selected_workspace_id';
 const activeWorkspaceIdsSettingKey = 'active_workspace_ids';
 const workLogClearedSettingKey = 'work_log_cleared_at';
@@ -272,12 +273,13 @@ export interface StorageMaintenanceBackend {
   getPolicy(): {
     readonly checkpointCreationMode: 'always' | 'git-aware'; readonly sqliteHardLimitMiB: number;
     readonly compressionEnabledOnNextStart: boolean; readonly automaticCheckpointRetention: boolean;
-    readonly auditPruneWithoutBackup: boolean; readonly routineAuditRetentionDays: number;
+    readonly auditPruneWithoutBackup: boolean; readonly automaticHardLimitRecovery: boolean; readonly routineAuditRetentionDays: number;
   };
   configurePolicy(options: {
     readonly userConfirmed: boolean; readonly compressionEnabledOnNextStart?: boolean;
     readonly checkpointCreationMode?: 'always' | 'git-aware'; readonly sqliteHardLimitMiB?: number; readonly globalQuotaMiB?: number;
     readonly automaticCheckpointRetention?: boolean; readonly auditPruneWithoutBackup?: boolean;
+    readonly automaticHardLimitRecovery?: boolean;
     readonly routineAuditRetentionDays?: number;
   }): { readonly restartRequired: boolean };
   inspect(): { readonly sqliteAllocatedBytes: number; readonly sqliteFreeBytes: number; readonly compactRecommended: boolean };
@@ -299,7 +301,7 @@ export interface DesktopRuntime {
   readonly activityTracker: ActivityTracker;
   readonly logHub: LogHub;
   readonly toolAvailabilityService: ToolAvailabilityService;
-  mutationAdmissionMessage(): string | null;
+  mutationAdmissionMessage(): Promise<string | null>;
   getLocale(): UiLocale;
   getUserSettings(): UserSettings;
   getDestructivePolicy(): DestructiveAutoApprovalPolicy;
@@ -898,7 +900,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       services: mcpServices,
       actor: mcpActor,
       activityTracker,
-      mutationAdmissionGuardProvider: () => database.mutationAdmissionMessage(),
+      mutationAdmissionGuardProvider: () => checkMutationAdmissionWithRecovery(),
       profileProvider: activePermissionProfile,
       authorizationModeProvider: (): 'standard' | 'full_bypass' => desktopFullBypassEnabled() ? 'full_bypass' : 'standard',
       allowAiDeleteProvider,
@@ -1211,6 +1213,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   let lastAuditRetentionSweepAt = 0;
   let auditRetentionSweep: Promise<void> | null = null;
   let auditRetentionClosing = false;
+  let storagePolicyUpdating = false;
 
   function sweepAuditRetention(options: { readonly force?: boolean; readonly maxBatches?: number; readonly existingBackupOnly?: boolean } = {}): void {
     const now = Date.now();
@@ -1218,8 +1221,9 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     // This backend-only opt-in will become a user setting after the retention
     // and recovery checks are validated. Default remains fail-closed.
     const pruneWithoutBackup = settingsRepository.get('audit_routine_prune_without_backup_v1') === 'true';
-    if (auditRetentionClosing || (!hasAutomaticBackup && !pruneWithoutBackup)
-      || auditRetentionSweep !== null || (!options.force && now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs)) return;
+    if (auditRetentionClosing || storagePolicyUpdating || (!hasAutomaticBackup && !pruneWithoutBackup)
+      || auditRetentionSweep !== null || (!options.force && now >= lastAuditRetentionSweepAt
+        && now - lastAuditRetentionSweepAt < recoveryRetentionSweepIntervalMs)) return;
     lastAuditRetentionSweepAt = now;
     const configuredRetentionDays = Number(settingsRepository.get('audit_routine_retention_days_v1') ?? '90');
     const retentionDays = Number.isSafeInteger(configuredRetentionDays) && configuredRetentionDays >= 1 && configuredRetentionDays <= 3650
@@ -1227,7 +1231,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     const cutoffIso = new Date(now - retentionDays * 24 * 60 * 60 * 1000).toISOString();
     auditRetentionSweep = (async (): Promise<void> => {
       // Avoid backup I/O when expired rows are all protected evidence.
-      if (!auditRepository.hasExpiredRoutineReadCandidates(cutoffIso)) return;
+      if (!await hasExpiredRoutineReadCandidatesOffMain(databaseFilename, cutoffIso)) return;
       if (!pruneWithoutBackup) {
         if (readSettings().autoBackupEnabled !== true) return;
         // Pressure sweeps must not create a multi-GB backup just to reclaim
@@ -1250,7 +1254,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       let totalDeleted = 0;
       for (let batch = 0; batch < (options.maxBatches ?? 20); batch += 1) {
         if (!pruneWithoutBackup && readSettings().autoBackupEnabled !== true) break;
-        const deleted = await auditRepository.purgeExpiredRoutineReads(cutoffIso);
+        const deleted = await purgeExpiredRoutineReadsOffMain(databaseFilename, cutoffIso, 500);
         totalDeleted += deleted;
         if (deleted < 500) break;
         await new Promise<void>((resolve) => setImmediate(resolve));
@@ -1265,33 +1269,250 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   auditRetentionTimer.unref?.();
   void startupBackup.then(() => sweepAuditRetention());
 
-  // Pressure-only audit cleanup delegates to ordinary backup/opt-in gates.
-  // Never force recovery-trash or archived-backup sweeps here.
+  // Emergency recovery starts on old/oversized profiles, lowering a cap,
+  // or a periodic pressure check. It never creates an automatic multi-GB
+  // backup; old *file* Undo checkpoints may expire, but Goals and mutation
+  // audit evidence are retained.
   let lastPressureSweepAt = 0;
+  let lastUrgentPressureAt = 0;
+  let lastExhaustedPressureAt = 0;
+  let exhaustedPressureCooldownMs = 0;
   let pressureSweep: Promise<void> | null = null;
-  const pressureSweepIntervalMs = 15 * 60 * 1000;
-  function sweepHardLimitPressure(): void {
+  let pressurePendingForce = false;
+  let pressureContinuation: ReturnType<typeof setTimeout> | null = null;
+  let pressureStartDelay: ReturnType<typeof setTimeout> | null = null;
+  function scheduleHardLimitPressureRecovery(): void {
+    // The Settings IPC must return control to the renderer before any
+    // expensive recovery check begins. Coalesce consecutive policy edits.
+    if (pressureStartDelay !== null) clearTimeout(pressureStartDelay);
+    pressureStartDelay = setTimeout(() => {
+      pressureStartDelay = null;
+      sweepHardLimitPressure(true);
+    }, 500);
+    pressureStartDelay.unref?.();
+  }
+  let hardLimitRecoveryStatus: {
+    state: 'idle' | 'running' | 'reclaimed' | 'waiting' | 'blocked' | 'failed';
+    lastRunAt?: string;
+    deletedRoutineReads: number;
+    deletedCheckpoints: number;
+    reclaimedBytes: number;
+  } = { state: 'idle', deletedRoutineReads: 0, deletedCheckpoints: 0, reclaimedBytes: 0 };
+  const pressureSweepIntervalMs = 2 * 60 * 1000;
+  function sweepHardLimitPressure(force = false, urgent = false): Promise<void> {
     const now = Date.now();
-    if (auditRetentionClosing || pressureSweep !== null || now - lastPressureSweepAt < pressureSweepIntervalMs) return;
+    if (auditRetentionClosing || storagePolicyUpdating) return Promise.resolve();
+    if (pressureSweep !== null) {
+      if (urgent) {
+        // An admission request racing the two-minute background sweep must
+        // receive a second, longer urgent pass if that short sweep is not enough.
+        return pressureSweep.then(async (): Promise<void> => {
+          if (database.mutationAdmissionMessage(true) !== null) {
+            await sweepHardLimitPressure(true, true);
+          }
+        });
+      }
+      if (force) pressurePendingForce = true;
+      return pressureSweep;
+    }
+    // Avoid spawning expensive cleanup workers in a hot loop after every
+    // safe candidate has been exhausted, even if callers repeatedly retry.
+    // Wall clocks can jump backwards (sleep/time sync). Never strand
+    // recovery in a future cooldown after the clock changes.
+    // A blocked MCP mutation must never be trapped behind the background
+    // exhausted-candidates cooldown. Throttle its own failed retries so
+    // repeated unavailable writes cannot spawn unlimited SQLite workers.
+    if (urgent && now >= lastUrgentPressureAt && now - lastUrgentPressureAt < 2_000) return Promise.resolve();
+    if (!urgent && now >= lastExhaustedPressureAt
+      && now - lastExhaustedPressureAt < exhaustedPressureCooldownMs) return Promise.resolve();
+    if (urgent) lastUrgentPressureAt = now;
+    if (!force && now >= lastPressureSweepAt && now - lastPressureSweepAt < pressureSweepIntervalMs) return Promise.resolve();
     lastPressureSweepAt = now;
-    // Defer ALL SQLite access to the caught promise: a restore/swap can make
-    // the connection temporarily unavailable even from a timer callback.
-    pressureSweep = Promise.resolve().then((): void => {
+    pressureSweep = Promise.resolve().then(async (): Promise<void> => {
       if (auditRetentionClosing) return;
       const limitMiB = parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY));
-      const snapshot = inspectSqliteHardLimit(database.connection, limitMiB);
-      if (!sqliteLimitPressure(snapshot.allocatedBytes, snapshot.freeBytes, snapshot.requestedBytes)) return;
-      // Reuse exactly the ordinary audit retention authorization and evidence
-      // fences. Never delete without opt-in or a verified existing backup.
-      // Do not force recovery-trash or archived-backup cleanup during pressure.
-      sweepAuditRetention({ force: true, maxBatches: 8, existingBackupOnly: true });
+      const readFootprint = (): ReturnType<typeof inspectSqliteHardLimit> & { readonly walBytes: number } => {
+        const pages = inspectSqliteHardLimit(database.connection, limitMiB);
+        let walBytes = 0;
+        try { walBytes = statSync(databaseFilename + '-wal').size; }
+        catch (error: unknown) {
+          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error;
+        }
+        return { ...pages, walBytes };
+      };
+      const initial = readFootprint();
+      const mainUnderPressure = sqliteLimitPressure(initial.allocatedBytes, initial.freeBytes, initial.requestedBytes);
+      const admissionBlocked = sqliteMutationAdmissionPressure(initial.allocatedBytes,
+        initial.freeBytes, initial.walBytes, initial.requestedBytes);
+      if (!mainUnderPressure && !admissionBlocked) {
+        hardLimitRecoveryStatus = { ...hardLimitRecoveryStatus, state: 'idle' };
+        return;
+      }
+      if (hardLimitRecoveryNeeded(initial)) {
+        if (settingsRepository.get(automaticHardLimitRecoverySettingKey) === 'false') {
+          hardLimitRecoveryStatus = { ...hardLimitRecoveryStatus, state: admissionBlocked ? 'blocked' : 'idle', lastRunAt: new Date(now).toISOString() };
+        } else {
+          hardLimitRecoveryStatus = { ...hardLimitRecoveryStatus, state: 'running', lastRunAt: new Date(now).toISOString() };
+          // Run every DELETE on a disposable SQLite worker connection. Even
+          // an expensive legacy candidate scan cannot block Electron Main.
+          const workerAudit = {
+            purgeExpiredRoutineReads: (cutoff: string, limit: number, completedOnly?: boolean): Promise<number> =>
+              purgeExpiredRoutineReadsOffMain(databaseFilename, cutoff, limit, completedOnly),
+          };
+          let result = { deleted: 0, reclaimedBytes: 0, moreWorkLikely: false, candidatesExhausted: false };
+          let cleanupFailed = false;
+          const recoverAudit = async (): Promise<void> => {
+            if (!hardLimitRecoveryNeeded(readFootprint())) return;
+            try {
+              result = await recoverOldestRoutineAuditUnderHardLimit(workerAudit, readFootprint, {
+                nowMs: now, maxBatches: urgent ? 1 : 4,
+                shouldStop: (): boolean => auditRetentionClosing || storagePolicyUpdating
+                  || settingsRepository.get(automaticHardLimitRecoverySettingKey) === 'false',
+              });
+            } catch (error) {
+              // An expensive or locked legacy audit table must not prevent
+              // reclaiming independently disposable old file checkpoints.
+              cleanupFailed = true;
+              console.error('Audit emergency recovery skipped: '
+                + (error instanceof Error ? error.message : String(error)));
+            }
+          };
+          // During a blocked mutation, try old Undo first: audit scans of a
+          // legacy table can occupy the entire 15s admission budget. Normal
+          // background maintenance still prioritizes routine-read audit.
+          if (!urgent) await recoverAudit();
+          // Goal checkpoints, mutation receipts and newest three per
+          // workspace remain protected by the checkpoint worker.
+          let deletedCheckpoints = 0;
+          let checkpointReusableBytes = 0;
+          let checkpointMoreWorkLikely = false;
+          if (hardLimitRecoveryNeeded(readFootprint()) && !auditRetentionClosing && !storagePolicyUpdating
+            && settingsRepository.get(automaticHardLimitRecoverySettingKey) !== 'false') {
+            try {
+              const checkpoints = await recoverOldFileCheckpointsUnderHardLimit({
+                pruneExpired: (cutoff: string, limit: number): Promise<number> =>
+                  pruneExpiredFileCheckpointsOffMain(databaseFilename, cutoff, limit),
+              }, readFootprint, {
+                nowMs: now, emergency: urgent, maxBatches: urgent ? 24 : 4,
+                shouldStop: (): boolean => auditRetentionClosing || storagePolicyUpdating
+                  || settingsRepository.get(automaticHardLimitRecoverySettingKey) === 'false'
+                  || (urgent && Date.now() - now > 14_000),
+              });
+              deletedCheckpoints = checkpoints.deleted;
+              checkpointReusableBytes = checkpoints.reclaimedBytes;
+              checkpointMoreWorkLikely = checkpoints.moreWorkLikely;
+            } catch (error) {
+              // Checkpoint cleanup fails closed; independently safe audit
+              // recovery can still succeed in the same pressure sweep.
+              cleanupFailed = true;
+              console.error('Checkpoint emergency recovery skipped: '
+                + (error instanceof Error ? error.message : String(error)));
+            }
+          }
+          if (urgent && hardLimitRecoveryNeeded(readFootprint())) await recoverAudit();
+          const remaining = readFootprint();
+          const stillAdmissionBlocked = sqliteMutationAdmissionPressure(remaining.allocatedBytes,
+            remaining.freeBytes, remaining.walBytes, remaining.requestedBytes);
+          const stillUnderPressure = hardLimitRecoveryNeeded(remaining);
+          const moreWorkLikely = stillUnderPressure && (result.moreWorkLikely || checkpointMoreWorkLikely);
+          if (result.candidatesExhausted && !moreWorkLikely && deletedCheckpoints === 0
+            && (stillUnderPressure || stillAdmissionBlocked)) {
+            lastExhaustedPressureAt = Date.now();
+            // Only actual admission refusal justifies frequent retries; a
+            // routine 85-95% warning must not rescan large protected history
+            // every 30 seconds for months of uptime.
+            exhaustedPressureCooldownMs = stillAdmissionBlocked ? 30_000 : 2 * 60_000;
+          } else if (!stillUnderPressure && !stillAdmissionBlocked) {
+            lastExhaustedPressureAt = 0;
+            exhaustedPressureCooldownMs = 0;
+          }
+          hardLimitRecoveryStatus = {
+            state: moreWorkLikely ? 'running' : cleanupFailed && stillUnderPressure ? 'failed'
+              : stillAdmissionBlocked ? 'blocked' : stillUnderPressure ? 'waiting' : 'reclaimed',
+            lastRunAt: new Date(now).toISOString(),
+            deletedRoutineReads: hardLimitRecoveryStatus.deletedRoutineReads + result.deleted,
+            deletedCheckpoints: hardLimitRecoveryStatus.deletedCheckpoints + deletedCheckpoints,
+            reclaimedBytes: hardLimitRecoveryStatus.reclaimedBytes + result.reclaimedBytes + checkpointReusableBytes,
+          };
+          if (result.deleted > 0) console.log(`[Storage] emergency reclaimed ${result.deleted} routine read events (${result.reclaimedBytes} reusable bytes)`);
+          if (moreWorkLikely && !auditRetentionClosing && pressureContinuation === null) {
+            // Spread large legacy migrations across event-loop turns rather
+            // than running an unbounded delete loop in Electron Main.
+            pressureContinuation = setTimeout(() => {
+              pressureContinuation = null;
+              sweepHardLimitPressure(true);
+            }, stillAdmissionBlocked ? 2_000 : 30_000);
+            pressureContinuation.unref?.();
+          }
+        }
+      } else if (admissionBlocked) {
+        // The configured limit is for main pages; this branch remains a
+        // conservative fallback if future admission policies add other constraints.
+        hardLimitRecoveryStatus = { ...hardLimitRecoveryStatus, state: 'blocked', lastRunAt: new Date(now).toISOString() };
+      }
+      // The normal age-based sweep retains its existing backup/opt-in gates.
+      // It never authorizes additional emergency checkpoint deletion.
+      if (mainUnderPressure && (settingsRepository.get(automaticHardLimitRecoverySettingKey) === 'false'
+        || !hardLimitRecoveryNeeded(initial))) {
+        sweepAuditRetention({ force: true, maxBatches: 8, existingBackupOnly: true });
+      }
     }).catch((error: unknown) => {
+      lastExhaustedPressureAt = Date.now();
+      exhaustedPressureCooldownMs = 2 * 60_000;
+      hardLimitRecoveryStatus = {
+        ...hardLimitRecoveryStatus, state: 'failed', lastRunAt: new Date().toISOString(),
+      };
       console.error('SQLite pressure check failed: ' + (error instanceof Error ? error.message : String(error)));
-    }).finally(() => { pressureSweep = null; });
+    }).finally(() => {
+      pressureSweep = null;
+      if (pressurePendingForce && !auditRetentionClosing) {
+        pressurePendingForce = false;
+        scheduleHardLimitPressureRecovery();
+      }
+    });
+    return pressureSweep;
   }
-  const hardLimitTimer = setInterval(sweepHardLimitPressure, pressureSweepIntervalMs);
+  /** A blocked mutation gets a bounded, single-flight recovery opportunity
+   * before it is rejected. No mutation is allowed without fresh audit headroom. */
+  async function checkMutationAdmissionWithRecovery(): Promise<string | null> {
+    const message = database.mutationAdmissionMessage();
+    if (message === null || auditRetentionClosing || storagePolicyUpdating
+      || settingsRepository.get(automaticHardLimitRecoverySettingKey) === 'false') return message;
+    // WAL disk pressure is independent of main-page pressure. If a previous
+    // long-lived reader has released the WAL, allow a safe idle-only checkpoint
+    // opportunity before refusing a mutation (never delete -wal/-shm).
+    if (message.startsWith('Large SQLite WAL')) {
+      try {
+        await awaitBoundedStorageRecovery(walMaintenance.inspect(
+          parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)),
+        ).then((): void => undefined));
+      } catch { /* keep the mutation blocked; retry only on the WAL cooldown */ }
+      return database.mutationAdmissionMessage(true);
+    }
+    // Keep slow audit SQL off the MCP critical path. Background recovery
+    // continues; a timeout never bypasses durable audit protection.
+    // Before rejecting the actual file mutation, give the old-checkpoint
+    // worker enough bounded transactions to clear a meaningful amount of
+    // reusable SQLite pages. Never bypass the final durable-audit admission.
+    await awaitBoundedStorageRecovery(sweepHardLimitPressure(true, true), 15_000);
+    return database.mutationAdmissionMessage(true);
+  }
+
+  const walMaintenance = new IdleWalMaintenance(databaseFilename);
+  const hardLimitTimer = setInterval(() => {
+    void sweepHardLimitPressure();
+    // A quiet oversized WAL may remain physically large even when main-page
+    // recovery has already succeeded. Check it separately and off-main;
+    // never force a checkpoint while every writer is still changing WAL.
+    void walMaintenance.inspect(parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)))
+      .catch((error: unknown) => {
+        console.error('Idle SQLite WAL maintenance failed: ' + (error instanceof Error ? error.message : String(error)));
+      });
+  }, pressureSweepIntervalMs);
   hardLimitTimer.unref?.();
-  void startupBackup.then(sweepHardLimitPressure);
+  // Start after synchronous runtime composition, independent of a potentially
+  // multi-GB opt-in startup backup. Only already-eligible routine reads are touched.
+  scheduleHardLimitPressureRecovery();
 
   let recoveryRetentionActive = false;
   async function sweepRecoveryRetention(force = false): Promise<void> {
@@ -1995,8 +2216,28 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       };
     })(),
     setStoragePolicy: async (request) => {
-      const changed = storageMaintenance.configurePolicy(request);
-      return { ...changed, overview: await storageOverview() };
+      if (storagePolicyUpdating) throw new Error('Storage policy update is already in progress');
+      storagePolicyUpdating = true;
+      let applied = false;
+      try {
+        // Avoid synchronous settings UPSERT waiting on an active worker's
+        // SQLite writer lock. IPC stays asynchronous and the renderer stays
+        // responsive while the bounded in-flight batch completes.
+        if (pressureSweep !== null) await pressureSweep;
+        if (auditRetentionSweep !== null) await auditRetentionSweep;
+        const changed = storageMaintenance.configurePolicy(request);
+        applied = true;
+        return { ...changed, overview: await storageOverview() };
+      } finally {
+        storagePolicyUpdating = false;
+        // Storage Overview may outlast the initial deferred sweep timer.
+        // Re-arm once the policy IPC finishes so a lowered cap cannot miss
+        // its first recovery attempt and wait for the next periodic sweep.
+        if (applied && (request.sqliteHardLimitMiB !== undefined
+          || request.automaticHardLimitRecovery === true)) {
+          scheduleHardLimitPressureRecovery();
+        }
+      }
     },
     previewCheckpointCleanup: async (request) => {
       await checkpointRepository.prepareStorageMetadata();
@@ -2514,6 +2755,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     auditRetentionClosing = true;
     clearInterval(auditRetentionTimer);
     clearInterval(hardLimitTimer);
+    if (pressureContinuation !== null) clearTimeout(pressureContinuation);
+    if (pressureStartDelay !== null) clearTimeout(pressureStartDelay);
+    pressureContinuation = null;
+    pressureStartDelay = null;
     logHub.stop();
     await mcpLifecycle.close();
     debugSessions.close();
@@ -2522,6 +2767,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     await startupBackup;
     if (auditRetentionSweep !== null) await auditRetentionSweep;
     if (pressureSweep !== null) await pressureSweep;
+    await walMaintenance.close();
     database.close();
   });
 
@@ -2556,6 +2802,19 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     // downgrade is safe until explicit metadata preparation completes.
     const hasCompressedV2 = checkpointStatus.hasCompressedV2;
     const checkpointMetadataIncomplete = !checkpointStatus.complete;
+    // Constant-cost rollup: do not scan multi-GB legacy snapshot payloads
+    // when Settings is opened. The explicit Preview action backfills in batches.
+    const checkpointPayloadState = checkpointStatus.complete
+      ? database.connection.prepare('SELECT payload_bytes FROM checkpoint_storage_totals WHERE id = 1')
+        .get() as { payload_bytes?: number } | undefined
+      : undefined;
+    const checkpointStorage = {
+      indexed: checkpointStatus.indexed,
+      total: checkpointStatus.total,
+      ...(checkpointStatus.complete && Number.isSafeInteger(checkpointPayloadState?.payload_bytes)
+        && (checkpointPayloadState?.payload_bytes ?? -1) >= 0
+        ? { payloadBytes: checkpointPayloadState!.payload_bytes! } : {}),
+    };
     const limit = inspectSqliteHardLimit(database.connection, parseSqliteHardLimitMiB(settingsRepository.get(SQLITE_HARD_LIMIT_SETTING_KEY)));
     let sqliteWalBytes = 0;
     try { sqliteWalBytes = statSync(databaseFilename + '-wal').size; }
@@ -2570,7 +2829,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         : { automaticBackupBudget }),
       sqliteOverBudget: limit.allocatedBytes > limit.requestedBytes,
       sqlitePressureHigh: sqliteLimitPressure(limit.allocatedBytes, limit.freeBytes, limit.requestedBytes),
-      usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete,
+      usageCategories: storageCategoryCache.entries, hasCompressedV2, checkpointMetadataIncomplete, checkpointStorage,
+      hardLimitRecovery: hardLimitRecoveryStatus,
       ...(globalQuotaStatus === null ? {} : { globalQuota: {
         limitBytes: globalQuotaStatus.policy.limitBytes,
         criticalReserveBytes: globalQuotaStatus.policy.criticalReserveBytes,
@@ -2590,6 +2850,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       compressionEnabledOnNextStart: false,
       automaticCheckpointRetention: settingsRepository.get('checkpoint_auto_retention_v1') === 'true',
       auditPruneWithoutBackup: settingsRepository.get('audit_routine_prune_without_backup_v1') === 'true',
+      automaticHardLimitRecovery: settingsRepository.get(automaticHardLimitRecoverySettingKey) !== 'false',
       routineAuditRetentionDays: parseIntegerSetting(settingsRepository.get('audit_routine_retention_days_v1') ?? undefined, 90, 1, 3650),
     }),
     configurePolicy: (options) => {
@@ -2655,13 +2916,22 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (options.auditPruneWithoutBackup !== undefined) {
         settingsRepository.set('audit_routine_prune_without_backup_v1', options.auditPruneWithoutBackup ? 'true' : 'false');
       }
+      if (options.automaticHardLimitRecovery !== undefined) {
+        settingsRepository.set(automaticHardLimitRecoverySettingKey, options.automaticHardLimitRecovery ? 'true' : 'false');
+        if (!options.automaticHardLimitRecovery && pressureContinuation !== null) {
+          clearTimeout(pressureContinuation);
+          pressureContinuation = null;
+        }
+      }
       if (options.routineAuditRetentionDays !== undefined) {
         settingsRepository.set('audit_routine_retention_days_v1', String(options.routineAuditRetentionDays));
       }
       lastAuditRetentionSweepAt = Date.now(); // policy changes take effect at next bounded sweep
-      if (options.sqliteHardLimitMiB !== undefined) {
+      if (options.sqliteHardLimitMiB !== undefined || options.automaticHardLimitRecovery === true) {
+        lastExhaustedPressureAt = 0;
+        exhaustedPressureCooldownMs = 0;
         lastPressureSweepAt = 0;
-        sweepHardLimitPressure();
+        scheduleHardLimitPressureRecovery();
       }
       return { restartRequired: false };
     },
@@ -2752,7 +3022,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     activityTracker,
     logHub,
     toolAvailabilityService,
-    mutationAdmissionMessage: (): string | null => database.mutationAdmissionMessage(),
+    mutationAdmissionMessage: () => checkMutationAdmissionWithRecovery(),
     prepareFactoryReset: (): Promise<void> => tunnelController.prepareFactoryReset(),
     getLocale: (): UiLocale => readLocale(settingsRepository),
     getUserSettings: (): UserSettings => readSettings(),

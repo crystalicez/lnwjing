@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { CheckpointCleanupPreview, NativeStorageCleanupRequest, ProfileStorageInventory, StorageOverview, StoragePolicy, UiLocale } from '@lnwjing/ipc-contracts';
 import { ActionButton, SettingsCardHeading, StatusMessage } from '../ui/UiPrimitives.js';
 import { SettingSwitch } from './SettingSwitch.js';
@@ -10,6 +10,26 @@ type NativeCategory = NativeStorageCleanupRequest['category'];
 
 function sizeLabel(bytes: number): string {
   return bytes >= MIB ? (bytes / MIB).toFixed(1) + ' MiB' : (bytes / 1024).toFixed(1) + ' KiB';
+}
+
+/** Metadata-only admission estimate: SQLite main used pages minus the MCP
+ * five-percent receipt reserve. This is not a promise that every future write
+ * fits, and does not include WAL or disk space outside the SQLite file. */
+export function storageAdmissionHeadroom(overview: StorageOverview): {
+  readonly usedBytes: number;
+  readonly headroomBytes: number;
+  readonly checkpointSharePercent: number | null;
+} {
+  const limitBytes = overview.policy.sqliteHardLimitMiB * MIB;
+  const usedBytes = Math.max(0, overview.sqliteAllocatedBytes - overview.sqliteFreeBytes);
+  const reservation = Math.max(16 * MIB, Math.floor(limitBytes * 0.05));
+  const headroomBytes = Math.max(0, limitBytes - reservation - usedBytes);
+  const payload = overview.checkpointStorage?.payloadBytes;
+  const checkpointSharePercent = payload !== undefined && usedBytes > 0
+    && Number.isSafeInteger(payload) && payload >= 0
+    ? Math.min(100, Math.round(100 * payload / usedBytes))
+    : null;
+  return { usedBytes, headroomBytes, checkpointSharePercent };
 }
 
 interface Props {
@@ -33,6 +53,12 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
   const [category, setCategory] = useState<NativeCategory>('tasks');
   const [globalQuotaDraft, setGlobalQuotaDraft] = useState<number | null>(null);
   const [cursors, setCursors] = useState<Partial<Record<NativeCategory, string | null>>>({});
+  const policyRefreshTimer = useRef<number | null>(null);
+  useEffect(() => {
+    return (): void => {
+      if (policyRefreshTimer.current !== null) window.clearTimeout(policyRefreshTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -43,6 +69,22 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     });
     return (): void => { active = false; };
   }, []);
+
+  // Poll only during an active, cooperative cleanup. Never wake SQLite
+  // continuously while Settings is open or the window is hidden.
+  useEffect(() => {
+    if (overview?.hardLimitRecovery?.state !== 'running' || pending) return;
+    let active = true;
+    const timer = window.setInterval(() => {
+      if (!active || document.visibilityState !== 'visible') return;
+      void window.lnwjing.getStorageOverview().then((next) => {
+        if (active) setOverview(next);
+      }).catch(() => {
+        // The user can still use Refresh; avoid a repeating error banner.
+      });
+    }, 3_000);
+    return (): void => { active = false; window.clearInterval(timer); };
+  }, [overview?.hardLimitRecovery?.state, pending]);
 
   async function scanProfile(): Promise<void> {
     if (inventoryPending || pending) return;
@@ -82,6 +124,15 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     try {
       const result = await window.lnwjing.setStoragePolicy({ userConfirmed: true, ...changes });
       setOverview(result.overview);
+      if (changes.sqliteHardLimitMiB !== undefined || changes.automaticHardLimitRecovery === true) {
+        // Backend intentionally starts emergency recovery after Save responds.
+        // One delayed read lets the normal running-only poll observe its state.
+        if (policyRefreshTimer.current !== null) window.clearTimeout(policyRefreshTimer.current);
+        policyRefreshTimer.current = window.setTimeout(() => {
+          policyRefreshTimer.current = null;
+          void window.lnwjing.getStorageOverview().then(setOverview).catch(() => undefined);
+        }, 1_000);
+      }
       setPreview(null); setPreviewRequest(null);
       if (changes.globalQuotaMiB !== undefined) setGlobalQuotaDraft(null);
       setNotice(result.restartRequired
@@ -103,6 +154,9 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     try {
       const result = await window.lnwjing.previewCheckpointCleanup(request);
       setPreviewRequest(request); setPreview(result);
+      // Explicit metadata preparation may have completed; refresh its status
+      // without invoking an additional full-file walk.
+      setOverview(await window.lnwjing.getStorageOverview());
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally { setPending(false); }
@@ -140,10 +194,52 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     } finally { setPending(false); }
   }
 
+  const pressure = overview === null ? null : storageAdmissionHeadroom(overview);
   return (
     <section className="panel settings-card settings-card-polished" aria-label={t('storagePanel.title')}>
       <SettingsCardHeading icon="▤" title={t('storagePanel.title')}
         subtitle={t('storagePanel.subtitle')} />
+      <div className="setting-field">
+        <strong>{t('storagePanel.sqliteTitle')}</strong>
+        <p>{overview === null ? (t('storagePanel.notLoaded')) :
+          `${sizeLabel(overview.sqliteAllocatedBytes)} · ${t('storagePanel.freePages')} ${sizeLabel(overview.sqliteFreeBytes)}`}</p>
+        {overview === null ? null : <p>{t('storagePanel.walUsage')}: {sizeLabel(overview.sqliteWalBytes)}</p>}
+        {overview !== null && overview.sqliteWalBytes >= Math.max(128 * 1024 ** 2,
+          Math.min(512 * 1024 ** 2, Math.floor(overview.policy.sqliteHardLimitMiB * 1024 ** 2 / 8)))
+          ? <StatusMessage tone="warning" role="alert">{t('storagePanel.walHigh')}</StatusMessage> : null}
+        <p className="hint">{t('storagePanel.sqliteNote')}</p>
+        {overview?.checkpointStorage === undefined ? null : (
+          <p className="hint">
+            {t('storagePanel.checkpointMetadataCount', {
+              indexed: String(overview.checkpointStorage.indexed),
+              total: String(overview.checkpointStorage.total),
+            })}
+            {overview.checkpointStorage.payloadBytes === undefined
+              ? ` · ${t('storagePanel.checkpointPayloadNotReady')}`
+              : ` · ${t('storagePanel.checkpointPayloadEstimate', {
+                size: sizeLabel(overview.checkpointStorage.payloadBytes),
+              })}`}
+          </p>
+        )}
+        {overview?.compactRecommended === true ? <p className="hint">{t('storagePanel.compactionNote')}</p> : null}
+      </div>
+      {overview?.checkpointMetadataIncomplete === true ? (
+        <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.indexPending')}</StatusMessage>
+      ) : null}
+      {overview?.hasCompressedV2 === true ? (
+        <StatusMessage tone="warning" role="alert" prefix="⚠ ">
+          {t('storagePanel.existingV2')}
+        </StatusMessage>
+      ) : null}
+      {overview?.usageCategories?.length ? <div className="setting-field">
+        <strong>{t('storagePanel.appdataTitle')}</strong>
+        {overview.usageCategories.map((item) => (
+          <p key={item.category}>{item.category}: {sizeLabel(item.bytes)}
+            {item.truncated ? (t('storagePanel.partialSuffix')) : ''}
+          </p>
+        ))}
+        <p className="hint">{t('storagePanel.appdataNote')}</p>
+      </div> : null}
       <div className="setting-field" data-testid="global-quota-settings">
         <strong>{t('storagePanel.globalTitle')}</strong>
         <p className="hint">{t('storagePanel.globalLimitNote')}</p>
@@ -219,31 +315,6 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
           {inventoryPending ? t('storagePanel.inventoryScanning') : t('storagePanel.inventoryScan')}
         </ActionButton>
       </div>
-      <div className="setting-field">
-        <strong>{t('storagePanel.sqliteTitle')}</strong>
-        <p>{overview === null ? (t('storagePanel.notLoaded')) :
-          `${sizeLabel(overview.sqliteAllocatedBytes)} · ${t('storagePanel.freePages')} ${sizeLabel(overview.sqliteFreeBytes)}`}</p>
-        {overview === null ? null : <p>{t('storagePanel.walUsage')}: {sizeLabel(overview.sqliteWalBytes)}</p>}
-        <p className="hint">{t('storagePanel.sqliteNote')}</p>
-        {overview?.compactRecommended === true ? <p className="hint">{t('storagePanel.compactionNote')}</p> : null}
-      </div>
-      {overview?.checkpointMetadataIncomplete === true ? (
-        <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.indexPending')}</StatusMessage>
-      ) : null}
-      {overview?.hasCompressedV2 === true ? (
-        <StatusMessage tone="warning" role="alert" prefix="⚠ ">
-          {t('storagePanel.existingV2')}
-        </StatusMessage>
-      ) : null}
-      {overview?.usageCategories?.length ? <div className="setting-field">
-        <strong>{t('storagePanel.appdataTitle')}</strong>
-        {overview.usageCategories.map((item) => (
-          <p key={item.category}>{item.category}: {sizeLabel(item.bytes)}
-            {item.truncated ? (t('storagePanel.partialSuffix')) : ''}
-          </p>
-        ))}
-        <p className="hint">{t('storagePanel.appdataNote')}</p>
-      </div> : null}
       <div className="inline-actions">
         <ActionButton type="button" disabled={pending} onClick={() => { void refresh(); }}>
           {t('storagePanel.refresh')}
@@ -274,6 +345,19 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
             </select>
             <p className="hint">{t('storagePanel.hardLimitNote')}</p>
             <p className="hint">{t('storagePanel.effectiveLimit')}: {sizeLabel(overview.sqliteEffectiveHardLimitBytes)}</p>
+            <p className="hint" data-testid="sqlite-mutation-headroom">
+              {t('storagePanel.mutationHeadroom', {
+                used: sizeLabel(pressure!.usedBytes),
+                headroom: sizeLabel(pressure!.headroomBytes),
+              })}
+            </p>
+            {overview.sqlitePressureHigh && pressure?.checkpointSharePercent !== null
+              && pressure?.checkpointSharePercent !== undefined && pressure.checkpointSharePercent >= 50
+              ? <StatusMessage tone="warning" role="alert" prefix="⚠ " data-testid="sqlite-checkpoint-pressure">
+                {t('storagePanel.checkpointPressure', {
+                  percent: String(pressure.checkpointSharePercent),
+                })}
+              </StatusMessage> : null}
             {overview.sqliteOverBudget ? <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.overBudget')}</StatusMessage> : null}
             {overview.sqlitePressureHigh ? <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.nearLimit')}</StatusMessage> : null}
             {overview.automaticBackupBudget === undefined ? null : (
@@ -288,6 +372,20 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
               <StatusMessage tone="warning" role="alert" prefix="⚠ ">{t('storagePanel.autoBackupBudgetUnknown')}</StatusMessage>
             ) : null}
           </div>
+          <SettingSwitch label={t('storagePanel.emergencyTrim')}
+            description={t('storagePanel.emergencyTrimNote')}
+            checked={overview.policy.automaticHardLimitRecovery} disabled={pending}
+            onChange={(value) => { void updatePolicy({ automaticHardLimitRecovery: value }); }} />
+          {overview.hardLimitRecovery === undefined ? null : (
+            <p className="hint" aria-live="polite">
+              {t('storagePanel.emergencyTrimStatus', {
+                status: t(`storagePanel.emergencyTrim.${overview.hardLimitRecovery.state}`),
+                count: String(overview.hardLimitRecovery.deletedRoutineReads),
+                checkpoints: String(overview.hardLimitRecovery.deletedCheckpoints ?? 0),
+                size: sizeLabel(overview.hardLimitRecovery.reclaimedBytes),
+              })}
+            </p>
+          )}
           <SettingSwitch label={t('storagePanel.autoRetention')}
             description={t('storagePanel.autoRetentionNote')}
             checked={overview.policy.automaticCheckpointRetention} disabled={pending || (!autoBackupEnabled && !overview.policy.automaticCheckpointRetention)}

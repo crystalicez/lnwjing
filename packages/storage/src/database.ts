@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statfsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createPreMigrationBackupSync } from './backup-service.js';
-import { applySqliteHardLimit, inspectSqliteHardLimit, parseSqliteHardLimitMiB, sqliteMutationAdmissionPressure, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
+import { applySqliteHardLimit, inspectSqliteHardLimit, parseSqliteHardLimitMiB, sqliteMutationAdmissionPressure, sqliteWalLowDiskPressure, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import { registerSqliteClientSync, releaseSqliteClientSync, type SqliteClientLease } from './sqlite-client-lease.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
 import { AUDIT_MIGRATION_SQL } from './migrations/audit-migration.js';
@@ -40,6 +40,10 @@ export interface SqliteDatabaseOptions {
   readonly arch?: string;
   readonly fileIdentityProvider?: (filename: string) => string | null;
   readonly onCanonicalFileReplaced?: (filename: string) => void;
+  /** Injected in tests only; production always stats the real WAL file. */
+  readonly walSizeProvider?: (filename: string) => number;
+  /** Injected in tests only; production checks real filesystem free space. */
+  readonly diskAvailableBytesProvider?: (directory: string) => bigint;
 }
 
 export interface Migration {
@@ -159,10 +163,10 @@ export class SqliteDatabase {
    * A per-process admission guard, NOT a global disk quota: other writers,
    * backup files, and pinned WAL transactions remain independently managed.
    */
-  public mutationAdmissionMessage(): string | null {
+  public mutationAdmissionMessage(forceRefresh = false): string | null {
     const now = Date.now();
     const cached = this.lastMutationQuotaCheck;
-    if (cached !== null && now >= cached.at && now - cached.at < 1_000) return cached.message;
+    if (!forceRefresh && cached !== null && now >= cached.at && now - cached.at < 1_000) return cached.message;
     const connection = this.connection;
     // Unlike read-only calls, mutation admission must observe another
     // process's changed limit promptly, without per-call SQL polling.
@@ -173,14 +177,35 @@ export class SqliteDatabase {
     const snapshot = inspectSqliteHardLimit(connection, limitMiB);
     let walBytes = 0;
     if (this.filename !== ':memory:') {
-      try { walBytes = statSync(this.filename + '-wal').size; }
-      catch (error: unknown) {
-        if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error;
+      if (this.options.walSizeProvider !== undefined) walBytes = this.options.walSizeProvider(this.filename + '-wal');
+      else {
+        try { walBytes = statSync(this.filename + '-wal').size; }
+        catch (error: unknown) {
+          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error;
+        }
       }
     }
-    const message = sqliteMutationAdmissionPressure(snapshot.allocatedBytes, snapshot.freeBytes, walBytes, snapshot.requestedBytes)
-      ? 'SQLite storage budget is nearly exhausted (including WAL); new MCP mutations are paused to preserve audit receipts. Raise SQLite Hard Limit in Storage Settings or safely reclaim space.'
+    let message: string | null = sqliteMutationAdmissionPressure(snapshot.allocatedBytes, snapshot.freeBytes, walBytes, snapshot.requestedBytes)
+      ? 'SQLite is near its configured hard limit and has insufficient reusable pages for durable MCP mutation receipts. Mutations are paused; inspect Storage recovery status and protected data.'
       : null;
+    // A pinned reader can make WAL grow without bound despite a healthy main
+    // page count. Avoid the more expensive statfs query unless WAL is already
+    // unusually large. Keep this separate from the SQLite main hard limit.
+    if (message === null && this.filename !== ':memory:'
+      && walBytes >= Math.max(128 * 1024 ** 2, Math.min(512 * 1024 ** 2, Math.floor(snapshot.requestedBytes / 8)))) {
+      try {
+        const available = this.options.diskAvailableBytesProvider?.(path.dirname(this.filename))
+          ?? ((): bigint => {
+            const disk = statfsSync(path.dirname(this.filename), { bigint: true });
+            return disk.bavail * disk.bsize;
+          })();
+        if (sqliteWalLowDiskPressure(walBytes, snapshot.requestedBytes, available)) {
+          message = 'Large SQLite WAL and low free disk space: new MCP mutations are paused to protect durable audit data. Close long-running SQLite readers and free disk space; do not delete live -wal or -shm files.';
+        }
+      } catch {
+        message = 'Large SQLite WAL detected but available disk space could not be verified. New MCP mutations are paused until disk space can be checked safely.';
+      }
+    }
     this.lastMutationQuotaCheck = { at: now, message };
     return message;
   }
@@ -237,7 +262,8 @@ export class SqliteDatabase {
   private refreshCanonicalConnectionIfNeeded(): void {
     if (this.filename === ':memory:' || this.refreshingCanonicalFile || this.canonicalFileIdentity === undefined) return;
     const now = Date.now();
-    if (this.options.fileIdentityProvider === undefined && now - this.lastCanonicalIdentityCheckAt < CANONICAL_FILE_IDENTITY_CHECK_INTERVAL_MS) return;
+    if (this.options.fileIdentityProvider === undefined && now >= this.lastCanonicalIdentityCheckAt
+      && now - this.lastCanonicalIdentityCheckAt < CANONICAL_FILE_IDENTITY_CHECK_INTERVAL_MS) return;
     this.lastCanonicalIdentityCheckAt = now;
     const observedIdentity = this.readCanonicalFileIdentity();
     if (observedIdentity === this.canonicalFileIdentity) return;
@@ -274,6 +300,9 @@ export class SqliteDatabase {
     else withSqliteLifecycleLockSync(this.options.backupDirectory, refresh);
   }
 
+  /** Canonical SQLite path for bounded emergency workers; never the workspace path. */
+  public get databaseFilePath(): string { return this.filename; }
+
   public get connection(): DatabaseSync {
     if (this.isClosed) throw new Error('SqliteDatabase is closed');
     this.refreshCanonicalConnectionIfNeeded();
@@ -281,7 +310,8 @@ export class SqliteDatabase {
     // must notice settings changes without reading SQLite every tool call.
     const now = Date.now();
     if (!this.refreshingCanonicalFile && this.appliedHardLimitMiB !== null
-      && now - this.lastHardLimitCheckAt >= HARD_LIMIT_SETTING_SYNC_INTERVAL_MS) {
+      && (now < this.lastHardLimitCheckAt
+        || now - this.lastHardLimitCheckAt >= HARD_LIMIT_SETTING_SYNC_INTERVAL_MS)) {
       this.lastHardLimitCheckAt = now;
       const row = this._connection.prepare('SELECT value FROM settings WHERE key = ?')
         .get(SQLITE_HARD_LIMIT_SETTING_KEY) as { value?: string } | undefined;

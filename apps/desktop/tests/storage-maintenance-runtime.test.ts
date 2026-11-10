@@ -18,7 +18,7 @@ describe('Desktop storage-maintenance backend', () => {
     try {
       expect(runtime.storageMaintenance.getPolicy()).toEqual({
         checkpointCreationMode: 'git-aware', sqliteHardLimitMiB: 4096, compressionEnabledOnNextStart: false, automaticCheckpointRetention: false,
-        auditPruneWithoutBackup: false, routineAuditRetentionDays: 90,
+        auditPruneWithoutBackup: false, automaticHardLimitRecovery: true, routineAuditRetentionDays: 90,
       });
       expect(() => runtime.storageMaintenance.configurePolicy({
         userConfirmed: false, compressionEnabledOnNextStart: true,
@@ -42,6 +42,8 @@ describe('Desktop storage-maintenance backend', () => {
       expect(() => runtime.storageMaintenance.configurePolicy({ userConfirmed: true, sqliteHardLimitMiB: 100 })).toThrow(/Invalid SQLite hard limit/);
       expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, sqliteHardLimitMiB: 1024 })).toEqual({ restartRequired: false });
       expect(runtime.storageMaintenance.getPolicy().sqliteHardLimitMiB).toBe(1024);
+      // Ledger policy is persisted once, read by a fresh runtime/client and
+      // displayed without forcing another full profile scan.
       expect((await runtime.services.getStorageOverview()).globalQuota).toBeUndefined();
       expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, globalQuotaMiB: 512 }))
         .toEqual({ restartRequired: false });
@@ -53,6 +55,16 @@ describe('Desktop storage-maintenance backend', () => {
       expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, globalQuotaMiB: 0 }))
         .toEqual({ restartRequired: false });
       expect((await runtime.services.getStorageOverview()).globalQuota).toBeUndefined();
+      expect(runtime.storageMaintenance.getPolicy().automaticHardLimitRecovery).toBe(true);
+      expect(runtime.storageMaintenance.configurePolicy({
+        userConfirmed: true, automaticHardLimitRecovery: false,
+      })).toEqual({ restartRequired: false });
+      expect(runtime.storageMaintenance.getPolicy().automaticHardLimitRecovery).toBe(false);
+      expect(runtime.storageMaintenance.configurePolicy({
+        userConfirmed: true, automaticHardLimitRecovery: true,
+      })).toEqual({ restartRequired: false });
+      // Integrated with the actual Desktop services, not only the worker test.
+      // The scan must remain read-only and cover SQLite plus other owned files.
       const inventory = await runtime.services.getProfileStorageInventory();
       expect(inventory.scope).toBe('profile');
       expect(inventory.incomplete).toBe(false);
@@ -62,6 +74,7 @@ describe('Desktop storage-maintenance backend', () => {
       expect(limited.sqliteEffectiveHardLimitBytes).toBe(1024 ** 3);
       expect(limited.sqliteOverBudget).toBe(false);
       expect(limited.sqlitePressureHigh).toBe(false);
+      expect(limited.checkpointStorage).toEqual({ indexed: 0, total: 0, payloadBytes: 0 });
       expect(limited.automaticBackupBudget).toMatchObject({ budgetBytes: 3 * 1024 ** 3, blocked: false });
       expect(limited.automaticBackupBudgetUnknown).toBeUndefined();
       expect(runtime.storageMaintenance.configurePolicy({
@@ -104,6 +117,9 @@ describe('Desktop storage-maintenance backend', () => {
       const runtime = createDesktopRuntime(root, { checkpointEncryptionKey: Buffer.alloc(32, 41) });
       try {
         await runtime.services.getDashboard();
+        const footprint = await runtime.services.getStorageOverview();
+        expect(footprint.checkpointStorage).toMatchObject({ indexed: 3, total: 3 });
+        expect(footprint.checkpointStorage?.payloadBytes).toBeGreaterThan(0);
         const plan = runtime.storageMaintenance.previewCheckpointBudget({
           maxBytes: 0, deleteBefore: '2026-01-01T00:00:00.000Z',
         });

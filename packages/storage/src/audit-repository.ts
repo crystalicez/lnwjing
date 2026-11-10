@@ -76,13 +76,35 @@ candidate.timestamp < ?
     'mcp_tool:read_file', 'mcp_tool:read_files',
     'mcp_tool:list_files', 'mcp_tool:list_directory', 'mcp_tool:search_files',
     'mcp_tool:search_text', 'mcp_tool:read_file_page', 'mcp_tool:git_status', 'mcp_tool:git_log',
-    'mcp_tool:workspace_index_status', 'mcp_tool:process_status', 'mcp_tool:process_logs'
+    'mcp_tool:workspace_index_status', 'mcp_tool:process_status', 'mcp_tool:process_logs',
+    -- These exact tool definitions are unconditionally read-only. Do not
+    -- include mixed-action tools such as git, tool_batch or computer_use.
+    'mcp_tool:git_diff', 'mcp_tool:workspace_tree', 'mcp_tool:project_snapshot',
+    'mcp_tool:workspace_context', 'mcp_tool:workspace_context_continue',
+    'mcp_tool:workspace_full_scan', 'mcp_tool:workspace_full_scan_continue',
+    'mcp_tool:workspace_snapshot', 'mcp_tool:search_all', 'mcp_tool:read_many_files',
+    'mcp_tool:read_file_page_continue'
   )
   AND candidate.result_code IN ('STARTED', 'SUCCESS')
+  -- A STARTED row may represent a tool still running (even if its recorded
+  -- timestamp is days old). Recycle it ONLY after a matching durable SUCCESS
+  -- has been recorded in the same workspace, session and tool. Keep orphaned
+  -- starts indefinitely rather than erasing evidence of interrupted calls.
+  AND (candidate.result_code = 'SUCCESS' OR (
+    json_type(candidate.metadata_json, '$.callId') = 'text'
+    AND EXISTS (
+      SELECT 1 FROM audit_events completed INDEXED BY idx_audit_calls_workspace_correlation
+      WHERE completed.workspace_id IS candidate.workspace_id
+        AND json_extract(completed.metadata_json, '$.callId') = json_extract(candidate.metadata_json, '$.callId')
+        AND completed.session_id IS candidate.session_id
+        AND completed.action = candidate.action
+        AND completed.result_code = 'SUCCESS'
+    )
+  ))
   AND json_type(candidate.metadata_json, '$.goalId') IS NULL
   AND json_type(candidate.metadata_json, '$.mutationReceipt') IS NULL
   AND NOT EXISTS (
-    SELECT 1 FROM audit_events related
+    SELECT 1 FROM audit_events related INDEXED BY idx_audit_calls_workspace_correlation
     WHERE json_type(candidate.metadata_json, '$.callId') = 'text'
       AND related.action = candidate.action
       AND related.workspace_id IS candidate.workspace_id
@@ -94,6 +116,31 @@ candidate.timestamp < ?
         OR json_type(related.metadata_json, '$.goalId') IS NOT NULL
         OR json_type(related.metadata_json, '$.mutationReceipt') IS NOT NULL
       )
+  )
+`;
+
+/** Shared prepared statement for main-thread retention and isolated emergency workers.
+ * The statement only deletes proven routine-read rows; never change either
+ * caller's predicate independently.
+ */
+export const ROUTINE_READ_RECOVERY_PROBE_SQL =
+  `SELECT 1 FROM audit_events candidate WHERE ${EXPIRED_ROUTINE_READ_CONDITION} LIMIT 1`;
+
+export const ROUTINE_READ_RECOVERY_DELETE_SQL = `
+  DELETE FROM audit_events WHERE id IN (
+    SELECT candidate.id FROM audit_events candidate WHERE ${EXPIRED_ROUTINE_READ_CONDITION}
+    ORDER BY candidate.timestamp ASC LIMIT ?
+  )
+`;
+
+// Under actual admission pressure, completed routine reads older than five
+// minutes may be recycled after older eligible history is exhausted. Exclude
+// STARTED rows so an unusually long-running read is never silently erased.
+export const ROUTINE_READ_RECOVERY_DELETE_COMPLETED_SQL = `
+  DELETE FROM audit_events WHERE id IN (
+    SELECT candidate.id FROM audit_events candidate WHERE ${EXPIRED_ROUTINE_READ_CONDITION}
+      AND candidate.result_code = 'SUCCESS'
+    ORDER BY candidate.timestamp ASC LIMIT ?
   )
 `;
 
@@ -132,15 +179,12 @@ export class SqliteAuditRepository implements AuditEventRepository {
   }
 
   /** Drop only expired routine reads. Mutations, goal evidence and receipts stay durable. */
-  public async purgeExpiredRoutineReads(cutoffIso: string, limit = 500): Promise<number> {
+  public async purgeExpiredRoutineReads(cutoffIso: string, limit = 500, completedOnly = false): Promise<number> {
     if (!Number.isFinite(Date.parse(cutoffIso))) throw new Error('Invalid audit retention cutoff');
     const boundedLimit = Number.isInteger(limit) && limit > 0 && limit <= 500 ? limit : 500;
-    const result = this.database.connection.prepare(`
-      DELETE FROM audit_events WHERE id IN (
-        SELECT candidate.id FROM audit_events candidate WHERE ${EXPIRED_ROUTINE_READ_CONDITION}
-        ORDER BY candidate.timestamp ASC LIMIT ?
-      )
-    `).run(cutoffIso, cutoffIso, boundedLimit);
+    const result = this.database.connection.prepare(completedOnly
+      ? ROUTINE_READ_RECOVERY_DELETE_COMPLETED_SQL : ROUTINE_READ_RECOVERY_DELETE_SQL)
+      .run(cutoffIso, cutoffIso, boundedLimit);
     return Number(result.changes);
   }
 

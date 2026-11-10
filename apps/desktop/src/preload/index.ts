@@ -1251,6 +1251,7 @@ function storagePolicy(value: unknown): StoragePolicy {
     compressionEnabledOnNextStart: booleanField(value, 'compressionEnabledOnNextStart'),
     automaticCheckpointRetention: booleanField(value, 'automaticCheckpointRetention'),
     auditPruneWithoutBackup: booleanField(value, 'auditPruneWithoutBackup'),
+    automaticHardLimitRecovery: booleanField(value, 'automaticHardLimitRecovery'),
     routineAuditRetentionDays: days,
   };
 }
@@ -1271,6 +1272,19 @@ function storageOverview(value: unknown): StorageOverview {
   }
   if (value.hasCompressedV2 !== undefined && typeof value.hasCompressedV2 !== 'boolean') throw new Error('Invalid compressed checkpoint status');
   if (value.checkpointMetadataIncomplete !== undefined && typeof value.checkpointMetadataIncomplete !== 'boolean') throw new Error('Invalid checkpoint metadata status');
+  let checkpointStorage: StorageOverview['checkpointStorage'];
+  if (value.checkpointStorage !== undefined) {
+    if (!isRecord(value.checkpointStorage)) throw new Error('Invalid checkpoint storage metadata');
+    const indexed = integerField(value.checkpointStorage, 'indexed');
+    const total = integerField(value.checkpointStorage, 'total');
+    if (indexed < 0 || total < 0 || indexed > total) throw new Error('Invalid checkpoint metadata counts');
+    const payloadBytes = value.checkpointStorage.payloadBytes === undefined
+      ? undefined : integerField(value.checkpointStorage, 'payloadBytes');
+    if (payloadBytes !== undefined && (payloadBytes < 0 || indexed !== total)) {
+      throw new Error('Invalid checkpoint payload estimate');
+    }
+    checkpointStorage = { indexed, total, ...(payloadBytes === undefined ? {} : { payloadBytes }) };
+  }
   let automaticBackupBudget: StorageOverview['automaticBackupBudget'];
   if (value.automaticBackupBudget !== undefined) {
     const budget = value.automaticBackupBudget;
@@ -1283,6 +1297,27 @@ function storageOverview(value: unknown): StorageOverview {
   }
   if (value.automaticBackupBudgetUnknown !== undefined && typeof value.automaticBackupBudgetUnknown !== 'boolean')
     throw new Error('Invalid automatic backup budget verification status');
+  let hardLimitRecovery: StorageOverview['hardLimitRecovery'];
+  if (value.hardLimitRecovery !== undefined) {
+    const raw = value.hardLimitRecovery;
+    if (!isRecord(raw) || (raw.state !== 'idle' && raw.state !== 'running'
+      && raw.state !== 'reclaimed' && raw.state !== 'waiting'
+      && raw.state !== 'blocked' && raw.state !== 'failed')) {
+      throw new Error('Invalid hard limit recovery status');
+    }
+    const deletedRoutineReads = integerField(raw, 'deletedRoutineReads');
+    const deletedCheckpoints = raw.deletedCheckpoints === undefined ? 0 : integerField(raw, 'deletedCheckpoints');
+    const reclaimedBytes = integerField(raw, 'reclaimedBytes');
+    if (deletedRoutineReads < 0 || deletedCheckpoints < 0 || reclaimedBytes < 0
+      || (raw.lastRunAt !== undefined && (typeof raw.lastRunAt !== 'string'
+        || !Number.isFinite(Date.parse(raw.lastRunAt))))) {
+      throw new Error('Invalid hard limit recovery counters');
+    }
+    hardLimitRecovery = {
+      state: raw.state, deletedRoutineReads, deletedCheckpoints, reclaimedBytes,
+      ...(raw.lastRunAt === undefined ? {} : { lastRunAt: raw.lastRunAt as string }),
+    };
+  }
   let globalQuota: StorageOverview['globalQuota'];
   if (value.globalQuota !== undefined) {
     if (!isRecord(value.globalQuota) || value.globalQuota.enforcement !== 'partial')
@@ -1309,6 +1344,8 @@ function storageOverview(value: unknown): StorageOverview {
     ...(value.automaticBackupBudgetUnknown === undefined ? {} : { automaticBackupBudgetUnknown: value.automaticBackupBudgetUnknown as boolean }),
     ...(value.hasCompressedV2 === undefined ? {} : { hasCompressedV2: value.hasCompressedV2 as boolean }),
     ...(value.checkpointMetadataIncomplete === undefined ? {} : { checkpointMetadataIncomplete: value.checkpointMetadataIncomplete as boolean }),
+    ...(checkpointStorage === undefined ? {} : { checkpointStorage }),
+    ...(hardLimitRecovery === undefined ? {} : { hardLimitRecovery }),
     ...(globalQuota === undefined ? {} : { globalQuota }),
     compactRecommended: booleanField(value, 'compactRecommended'), compactionRequiresOffline: true,
     ...(usageCategories === undefined ? {} : { usageCategories }) };
@@ -1365,7 +1402,7 @@ function setStoragePolicy(request: SetStoragePolicyRequest): Promise<SetStorageP
   if (request.checkpointCreationMode !== undefined && request.checkpointCreationMode !== 'always' && request.checkpointCreationMode !== 'git-aware') {
     return Promise.reject(new Error('Invalid checkpoint mode'));
   }
-  for (const key of ['compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup'] as const) {
+  for (const key of ['compressionEnabledOnNextStart', 'automaticCheckpointRetention', 'auditPruneWithoutBackup', 'automaticHardLimitRecovery'] as const) {
     if (request[key] !== undefined && typeof request[key] !== 'boolean') return Promise.reject(new Error('Invalid storage policy'));
   }
   if (request.globalQuotaMiB !== undefined && (!Number.isSafeInteger(request.globalQuotaMiB)

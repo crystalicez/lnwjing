@@ -64,13 +64,13 @@ describe('SqliteAuditRepository', () => {
       await add('other-scope-start', 'reused', 'started');
       await add('other-scope-goal', 'reused', 'completed', { sessionId: 'session-b', goalId: 'different-goal' });
 
-      expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z')).toBe(3);
+      expect(await repository.purgeExpiredRoutineReads('2026-09-01T00:00:00.000Z')).toBe(2);
       const ids = (await repository.list(50)).map((event) => event.id);
       expect(ids).toEqual(expect.arrayContaining([
         'goal-start', 'goal-done', 'denied-start', 'denied-done',
-        'recent-start', 'recent-done', 'other-scope-goal',
+        'recent-start', 'recent-done', 'other-scope-goal', 'other-scope-start',
       ]));
-      expect(ids).not.toEqual(expect.arrayContaining(['routine-start', 'routine-done', 'other-scope-start']));
+      expect(ids).not.toEqual(expect.arrayContaining(['routine-start', 'routine-done']));
       const page = await repository.listCallHistory({ workspaceId: 'ws', goalId: 'goal', limit: 10 });
       expect(page.items).toEqual(expect.arrayContaining([
         expect.objectContaining({ callId: 'goal-call', startedAt: old }),
@@ -78,6 +78,27 @@ describe('SqliteAuditRepository', () => {
     } finally {
       database.close();
     }
+  });
+
+  it('also ages out exact read-only context tools without treating mixed-action tool audit as disposable', async () => {
+    const db = new SqliteDatabase(':memory:');
+    const repo = new SqliteAuditRepository(db);
+    const actions = [
+      'read_many_files', 'search_all', 'git_diff', 'workspace_tree',
+      'workspace_context', 'workspace_context_continue',
+      'workspace_full_scan', 'workspace_full_scan_continue',
+      'workspace_snapshot', 'project_snapshot', 'read_file_page_continue',
+    ];
+    try {
+      for (const action of [...actions, 'tool_batch', 'git', 'computer_use']) {
+        await repo.insert({ id: action, action: `mcp_tool:${action}`,
+          timestamp: '2025-01-01T00:00:00.000Z', actorId: 'test',
+          actorName: 'test', resultCode: 'SUCCESS', durationMs: 0, metadata: {} });
+      }
+      expect(await repo.purgeExpiredRoutineReads('2026-01-01T00:00:00.000Z')).toBe(actions.length);
+      expect((await repo.list(30)).map((row) => row.id).sort())
+        .toEqual(['computer_use', 'git', 'tool_batch']);
+    } finally { db.close(); }
   });
 
   it('probes exactly the purgeable rows without changing audit evidence', async () => {
@@ -101,12 +122,15 @@ describe('SqliteAuditRepository', () => {
       expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(false);
       expect((await repository.list(100))).toHaveLength(7);
       expect(await repository.purgeExpiredRoutineReads(cutoff)).toBe(0);
+      await add('orphaned-start', 'mcp_tool:read_file', { callId: 'never-completed' }, 'STARTED');
+      expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(false);
       await add('routine', 'mcp_tool:search_files');
       expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(true);
-      expect((await repository.list(100))).toHaveLength(8);
+      expect((await repository.list(100))).toHaveLength(9);
       expect(await repository.purgeExpiredRoutineReads(cutoff)).toBe(1);
       expect(repository.hasExpiredRoutineReadCandidates(cutoff)).toBe(false);
       expect((await repository.list(100)).map((event) => event.id)).not.toContain('routine');
+      expect((await repository.list(100)).map((event) => event.id)).toContain('orphaned-start');
       expect(() => repository.hasExpiredRoutineReadCandidates('invalid')).toThrow('Invalid audit retention cutoff');
     } finally {
       database.close();

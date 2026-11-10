@@ -144,7 +144,7 @@ export interface ToolRegistryOptions {
   /** Optional transport/runtime guard checked before every tool dispatch. Return a message to fail closed. */
   readonly invocationGuardProvider?: () => string | null | undefined;
   /** Host storage-pressure gate: evaluated only after permission classification and before any mutation. */
-  readonly mutationAdmissionGuardProvider?: () => string | null | undefined;
+  readonly mutationAdmissionGuardProvider?: () => string | null | undefined | Promise<string | null | undefined>;
   /** Legacy compatibility. New callers should supply destructivePolicyProvider. */
   readonly allowAiDeleteProvider?: () => boolean;
   /** Fine-grained local destructive auto-approval policy. */
@@ -243,7 +243,7 @@ export class ToolRegistry {
   private readonly profileProvider: () => PermissionProfile;
   private readonly authorizationModeProvider: () => AuthorizationMode;
   private readonly invocationGuardProvider: (() => string | null | undefined) | undefined;
-  private readonly mutationAdmissionGuardProvider: (() => string | null | undefined) | undefined;
+  private readonly mutationAdmissionGuardProvider: (() => string | null | undefined | Promise<string | null | undefined>) | undefined;
   private readonly destructivePolicyProvider: () => DestructiveAutoApprovalPolicy;
   private readonly ponytailModeProvider: () => PonytailMode;
   private readonly ponytailActivation: PonytailActivationLedger;
@@ -475,6 +475,23 @@ export class ToolRegistry {
   ): Promise<McpToolResponse> {
     const { invocationGuardMessage, profile, fullBypass } = this.currentPolicy();
     const authorizationMode: AuthorizationMode = fullBypass ? 'full_bypass' : 'standard';
+    // An audit STARTED insert itself can fail with SQLITE_FULL. For an actual
+    // mutation, give the automatic recovery worker its chance *before* that
+    // insert, while still recording every invocation/denial as normal.
+    // Carry the preflight outcome into the later policy gate so each call
+    // invokes the guard only once, not twice.
+    let earlyStorageGuardChecked = false;
+    let earlyStorageGuardMessage: string | null | undefined;
+    const incomingTool = this.toolsByName.get(name);
+    // Use only the registered static permission here: inspecting unparsed
+    // caller objects before audit may execute a hostile accessor. Actual
+    // read/mutation classification still occurs after schema validation.
+    if (incomingTool !== undefined && this.mutationAdmissionGuardProvider !== undefined
+      && incomingTool.permission !== 'READ') {
+      earlyStorageGuardChecked = true;
+      try { earlyStorageGuardMessage = await this.mutationAdmissionGuardProvider(); }
+      catch { earlyStorageGuardMessage = 'Storage quota could not be verified; mutation is paused to preserve recovery evidence'; }
+    }
     const activityWorkspaceId = await this.resolveActivityWorkspaceId(name, input);
     const workspaceActivityInput = withActivityWorkspaceId(
       stripEngineeringTaskEnvelope(stripGoalLeaseEnvelope(stripWorkspaceWriterLeaseEnvelope(input))),
@@ -592,21 +609,26 @@ export class ToolRegistry {
         await this.activity.end(callId, code, Date.now() - started, message);
         return response;
       }
-      if (mutationDecision.kind !== 'read' && !this.activity.isAuditPersistenceHealthy()) {
-        const message = 'Durable SQLite audit recording failed; mutations are paused until audit evidence can be written again';
-        const response = mapError(appError('CONFLICT', message, true));
-        await this.activity.end(callId, 'CONFLICT', Date.now() - started, message);
-        return response;
-      }
+      // Recover SQLite audit headroom before consulting the durable-audit
+      // health latch. Otherwise a prior SQLITE_FULL insert prevents the
+      // recovery path from ever running on subsequent mutation attempts.
       if (mutationDecision.kind !== 'read' && this.mutationAdmissionGuardProvider !== undefined) {
-        let storageGuardMessage: string | null | undefined;
-        try { storageGuardMessage = this.mutationAdmissionGuardProvider(); }
-        catch { storageGuardMessage = 'Storage quota could not be verified; mutation is paused to preserve recovery evidence'; }
+        let storageGuardMessage: string | null | undefined = earlyStorageGuardMessage;
+        if (!earlyStorageGuardChecked) {
+          try { storageGuardMessage = await this.mutationAdmissionGuardProvider(); }
+          catch { storageGuardMessage = 'Storage quota could not be verified; mutation is paused to preserve recovery evidence'; }
+        }
         if (typeof storageGuardMessage === 'string' && storageGuardMessage.length > 0) {
           const response = mapError(appError('CONFLICT', storageGuardMessage, true));
           await this.activity.end(callId, 'CONFLICT', Date.now() - started, storageGuardMessage);
           return response;
         }
+      }
+      if (mutationDecision.kind !== 'read' && !this.activity.isAuditPersistenceHealthy()) {
+        const message = 'Durable SQLite audit recording failed; mutations are paused until audit evidence can be written again';
+        const response = mapError(appError('CONFLICT', message, true));
+        await this.activity.end(callId, 'CONFLICT', Date.now() - started, message);
+        return response;
       }
       if (tool.name === 'finish_goal' && isRecord(activeRoutedInput) && activeRoutedInput.status === 'completed') {
         const finishGoalId = readTrimmedString(activeRoutedInput.goalId);

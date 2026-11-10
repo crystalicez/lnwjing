@@ -40,10 +40,29 @@ export function applySqliteHardLimit(connection: DatabaseSync, limitMiB: number)
 }
 
 export function sqliteMutationAdmissionPressure(allocatedBytes: number, freeBytes: number, walBytes: number, limitBytes: number): boolean {
-  if (![allocatedBytes, freeBytes, walBytes, limitBytes].every(Number.isFinite)
-    || freeBytes < 0 || walBytes < 0 || limitBytes <= 0) return true;
+  if (![allocatedBytes, freeBytes, walBytes, limitBytes].every(Number.isSafeInteger)
+    || allocatedBytes < 0 || freeBytes < 0 || freeBytes > allocatedBytes
+    || walBytes < 0 || limitBytes <= 0) return true;
+  // The configured hard limit is for MAIN database pages, not the WAL.
+  // WAL bytes are physically separate and cannot consume SQLite's max_page_count.
+  // Counting them as database pages falsely freezes writes when readers pin WAL.
   const reserved = Math.max(16 * 1024 * 1024, Math.floor(limitBytes * 0.05));
-  return limitBytes - (allocatedBytes - freeBytes + walBytes) <= reserved;
+  return limitBytes - (allocatedBytes - freeBytes) <= reserved;
+}
+
+/**
+ * The main-page limit does not cap WAL disk usage. Check physical free space
+ * only for an unusually large WAL, avoiding per-MCP-call filesystem polling
+ * while SQLite is working normally. This is a low-disk safety guard, NOT a
+ * promise that WAL stays within the main database quota.
+ */
+export function sqliteWalLowDiskPressure(walBytes: number, limitBytes: number, availableBytes: bigint): boolean {
+  if (!Number.isSafeInteger(walBytes) || walBytes < 0 || !Number.isSafeInteger(limitBytes) || limitBytes <= 0
+    || availableBytes < 0n) return true;
+  const unusuallyLargeWal = Math.max(128 * 1024 ** 2, Math.min(512 * 1024 ** 2, Math.floor(limitBytes / 8)));
+  if (walBytes < unusuallyLargeWal) return false;
+  const minimumFree = Math.max(512 * 1024 ** 2, Math.min(2 * 1024 ** 3, Math.floor(limitBytes / 4)));
+  return availableBytes < BigInt(minimumFree);
 }
 
 export function sqliteLimitPressure(allocatedBytes: number, freeBytes: number, limitBytes: number): boolean {

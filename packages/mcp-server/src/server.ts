@@ -50,7 +50,7 @@ export interface McpServerOptions {
   readonly authorizationModeProvider?: () => AuthorizationMode;
   /** Optional runtime guard checked before every tool call. Return a message to fail closed. */
   readonly invocationGuardProvider?: () => string | null | undefined;
-  readonly mutationAdmissionGuardProvider?: () => string | null | undefined;
+  readonly mutationAdmissionGuardProvider?: () => string | null | undefined | Promise<string | null | undefined>;
   readonly allowAiDeleteProvider?: () => boolean;
   readonly destructivePolicyProvider?: () => DestructiveAutoApprovalPolicy;
   readonly activeWorkspaceScopeProvider?: () => WorkspaceScope | null | Promise<WorkspaceScope | null>;

@@ -390,7 +390,7 @@ const defaultDesktopServices: DesktopIpcServices = {
     profile: request.profile, strictRoots: request.strictRoots, allowedRoots: request.allowedRoots, restartRequired: false,
   }),
   createBackup: async (): Promise<BackupSummary> => ({ id: 'unavailable', createdAt: new Date(0).toISOString(), reason: 'manual', sizeBytes: 0 }),
-  getStorageOverview: async (): Promise<StorageOverview> => ({ policy: { checkpointCreationMode: 'git-aware', sqliteHardLimitMiB: 4096, compressionEnabledOnNextStart: false, automaticCheckpointRetention: false, auditPruneWithoutBackup: false, routineAuditRetentionDays: 90 }, sqliteAllocatedBytes: 0, sqliteFreeBytes: 0, sqliteWalBytes: 0, sqliteEffectiveHardLimitBytes: 4096 * 1024 * 1024, sqliteOverBudget: false, sqlitePressureHigh: false, compactRecommended: false, compactionRequiresOffline: true }),
+  getStorageOverview: async (): Promise<StorageOverview> => ({ policy: { checkpointCreationMode: 'git-aware', sqliteHardLimitMiB: 4096, compressionEnabledOnNextStart: false, automaticCheckpointRetention: false, auditPruneWithoutBackup: false, automaticHardLimitRecovery: true, routineAuditRetentionDays: 90 }, sqliteAllocatedBytes: 0, sqliteFreeBytes: 0, sqliteWalBytes: 0, sqliteEffectiveHardLimitBytes: 4096 * 1024 * 1024, sqliteOverBudget: false, sqlitePressureHigh: false, compactRecommended: false, compactionRequiresOffline: true }),
   getProfileStorageInventory: async (): Promise<ProfileStorageInventory> => { throw new Error('Storage inventory backend unavailable'); },
   setStoragePolicy: async (): Promise<SetStoragePolicyResult> => { throw new Error('Storage backend is unavailable'); },
   previewCheckpointCleanup: async (): Promise<CheckpointCleanupPreview> => { throw new Error('Storage backend is unavailable'); },

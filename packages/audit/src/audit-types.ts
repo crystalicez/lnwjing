@@ -128,7 +128,7 @@ export interface AuditEventRepository {
   listActivitySessions(actionPrefix?: string, limit?: number, offset?: number): Promise<ActivitySessionSummary[]>;
   listActivityScoped(query: AuditEventQuery, limit?: number): Promise<ActivityAuditEvent[]>;
   /** Resolves at most one started-event detail by exact event ID or call ID. */
-  resolveActivityTargetDetail(idOrCallId: string): Promise<ActivityTargetDetail | null>;
+  resolveActivityTargetDetail(idOrCallId: string, workspaceId?: string | null): Promise<ActivityTargetDetail | null>;
 }
 
 export interface CodexRunAuditInput {

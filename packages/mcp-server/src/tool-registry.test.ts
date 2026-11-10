@@ -297,6 +297,97 @@ describe('MCP tool registry', () => {
     expect(reads).toBe(1);
   });
 
+  it('awaits async storage recovery before deciding whether to execute a mutation', async () => {
+    let releaseRecovery!: () => void;
+    const recoveryStarted = new Promise<void>((resolve) => { releaseRecovery = resolve; });
+    let edits = 0;
+    let checks = 0;
+    const registry = new ToolRegistry({ file: {
+      async editFile(): Promise<ReturnType<typeof ok>> {
+        edits += 1;
+        return ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 });
+      },
+    } as never }, actor, {
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+      mutationAdmissionGuardProvider: async (): Promise<string | null> => {
+        checks += 1;
+        await recoveryStarted;
+        return null;
+      },
+    });
+    const pending = registry.invoke('edit_file', { workspaceId: 'workspace-a', path: 'file.ts', oldText: 'a', newText: 'b' });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(edits).toBe(0);
+    releaseRecovery();
+    expect((await pending).isError).not.toBe(true);
+    expect(edits).toBe(1);
+    expect(checks).toBe(1);
+  });
+
+  it('fails closed when the asynchronous admission guard rejects', async () => {
+    let edits = 0;
+    const registry = new ToolRegistry({ file: {
+      async editFile(): Promise<ReturnType<typeof ok>> {
+        edits += 1;
+        return ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 });
+      },
+    } as never }, actor, {
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+      mutationAdmissionGuardProvider: async (): Promise<string | null> => {
+        throw new Error('worker failed');
+      },
+    });
+    const response = await registry.invoke('edit_file', { workspaceId: 'workspace-a', path: 'file.ts', oldText: 'a', newText: 'b' });
+    expect(response).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    expect(edits).toBe(0);
+  });
+
+  it('attempts storage cleanup even if earlier failed audit persistence already latched unhealthy', async () => {
+    const order: string[] = [];
+    let writable = false;
+    let checks = 0;
+    let edits = 0;
+    const tracker = new ActivityTracker(undefined, (): void => {}, {
+      async record(): Promise<void> {
+        order.push('audit');
+        if (!writable) throw new Error('SQLITE_FULL');
+      },
+    });
+    const registry = new ToolRegistry({ file: {
+      async editFile(): Promise<ReturnType<typeof ok>> {
+        edits += 1;
+        return ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 });
+      },
+      async readFile(): Promise<ReturnType<typeof ok>> {
+        return ok({ path: 'file.ts', content: 'safe', truncated: false });
+      },
+    } as never }, actor, {
+      activityTracker: tracker,
+      authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+      mutationAdmissionGuardProvider: async (): Promise<null> => {
+        order.push('recovery');
+        checks += 1;
+        writable = true;
+        return null;
+      },
+    });
+    const input = { workspaceId: 'workspace-a', path: 'file.ts', oldText: 'a', newText: 'b' };
+    await registry.invoke('read_file', { workspaceId: 'workspace-a', path: 'file.ts' });
+    expect(tracker.isAuditPersistenceHealthy()).toBe(false);
+    order.length = 0;
+    const first = await registry.invoke('edit_file', input);
+    expect(order[0]).toBe('recovery');
+    expect(order).toContain('audit');
+    // Recovery now runs *before* the audit STARTED insert. The very first
+    // retry must succeed, rather than requiring a sacrificial failed mutation.
+    expect(first.isError).not.toBe(true);
+    expect(checks).toBe(1);
+    expect(edits).toBe(1);
+    expect(tracker.isAuditPersistenceHealthy()).toBe(true);
+    expect((await registry.invoke('edit_file', input)).isError).not.toBe(true);
+    expect(edits).toBe(2);
+  });
+
   it('blocks subsequent mutations after SQLITE_FULL audit failure until durable audit recovers', async () => {
     let auditWritable = false;
     let edits = 0;

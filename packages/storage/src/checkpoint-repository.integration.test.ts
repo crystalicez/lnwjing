@@ -517,6 +517,34 @@ describe('SqliteCheckpointRepository', () => {
     } finally { database.close(); }
   });
 
+  it('preserves the real SQLite error after an auto-rolled-back metadata batch', async () => {
+    const root = await temporaryRoot();
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repository = new SqliteCheckpointRepository(database);
+      await repository.insert({
+        ...fixtureCheckpoint('legacy-capacity-fixture'),
+        id: 'legacy-capacity', createdAt: '2026-01-01T00:00:00.000Z',
+      });
+      database.connection.exec('DELETE FROM checkpoint_storage_meta');
+      expect(repository.storageMetadataStatus().complete).toBe(false);
+      // RAISE(ROLLBACK) emulates SQLite automatically ending a transaction
+      // under a storage/write fault; an unconditional ROLLBACK masks the cause.
+      database.connection.exec(`
+        CREATE TRIGGER simulate_legacy_capacity_failure
+        BEFORE INSERT ON checkpoint_storage_meta BEGIN
+          SELECT RAISE(ROLLBACK, 'legacy metadata write failed');
+        END;
+      `);
+      await expect(repository.prepareStorageMetadata()).rejects.toThrow(/legacy metadata write failed/);
+      expect(database.connection.isTransaction).toBe(false);
+      expect((await repository.get('legacy-capacity'))?.id).toBe('legacy-capacity');
+      database.connection.exec('DROP TRIGGER simulate_legacy_capacity_failure');
+      await repository.prepareStorageMetadata();
+      expect(repository.storageMetadataStatus()).toMatchObject({ complete: true, indexed: 1, total: 1 });
+    } finally { database.close(); }
+  });
+
   it('backfills legacy metadata only on explicit request using cooperative batches', async () => {
     const root = await temporaryRoot();
     const db = new SqliteDatabase(path.join(root, 'state.db'));

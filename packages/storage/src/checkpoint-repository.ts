@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { pruneExpiredFileCheckpointsOffMain } from './checkpoint-hard-limit-recovery.js';
+import { inspectSqliteHardLimit, parseSqliteHardLimitMiB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Checkpoint, CheckpointFile, CheckpointRepository } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
@@ -9,6 +11,16 @@ interface CheckpointRow {
   readonly workspace_id: string;
   readonly created_at: string;
   readonly files_json: string;
+}
+
+/**
+ * SQLITE_FULL, SQLITE_IOERR and some constraint failures can auto-abort
+ * a SQLite transaction. A second ROLLBACK must never mask the first failure.
+ */
+function rollbackCheckpointTransaction(connection: DatabaseSync): void {
+  if (!connection.isTransaction) return;
+  try { connection.exec('ROLLBACK;'); }
+  catch { /* Leave the original SQLite error intact. */ }
 }
 
 export class SqliteCheckpointRepository implements CheckpointRepository {
@@ -106,7 +118,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
         }
         connection.exec('COMMIT;');
       } catch (error) {
-        connection.exec('ROLLBACK;');
+        rollbackCheckpointTransaction(connection);
         throw error;
       }
       this.cachedByteCount = null;
@@ -126,10 +138,79 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
   }
 
   public async insert(checkpoint: Checkpoint): Promise<void> {
-    this.database.connection.prepare(
-      'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
-    ).run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, this.encodeFiles(checkpoint.files));
-    this.cachedByteCount = null;
+    // A large encrypted snapshot may exceed the reserve MCP checked before
+    // reading the old file. Recycle expired file Undo before inserting it.
+    const payload = this.encodeFiles(checkpoint.files);
+    const write = (): void => {
+      this.database.connection.prepare(
+        'INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?, ?, ?, ?)',
+      ).run(checkpoint.id, checkpoint.workspaceId, checkpoint.createdAt, payload);
+      this.cachedByteCount = null;
+    };
+    if (!this.database.connection.isTransaction) await this.reclaimBeforeCheckpointInsert(payload);
+    let retries = 0;
+    while (true) {
+      try {
+        write();
+        return;
+      } catch (error) {
+        if (!(error instanceof Error) || !/SQLITE_FULL|database or disk is full/i.test(error.message)
+          || this.database.connection.isTransaction || retries >= 3) throw error;
+        // A concurrent writer may exhaust SQLite after initial admission.
+        // Reclaim more old Undo, then retry ONLY this atomic INSERT.
+        const reclaimed = await this.reclaimBeforeCheckpointInsert(payload, true);
+        if (!reclaimed) throw error;
+        retries += 1;
+      }
+    }
+  }
+
+  /** Worker-only, bounded expiry of old file Undo during a large INSERT. */
+  private async reclaimBeforeCheckpointInsert(payload: string, force = false): Promise<boolean> {
+    const filename = this.database.databaseFilePath;
+    if (filename === ':memory:' || this.database.connection.isTransaction) return false;
+    const connection = this.database.connection;
+    const recoverySetting = connection.prepare(
+      "SELECT value FROM settings WHERE key = 'sqlite_auto_safe_trim_on_limit_v1'",
+    ).get() as { value?: string } | undefined;
+    if (recoverySetting?.value === 'false') return false;
+    const limitSetting = connection.prepare('SELECT value FROM settings WHERE key = ?')
+      .get(SQLITE_HARD_LIMIT_SETTING_KEY) as { value?: string } | undefined;
+    const limitMiB = parseSqliteHardLimitMiB(limitSetting?.value ?? null);
+    const footprint = (): ReturnType<typeof inspectSqliteHardLimit> =>
+      inspectSqliteHardLimit(this.database.connection, limitMiB);
+    const initial = footprint();
+    const cap = Math.min(initial.requestedBytes, initial.effectiveBytes);
+    const reserve = Math.min(Math.floor(cap / 4), Math.max(16 * 1024 ** 2, Math.floor(cap * 0.05)));
+    const overhead = Math.min(1024 ** 2, Math.floor(cap * 0.02));
+    const requiredFree = Buffer.byteLength(payload, 'utf8') + reserve + overhead;
+    // One checkpoint larger than the empty-db budget cannot fit; do not
+    // destroy other history in a futile cleanup attempt.
+    if (!Number.isSafeInteger(requiredFree)) return false;
+    if (requiredFree >= cap) throw new Error('Checkpoint payload exceeds SQLite Hard Limit even with all expired Undo history removed');
+    const hasRoom = (): boolean => {
+      const state = footprint();
+      return cap - (state.allocatedBytes - state.freeBytes) >= requiredFree;
+    };
+    if (!force && hasRoom()) return false;
+    const now = Date.now();
+    const cutoffs = [7 * 86_400_000, 86_400_000, 3_600_000, 300_000]
+      .map((ageMs) => new Date(now - ageMs).toISOString());
+    let deleted = 0;
+    let batches = 0;
+    let mustPruneOnce = force;
+    for (const cutoff of cutoffs) {
+      while (batches < 64 && Date.now() - now < 20_000 && (mustPruneOnce || !hasRoom())) {
+        const count = await pruneExpiredFileCheckpointsOffMain(filename, cutoff);
+        batches += 1;
+        deleted += count;
+        if (count === 0) break;
+        mustPruneOnce = false;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+      if (!mustPruneOnce && hasRoom()) break;
+    }
+    return deleted > 0;
   }
 
   public async get(id: string): Promise<Checkpoint | null> {
@@ -177,7 +258,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       this.cachedByteCount = null;
       return Number(result.changes);
     } catch (error) {
-      connection.exec('ROLLBACK;');
+      rollbackCheckpointTransaction(connection);
       throw error;
     }
   }
@@ -225,7 +306,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       this.cachedByteCount = null;
       return deleted;
     } catch (error) {
-      connection.exec('ROLLBACK;');
+      rollbackCheckpointTransaction(connection);
       throw error;
     }
   }
@@ -333,7 +414,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
       this.cachedByteCount = null;
       return { deleted, plannedBytes: plan.candidateBytes };
     } catch (error) {
-      connection.exec('ROLLBACK;');
+      rollbackCheckpointTransaction(connection);
       throw error;
     }
   }
@@ -392,7 +473,7 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
         }
         connection.exec('COMMIT;');
       } catch (error) {
-        connection.exec('ROLLBACK;');
+        rollbackCheckpointTransaction(connection);
         throw error;
       }
       if (rows.length < 8) {

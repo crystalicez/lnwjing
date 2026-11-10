@@ -1,4 +1,4 @@
-/** Storage maintenance is explicit-only. All sizes are SQLite byte counts. */
+/** Storage maintenance and recovery policies for the current profile. */
 export interface StoragePolicy {
   readonly checkpointCreationMode: 'always' | 'git-aware';
   /** Maximum allocated main-database size, excluding WAL and backups. */
@@ -6,6 +6,8 @@ export interface StoragePolicy {
   readonly compressionEnabledOnNextStart: boolean;
   readonly automaticCheckpointRetention: boolean;
   readonly auditPruneWithoutBackup: boolean;
+  /** Permit emergency expiration of eligible routine reads and old file Undo. */
+  readonly automaticHardLimitRecovery: boolean;
   readonly routineAuditRetentionDays: number;
 }
 /** Read-only, on-demand logical-file inventory of the owned AppData profile.
@@ -42,6 +44,15 @@ export interface StorageOverview {
   readonly sqliteEffectiveHardLimitBytes: number;
   readonly sqliteOverBudget: boolean;
   readonly sqlitePressureHigh: boolean;
+  readonly hardLimitRecovery?: {
+    readonly state: 'idle' | 'running' | 'reclaimed' | 'waiting' | 'blocked' | 'failed';
+    readonly lastRunAt?: string;
+    readonly deletedRoutineReads: number;
+    /** Expired file checkpoints; the original one-click Undo is no longer available. */
+    readonly deletedCheckpoints?: number;
+    /** Reusable SQLite space; not physical disk bytes returned. */
+    readonly reclaimedBytes: number;
+  };
   /** Bounded automatic daily backup budget; manual recovery snapshots are explicit. */
   readonly automaticBackupBudget?: {
     readonly budgetBytes: number;
@@ -50,6 +61,7 @@ export interface StorageOverview {
     readonly blocked: boolean;
   };
   readonly automaticBackupBudgetUnknown?: boolean;
+  /** Opt-in, profile-only app-managed reservation coverage. NOT an OS hard cap. */
   readonly globalQuota?: {
     readonly limitBytes: number;
     readonly criticalReserveBytes: number;
@@ -64,6 +76,13 @@ export interface StorageOverview {
   readonly compactRecommended: boolean;
   readonly hasCompressedV2?: boolean;
   readonly checkpointMetadataIncomplete?: boolean;
+  /** Bounded metadata only: legacy checkpoints may be partially indexed. */
+  readonly checkpointStorage?: {
+    readonly indexed: number;
+    readonly total: number;
+    /** Sum of indexed checkpoint payloads, only authoritative when complete. */
+    readonly payloadBytes?: number;
+  };
   readonly compactionRequiresOffline: true;
   readonly usageCategories?: readonly { readonly category: string; readonly bytes: number; readonly inspectedEntries: number; readonly truncated: boolean }[];
 }
@@ -71,11 +90,12 @@ export interface SetStoragePolicyRequest {
   readonly userConfirmed: true;
   readonly checkpointCreationMode?: 'always' | 'git-aware';
   readonly sqliteHardLimitMiB?: number;
-  /** Zero disables opt-in profile reservations. */
+  /** Zero disables the opt-in profile quota; nonzero values are MiB. */
   readonly globalQuotaMiB?: number;
   readonly compressionEnabledOnNextStart?: boolean;
   readonly automaticCheckpointRetention?: boolean;
   readonly auditPruneWithoutBackup?: boolean;
+  readonly automaticHardLimitRecovery?: boolean;
   readonly routineAuditRetentionDays?: number;
 }
 export interface SetStoragePolicyResult {

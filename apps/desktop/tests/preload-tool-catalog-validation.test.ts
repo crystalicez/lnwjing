@@ -65,7 +65,7 @@ describe('preload Tool Catalog validation', () => {
     const overview = {
       policy: { checkpointCreationMode: 'git-aware', sqliteHardLimitMiB: 4096,
         compressionEnabledOnNextStart: false, automaticCheckpointRetention: false,
-        auditPruneWithoutBackup: false, routineAuditRetentionDays: 90 },
+        auditPruneWithoutBackup: false, automaticHardLimitRecovery: true, routineAuditRetentionDays: 90 },
       sqliteAllocatedBytes: 4096, sqliteFreeBytes: 0, sqliteWalBytes: 4096,
       sqliteEffectiveHardLimitBytes: 4096 * 1024 ** 2,
       sqliteOverBudget: false, sqlitePressureHigh: false,
@@ -77,6 +77,25 @@ describe('preload Tool Catalog validation', () => {
     await expect(electron.exposed!.getStorageOverview()).resolves.toMatchObject({
       automaticBackupBudget: { budgetBytes: 12 * 1024 ** 3, blocked: false },
     });
+    electron.invoke.mockResolvedValueOnce({ ...overview,
+      hardLimitRecovery: { state: 'reclaimed', deletedRoutineReads: 30, deletedCheckpoints: 12, reclaimedBytes: 4096 } });
+    await expect(electron.exposed!.getStorageOverview()).resolves.toMatchObject({
+      hardLimitRecovery: { state: 'reclaimed', deletedRoutineReads: 30, deletedCheckpoints: 12, reclaimedBytes: 4096 },
+    });
+    electron.invoke.mockResolvedValueOnce({ ...overview,
+      hardLimitRecovery: { state: 'running', deletedRoutineReads: -1, reclaimedBytes: 1 } });
+    await expect(electron.exposed!.getStorageOverview()).rejects.toThrow(/counters/);
+    electron.invoke.mockResolvedValueOnce({ ...overview,
+      hardLimitRecovery: { state: 'running', deletedRoutineReads: 1, deletedCheckpoints: -2, reclaimedBytes: 1 } });
+    await expect(electron.exposed!.getStorageOverview()).rejects.toThrow(/counters/);
+    electron.invoke.mockResolvedValueOnce({ ...overview,
+      checkpointStorage: { indexed: 2, total: 3 } });
+    await expect(electron.exposed!.getStorageOverview()).resolves.toMatchObject({
+      checkpointStorage: { indexed: 2, total: 3 },
+    });
+    electron.invoke.mockResolvedValueOnce({ ...overview,
+      checkpointStorage: { indexed: 2, total: 3, payloadBytes: 1234 } });
+    await expect(electron.exposed!.getStorageOverview()).rejects.toThrow(/payload estimate/);
     electron.invoke.mockResolvedValueOnce({ ...overview,
       automaticBackupBudget: { ...overview.automaticBackupBudget, usedBytes: -1 } });
     await expect(electron.exposed!.getStorageOverview()).rejects.toThrow(/budget sizes/);

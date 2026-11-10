@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { SqliteDatabase } from './database.js';
 import { applySqliteHardLimit, inspectSqliteHardLimit, sqliteLimitPressure,
-  DEFAULT_SQLITE_HARD_LIMIT_MIB, SQLITE_HARD_LIMIT_SETTING_KEY, sqliteMutationAdmissionPressure } from './sqlite-hard-limit.js';
+  DEFAULT_SQLITE_HARD_LIMIT_MIB, SQLITE_HARD_LIMIT_SETTING_KEY, sqliteMutationAdmissionPressure, sqliteWalLowDiskPressure } from './sqlite-hard-limit.js';
 
 describe('SQLite main database hard limit', () => {
   it('defaults to four GiB, persists custom limits and reapplies after reopening', async () => {
@@ -29,6 +29,12 @@ describe('SQLite main database hard limit', () => {
       expect(peer.mutationAdmissionMessage()).toBeNull();
       expect(inspectSqliteHardLimit(peer.connection, 1024).effectiveBytes).toBe(1024 ** 3);
       expect(inspectSqliteHardLimit(passive.connection, 1024).effectiveBytes).toBe(4 * 1024 ** 3);
+      // NTP correction or resume can move the clock backwards. This must
+      // force the passive connection to re-read settings, not defer it forever.
+      const clockBackwards = vi.spyOn(Date, 'now').mockReturnValue(Date.now() - 30_000);
+      try {
+        expect(inspectSqliteHardLimit(passive.connection, 1024).effectiveBytes).toBe(1024 ** 3);
+      } finally { clockBackwards.mockRestore(); }
       const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11_000);
       try {
         expect(inspectSqliteHardLimit(passive.connection, 1024).effectiveBytes).toBe(1024 ** 3);
@@ -63,13 +69,52 @@ describe('SQLite main database hard limit', () => {
     } finally { db.close(); }
   });
 
-  it('reserves audit headroom and accounts for WAL bytes when admitting mutations', () => {
+  it('reserves headroom for main database pages without treating WAL as main pages', () => {
     const cap = 512 * 1024 * 1024;
     expect(sqliteMutationAdmissionPressure(100 * 1024 ** 2, 0, 0, cap)).toBe(false);
     expect(sqliteMutationAdmissionPressure(470 * 1024 ** 2, 0, 0, cap)).toBe(false);
-    expect(sqliteMutationAdmissionPressure(470 * 1024 ** 2, 0, 20 * 1024 ** 2, cap)).toBe(true);
+    expect(sqliteMutationAdmissionPressure(470 * 1024 ** 2, 0, 20 * 1024 ** 2, cap)).toBe(false);
+    expect(sqliteMutationAdmissionPressure(490 * 1024 ** 2, 0, 0, cap)).toBe(true);
+    expect(sqliteMutationAdmissionPressure(100 * 1024 ** 2, 0, 450 * 1024 ** 2, cap)).toBe(false);
     expect(sqliteMutationAdmissionPressure(490 * 1024 ** 2, 80 * 1024 ** 2, 0, cap)).toBe(false);
     expect(sqliteMutationAdmissionPressure(100, 0, Number.NaN, cap)).toBe(true);
+    expect(sqliteMutationAdmissionPressure(100, 101, 0, cap)).toBe(true);
+    expect(sqliteMutationAdmissionPressure(-1, 0, 0, cap)).toBe(true);
+  });
+
+  it('guards only large WAL under low real disk space, independently of main-page pressure', () => {
+    const mib = 1024 ** 2;
+    const limit = 2048 * mib;
+    expect(sqliteWalLowDiskPressure(255 * mib, limit, 1n)).toBe(false);
+    expect(sqliteWalLowDiskPressure(256 * mib, limit, 2n * 1024n ** 3n)).toBe(false);
+    expect(sqliteWalLowDiskPressure(256 * mib, limit, 512n * BigInt(mib))).toBe(false);
+    expect(sqliteWalLowDiskPressure(256 * mib, limit, 511n * BigInt(mib))).toBe(true);
+    expect(sqliteWalLowDiskPressure(-1, limit, 1n)).toBe(true);
+    expect(sqliteWalLowDiskPressure(256 * mib, limit, -1n)).toBe(true);
+  });
+
+  it('pauses only on actual low disk with oversized WAL and recovers when space returns', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-wal-space-'));
+    const filename = path.join(root, 'main.sqlite');
+    const mib = 1024 ** 2;
+    let freeSpace = 2n * 1024n ** 3n;
+    const db = new SqliteDatabase(filename, {
+      walSizeProvider: (): number => 256 * mib,
+      diskAvailableBytesProvider: (): bigint => freeSpace,
+    });
+    try {
+      db.connection.prepare('INSERT INTO settings(key,value) VALUES(?,?)')
+        .run(SQLITE_HARD_LIMIT_SETTING_KEY, '2048');
+      db.syncHardLimit();
+      expect(db.mutationAdmissionMessage(true)).toBeNull();
+      freeSpace = 511n * BigInt(mib);
+      expect(db.mutationAdmissionMessage(true)).toMatch(/Large SQLite WAL and low free disk space/);
+      freeSpace = 1024n * BigInt(mib);
+      expect(db.mutationAdmissionMessage(true)).toBeNull();
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('considers reusable free pages before signaling storage pressure', () => {
