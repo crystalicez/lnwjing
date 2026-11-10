@@ -43,6 +43,9 @@ describe('Storage Management UI', () => {
     expect(markup).toContain('Verified native launcher cleanup');
     expect(markup).toContain('Profile storage inventory');
     expect(markup).toContain('Scan entire profile');
+    expect(markup).toContain('data-testid="preserve-settings-reset"');
+    expect(markup).toContain('Clear all data except Settings</button>');
+    expect(markup).toContain('Your actual project files are never deleted');
     expect(markup).not.toContain('VACUUM now');
   });
 
@@ -50,6 +53,7 @@ describe('Storage Management UI', () => {
     const markup = renderToStaticMarkup(createElement(StorageManagementPanel, { locale: 'th', autoBackupEnabled: false }));
     expect(markup).toContain('จัดการพื้นที่จัดเก็บ');
     expect(markup).toContain('ประเมินก่อนลบ');
+    expect(markup).toContain('ล้างข้อมูลทั้งหมด ยกเว้น Settings</button>');
     expect(markup).not.toContain('ยืนยันล้าง Checkpoints ที่ผ่านเงื่อนไข');
   });
 });

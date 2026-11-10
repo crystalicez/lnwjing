@@ -210,7 +210,12 @@ describe('production desktop IPC acceptance', () => {
 
     await expect(handler(trusted)).resolves.toEqual({ accepted: true });
     expect(onFactoryReset).toHaveBeenCalledOnce();
-    await expect(handler(untrusted)).rejects.toThrow('IPC sender rejected');
+    await expect(handler(trusted, { preserveSettings: true })).resolves.toEqual({ accepted: true });
+    expect(onFactoryReset).toHaveBeenLastCalledWith({ preserveSettings: true });
+    for (const bad of [null, { preserveSettings: false }, { preserveSettings: true, extra: 1 }, { mode: 'all' }]) {
+      await expect(handler(trusted, bad)).rejects.toThrow(/Invalid factory reset mode/);
+    }
+    await expect(handler(untrusted, { preserveSettings: true })).rejects.toThrow('IPC sender rejected');
   });
 
   it('opens only allowlisted setup pages for a trusted renderer', async () => {

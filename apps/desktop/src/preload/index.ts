@@ -2064,10 +2064,15 @@ const api: LnwjingApi = {
       if (!isRecord(value)) throw new Error('Invalid IPC response');
       return { accepted: booleanField(value, 'accepted') };
     }),
-  factoryReset: () => invoke(ipcChannels.factoryReset).then((value: unknown) => {
+  factoryReset: (request?: { readonly preserveSettings: true }) => {
+    if (request !== undefined && (!isRecord(request) || request.preserveSettings !== true
+      || Object.keys(request).length !== 1)) return Promise.reject(new Error('Invalid factory reset mode'));
+    return (request === undefined ? invoke(ipcChannels.factoryReset)
+      : invoke(ipcChannels.factoryReset, request)).then((value: unknown) => {
     if (!isRecord(value)) throw new Error('Invalid IPC response');
     return { accepted: booleanField(value, 'accepted') };
-  }),
+    });
+  },
   checkForUpdates: () => invoke(ipcChannels.checkForUpdates).then(updateStatus),
   installUpdate: () => invoke(ipcChannels.installUpdate).then((value: unknown) => {
     if (!isRecord(value)) throw new Error('Invalid IPC response');

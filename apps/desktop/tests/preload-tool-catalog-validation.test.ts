@@ -187,6 +187,11 @@ describe('preload Tool Catalog validation', () => {
     electron.invoke.mockResolvedValueOnce({ accepted: true });
     await expect(electron.exposed!.factoryReset()).resolves.toEqual({ accepted: true });
     expect(electron.invoke).toHaveBeenLastCalledWith(ipcChannels.factoryReset);
+    electron.invoke.mockResolvedValueOnce({ accepted: true });
+    await expect(electron.exposed!.factoryReset({ preserveSettings: true })).resolves.toEqual({ accepted: true });
+    expect(electron.invoke).toHaveBeenLastCalledWith(ipcChannels.factoryReset, { preserveSettings: true });
+    await expect(electron.exposed!.factoryReset({ preserveSettings: false } as never)).rejects.toThrow(/Invalid factory reset mode/);
+    await expect(electron.exposed!.factoryReset({ preserveSettings: true, extra: 1 } as never)).rejects.toThrow(/Invalid factory reset mode/);
   });
 
   it('allows an empty tunnel-client path to select the bundled client', async () => {

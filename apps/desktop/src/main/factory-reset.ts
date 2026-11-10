@@ -1,9 +1,13 @@
 import { lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { applySettingsPreservingResetSync } from './settings-preserving-reset.js';
 
-interface FactoryResetMarker {
-  readonly version: 1;
-}
+type FactoryResetMarker = { readonly version: 1 } | {
+  readonly version: 2;
+  readonly mode: 'preserve-settings';
+  readonly nonce: string;
+};
 
 export const FACTORY_RESET_APPLY_ARG = '--lnwjing-apply-factory-reset';
 const FACTORY_RESET_MARKER: FactoryResetMarker = { version: 1 };
@@ -22,17 +26,22 @@ export function clearFactoryResetBootstrapSync(dataPath: string): void {
   rmSync(factoryResetBootstrapUserDataPath(dataPath), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
-export function stageFactoryResetSync(dataPath: string): string {
+export function stageFactoryResetSync(dataPath: string, mode: 'all' | 'preserve-settings' = 'all'): string {
   const markerPath = factoryResetMarkerPath(dataPath);
   try {
     const metadata = lstatSync(markerPath);
     if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('Factory reset marker is not a trusted regular file');
-    parseFactoryResetMarker(readFileSync(markerPath, 'utf8'));
+    const existing = parseFactoryResetMarker(readFileSync(markerPath, 'utf8'));
+    if ((existing.version === 1 ? 'all' : existing.mode) !== mode) {
+      throw new Error('A different reset mode is already pending');
+    }
     return markerPath;
   } catch (error: unknown) {
     if (!isMissingFile(error)) throw error;
   }
-  writeFileSync(markerPath, `${JSON.stringify(FACTORY_RESET_MARKER)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  const marker: FactoryResetMarker = mode === 'preserve-settings'
+    ? { version: 2, mode, nonce: randomUUID() } : FACTORY_RESET_MARKER;
+  writeFileSync(markerPath, `${JSON.stringify(marker)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
   return markerPath;
 }
 
@@ -53,16 +62,20 @@ export function applyPendingFactoryResetSync(dataPath: string, tunnelProfileDire
   }
 
   const marker = parseFactoryResetMarker(raw);
-  if (marker.version !== FACTORY_RESET_MARKER.version) throw new Error('Unsupported factory reset marker version');
+  if (marker.version !== 1 && marker.version !== 2) throw new Error('Unsupported factory reset marker version');
 
   const safeDataPath = safeAbsoluteDirectory(dataPath, 'lnwjing data path');
   const safeTunnelProfileDirectory = safeAbsoluteDirectory(tunnelProfileDirectory, 'Tunnel profile directory');
 
-  rmSync(safeDataPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-  if (!isSamePath(safeTunnelProfileDirectory, safeDataPath)) {
-    clearLnwjingTunnelArtifactsSync(safeTunnelProfileDirectory);
+  if (marker.version === 2) {
+    applySettingsPreservingResetSync(safeDataPath, marker.nonce);
+  } else {
+    rmSync(safeDataPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    if (!isSamePath(safeTunnelProfileDirectory, safeDataPath)) {
+      clearLnwjingTunnelArtifactsSync(safeTunnelProfileDirectory);
+    }
+    mkdirSync(safeDataPath, { recursive: true });
   }
-  mkdirSync(safeDataPath, { recursive: true });
   rmSync(markerPath, { force: true });
   return true;
 }
@@ -143,10 +156,18 @@ function parseFactoryResetMarker(raw: string): FactoryResetMarker {
   } catch {
     throw new Error('Factory reset marker is invalid');
   }
-  if (typeof value !== 'object' || value === null || (value as { version?: unknown }).version !== 1) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Factory reset marker is invalid');
   }
-  return FACTORY_RESET_MARKER;
+  const record = value as Record<string, unknown>;
+  if (record.version === 1 && Object.keys(record).length === 1) return FACTORY_RESET_MARKER;
+  if (record.version === 2 && record.mode === 'preserve-settings'
+    && typeof record.nonce === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(record.nonce)
+    && Object.keys(record).length === 3) {
+    return { version: 2, mode: 'preserve-settings', nonce: record.nonce };
+  }
+  throw new Error('Factory reset marker is invalid');
 }
 
 function safeAbsoluteDirectory(value: string, label: string): string {

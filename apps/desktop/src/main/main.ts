@@ -265,7 +265,7 @@ export type MainWindowProvider = () => BrowserWindow | null;
 export interface DesktopIpcHooks {
   readonly onLocaleChanged?: (locale: UiLocale) => void;
   readonly onUserSettingsChanged?: (settings: UserSettings) => void;
-  readonly onFactoryReset?: () => Promise<{ readonly accepted: boolean }>;
+  readonly onFactoryReset?: (request?: { readonly preserveSettings: true }) => Promise<{ readonly accepted: boolean }>;
   readonly ipcDrainBarrier?: DesktopIpcDrainBarrier;
 }
 
@@ -1013,8 +1013,10 @@ export function registerIpcHandlers(
   });
   registerHandler(ipcChannels.factoryReset, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
-    assertNoPayload(payload);
-    return hooks.onFactoryReset === undefined ? { accepted: false } : hooks.onFactoryReset();
+    if (payload !== undefined && (!isRecord(payload) || payload.preserveSettings !== true
+      || Object.keys(payload).length !== 1)) throw new Error('Invalid factory reset mode');
+    if (hooks.onFactoryReset === undefined) return { accepted: false };
+    return payload === undefined ? hooks.onFactoryReset() : hooks.onFactoryReset({ preserveSettings: true });
   });
   registerHandler(ipcChannels.checkForUpdates, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
@@ -1838,15 +1840,15 @@ function refreshDesktopTrayMenu(): void {
   })));
 }
 
-async function requestFactoryReset(dataPath: string): Promise<{ readonly accepted: boolean }> {
+async function requestFactoryReset(dataPath: string, mode: 'all' | 'preserve-settings' = 'all'): Promise<{ readonly accepted: boolean }> {
   if (factoryResetQueued) return { accepted: true };
   const messages = nativeMessages(desktopLocale);
   const confirmation = await dialog.showMessageBox({
     type: 'warning',
-    title: messages.factoryResetTitle,
-    message: messages.factoryResetMessage,
-    detail: messages.factoryResetDetail,
-    buttons: [messages.factoryResetConfirm, messages.cancel],
+    title: mode === 'all' ? messages.factoryResetTitle : messages.preserveSettingsResetTitle,
+    message: mode === 'all' ? messages.factoryResetMessage : messages.preserveSettingsResetMessage,
+    detail: mode === 'all' ? messages.factoryResetDetail : messages.preserveSettingsResetDetail,
+    buttons: [mode === 'all' ? messages.factoryResetConfirm : messages.preserveSettingsResetConfirm, messages.cancel],
     defaultId: 1,
     cancelId: 1,
     noLink: true,
@@ -1856,8 +1858,19 @@ async function requestFactoryReset(dataPath: string): Promise<{ readonly accepte
   // Do not claim reset accepted until the owned native runtime alias is gone.
   // runtimes rm removes its local profile and health/log files, too.
   if (desktopRuntime === null) throw new Error('Desktop runtime is unavailable for verified Tunnel reset');
-  await desktopRuntime.prepareFactoryReset();
-  stageFactoryResetSync(dataPath);
+  if (mode === 'all') await desktopRuntime.prepareFactoryReset();
+  else {
+    const [tunnel, remoteMcp] = await Promise.all([
+      desktopRuntime.services.getTunnelStatus(),
+      desktopRuntime.services.getRemoteMcpStatus(),
+    ]);
+    if (tunnel.state !== 'stopped' || (tunnel.persistent !== null
+      && (tunnel.persistent.state !== 'stopped' || tunnel.persistent.runtimeAliasActive === true))
+      || remoteMcp.state !== 'stopped') {
+      throw new Error('Stop Secure Tunnel and Remote MCP before clearing application data while preserving settings');
+    }
+  }
+  stageFactoryResetSync(dataPath, mode);
   factoryResetQueued = true;
   setTimeout(() => {
     const relaunch = (): void => {
@@ -3011,7 +3024,7 @@ function bootstrapDesktop(configuredDataPath?: string): void {
     registerIpcHandlers(() => mainWindow, runtime.services, {
       onLocaleChanged: setDesktopLocale,
       onUserSettingsChanged: applyDesktopUserSettings,
-      onFactoryReset: () => requestFactoryReset(dataPath),
+      onFactoryReset: (request) => requestFactoryReset(dataPath, request?.preserveSettings === true ? 'preserve-settings' : 'all'),
       ipcDrainBarrier: desktopIpcDrainBarrier,
     });
     recordDesktopStartup('window:create:begin');

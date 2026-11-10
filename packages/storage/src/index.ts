@@ -1,6 +1,7 @@
 export * from './audit-repository.js';
 export * from './checkpoint-repository.js';
 export * from './database.js';
+export { assertNoActiveSqliteClientsSync } from './sqlite-client-lease.js';
 export * from './storage-maintenance.js';
 export * from './profile-storage-inventory.js';
 export * from './windows-profile-allocation.js';

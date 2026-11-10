@@ -29,6 +29,10 @@ export interface NativeMessages {
   readonly factoryResetMessage: string;
   readonly factoryResetDetail: string;
   readonly factoryResetConfirm: string;
+  readonly preserveSettingsResetTitle: string;
+  readonly preserveSettingsResetMessage: string;
+  readonly preserveSettingsResetDetail: string;
+  readonly preserveSettingsResetConfirm: string;
   readonly logStatus: string;
   readonly logCapturedRowUnavailable: string;
   readonly logTime: string;
@@ -81,6 +85,10 @@ const th: NativeMessages = {
   factoryResetMessage: 'ล้างข้อมูล lnwjing ทั้งหมดบนเครื่องนี้และเริ่มใหม่เหมือนติดตั้งครั้งแรก?',
   factoryResetDetail: 'การรีเซ็ตจะลบฐานข้อมูล การตั้งค่า โปรเจกต์ที่ลงทะเบียน คีย์และ secret, Tunnel profile, backups, logs, cache, ข้อมูลกู้คืน และ First-run state ทั้งหมด ไม่ลบโฟลเดอร์โปรเจกต์จริงของคุณ เมื่อเสร็จ lnwjing จะเปิดใหม่และแสดง Setup Guide',
   factoryResetConfirm: 'ล้างทั้งหมดและเริ่มใหม่',
+  preserveSettingsResetTitle: 'ล้างข้อมูลโดยเก็บ Settings',
+  preserveSettingsResetMessage: 'ล้างประวัติและข้อมูลทั้งหมดของ lnwjing แต่เก็บการตั้งค่าไว้?',
+  preserveSettingsResetDetail: 'ลบงานที่บันทึกไว้, โปรเจกต์ที่ลงทะเบียน, Checkpoints, Recovery Trash, Backups, Logs และ Cache ในโปรไฟล์ lnwjing โดยเก็บ Settings, คีย์ถอดรหัสและข้อมูลเชื่อมต่อที่จำเป็นไว้ ไม่แตะไฟล์ในโฟลเดอร์โปรเจกต์จริง ปิด MCP และ Tunnel ก่อนเริ่ม เมื่อเสร็จโปรแกรมจะเปิดใหม่',
+  preserveSettingsResetConfirm: 'ล้างข้อมูล แต่เก็บ Settings',
   logStatus: 'สถานะ',
   logCapturedRowUnavailable: 'ไม่พบรายการที่จับไว้แล้ว',
   logTime: 'เวลา',
@@ -133,6 +141,10 @@ const en: NativeMessages = {
   factoryResetMessage: 'Erase all lnwjing data on this device and start again like a fresh installation?',
   factoryResetDetail: 'This deletes the database, settings, registered projects, saved keys and secrets, Tunnel profile, backups, logs, cache, recovery data, and first-run state. Your actual project folders are not deleted. lnwjing will relaunch into the Setup Guide.',
   factoryResetConfirm: 'Erase everything and start over',
+  preserveSettingsResetTitle: 'Clear data but keep Settings',
+  preserveSettingsResetMessage: 'Erase saved work and history while keeping lnwjing Settings?',
+  preserveSettingsResetDetail: 'Deletes registered projects, checkpoints, recovery trash, backups, logs and caches within the lnwjing profile. Keeps Settings, decryption keys and necessary connection credentials. Files in your actual project directories are untouched. Stop MCP and Tunnel first. lnwjing restarts afterward.',
+  preserveSettingsResetConfirm: 'Clear data, keep Settings',
   logStatus: 'Status',
   logCapturedRowUnavailable: 'Captured row is no longer available',
   logTime: 'Time',

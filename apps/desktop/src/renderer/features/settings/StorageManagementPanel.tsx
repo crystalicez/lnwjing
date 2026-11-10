@@ -44,6 +44,7 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
   const [inventory, setInventory] = useState<ProfileStorageInventory | null>(null);
   const [inventoryPending, setInventoryPending] = useState(false);
   const [pending, setPending] = useState(false);
+  const [resetPending, setResetPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [maxMiB, setMaxMiB] = useState(256);
@@ -192,6 +193,21 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally { setPending(false); }
+  }
+
+  async function clearExceptSettings(): Promise<void> {
+    if (pending || resetPending || inventoryPending) return;
+    setResetPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      // The native host performs the final confirmation, stops the runtime,
+      // then applies the reset offline on relaunch.
+      const result = await window.lnwjing.factoryReset({ preserveSettings: true });
+      if (result.accepted) setNotice(t('settingsPage.factoryResetWorking'));
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setResetPending(false); }
   }
 
   const pressure = overview === null ? null : storageAdmissionHeadroom(overview);
@@ -437,6 +453,14 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
           {t('storagePanel.cleanNative')}
         </ActionButton>
         {cursors[category] === null ? <ActionButton type="button" disabled={pending} onClick={() => setCursors((current) => ({ ...current, [category]: undefined }))}>{t('storagePanel.scanAgain')}</ActionButton> : null}
+      </div>
+      <div className="setting-field" data-testid="preserve-settings-reset">
+        <strong>{t('settingsPage.preserveResetTitle')}</strong>
+        <p className="hint">{t('settingsPage.preserveResetHint')}</p>
+        <ActionButton type="button" disabled={pending || inventoryPending || resetPending}
+          onClick={() => { void clearExceptSettings(); }}>
+          {resetPending ? t('settingsPage.factoryResetWorking') : t('settingsPage.preserveResetButton')}
+        </ActionButton>
       </div>
       {error === null ? null : <StatusMessage tone="warning" role="alert" prefix="⚠ ">{error}</StatusMessage>}
       {notice === null ? null : <StatusMessage tone="success" prefix="✓ ">{notice}</StatusMessage>}

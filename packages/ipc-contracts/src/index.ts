@@ -1297,7 +1297,7 @@ export interface IpcRequestMap {
   readonly [ipcChannels.getInstallActivity]: undefined;
   readonly [ipcChannels.getMutationApprovalPrompt]: undefined;
   readonly [ipcChannels.resolveMutationApprovalPrompt]: ResolveMutationApprovalPromptRequest;
-  readonly [ipcChannels.factoryReset]: undefined;
+  readonly [ipcChannels.factoryReset]: undefined | { readonly preserveSettings: true };
   readonly [ipcChannels.checkForUpdates]: undefined;
   readonly [ipcChannels.installUpdate]: undefined;
   readonly [ipcChannels.getGitDiff]: GetGitDiffRequest;
@@ -1495,7 +1495,7 @@ export interface LnwjingApi {
   getInstallActivity(): Promise<IpcResponseMap[typeof ipcChannels.getInstallActivity]>;
   getMutationApprovalPrompt(): Promise<IpcResponseMap[typeof ipcChannels.getMutationApprovalPrompt]>;
   resolveMutationApprovalPrompt(request: ResolveMutationApprovalPromptRequest): Promise<IpcResponseMap[typeof ipcChannels.resolveMutationApprovalPrompt]>;
-  factoryReset(): Promise<IpcResponseMap[typeof ipcChannels.factoryReset]>;
+  factoryReset(request?: { readonly preserveSettings: true }): Promise<IpcResponseMap[typeof ipcChannels.factoryReset]>;
   checkForUpdates(): Promise<IpcResponseMap[typeof ipcChannels.checkForUpdates]>;
   installUpdate(): Promise<IpcResponseMap[typeof ipcChannels.installUpdate]>;
   getGitDiff(request: GetGitDiffRequest): Promise<IpcResponseMap[typeof ipcChannels.getGitDiff]>;
