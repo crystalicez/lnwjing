@@ -1,5 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync, lstatSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync, statfsSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { inspectProfileStorageOffMain, type ProfileStorageInventory } from './profile-storage-inventory.js';
@@ -27,6 +27,10 @@ export interface GlobalQuotaLedgerStatus {
   readonly policy: GlobalQuotaPolicy;
   readonly reservedBytes: number;
   readonly activeReservations: number;
+  /** Volume-level OS free bytes, not bytes attributed to this application's files. */
+  readonly volumeFreeBytes: number;
+  /** Free bytes after other cooperative reservations and critical safety margin. */
+  readonly volumeUnreservedBytes: number;
 }
 
 export interface GlobalQuotaSnapshot {
@@ -34,6 +38,8 @@ export interface GlobalQuotaSnapshot {
   readonly logicalUsedBytes: number;
   readonly reservedBytes: number;
   readonly ordinaryAvailableBytes: number;
+  readonly volumeFreeBytes: number;
+  readonly volumeUnreservedBytes: number;
   readonly inventory: ProfileStorageInventory;
 }
 
@@ -42,6 +48,36 @@ interface ReservationRow { id: string; token_hash: string; owner_pid: number; by
 const MAX_RESERVATIONS = 2048;
 const MAX_SCAN_ATTEMPTS = 4;
 const LEDGER_FILE = 'global-quota-reservations-v2.sqlite';
+/** Space other software, SQLite journaling and native helpers may still need. */
+const MIN_VOLUME_RESERVE_BYTES = 64 * 1024 * 1024;
+
+/** For deterministic fake-volume tests; production always reads the real OS volume. */
+export interface GlobalQuotaVolumeOptions {
+  readonly availableVolumeBytes?: () => bigint;
+}
+
+function realVolumeFreeBytes(root: string): bigint {
+  const fs = statfsSync(root, { bigint: true });
+  if (fs.bsize <= 0n || fs.bavail < 0n) throw new Error('Global quota volume capacity is invalid');
+  return fs.bsize * fs.bavail;
+}
+
+function safeVolumeFreeBytes(freeBytes: bigint): bigint {
+  if (typeof freeBytes !== 'bigint' || freeBytes < 0n) {
+    throw new Error('Global quota physical free space is unavailable');
+  }
+  return freeBytes;
+}
+
+function displayBytes(bytes: bigint): number {
+  return Number(bytes > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : bytes);
+}
+
+function volumeHeadroom(freeBytes: bigint, reservedBytes: number, criticalReserveBytes: number): bigint {
+  const safety = BigInt(Math.max(criticalReserveBytes, MIN_VOLUME_RESERVE_BYTES));
+  const headroom = freeBytes - BigInt(reservedBytes) - safety;
+  return headroom > 0n ? headroom : 0n;
+}
 
 function safeBytes(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 0;
@@ -76,11 +112,13 @@ function sameToken(storedHash: string, token: string): boolean {
 export class GlobalStorageQuotaReservations {
   private readonly root: string;
   private readonly ledgerFilename: string;
+  private readonly getAvailableVolumeBytes: () => bigint;
 
-  public constructor(profileRoot: string) {
+  public constructor(profileRoot: string, options: GlobalQuotaVolumeOptions = {}) {
     if (!path.isAbsolute(profileRoot)) throw new Error('Global quota profile root must be absolute');
     this.root = path.resolve(profileRoot);
     this.ledgerFilename = path.join(this.root, LEDGER_FILE);
+    this.getAvailableVolumeBytes = options.availableVolumeBytes ?? ((): bigint => realVolumeFreeBytes(this.root));
     // Never reject legacy or redirected profile paths merely because the
     // optional quota feature has not been enabled. Validate before any ledger I/O.
   }
@@ -97,10 +135,13 @@ export class GlobalStorageQuotaReservations {
       const totals = db.prepare('SELECT COUNT(*) AS count, COALESCE(SUM(bytes),0) AS bytes FROM quota_reservations')
         .get() as { count: number; bytes: number };
       if (!safeBytes(totals.bytes) || !safeBytes(totals.count)) throw new Error('Invalid quota ledger totals');
+      const freeBytes = safeVolumeFreeBytes(this.getAvailableVolumeBytes());
       return {
         policy: { limitBytes: state.limit_bytes, criticalReserveBytes: state.reserve_bytes },
         reservedBytes: totals.bytes,
         activeReservations: totals.count,
+        volumeFreeBytes: displayBytes(freeBytes),
+        volumeUnreservedBytes: displayBytes(volumeHeadroom(freeBytes, totals.bytes, state.reserve_bytes)),
       };
     } finally { db.close(); }
   }
@@ -117,7 +158,12 @@ export class GlobalStorageQuotaReservations {
     const current = this.status();
     if (current === null || current.policy.limitBytes !== before.policy.limitBytes
       || current.policy.criticalReserveBytes !== before.policy.criticalReserveBytes) return null;
-    if (inventory.logicalBytes + current.reservedBytes < current.policy.limitBytes * 0.75) return null;
+    const lowVolumeSpace = volumeHeadroom(
+      safeVolumeFreeBytes(this.getAvailableVolumeBytes()),
+      current.reservedBytes, current.policy.criticalReserveBytes,
+    ) < BigInt(MIN_VOLUME_RESERVE_BYTES);
+    if (inventory.logicalBytes + current.reservedBytes < current.policy.limitBytes * 0.75
+      && !lowVolumeSpace) return null;
     return reclaimExpiredDisposableFiles(this.root);
   }
 
@@ -168,7 +214,12 @@ export class GlobalStorageQuotaReservations {
       const inventory = await this.completeInventory();
       // Only after a complete inventory, and only for old disposable logs.
       // A second inventory is required if any file is actually removed.
-      if (!reclaimAttempted && inventory.logicalBytes + initial.reserved + bytes >= initial.limit_bytes * 0.75) {
+      const physicalPressure = volumeHeadroom(
+        safeVolumeFreeBytes(this.getAvailableVolumeBytes()),
+        initial.reserved, initial.reserve_bytes,
+      ) < BigInt(bytes) + BigInt(MIN_VOLUME_RESERVE_BYTES);
+      if (!reclaimAttempted && (inventory.logicalBytes + initial.reserved + bytes >= initial.limit_bytes * 0.75
+        || physicalPressure)) {
         reclaimAttempted = true;
         const reclaimed = await reclaimExpiredDisposableFiles(this.root);
         if (reclaimed.removed > 0) continue;
@@ -185,6 +236,13 @@ export class GlobalStorageQuotaReservations {
         const planned = inventory.logicalBytes + reserved + bytes + state.reserve_bytes;
         if (!Number.isSafeInteger(planned) || planned > state.limit_bytes) {
           throw new Error('Global storage quota has insufficient unreserved space');
+        }
+        // Reserve actual volume headroom against competing *cooperative*
+        // writers as well as the profile budget. This does not constrain
+        // arbitrary external writers or OS disk allocations during a copy.
+        const freeBytes = safeVolumeFreeBytes(this.getAvailableVolumeBytes());
+        if (BigInt(bytes) > volumeHeadroom(freeBytes, reserved, state.reserve_bytes)) {
+          throw new Error('Global storage quota has insufficient physical volume headroom');
         }
         db.prepare('INSERT INTO quota_reservations (id,token_hash,owner_pid,bytes) VALUES (?,?,?,?)')
           .run(id, hashToken(token), process.pid, bytes);
@@ -228,10 +286,13 @@ export class GlobalStorageQuotaReservations {
         const reserved = (db.prepare('SELECT COALESCE(SUM(bytes),0) AS total FROM quota_reservations')
           .get() as { total: number }).total;
         if (!safeBytes(reserved)) throw new Error('Invalid global quota reservation ledger');
+        const freeBytes = safeVolumeFreeBytes(this.getAvailableVolumeBytes());
         return {
           policy: { limitBytes: state.limit_bytes, criticalReserveBytes: state.reserve_bytes },
           logicalUsedBytes: inventory.logicalBytes,
           reservedBytes: reserved,
+          volumeFreeBytes: displayBytes(freeBytes),
+          volumeUnreservedBytes: displayBytes(volumeHeadroom(freeBytes, reserved, state.reserve_bytes)),
           ordinaryAvailableBytes: Math.max(0,
             state.limit_bytes - state.reserve_bytes - inventory.logicalBytes - reserved),
           inventory,

@@ -51,6 +51,7 @@ test('real Storage Settings persist Git-aware and SQLite backup budget with isol
     await expect.poll(async () => (await page.evaluate(() => window.lnwjing.getStorageOverview()))
       .globalQuota?.limitBytes).toBe(512 * 1024 ** 2);
     await expect(globalInput).toHaveValue('512');
+    await expect(page.locator('[data-testid="global-quota-volume-free"]')).toBeVisible();
     await globalInput.fill('0');
     await globalApply.click();
     await expect.poll(async () => (await page.evaluate(() => window.lnwjing.getStorageOverview()))

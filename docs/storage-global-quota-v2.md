@@ -75,6 +75,20 @@ Each candidate's identity, size and modification time are rechecked before
 unlinking. A refusal or incomplete scan is not bypassed. Deleted bytes are
 reported as **logical bytes**, never claimed as proven NTFS physical savings.
 
+Additional physical-volume admission (2026-11-10): every opted-in reservation
+also checks real OS free space on the profile's volume, atomically with the
+shared ledger's outstanding cooperative reservations. A protected physical
+headroom of at least 64 MiB (or the configured critical reserve, whichever
+is greater) remains unavailable to ordinary reservations. Incomplete or
+invalid volume readings **refuse new reservations**; normal app startup with
+Quota disabled does not read or enforce this policy. Old disposable logs may
+also be reclaimed under physical-volume pressure. Storage Settings displays
+**whole-volume OS free bytes** and the remaining budget after cooperative
+reservations. This protects simultaneous *cooperating* backups from
+overcommitting the same observed free volume, but external applications can
+still consume that free space while a copy is running. This is neither
+per-file NTFS allocation accounting nor a guaranteed physical app quota.
+
 Limitations before production enforcement: the inventory is logical-byte based
 on Windows (not NTFS allocated-byte accounting), scans only the profile root,
 and requires a full walk per reservation. Noncooperating writers, journal/WAL

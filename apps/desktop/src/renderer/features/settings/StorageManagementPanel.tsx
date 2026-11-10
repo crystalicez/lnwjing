@@ -168,6 +168,10 @@ export function StorageManagementPanel({ locale, autoBackupEnabled, onChanged }:
               reserve: sizeLabel(overview.globalQuota.criticalReserveBytes),
               pending: sizeLabel(overview.globalQuota.reservedBytes),
             })}</p>
+            <p className="hint" data-testid="global-quota-volume-free">{t('storagePanel.globalVolumeFree', {
+              free: sizeLabel(overview.globalQuota.volumeFreeBytes),
+              headroom: sizeLabel(overview.globalQuota.volumeUnreservedBytes),
+            })}</p>
             {inventory !== null && !inventory.incomplete ? (
               <p>{t('storagePanel.globalLogicalUsed', {
                 used: sizeLabel(inventory.logicalBytes),

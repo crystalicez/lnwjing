@@ -55,6 +55,10 @@ export interface StorageOverview {
     readonly criticalReserveBytes: number;
     readonly reservedBytes: number;
     readonly activeReservations: number;
+    /** OS free bytes of the entire underlying volume, not lnwjing-only usage. */
+    readonly volumeFreeBytes: number;
+    /** Free bytes after in-flight cooperative reservations and the critical safety buffer. */
+    readonly volumeUnreservedBytes: number;
     readonly enforcement: 'partial';
   };
   readonly compactRecommended: boolean;

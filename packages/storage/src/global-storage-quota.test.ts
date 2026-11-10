@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -45,6 +46,73 @@ function departedOwner(ledger: string, bytes: number): Promise<void> {
 }
 
 describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
+  it('atomically honors actual volume free space across competing cooperative reservations', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const free = BigInt(64 * MIB + 700 * 1024);
+      const options = { availableVolumeBytes: (): bigint => free };
+      const first = new GlobalStorageQuotaReservations(root, options);
+      const second = new GlobalStorageQuotaReservations(root, options);
+      first.configure({ limitBytes: 8 * MIB, criticalReserveBytes: 128 * 1024 });
+      const proof = await first.reserve(450 * 1024);
+      const snapshot = second.status();
+      expect(snapshot?.volumeFreeBytes).toBe(Number(free));
+      expect(snapshot?.volumeUnreservedBytes).toBe(250 * 1024);
+      expect(snapshot?.reservedBytes).toBe(450 * 1024);
+      await expect(second.reserve(300 * 1024)).rejects.toThrow(/physical volume headroom/);
+      first.release(proof);
+      const later = await second.reserve(300 * 1024);
+      second.release(later);
+    } finally { await dispose(); }
+  });
+
+  it('rechecks volume free space inside the atomic admission transaction after the inventory', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      let volumeChecks = 0;
+      const quota = new GlobalStorageQuotaReservations(root, {
+        availableVolumeBytes: (): bigint => {
+          volumeChecks++;
+          return volumeChecks === 1 ? BigInt(256 * MIB) : BigInt(64 * MIB);
+        },
+      });
+      quota.configure({ limitBytes: 8 * MIB, criticalReserveBytes: 128 * 1024 });
+      await expect(quota.reserve(200 * 1024)).rejects.toThrow(/physical volume headroom/);
+      expect(volumeChecks).toBeGreaterThanOrEqual(2);
+      expect(quota.status()?.activeReservations).toBe(0);
+    } finally { await dispose(); }
+  });
+
+  it('refuses a missing or invalid physical space measurement while the quota is enabled', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => -1n });
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 1024 });
+      expect(() => quota.status()).toThrow(/physical free space/);
+      await expect(quota.reserve(1024)).rejects.toThrow(/physical free space/);
+      expect(() => quota.disable()).not.toThrow();
+    } finally { await dispose(); }
+  });
+
+  it('reclaims eligible old diagnostics even when logical quota is low but volume headroom is tight', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      await mkdir(path.join(root, 'logs'));
+      const file = path.join(root, 'logs', 'old.log');
+      await writeFile(file, Buffer.alloc(700 * 1024));
+      const old = new Date('2020-01-01T00:00:00Z');
+      await utimes(file, old, old);
+      const quota = new GlobalStorageQuotaReservations(root, {
+        availableVolumeBytes: (): bigint => BigInt(64 * MIB + 350 * 1024
+          + (existsSync(file) ? 0 : 700 * 1024)),
+      });
+      quota.configure({ limitBytes: 8 * MIB, criticalReserveBytes: 1024 });
+      const proof = await quota.reserve(400 * 1024);
+      await expect(readFile(file)).rejects.toMatchObject({ code: 'ENOENT' });
+      quota.release(proof);
+    } finally { await dispose(); }
+  });
+
   it('allows an unconfigured redirected legacy profile to start without enabling its unsafe ledger', async () => {
     const { root, dispose } = await fixture();
     const outer = await fixture();

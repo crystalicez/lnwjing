@@ -47,7 +47,8 @@ describe('Desktop storage-maintenance backend', () => {
         .toEqual({ restartRequired: false });
       expect((await runtime.services.getStorageOverview()).globalQuota).toMatchObject({
         limitBytes: 512 * 1024 ** 2, criticalReserveBytes: expect.any(Number),
-        reservedBytes: 0, enforcement: 'partial',
+        reservedBytes: 0, volumeFreeBytes: expect.any(Number),
+        volumeUnreservedBytes: expect.any(Number), enforcement: 'partial',
       });
       expect(runtime.storageMaintenance.configurePolicy({ userConfirmed: true, globalQuotaMiB: 0 }))
         .toEqual({ restartRequired: false });

@@ -1291,9 +1291,14 @@ function storageOverview(value: unknown): StorageOverview {
     const criticalReserveBytes = integerField(value.globalQuota, 'criticalReserveBytes');
     const reservedBytes = integerField(value.globalQuota, 'reservedBytes');
     const activeReservations = integerField(value.globalQuota, 'activeReservations');
+    const volumeFreeBytes = integerField(value.globalQuota, 'volumeFreeBytes');
+    const volumeUnreservedBytes = integerField(value.globalQuota, 'volumeUnreservedBytes');
+    if (volumeFreeBytes < 0 || volumeUnreservedBytes < 0 || volumeUnreservedBytes > volumeFreeBytes)
+      throw new Error('Invalid volume free space');
     if (limitBytes <= 0 || criticalReserveBytes < 0 || criticalReserveBytes >= limitBytes
       || reservedBytes < 0 || activeReservations < 0) throw new Error('Invalid global quota counters');
-    globalQuota = { limitBytes, criticalReserveBytes, reservedBytes, activeReservations, enforcement: 'partial' };
+    globalQuota = { limitBytes, criticalReserveBytes, reservedBytes, activeReservations,
+      volumeFreeBytes, volumeUnreservedBytes, enforcement: 'partial' };
   }
   const sqliteEffectiveHardLimitBytes = integerField(value, 'sqliteEffectiveHardLimitBytes');
   if (sqliteEffectiveHardLimitBytes < 0) throw new Error('Invalid SQLite hard limit');

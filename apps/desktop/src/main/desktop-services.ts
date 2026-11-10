@@ -2575,6 +2575,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         criticalReserveBytes: globalQuotaStatus.policy.criticalReserveBytes,
         reservedBytes: globalQuotaStatus.reservedBytes,
         activeReservations: globalQuotaStatus.activeReservations,
+        volumeFreeBytes: globalQuotaStatus.volumeFreeBytes,
+        volumeUnreservedBytes: globalQuotaStatus.volumeUnreservedBytes,
         enforcement: 'partial' as const,
       } }),
       policy: storageMaintenance.getPolicy(), compactionRequiresOffline: true as const };
