@@ -30,19 +30,20 @@ extraResources:
     to: runtime-tools
   - from: build/ecc-runtime
     to: ecc-runtime
-  - from: ../../.agents/skills/lnwjing-scheduled-continuation
+  # Private source tree, not a workspace .agents skill. The destination and IDs stay stable.
+  - from: ../../assets/bundled-skills/lnwjing-scheduled-continuation
     to: agent-skills/lnwjing-scheduled-continuation
-  - from: ../../.agents/skills/ponytail
+  - from: ../../assets/bundled-skills/ponytail
     to: agent-skills/ponytail
-  - from: ../../.agents/skills/ponytail-review
+  - from: ../../assets/bundled-skills/ponytail-review
     to: agent-skills/ponytail-review
-  - from: ../../.agents/skills/ponytail-audit
+  - from: ../../assets/bundled-skills/ponytail-audit
     to: agent-skills/ponytail-audit
-  - from: ../../.agents/skills/ponytail-debt
+  - from: ../../assets/bundled-skills/ponytail-debt
     to: agent-skills/ponytail-debt
-  - from: ../../.agents/skills/ponytail-gain
+  - from: ../../assets/bundled-skills/ponytail-gain
     to: agent-skills/ponytail-gain
-  - from: ../../.agents/skills/ponytail-help
+  - from: ../../assets/bundled-skills/ponytail-help
     to: agent-skills/ponytail-help
 # Target-native STDIO launchers invoke the packaged Electron host. No private
 # Node runtime or duplicated CJS entry is shipped.

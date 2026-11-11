@@ -29,7 +29,7 @@ Operational rule after this audit: when a child tool name is stale, refresh the 
 ## Skill providers
 
 Skills may come from:
-- bundled roots,
+- built-in `assets/bundled-skills/` sources shipped as `resources/agent-skills/` with stable `bundled:agent-skills/*` IDs,
 - workspace `.agents/skills`,
 - user/global skill roots,
 - configured external roots,

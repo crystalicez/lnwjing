@@ -408,7 +408,7 @@ export function goalTools(context: McpToolContext): McpToolDefinition[] {
             : {}),
           continuationDirective: {
             mode: scheduledContinuation,
-            skillId: 'workspace-agents-skills/lnwjing-scheduled-continuation',
+            skillId: 'bundled:agent-skills/lnwjing-scheduled-continuation',
             nativeTaskHostRequired: true,
             userMustPromptAgain: false,
             successorHostState,

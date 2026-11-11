@@ -12,7 +12,7 @@ worktree uses them, remove them so the repository retains only `dev` and
 
 ## Automatic scheduled continuation
 
-When a user-authorized repository task is still incomplete and the user has authorized scheduled continuation, load and follow [`.agents/skills/lnwjing-scheduled-continuation/SKILL.md`](.agents/skills/lnwjing-scheduled-continuation/SKILL.md) as the source of truth. Never create a schedule when the user has explicitly opted out for the current task.
+When a user-authorized repository task is still incomplete and the user has authorized scheduled continuation, load and follow [`assets/bundled-skills/lnwjing-scheduled-continuation/SKILL.md`](assets/bundled-skills/lnwjing-scheduled-continuation/SKILL.md) as the source of truth. Never create a schedule when the user has explicitly opted out for the current task.
 
 For rolling continuation, the workspace skill is authoritative. Current mainline uses exactly one **hourly recurring** Native ChatGPT Scheduled Task for an active goal, in the current chat with cloud execution requested. Ordinary checkpoints and ordinary recurring wakes reuse the same native task; they do not create or retime a per-turn successor. Historical one-time watchdog rows are compatibility-only. Never use lnwjing `scheduler`, Windows Task Scheduler, `schtasks.exe`, cron, shell timers, browser/DOM automation, or undocumented scheduler APIs as a fallback. Never create or re-enable scheduled continuation when the user has explicitly disabled it for the current task.
 

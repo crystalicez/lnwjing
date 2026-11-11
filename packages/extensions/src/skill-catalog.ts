@@ -138,7 +138,13 @@ export class SkillCatalog {
       );
     }
     for (const bundled of this.options.bundledRoots ?? []) {
-      defaults.push({ source: `bundled:${path.basename(bundled)}`, path: path.resolve(bundled) });
+      // Repository-owned assets/bundled-skills is the same trusted bundle
+      // shipped as resources/agent-skills. Preserve its source-qualified IDs.
+      const bundleName = path.basename(path.resolve(bundled));
+      defaults.push({
+        source: `bundled:${bundleName === 'bundled-skills' ? 'agent-skills' : bundleName}`,
+        path: path.resolve(bundled),
+      });
     }
     for (const extra of [...this.options.settings.extraSkillRoots, ...(this.options.extraRoots ?? [])]) {
       defaults.push({ source: `extra:${path.basename(extra)}`, path: path.resolve(extra) });

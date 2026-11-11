@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 describe('scheduled continuation skill contract', () => {
   it('documents one hourly recurring native watchdog through verified terminal cleanup', async () => {
     const skill = await readFile(
-      path.resolve(import.meta.dirname, '../../../.agents/skills/lnwjing-scheduled-continuation/SKILL.md'),
+      path.resolve(import.meta.dirname, '../../../assets/bundled-skills/lnwjing-scheduled-continuation/SKILL.md'),
       'utf8',
     );
 

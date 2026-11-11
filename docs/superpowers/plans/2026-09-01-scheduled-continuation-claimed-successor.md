@@ -218,7 +218,7 @@ Run the focused command from Step 2, then the complete application continuation 
 - Modify: `packages/mcp-server/src/tools/scheduled-continuation-tools.ts`
 - Modify: `packages/mcp-server/src/tools/scheduled-continuation-tools.test.ts`
 - Modify: `packages/mcp-server/src/scheduled-continuation-skill-contract.test.ts`
-- Modify: `.agents/skills/lnwjing-scheduled-continuation/SKILL.md`
+- Modify: `assets/bundled-skills/lnwjing-scheduled-continuation/SKILL.md`
 - Modify: `AGENTS.md`
 
 **Interfaces:**

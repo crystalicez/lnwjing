@@ -107,6 +107,8 @@ describe('session resilience acceptance', () => {
       expect(diagnostics).toContain('lnwjing MCP stdio ready');
       expect(diagnostics).toContain(await realpath(workspace));
       expect(diagnostics).not.toContain('E:\\ drive is required');
+    } catch (cause) {
+      throw new Error(`Bundled CJS MCP runtime exited: ${diagnostics.slice(-2500) || 'no stderr received'}`, { cause });
     } finally {
       await client.close();
     }

@@ -34,7 +34,8 @@ scripts/                build, packaging, release, runtime-tool scripts
 tests/                  cross-package integration/release/packaging tests
 docs/                   architecture, development, benchmarks and plans
 .github/workflows/      CI, release and runtime-dependency automation
-.agents/skills/         workspace agent skills
+assets/bundled-skills/ shipped lnwjing-owned skill sources (runtime: resources/agent-skills/)
+.agents/skills/         optional workspace-imported agent skills (not bundled source)
 ```
 
 ## Composition roots

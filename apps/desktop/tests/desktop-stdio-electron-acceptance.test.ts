@@ -88,6 +88,11 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
       const local = path.join(root, 'local');
       const temp = path.join(root, 'temp');
       await Promise.all([workspace, data, roaming, local, temp].map(p => mkdir(p, { recursive: true })));
+      // Imported workspace skills may share a name with a shipped policy skill.
+      // They must remain separately addressable and never gain bundled trust.
+      const importedSkill = path.join(workspace, '.agents', 'skills', 'ponytail');
+      await mkdir(importedSkill, { recursive: true });
+      await writeFile(path.join(importedSkill, 'SKILL.md'), '---\nname: ponytail\ndescription: Workspace-owned collision\n---\n# Shadow copy\n', { flag: 'wx' });
       await writeFile(path.join(workspace, 'file-00.ts'), 'export const known_needle_12345 = true;\n', { flag: 'wx' });
       await Promise.all(Array.from({ length: 64 }, (_, i) => writeFile(
         path.join(workspace, `sample-${String(i).padStart(3, '0')}.ts`),
@@ -129,6 +134,42 @@ describe.skipIf(process.platform !== 'win32' || process.env.LNWJING_RUN_ELECTRON
         const tools = responseData(await request(transport, 2, 'tools/list', {}));
         const names = (tools.tools as Array<{ name: string }>).map(tool => tool.name);
         expect(names).toContain('search_text');
+        expect(names).toContain('skills_list');
+        expect(names).toContain('skills_read');
+        const bundled = responseData(await request(transport, 8, 'tools/call', {
+          name: 'skills_list', arguments: { source: 'bundled:agent-skills' },
+        }));
+        expect(bundled.isError).not.toBe(true);
+        for (const name of [
+          'lnwjing-scheduled-continuation', 'ponytail', 'ponytail-review',
+          'ponytail-audit', 'ponytail-debt', 'ponytail-gain', 'ponytail-help',
+        ]) expect(JSON.stringify(bundled)).toContain(`bundled:agent-skills/${name}`);
+        const readBundled = responseData(await request(transport, 9, 'tools/call', {
+          name: 'skills_read', arguments: { skillId: 'bundled:agent-skills/ponytail' },
+        }));
+        expect(readBundled.isError).not.toBe(true);
+        expect(JSON.stringify(readBundled)).toContain('trustTier');
+        expect(JSON.stringify(readBundled)).toContain('bundled');
+        const workspaceSkills = responseData(await request(transport, 10, 'tools/call', {
+          name: 'skills_list', arguments: { source: 'workspace-agents-skills' },
+        }));
+        expect(workspaceSkills.isError).not.toBe(true);
+        expect(JSON.stringify(workspaceSkills)).toContain('workspace-agents-skills/ponytail');
+        const imported = responseData(await request(transport, 11, 'tools/call', {
+          name: 'skills_read', arguments: { skillId: 'workspace-agents-skills/ponytail' },
+        }));
+        expect(imported.isError).not.toBe(true);
+        expect(JSON.stringify(imported)).toContain('workspace');
+        expect(JSON.stringify(imported)).toContain('Shadow copy');
+        expect(JSON.stringify(readBundled)).not.toContain('Shadow copy');
+        const traversal = responseData(await request(transport, 12, 'tools/call', {
+          name: 'skills_read', arguments: {
+            skillId: 'bundled:agent-skills/ponytail',
+            relativePath: '../ponytail-review/SKILL.md',
+          },
+        }));
+        expect(traversal.isError).toBe(true);
+        expect(JSON.stringify(traversal)).toContain('PATH_OUTSIDE_WORKSPACE');
         const match = responseData(await request(transport, 3, 'tools/call', {
           name: 'search_text',
           arguments: { path: workspace, query: 'known_needle_12345', maxResults: 3 },

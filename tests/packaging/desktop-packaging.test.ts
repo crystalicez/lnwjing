@@ -186,12 +186,13 @@ describe('cross-platform desktop packaging', () => {
     expect(config).toContain('to: runtime-tools');
     expect(config).toContain('from: build/tunnel-client');
     expect(config).toContain('to: tunnel-client');
-    expect(config).toContain('from: ../../.agents/skills/lnwjing-scheduled-continuation');
+    expect(config).toContain('from: ../../assets/bundled-skills/lnwjing-scheduled-continuation');
+    expect(config).not.toContain('from: ../../.agents/skills/');
     expect(config).toContain('to: agent-skills/lnwjing-scheduled-continuation');
     for (const skillName of ponytailSkillNames) {
-      expect(config).toContain(`from: ../../.agents/skills/${skillName}`);
+      expect(config).toContain(`from: ../../assets/bundled-skills/${skillName}`);
       expect(config).toContain(`to: agent-skills/${skillName}`);
-      const vendoredRoot = path.join(repositoryRoot, '.agents', 'skills', skillName);
+      const vendoredRoot = path.join(repositoryRoot, 'assets', 'bundled-skills', skillName);
       await access(path.join(vendoredRoot, 'SKILL.md'));
       await access(path.join(vendoredRoot, 'LICENSE'));
       await access(path.join(vendoredRoot, 'SOURCE.md'));
@@ -200,7 +201,7 @@ describe('cross-platform desktop packaging', () => {
     expect(config).toContain('to: native-host/macos');
     expect(config).toContain('from: build/native-host/linux');
     expect(config).toContain('to: native-host/linux');
-    await access(path.join(repositoryRoot, '.agents', 'skills', 'lnwjing-scheduled-continuation', 'SKILL.md'));
+    await access(path.join(repositoryRoot, 'assets', 'bundled-skills', 'lnwjing-scheduled-continuation', 'SKILL.md'));
     expect(desktopPackage.scripts?.['package:windows']).toContain('prepare-runtime-tools.mjs');
     // Windows runtime-tools stages the tunnel itself; do not stage a second time.
     expect(desktopPackage.scripts?.['package:windows']).not.toContain('prepare-tunnel-client.mjs');

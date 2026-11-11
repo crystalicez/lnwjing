@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseExtensionsSettings } from './allowlist.js';
 import { LocalExtensionsService } from './extensions-service.js';
 import type { McpClientFactory } from './mcp-session-manager.js';
@@ -46,6 +48,25 @@ export function bundledSkillRootCandidates(
       ? path.join(resourcesPath, 'agent-skills')
       : undefined,
     path.join(path.dirname(executablePath), 'resources', 'agent-skills'),
+    ...repositoryBundledSkillRoots(),
   ].filter((candidate): candidate is string => candidate !== undefined);
   return [...new Set(candidates.map((candidate) => path.resolve(candidate)))];
+}
+
+/** Dev runners use the checked-in bundle without treating workspace .agents as trusted. */
+function repositoryBundledSkillRoots(): readonly string[] {
+  // tsc emits packages/extensions/dist; Desktop esbuild emits apps/desktop/dist/main.
+  // Packaged Electron does not have either candidate repository ancestor.
+  // esbuild can compile the CLI to CommonJS, where import.meta.url is absent.
+  // Never infer a trusted bundle from the mutable process working directory.
+  const moduleUrl = import.meta.url;
+  if (typeof moduleUrl !== 'string' || !moduleUrl.startsWith('file:')) return [];
+  const moduleDir = path.dirname(fileURLToPath(moduleUrl));
+  return ['../../..', '../../../..'].flatMap((relative) => {
+    const root = path.resolve(moduleDir, relative);
+    const skillRoot = path.join(root, 'assets', 'bundled-skills');
+    return existsSync(path.join(root, 'packages', 'extensions', 'package.json'))
+      && existsSync(path.join(skillRoot, 'lnwjing-scheduled-continuation', 'SKILL.md'))
+      ? [skillRoot] : [];
+  });
 }

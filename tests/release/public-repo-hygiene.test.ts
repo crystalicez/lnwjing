@@ -192,7 +192,7 @@ describe('public repository hygiene', () => {
   });
 
   it('keeps recurring scheduled cleanup explicit and host-proven before terminal completion', async () => {
-    const skill = await readFile(path.join(repositoryRoot, '.agents', 'skills', 'lnwjing-scheduled-continuation', 'SKILL.md'), 'utf8');
+    const skill = await readFile(path.join(repositoryRoot, 'assets', 'bundled-skills', 'lnwjing-scheduled-continuation', 'SKILL.md'), 'utf8');
     expect(skill).toContain('`terminal_cleanup_required`');
     expect(skill).toContain('Make the exact recurring native task non-runnable');
     expect(skill).toContain('host-confirmed delete or disable evidence');
