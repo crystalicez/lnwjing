@@ -6,7 +6,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
-const candidate = path.join(root, '.audit', 'settings-reset-portable-candidate');
+const candidate = process.env.LNWJING_TEST_PORTABLE_DIR?.trim()
+  ? path.resolve(process.env.LNWJING_TEST_PORTABLE_DIR.trim())
+  : path.join(root, '.audit', 'settings-reset-portable-candidate');
 const executable = path.join(candidate, 'lnwjing-Portable-5.8.7.exe');
 const runtimePattern = /^lnwjing-runtime-v5\.8\.7-[A-Za-z0-9_-]+$/;
 
@@ -40,6 +42,12 @@ describe('actual test-owned Windows Portable outer EXE', () => {
   it.skipIf(process.platform !== 'win32')(
     'extracts a verified packaged runtime and refuses to bypass a pending reset across two cold starts',
     async () => {
+      if (process.env.LNWJING_TEST_PORTABLE_DIR?.trim()) {
+        // A manually selected executable must never point at the user's active
+        // Portable. Extraction cleanup is allowed only in a release-owned ready folder.
+        expect(path.dirname(candidate).toLowerCase()).toBe(path.join(root, 'portable').toLowerCase());
+        expect(path.basename(candidate)).toMatch(/^ready-5\.8\.7-\d{8}-\d{6}-\d+$/);
+      }
       expect(existsSync(executable)).toBe(true);
       const binary = await stat(executable);
       expect(binary.isFile()).toBe(true);

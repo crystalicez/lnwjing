@@ -8,7 +8,8 @@ import { expect, it } from 'vitest';
 import { stageFactoryResetSync, factoryResetMarkerPath } from '../../apps/desktop/src/main/factory-reset.js';
 
 const repository = path.resolve(import.meta.dirname, '..', '..');
-const executable = path.join(repository, '.audit', 'settings-reset-portable-candidate', 'win-unpacked', 'lnwjing.exe');
+const executable = process.env.LNWJING_PACKAGED_EXECUTABLE?.trim()
+  || path.join(repository, '.audit', 'settings-reset-portable-candidate', 'win-unpacked', 'lnwjing.exe');
 
 async function invoke(executablePath: string, args: string[], env: NodeJS.ProcessEnv): Promise<{ code: number | null; stderr: string }> {
   const child = spawn(executablePath, args, { cwd: repository, env, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });

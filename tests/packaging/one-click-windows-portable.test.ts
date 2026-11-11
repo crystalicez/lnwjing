@@ -126,6 +126,11 @@ describe('one-click Windows x64 portable build', () => {
     expect(verify).toContain("Get-Command '7z'");
     expect(verify).toContain('Path = $R6\\');
     expect(verify).toContain('Get-ChildItem -LiteralPath $unpacked -Recurse -File');
+    for (const skill of [
+      'lnwjing-scheduled-continuation', 'ponytail', 'ponytail-review',
+      'ponytail-audit', 'ponytail-debt', 'ponytail-gain', 'ponytail-help',
+    ]) expect(verify).toContain(`'${skill}'`);
+    expect(verify).toContain('Required bundled Agent Skill is missing:');
     expect(verify).toContain('$actual.Remove($relativePath)');
     expect(verify).toContain('PORTABLE_PAYLOAD_VERIFIED:');
     expect(verify).toContain('refusing unverified release');

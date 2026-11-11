@@ -42,7 +42,7 @@ describe('SQLite lifecycle lock ownership', () => {
     child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
     child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
     const finished = new Promise<number | null>((resolve, reject) => {
-      child.once('exit', resolve); child.once('error', reject);
+      child.once('close', resolve); child.once('error', reject);
     });
     try {
       await new Promise(resolve => setTimeout(resolve, 400));
@@ -51,7 +51,7 @@ describe('SQLite lifecycle lock ownership', () => {
     } finally {
       await rm(filename, { force: true });
     }
-    expect(await finished).toBe(0);
+    expect(await finished, `SQLite lock contender stderr: ${stderr}`).toBe(0);
     expect(stderr.replace(/\(node:\d+\) ExperimentalWarning:[^\n]*\n/g, '')).toBe('');
     expect(Number(stdout)).toBeGreaterThanOrEqual(200);
   }, 10_000);

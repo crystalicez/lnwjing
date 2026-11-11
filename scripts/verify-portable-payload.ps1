@@ -52,6 +52,20 @@ foreach ($line in $listing) {
         throw "Portable archive has an invalid or duplicate runtime entry: $relativePath"
     }
 }
+# A complete archive can still be missing a required feature when
+# electron-builder silently skips a missing extraResource directory.
+# Check the explicit feature contract before comparing file inventories.
+$requiredSkills = @(
+    'lnwjing-scheduled-continuation',
+    'ponytail', 'ponytail-review', 'ponytail-audit',
+    'ponytail-debt', 'ponytail-gain', 'ponytail-help'
+)
+foreach ($skill in $requiredSkills) {
+    $required = Join-Path $unpacked ("resources\agent-skills\" + $skill + "\SKILL.md")
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw "Required bundled Agent Skill is missing: $skill"
+    }
+}
 $expectedCount = 0
 foreach ($file in Get-ChildItem -LiteralPath $unpacked -Recurse -File -Force -ErrorAction Stop) {
     if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {

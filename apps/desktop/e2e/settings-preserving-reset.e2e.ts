@@ -11,13 +11,13 @@ import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const projectRoot = path.resolve(desktopRoot, '..', '..');
-const packagedCandidate = path.join(projectRoot, '.audit', 'settings-reset-portable-candidate', 'win-unpacked', 'lnwjing.exe');
+const packagedCandidate = process.env.LNWJING_PACKAGED_EXECUTABLE
+  ?? path.join(projectRoot, '.audit', 'settings-reset-portable-candidate', 'win-unpacked', 'lnwjing.exe');
 type GuiBuild = 'source' | 'packaged-candidate';
 
 async function launchTestGui(profile: string, build: GuiBuild): Promise<ElectronApplication> {
-  const packaged = build === 'packaged-candidate' || process.env.LNWJING_PACKAGED_EXECUTABLE !== undefined;
-  const executable = build === 'packaged-candidate' ? packagedCandidate
-    : process.env.LNWJING_PACKAGED_EXECUTABLE ?? electronExecutablePath(desktopRoot);
+  const packaged = build === 'packaged-candidate';
+  const executable = packaged ? packagedCandidate : electronExecutablePath(desktopRoot);
   const app = await _electron.launch({
     executablePath: executable,
     args: packaged
