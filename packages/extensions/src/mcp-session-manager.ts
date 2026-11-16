@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { ChildProcess } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { appError, err, ok, type Result } from '@lnwjing/domain';
@@ -478,9 +479,17 @@ export function createDefaultMcpClientFactory(
         if (closing !== undefined) return closing;
         const attempt = (async (): Promise<void> => {
           let firstError: unknown;
-          if (pid !== null && getStopPid(processTreeTerminator) !== undefined) {
+          if (pid !== null) {
             try {
-              await getStopPid(processTreeTerminator)?.(pid);
+              if (process.platform === 'linux') {
+                const child: unknown = Reflect.get(transport, '_process');
+                if (!(child instanceof ChildProcess) || child.pid === undefined || child.pid !== pid) {
+                  throw new Error('MCP_CHILD_IDENTITY_UNVERIFIED');
+                }
+                await processTreeTerminator.stop(child, child.pid);
+              } else {
+                await getStopPid(processTreeTerminator)?.(pid);
+              }
             } catch (error: unknown) {
               firstError = error;
             }

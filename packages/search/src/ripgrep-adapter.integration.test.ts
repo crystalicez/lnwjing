@@ -99,13 +99,29 @@ describe('RipgrepAdapter', () => {
 
   it('contains exceptions thrown by stdout observers instead of crashing the host', async () => {
     const runner = new DirectProcessRunner();
-    const result = await runner.run(process.execPath, ['-e', "process.stdout.write('needle\\n')"], process.cwd(), {
+    const result = await runner.run(process.execPath, ['-e', "process.stdout.write('needle\\n'); setTimeout(() => {}, 250)"], process.cwd(), {
       timeoutMs: 5_000,
       stopAfterStdoutLine: () => { throw new Error('observer failure'); },
     });
+    expect(result.exitCode).toBe(-1);
+    expect(result.stderr).toContain('Search stdout observer failed');
     expect(result.observerFailed).toBe(true);
-    expect(result.stoppedEarly).toBe(true);
-  });
+    expect(result.timedOut).not.toBe(true);
+    expect(result.stoppedEarly).not.toBe(true);
+  }, 15_000);
+
+  it('marks synchronous or asynchronous process-tree stop rejection as failed termination', async () => {
+    for (const terminator of [
+      { async stop(): Promise<void> { throw new Error('POSIX process group identity could not be verified'); } },
+      { stop(): Promise<void> { throw new Error('POSIX process group identity could not be verified'); } },
+    ]) {
+      const runner = new DirectProcessRunner(terminator);
+      const result = await runner.run(process.execPath, ['-e', 'setTimeout(() => {}, 250)'], process.cwd(), { timeoutMs: 10 });
+      expect(result.timedOut).toBe(true);
+      expect(result.exitCode).toBe(-1);
+      expect(result.stderr).toContain('POSIX process group identity could not be verified');
+    }
+  }, 15_000);
 
   it('streams records beyond the historical 10 MiB output cap without silently dropping results', async () => {
     const runner = new DirectProcessRunner();

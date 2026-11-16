@@ -93,17 +93,19 @@ export class DirectProcessRunner implements ProcessRunner {
         }
         finish(exitCode);
       };
-      const requestStop = (reason: 'timeout' | 'early'): void => {
+      const requestStop = (reason: 'timeout' | 'early' | 'observer_error'): void => {
         if (terminationPending || settled) return;
         if (reason === 'timeout') timedOut = true;
-        else stoppedEarly = true;
+        else if (reason === 'early') stoppedEarly = true;
         const pid = child.pid;
         if (pid === undefined) {
           finish(-1);
           return;
         }
         terminationPending = true;
-        void this.terminator.stop(child, pid).then(() => {
+        // Normalize synchronous and asynchronous terminator failures into the
+        // same fail-closed result; neither may escape a stream/timer callback.
+        void Promise.resolve().then(() => this.terminator.stop(child, pid)).then(() => {
           terminationPending = false;
           finish(pendingExitCode ?? -1);
         }).catch((error: unknown) => {
@@ -121,7 +123,7 @@ export class DirectProcessRunner implements ProcessRunner {
           stdoutBytes = appendBounded(stdoutChunks, stdoutBytes, chunk);
           return;
         }
-        if (stoppedEarly || timedOut) return;
+        if (stoppedEarly || timedOut || observerFailed) return;
         stdoutLinePending += stdoutDecoder.decode(chunk, { stream: true });
         const delimiter = options.stdoutDelimiter ?? '\n';
         let separator: number;
@@ -146,7 +148,8 @@ export class DirectProcessRunner implements ProcessRunner {
             }
           } catch {
             observerFailed = true;
-            requestStop('early');
+            stderrBytes = appendBounded(stderrChunks, stderrBytes, Buffer.from('Search stdout observer failed', 'utf8'));
+            requestStop('observer_error');
             return;
           }
         }
@@ -161,7 +164,7 @@ export class DirectProcessRunner implements ProcessRunner {
         if (timer !== undefined) clearTimeout(timer);
         options.signal?.removeEventListener('abort', abort);
         resolve({
-          exitCode,
+          exitCode: observerFailed ? -1 : exitCode,
           stdout: stdoutText(),
           stderr: stderrText(),
           ...(timedOut ? { timedOut: true } : {}),
