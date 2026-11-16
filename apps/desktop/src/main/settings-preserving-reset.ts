@@ -39,7 +39,7 @@ const MAX_PROTECTED_PROJECTS = 512;
 // Such layouts are not safe to support without moving the repository itself.
 const UNSAFE_PROJECT_TOP_LEVEL = new Set([
   'cache', 'code cache', 'gpucache', 'dawncache', 'shadercache', 'workspace-index',
-  'logs', 'diagnostics', 'crash-dumps', 'backups', 'recovery-trash',
+  'logs', 'diagnostics', 'crash-dumps', 'backups', 'recovery-trash', 'file-write-operations',
   'background-tasks', 'native-managed-git', 'native-managed-processes',
   'remote-mcp', 'tunnel-client', 'lnwjing.sqlite', 'local state',
   'checkpoint-master.key', 'global-quota-reservations-v2.sqlite',

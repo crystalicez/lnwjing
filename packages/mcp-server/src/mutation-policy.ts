@@ -88,6 +88,7 @@ export function inspectMutationOperation(
     case 'read_file':
     case 'read_files':
     case 'read_file_page':
+    case 'write_file_status':
     case 'read_file_page_continue':
     case 'list_recovery_items':
     case 'list_checkpoints':

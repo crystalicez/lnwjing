@@ -204,6 +204,7 @@ export function createStdioMcpRuntime(
     protectCriticalFiles: (): boolean => !fullBypassAll && destructivePolicyProvider().protectCriticalFiles,
     recoverableDelete: (): boolean => destructivePolicyProvider().recoverableDelete,
     recoveryTrashRoot: path.join(dataPath, 'recovery-trash'),
+    writeOperationJournalRoot: path.join(dataPath, 'file-write-operations'),
   });
   const gitService = new GitService(workspaceRepository, undefined, undefined, { writerAdmission, nativeContainmentRoot: path.join(dataPath, 'native-managed-git') });
   const workspaceQuery = new WorkspaceQueryService(workspaceRepository, pathGuard);

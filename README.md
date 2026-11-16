@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Cross-platform local AI-agent runtime and MCP gateway</strong><br />
-  <em>294 total tool definitions for local files, Git, processes, Windows automation, WSL, browser control, durable goal continuation, Engineering Harness, native Goal automation, context capsules, indexing, observability, Office semantic automation, ECC integration, and extensibility; 282 are advertised by default and all 294 when Codex delegation plus Agent Swarm is enabled.</em>
+  <em>295 total tool definitions for local files, Git, processes, Windows automation, WSL, browser control, durable goal continuation, Engineering Harness, native Goal automation, context capsules, indexing, observability, Office semantic automation, ECC integration, and extensibility; 283 are advertised by default and all 295 when Codex delegation plus Agent Swarm is enabled.</em>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D4" />
   <img alt="Node" src="https://img.shields.io/badge/Node.js-24.x-339933" />
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-294%20tools-6f42c1" />
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-295%20tools-6f42c1" />
 </p>
 
 <h2 align="center">Download lnwjing</h2>
@@ -162,7 +162,7 @@ For the Thai setup and workflow guide, see [docs/USAGE_TH.md](docs/USAGE_TH.md#8
 
 ## What can lnwjing do?
 
-lnwjing exposes **294 tool definitions** through one local runtime and MCP gateway. The default advertised set is 282; all 294 are available when Codex delegation plus Agent Swarm is enabled.
+lnwjing exposes **295 tool definitions** through one local runtime and MCP gateway. The default advertised set is 283; all 295 are available when Codex delegation plus Agent Swarm is enabled.
 
 | Area | Examples |
 | --- | --- |

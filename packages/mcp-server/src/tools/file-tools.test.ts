@@ -48,6 +48,40 @@ describe('fileTools cancellation', () => {
     expect(observedSignals).toEqual([signal, signal, signal, signal, signal, signal, signal]);
   });
 
+  it('forwards caller operationId on write_file and queries write_file_status', async () => {
+    const calls: unknown[] = [];
+    const context = {
+      actor: { clientId: 'test', clientName: 'test' },
+      contextEconomy: new ContextEconomyRuntime(),
+      services: {
+        file: {
+          async writeFile(_actor: unknown, workspaceId: unknown, request: unknown) {
+            calls.push(['writeFile', workspaceId, request]);
+            return ok({ path: 'a.txt', bytesWritten: 1 });
+          },
+          async writeFileStatus(_actor: unknown, workspaceId: unknown, operationId: unknown) {
+            calls.push(['writeFileStatus', workspaceId, operationId]);
+            return ok({ operationId, state: 'outcome_unverified', createdAt: new Date(0).toISOString() });
+          },
+        },
+      },
+    } as unknown as McpToolContext;
+    const tools = fileTools(context);
+    const write = tools.find((entry) => entry.name === 'write_file')!;
+    const status = tools.find((entry) => entry.name === 'write_file_status')!;
+    const operationId = '123e4567-e89b-42d3-a456-426614174000';
+    await expect(write.execute({
+      workspaceId: 'workspace-1', path: 'a.txt', content: 'a', operationId,
+    }, new AbortController().signal)).resolves.toMatchObject({ ok: true });
+    await expect(status.execute({
+      workspaceId: 'workspace-1', operationId,
+    }, new AbortController().signal)).resolves.toMatchObject({ ok: true, value: { state: 'outcome_unverified' } });
+    expect(calls).toEqual([
+      ['writeFile', 'workspace-1', { path: 'a.txt', content: 'a', operationId }],
+      ['writeFileStatus', 'workspace-1', operationId],
+    ]);
+  });
+
   it('returns structured paths when the underlying file move succeeds with void', async () => {
     const context = {
       actor: { clientId: 'test', clientName: 'test' },

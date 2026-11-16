@@ -1,6 +1,6 @@
 # lnwjing — สรุปความสามารถทั้งหมด
 
-สถานะเอกสาร: สรุปจาก source candidate และ runtime contract ปัจจุบันของ lnwjing v5.8.7 (มีทั้งหมด 294 definitions; advertise 282 tools โดยปริยายก่อนใช้ per-tool override และครบ 294 tools เมื่อเปิด Codex delegation กับ Agent Swarm)
+สถานะเอกสาร: สรุปจาก source candidate และ runtime contract ปัจจุบันของ lnwjing v5.8.7 (มีทั้งหมด 295 definitions; advertise 283 tools โดยปริยายก่อนใช้ per-tool override และครบ 295 tools เมื่อเปิด Codex delegation กับ Agent Swarm)
 ขอบเขต: ความสามารถของ gateway, MCP tools, การเชื่อมต่อ AI, สิทธิ์, Live Logs และข้อจำกัดในการใช้งาน
 เอกสารนี้ถูกติดตามใน repository และต้องสอดคล้องกับ source, runtime contract และ release ปัจจุบัน
 
@@ -134,7 +134,7 @@ Bridge นี้ทำให้ lnwjing เป็น MCP gateway ได้ แ�
 4. เรียก tool จริง เช่น workspace_list หรือ workspace_info
 5. ตรวจผลใน Live Logs, process logs หรือ tunnel log
 
-สำหรับ runtime contract ปัจจุบัน full registry มี 294 tool definitions; ค่า default โฆษณา 282 tools และครบ 294 tools เมื่อเปิด `codex_*` กับ `agent_swarm_run` แบบ opt-in. การเห็น catalog เป็นหลักฐานของ runtime ที่ทดสอบ ไม่ได้ยืนยันว่า tunnel หรือ client ภายนอกกำลังเชื่อมอยู่ในขณะนั้น
+สำหรับ runtime contract ปัจจุบัน full registry มี 295 tool definitions; ค่า default โฆษณา 283 tools และครบ 295 tools เมื่อเปิด `codex_*` กับ `agent_swarm_run` แบบ opt-in. การเห็น catalog เป็นหลักฐานของ runtime ที่ทดสอบ ไม่ได้ยืนยันว่า tunnel หรือ client ภายนอกกำลังเชื่อมอยู่ในขณะนั้น
 
 ถ้า Start Tunnel เชื่อมแล้วหลุดวน:
 
@@ -362,7 +362,7 @@ skill_match และ skill_load โหลด local skill ตาม intent ผ�
 
 ## รายชื่อ MCP tools ใน runtime snapshot
 
-runtime contract ปัจจุบันมีทั้งหมด 294 tool definitions; ค่า default ส่งกลับ 282 tools และส่งกลับครบ 294 tools เมื่อเปิด `codex_*` กับ `agent_swarm_run` แบบ opt-in. Planned และ feature-disabled definitions ยังคงอยู่ใน complete inventory แต่ไม่ถูก advertise. รายชื่อ full registry ตามลำดับ canonical มีดังนี้:
+runtime contract ปัจจุบันมีทั้งหมด 295 tool definitions; ค่า default ส่งกลับ 283 tools และส่งกลับครบ 295 tools เมื่อเปิด `codex_*` กับ `agent_swarm_run` แบบ opt-in. Planned และ feature-disabled definitions ยังคงอยู่ใน complete inventory แต่ไม่ถูก advertise. รายชื่อ full registry ตามลำดับ canonical มีดังนี้:
 
 ~~~text
 workspace_list
@@ -390,6 +390,7 @@ git_clone_status
 git_clone_cancel
 git
 write_file
+write_file_status
 apply_patch
 edit_file
 move_file
