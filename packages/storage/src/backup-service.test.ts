@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -111,6 +111,39 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
       expect(await service.verifyBackupForCleanup('not-a-backup')).toBe(false);
       await writeFile(path.join(root, 'backups', saved.id + '.sqlite'), 'corrupt', 'utf8');
       expect(await service.verifyBackupForCleanup(saved.id)).toBe(false);
+    } finally {
+      database.close();
+    }
+  });
+
+  it('rejects a valid but substituted SQLite snapshot even when its file size matches', async () => {
+    const root = await temporaryRoot();
+    const filename = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const database = new SqliteDatabase(filename);
+    try {
+      const service = new SqliteBackupService(database, { databaseFilename: filename, backupDirectory });
+      const first = await service.create('manual');
+      const firstPath = path.join(backupDirectory, `${first.id}.sqlite`);
+      // A byte-identical copy to a new file must remain restorable across
+      // volumes/hosts. A physical inode or birthtime cannot be the authority.
+      await copyFile(firstPath, firstPath + '.copy');
+      await rename(firstPath, firstPath + '.original');
+      await rename(firstPath + '.copy', firstPath);
+      expect(await service.verifyBackupForCleanup(first.id)).toBe(true);
+
+      database.connection.prepare('INSERT INTO settings(key, value) VALUES(?, ?)')
+        .run('sampled-content-change', 'different-backup-content');
+      const second = await service.create('manual');
+      const secondPath = path.join(backupDirectory, `${second.id}.sqlite`);
+      expect(first.sizeBytes).toBe(second.sizeBytes);
+      // This substituted database is still valid SQLite with exactly the
+      // same size. Its sampled content must not match the first manifest.
+      await rename(firstPath, firstPath + '.copied-original');
+      await copyFile(secondPath, firstPath);
+      expect(await service.verifyBackupForCleanup(second.id)).toBe(true);
+      expect(await service.verifyBackupForCleanup(first.id)).toBe(false);
+      await expect(service.scheduleRestore(first.id)).rejects.toThrow(/sampled content/);
     } finally {
       database.close();
     }
@@ -355,6 +388,37 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
     }
   });
 
+  it('replaces a recent daily backup whose SQLite contents are corrupt without changing file size', async () => {
+    const root = await temporaryRoot();
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
+    const backupDirectory = path.join(root, 'backups');
+    const database = new SqliteDatabase(databaseFile, { backupDirectory });
+    try {
+      const service = new SqliteBackupService(database, {
+        backupDirectory, databaseFilename: databaseFile,
+        now: (): Date => new Date('2026-08-01T00:00:00.000Z'),
+      });
+      const original = await service.ensureRecent();
+      if (original === null) throw new Error('Initial daily backup is unavailable');
+      // A healthy copy is reused. Mutating its header must invalidate the cache.
+      await expect(service.ensureRecent()).resolves.toBeNull();
+      const filename = path.join(backupDirectory, `${original.id}.sqlite`);
+      const bytes = await readFile(filename);
+      const originalSize = bytes.length;
+      bytes.fill(0, 0, 100);
+      await writeFile(filename, bytes);
+      expect((await readFile(filename)).length).toBe(originalSize);
+      expect(await service.verifyBackupForCleanup(original.id)).toBe(false);
+      const replacement = await service.ensureRecent();
+      expect(replacement?.id).not.toBe(original.id);
+      if (replacement === null) throw new Error('Corrupt backup was treated as recent');
+      expect(await service.verifyBackupForCleanup(replacement.id)).toBe(true);
+      await expect(service.ensureRecent()).resolves.toBeNull();
+    } finally {
+      database.close();
+    }
+  });
+
   it('coordinates the daily backup lease across concurrent database runtimes', async () => {
     const root = await temporaryRoot();
     const databaseFile = path.join(root, 'lnwjing.sqlite');
@@ -419,6 +483,12 @@ describe('SqliteBackupService', { timeout: 30_000 }, () => {
 
       const listed = (await service.list()).filter((entry) => entry.reason === 'daily');
       expect(listed).toHaveLength(11);
+      // Moving a snapshot into the same-volume retention archive must preserve
+      // its cheap file identity and keep it usable for emergency recovery.
+      const archived = (await readdir(path.join(backupDirectory, 'retention-archive')))
+        .filter((filename) => filename.endsWith('.sqlite'));
+      expect(archived.length).toBeGreaterThan(0);
+      expect(await service.verifyBackupForCleanup(archived[0]!.slice(0, -'.sqlite'.length))).toBe(true);
     } finally {
       database.close();
     }

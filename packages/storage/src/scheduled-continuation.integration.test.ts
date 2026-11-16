@@ -4,8 +4,12 @@ import { DatabaseSync } from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SqliteDatabase } from './database.js';
+import { INITIAL_MIGRATION_SQL, SqliteDatabase } from './database.js';
 import { SqliteGoalRepository } from './goal-repository.js';
+import { AUDIT_MIGRATION_SQL } from './migrations/audit-migration.js';
+import { CHECKPOINT_MIGRATION_SQL } from './migrations/checkpoint-migration.js';
+import { AUDIT_SCOPE_MIGRATION_SQL } from './migrations/audit-scope-migration.js';
+import { WORKSPACE_ARCHIVE_MIGRATION_SQL } from './migrations/workspace-archive-migration.js';
 import { GOAL_CONTINUATION_MIGRATION_SQL } from './migrations/goal-continuation-migration.js';
 import { SCHEDULED_CONTINUATION_MIGRATION_SQL } from './migrations/scheduled-continuation-migration.js';
 
@@ -170,6 +174,13 @@ describe('scheduled continuation migration', () => {
     const filename = path.join(root, 'state.sqlite');
     const legacy = new DatabaseSync(filename);
     legacy.exec('CREATE TABLE schema_migrations (id TEXT PRIMARY KEY NOT NULL);');
+    // Build an authentic pre-008 schema. A migration ledger without its tables
+    // is not a valid historical database and masks genuine upgrade failures.
+    legacy.exec(INITIAL_MIGRATION_SQL);
+    legacy.exec(AUDIT_MIGRATION_SQL);
+    legacy.exec(CHECKPOINT_MIGRATION_SQL);
+    legacy.exec(AUDIT_SCOPE_MIGRATION_SQL);
+    legacy.exec(WORKSPACE_ARCHIVE_MIGRATION_SQL);
     legacy.exec(GOAL_CONTINUATION_MIGRATION_SQL);
     legacy.exec(SCHEDULED_CONTINUATION_MIGRATION_SQL);
     for (const id of ['001_initial','002_audit','003_checkpoints','004_audit_scope','005_workspace_archive','006_goal_continuation','007_scheduled_continuations']) {
@@ -186,6 +197,7 @@ describe('scheduled continuation migration', () => {
       const continuationColumns = upgraded.connection.prepare('PRAGMA table_info(goal_scheduled_continuations)').all()
         .map((row) => (row as { name: string }).name);
       expect(migrationIds).toContain('008_scheduled_continuation_session_fence');
+      expect(upgraded.connection.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get()).toEqual({ name: 'settings' });
       expect(goalColumns).toContain('lease_owner_session_id');
       expect(continuationColumns).toContain('source_session_id');
     } finally {

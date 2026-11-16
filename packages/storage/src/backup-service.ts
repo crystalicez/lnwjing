@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
-import { lstat, mkdir, open, readFile, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
+import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
+import { lstat, mkdir, open, readFile, readdir, rename, rm, writeFile, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { Worker } from 'node:worker_threads';
 import { isForeignAbsolutePath } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import { withSqliteLifecycleLockSync } from './sqlite-lifecycle-lock.js';
@@ -30,6 +31,8 @@ export interface BackupSummary {
 interface BackupManifest extends BackupSummary {
   readonly schemaVersion: 1;
   readonly databaseFile: string;
+  /** Portable SHA-256 of bounded file samples; not a full-file authenticity proof. */
+  readonly fileSampleSha256?: string;
 }
 
 export type BackupHostCompatibility = 'same_host' | 'cross_host' | 'legacy_unknown';
@@ -53,6 +56,57 @@ export interface BackupRestoreNotice {
 interface StoredBackupManifest {
   readonly manifest: BackupManifest;
   readonly directory: string;
+}
+
+const BACKUP_SAMPLE_BYTES = 64 * 1024;
+
+function backupSampleRanges(sizeBytes: number): readonly (readonly [number, number])[] {
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0) throw new Error('Invalid SQLite backup size');
+  const headBytes = Math.min(sizeBytes, BACKUP_SAMPLE_BYTES);
+  const tailStart = Math.max(headBytes, sizeBytes - BACKUP_SAMPLE_BYTES);
+  return tailStart >= sizeBytes
+    ? [[0, headBytes]]
+    : [[0, headBytes], [tailStart, sizeBytes - tailStart]];
+}
+
+async function backupSampleSha256(filename: string, sizeBytes: number): Promise<string> {
+  const digest = createHash('sha256').update(`sqlite-sample-v1:${sizeBytes}:`);
+  const handle = await open(filename, 'r');
+  try {
+    for (const [position, length] of backupSampleRanges(sizeBytes)) {
+      const bytes = Buffer.allocUnsafe(length);
+      let received = 0;
+      while (received < length) {
+        const result = await handle.read(bytes, received, length - received, position + received);
+        if (result.bytesRead === 0) throw new Error('SQLite backup sample was truncated');
+        received += result.bytesRead;
+      }
+      digest.update(bytes);
+    }
+    return digest.digest('hex');
+  } finally {
+    await handle.close();
+  }
+}
+
+function backupSampleSha256Sync(filename: string, sizeBytes: number): string {
+  const digest = createHash('sha256').update(`sqlite-sample-v1:${sizeBytes}:`);
+  const fd = openSync(filename, 'r');
+  try {
+    for (const [position, length] of backupSampleRanges(sizeBytes)) {
+      const bytes = Buffer.allocUnsafe(length);
+      let received = 0;
+      while (received < length) {
+        const read = readSync(fd, bytes, received, length - received, position + received);
+        if (read === 0) throw new Error('SQLite backup sample was truncated');
+        received += read;
+      }
+      digest.update(bytes);
+    }
+    return digest.digest('hex');
+  } finally {
+    closeSync(fd);
+  }
 }
 
 interface RestoreMarker {
@@ -122,6 +176,9 @@ export class SqliteBackupService {
   private readonly databaseFilename: string;
   private readonly automaticBackupBudgetOverrideBytes: number | undefined;
   private readonly globalQuota: SqliteBackupServiceOptions['globalQuota'];
+  // Avoid repeatedly reading multi-GB daily snapshots in one process. A changed
+  // file identity or metadata invalidates its successful integrity check.
+  private readonly verifiedDailyBackups = new Map<string, string>();
 
   public constructor(private readonly database: SqliteDatabase, options: SqliteBackupServiceOptions) {
     this.backupDirectory = path.resolve(options.backupDirectory);
@@ -221,6 +278,8 @@ export class SqliteBackupService {
     let quotaReservation: GlobalQuotaReservation | null = null;
     const quota = typeof this.globalQuota === 'function' ? this.globalQuota() : this.globalQuota;
     if (quota !== undefined && quota !== null) {
+      // Low-frequency admission: the snapshot may grow while SQLite copies.
+      // Reserve a conservative estimate and reject a larger result below.
       const sourcePages = (this.database.connection.prepare('PRAGMA page_count').get() as { page_count: number }).page_count;
       const pageSize = (this.database.connection.prepare('PRAGMA page_size').get() as { page_size: number }).page_size;
       const estimate = Math.ceil(sourcePages * pageSize * 1.1) + 256 * 1024;
@@ -242,8 +301,10 @@ export class SqliteBackupService {
           throw new Error('Automatic SQLite backup exceeded its storage budget during creation');
         }
       }
-      validateDatabase(destination);
-      if (quotaReservation !== null && (await stat(destination)).size + 128 * 1024 > quotaReservation.bytes) {
+      await validateDatabaseAsync(destination);
+      const createdFile = await lstat(destination);
+      if (!createdFile.isFile() || createdFile.isSymbolicLink()) throw new Error('Invalid SQLite backup output');
+      if (quotaReservation !== null && createdFile.size + 128 * 1024 > quotaReservation.bytes) {
         throw new Error('SQLite backup exceeded its global quota reservation; unpublished copy removed');
       }
       manifest = {
@@ -251,8 +312,9 @@ export class SqliteBackupService {
         id,
         createdAt,
         reason,
-        sizeBytes: (await stat(destination)).size,
+        sizeBytes: createdFile.size,
         databaseFile,
+        fileSampleSha256: await backupSampleSha256(destination, createdFile.size),
         platform: this.platform,
         arch: this.arch,
         dataSchemaVersion: readDataSchemaVersion(this.database.connection),
@@ -283,10 +345,30 @@ export class SqliteBackupService {
         const age = now - Date.parse(daily.createdAt);
         if (daily.reason !== 'daily' || !Number.isFinite(age) || age < 0 || age >= maxAgeMs) continue;
         try {
-          const file = await lstat(path.join(this.backupDirectory, daily.databaseFile));
-          if (file.isFile() && file.size === daily.sizeBytes && file.size > 0) return null;
+          const filename = path.join(this.backupDirectory, daily.databaseFile);
+          const file = await lstat(filename);
+          if (!file.isFile() || file.isSymbolicLink() || file.size !== daily.sizeBytes || file.size <= 0
+            || (daily.fileSampleSha256 !== undefined
+              && daily.fileSampleSha256 !== await backupSampleSha256(filename, file.size))) continue;
+          const fingerprint = `${file.dev}:${file.ino}:${file.size}:${file.mtimeMs}:${file.ctimeMs}`;
+          if (this.verifiedDailyBackups.get(daily.id) !== fingerprint) {
+            // Size and age alone cannot establish recoverability. Verify at least
+            // once per process and whenever the snapshot changes on disk.
+            await validateDatabaseAsync(filename);
+            const rechecked = await lstat(filename);
+            if (!rechecked.isFile() || rechecked.isSymbolicLink()
+              || `${rechecked.dev}:${rechecked.ino}:${rechecked.size}:${rechecked.mtimeMs}:${rechecked.ctimeMs}` !== fingerprint) {
+              throw new Error('SQLite daily backup changed during integrity verification');
+            }
+            this.verifiedDailyBackups.set(daily.id, fingerprint);
+            if (this.verifiedDailyBackups.size > 32) {
+              this.verifiedDailyBackups.delete(this.verifiedDailyBackups.keys().next().value!);
+            }
+          }
+          return null;
         } catch {
-          // A missing or inaccessible backup is not evidence that a daily copy exists.
+          this.verifiedDailyBackups.delete(daily.id);
+          // A missing, unreadable or corrupt backup is not a usable daily copy.
         }
       }
       return await this.create('daily');
@@ -306,9 +388,15 @@ export class SqliteBackupService {
     if (stored === null) return false;
     const filename = path.join(stored.directory, stored.manifest.databaseFile);
     try {
-      if ((await stat(filename)).size !== stored.manifest.sizeBytes) return false;
-      validateDatabase(filename);
-      return true;
+      const info = await lstat(filename);
+      if (!info.isFile() || info.isSymbolicLink() || info.size !== stored.manifest.sizeBytes
+        || (stored.manifest.fileSampleSha256 !== undefined
+          && stored.manifest.fileSampleSha256 !== await backupSampleSha256(filename, info.size))) return false;
+      const identity = `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+      await validateDatabaseAsync(filename);
+      const rechecked = await lstat(filename);
+      return rechecked.isFile() && !rechecked.isSymbolicLink()
+        && `${rechecked.dev}:${rechecked.ino}:${rechecked.size}:${rechecked.mtimeMs}:${rechecked.ctimeMs}` === identity;
     } catch {
       return false;
     }
@@ -318,7 +406,20 @@ export class SqliteBackupService {
     await mkdir(this.backupDirectory, { recursive: true });
     const stored = await readStoredManifestById(this.backupDirectory, backupIdValue);
     if (stored === null) throw new Error('Backup was not found');
-    validateDatabase(path.join(stored.directory, stored.manifest.databaseFile));
+    const filename = path.join(stored.directory, stored.manifest.databaseFile);
+    const info = await lstat(filename);
+    if (!info.isFile() || info.isSymbolicLink() || info.size !== stored.manifest.sizeBytes
+      || (stored.manifest.fileSampleSha256 !== undefined
+        && stored.manifest.fileSampleSha256 !== await backupSampleSha256(filename, info.size))) {
+      throw new Error('SQLite backup sampled content does not match its manifest');
+    }
+    const identity = `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+    await validateDatabaseAsync(filename);
+    const rechecked = await lstat(filename);
+    if (!rechecked.isFile() || rechecked.isSymbolicLink()
+      || `${rechecked.dev}:${rechecked.ino}:${rechecked.size}:${rechecked.mtimeMs}:${rechecked.ctimeMs}` !== identity) {
+      throw new Error('SQLite backup changed during restore validation');
+    }
     const marker: RestoreMarker = { schemaVersion: 1, backupId: stored.manifest.id, requestedAt: this.now().toISOString() };
     const markerPath = restoreMarkerPath(this.backupDirectory);
     const temporary = markerPath + '.tmp-' + randomUUID();
@@ -396,13 +497,16 @@ export function createPreMigrationBackupSync(
   try {
     database.exec('VACUUM INTO ' + sqliteString(destination) + ';');
     validateDatabase(destination);
+    const createdFile = lstatSync(destination);
+    if (!createdFile.isFile() || createdFile.isSymbolicLink()) throw new Error('Invalid pre-migration backup output');
     const manifest: BackupManifest = {
       schemaVersion: 1,
       id,
       createdAt,
       reason: 'pre-migration',
-      sizeBytes: statSync(destination).size,
+      sizeBytes: createdFile.size,
       databaseFile,
+      fileSampleSha256: backupSampleSha256Sync(destination, createdFile.size),
       platform,
       arch,
       dataSchemaVersion: readDataSchemaVersion(database),
@@ -661,6 +765,12 @@ function applyPendingSqliteRestoreUnlocked(
     const stored = readStoredManifestByIdSync(directory, marker.backupId);
     if (stored === null) throw new Error('Scheduled backup was not found');
     const source = path.join(stored.directory, stored.manifest.databaseFile);
+    const sourceInfo = lstatSync(source);
+    if (!sourceInfo.isFile() || sourceInfo.isSymbolicLink() || sourceInfo.size !== stored.manifest.sizeBytes
+      || (stored.manifest.fileSampleSha256 !== undefined
+        && stored.manifest.fileSampleSha256 !== backupSampleSha256Sync(source, sourceInfo.size))) {
+      throw new Error('Scheduled SQLite backup sampled content has changed');
+    }
     validateDatabase(source);
     mkdirSync(path.dirname(dbPath), { recursive: true });
 
@@ -1374,7 +1484,10 @@ function parseManifest(raw: string, directory: string): BackupManifest | null {
   const platform = value.platform === undefined ? undefined : parsePlatform(value.platform);
   const arch = value.arch === undefined ? undefined : typeof value.arch === 'string' && value.arch.trim().length > 0 ? value.arch.trim() : null;
   const dataSchemaVersion = value.dataSchemaVersion === undefined ? undefined : validDataSchemaVersion(value.dataSchemaVersion) ? value.dataSchemaVersion : null;
-  if (platform === null || arch === null || dataSchemaVersion === null) return null;
+  const fileSampleSha256 = value.fileSampleSha256 === undefined ? undefined
+    : typeof value.fileSampleSha256 === 'string' && /^[a-f0-9]{64}$/.test(value.fileSampleSha256)
+      ? value.fileSampleSha256 : null;
+  if (platform === null || arch === null || dataSchemaVersion === null || fileSampleSha256 === null) return null;
   if (!existsSync(path.join(directory, value.databaseFile))) return null;
   return {
     schemaVersion: 1,
@@ -1386,6 +1499,7 @@ function parseManifest(raw: string, directory: string): BackupManifest | null {
     ...(platform === undefined ? {} : { platform }),
     ...(arch === undefined ? {} : { arch }),
     ...(dataSchemaVersion === undefined ? {} : { dataSchemaVersion }),
+    ...(fileSampleSha256 === undefined ? {} : { fileSampleSha256 }),
   };
 }
 
@@ -1393,6 +1507,55 @@ function parseRestoreMarker(raw: string): RestoreMarker {
   const value = JSON.parse(raw) as unknown;
   if (!isRecord(value) || value.schemaVersion !== 1 || typeof value.backupId !== 'string' || !isSafeBackupId(value.backupId) || typeof value.requestedAt !== 'string') throw new Error('Restore marker is invalid');
   return { schemaVersion: 1, backupId: value.backupId, requestedAt: value.requestedAt };
+}
+
+// SQLite quick_check reads the complete snapshot. Run it off Electron Main
+// without adding a second backup, persistent index or disk-resident cache.
+// Keep the synchronous validator below for the offline restore/migration path.
+const SQLITE_BACKUP_VALIDATOR_WORKER = `
+  const { parentPort, workerData } = require('node:worker_threads');
+  const { DatabaseSync } = require('node:sqlite');
+  let database;
+  let failure;
+  try {
+    database = new DatabaseSync(workerData, { readOnly: true });
+    const row = database.prepare('PRAGMA quick_check;').get();
+    if (row === undefined || !Object.values(row).includes('ok')) {
+      throw new Error('SQLite backup integrity check failed');
+    }
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (database !== undefined) {
+      try { database.close(); }
+      catch (error) { failure = error instanceof Error ? error.message : String(error); }
+    }
+  }
+  parentPort.postMessage(failure === undefined ? { ok: true } : { ok: false, message: failure });
+`;
+
+async function validateDatabaseAsync(filename: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const worker = new Worker(SQLITE_BACKUP_VALIDATOR_WORKER, { eval: true, workerData: filename });
+    let settled = false;
+    worker.once('message', (message: unknown) => {
+      if (settled) return;
+      settled = true;
+      if (isRecord(message) && message.ok === true) resolve();
+      else reject(new Error(isRecord(message) && typeof message.message === 'string'
+        ? message.message : 'SQLite backup integrity check failed'));
+    });
+    worker.once('error', (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
+    worker.once('exit', (code) => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`SQLite backup validation worker exited without a result (code ${code})`));
+    });
+  });
 }
 
 function validateDatabase(filename: string): void {

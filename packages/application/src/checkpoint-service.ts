@@ -153,7 +153,7 @@ export class CheckpointService implements CheckpointServicePort {
   ): Promise<Result<RestoreResult>> {
     if (!isApplicationAuthorized(authorization, options.userConfirmed === true)) return err(appError('PERMISSION_REQUIRED', 'Checkpoint restore requires explicit user confirmation'));
     const checkpoint = await this.repository.get(checkpointId);
-    if (checkpoint === null) return err(appError('FILE_NOT_FOUND', 'Checkpoint was not found'));
+    if (checkpoint === null) return err(appError('FILE_NOT_FOUND', 'Checkpoint was not found; older Undo history may have expired under SQLite Hard Limit recovery'));
     if (checkpoint.workspaceId !== workspaceId) return err(appError('PERMISSION_DENIED', 'Checkpoint belongs to another workspace'));
     const workspace = await this.getWorkspace(workspaceId);
     if (!workspace.ok) return workspace;

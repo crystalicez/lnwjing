@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AuditEvent } from '@lnwjing/audit';
-import { SqliteAuditRepository } from './audit-repository.js';
+import { SqliteAuditRepository, ROUTINE_READ_RECOVERY_PROBE_SQL, ROUTINE_READ_RECOVERY_DELETE_SQL } from './audit-repository.js';
 import { SqliteDatabase } from './database.js';
 
 const temporaryRoots: string[] = [];
@@ -13,6 +13,20 @@ afterEach(async () => {
 });
 
 describe('SqliteAuditRepository', () => {
+  it('keeps paired-call protection on the existing indexed workspace/callId lookup at scale', () => {
+    const db = new SqliteDatabase(':memory:');
+    try {
+      const plans = [ROUTINE_READ_RECOVERY_PROBE_SQL, ROUTINE_READ_RECOVERY_DELETE_SQL]
+        .map((sql) => db.connection.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(
+          ...sql.includes('ORDER BY candidate.timestamp')
+            ? ['2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z', 128]
+            : ['2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'],
+        ).map((row) => String(row.detail)).join('\n'));
+      for (const plan of plans) {
+        expect(plan).toContain('idx_audit_calls_workspace_correlation');
+      }
+    } finally { db.close(); }
+  });
   it('paginates grouped session history without reading every session into JS', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-session-pages-'));
     temporaryRoots.push(root);
@@ -377,6 +391,157 @@ describe('SqliteAuditRepository', () => {
         "EXPLAIN QUERY PLAN SELECT 1 FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?",
       ).all('workspace-a', 'same-call') as { detail: string }[];
       expect(secondaryPlan.some((row) => row.detail.includes('idx_audit_calls_workspace_correlation'))).toBe(true);
+    } finally { database.close(); }
+  });
+
+  it('uses primary-key and workspace-call indexed seeks to resolve full detail and in-flight export', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-indexed-resolve-'));
+    temporaryRoots.push(root);
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repo = new SqliteAuditRepository(database);
+      for (const [workspaceId, suffix] of [['workspace-a', 'one'], ['workspace-b', 'two']] as const) {
+        await repo.insert({
+          id: `start-${suffix}`, timestamp: `2026-08-20T00:00:0${suffix === 'one' ? 1 : 2}.000Z`,
+          actorId: 'test', actorName: 'test', workspaceId,
+          action: 'mcp_tool:read_file', resultCode: 'STARTED', durationMs: 0,
+          metadata: {
+            callId: 'shared-id', phase: 'started', toolName: 'read_file',
+            activityTargetDetail: { kind: 'files', items: [`${suffix}.ts`] },
+          },
+        });
+      }
+      await expect(repo.resolveActivityTargetDetail('shared-id', 'workspace-a'))
+        .resolves.toEqual({ kind: 'files', items: ['one.ts'] });
+      await expect(repo.resolveActivityTargetDetail('shared-id', 'workspace-b'))
+        .resolves.toEqual({ kind: 'files', items: ['two.ts'] });
+      await expect(repo.resolveActivityTargetDetail('start-one'))
+        .resolves.toEqual({ kind: 'files', items: ['one.ts'] });
+      expect((await repo.resolveActivityEvent('shared-id', 'started-call', 'workspace-a'))?.id).toBe('start-one');
+      expect((await repo.resolveActivityEvent('shared-id', 'started-call', 'workspace-b'))?.id).toBe('start-two');
+      expect((await repo.resolveActivityEvent('start-two'))?.id).toBe('start-two');
+
+      // Exact event IDs must never override an explicitly requested workspace.
+      // A colliding event ID belongs to B, but A has a call with that same ID.
+      await repo.insert({
+        id: 'collision-id', timestamp: '2026-08-20T00:00:03.000Z',
+        actorId: 'test', actorName: 'test', workspaceId: 'workspace-b',
+        action: 'mcp_tool:read_file', resultCode: 'STARTED', durationMs: 0,
+        metadata: {
+          callId: 'different-call', phase: 'started', toolName: 'read_file',
+          activityTargetDetail: { kind: 'files', items: ['wrong-workspace.txt'] },
+        },
+      });
+      await repo.insert({
+        id: 'event-a', timestamp: '2026-08-20T00:00:04.000Z',
+        actorId: 'test', actorName: 'test', workspaceId: 'workspace-a',
+        action: 'mcp_tool:read_file', resultCode: 'STARTED', durationMs: 0,
+        metadata: {
+          callId: 'collision-id', phase: 'started', toolName: 'read_file',
+          activityTargetDetail: { kind: 'files', items: ['correct-workspace.txt'] },
+        },
+      });
+      await expect(repo.resolveActivityTargetDetail('collision-id', 'workspace-a')).resolves.toEqual({
+        kind: 'files', items: ['correct-workspace.txt'],
+      });
+      await expect(repo.resolveActivityTargetDetail('collision-id', 'workspace-b')).resolves.toEqual({
+        kind: 'files', items: ['wrong-workspace.txt'],
+      });
+      await expect(repo.resolveActivityEvent('collision-id', 'event', 'workspace-a')).resolves.toBeNull();
+      expect((await repo.resolveActivityEvent('collision-id', 'started-call', 'workspace-a'))?.id).toBe('event-a');
+
+      const plans = [
+        database.connection.prepare('EXPLAIN QUERY PLAN SELECT id FROM audit_events WHERE id = ? LIMIT 1').all('start-one'),
+        database.connection.prepare(
+          "EXPLAIN QUERY PLAN SELECT id FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ? AND json_extract(metadata_json, '$.phase') = 'started' ORDER BY timestamp DESC, id DESC LIMIT 1",
+        ).all('workspace-a', 'shared-id'),
+        database.connection.prepare(
+          "EXPLAIN QUERY PLAN SELECT id FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') IN (SELECT value FROM json_each(?))",
+        ).all('workspace-b', JSON.stringify(['shared-id'])),
+      ] as { detail: string }[][];
+      for (const plan of plans) {
+        expect(plan.some((row) => row.detail.includes('SEARCH audit_events'))).toBe(true);
+        expect(plan.some((row) => row.detail.includes('SCAN audit_events'))).toBe(false);
+      }
+    } finally {
+      database.close();
+    }
+  });
+
+  it('finds recent activity for a quiet workspace even after 550 newer events elsewhere', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-audit-recent-projects-'));
+    temporaryRoots.push(root);
+    const database = new SqliteDatabase(path.join(root, 'state.db'));
+    try {
+      const repo = new SqliteAuditRepository(database);
+      const baseline = Date.parse('2026-11-02T04:19:00.000Z');
+      database.connection.exec('BEGIN');
+      try {
+        await repo.insert({
+          id: 'quiet-recent', timestamp: '2026-11-02T04:18:00.000Z',
+          actorId: 'test', actorName: 'test', workspaceId: 'quiet',
+          action: 'mcp_tool:read_file', resultCode: 'SUCCESS', durationMs: 1,
+          metadata: { phase: 'completed', toolName: 'read_file', callId: 'quiet-call' },
+        });
+        for (let index = 0; index < 550; index += 1) {
+          await repo.insert({
+            id: `loud-${index}`, timestamp: new Date(baseline + index).toISOString(),
+            actorId: 'test', actorName: 'test', workspaceId: 'loud',
+            action: 'mcp_tool:read_file', resultCode: 'SUCCESS', durationMs: 1,
+            metadata: { phase: 'completed', toolName: 'read_file', callId: `loud-${index}` },
+          });
+        }
+        database.connection.exec('COMMIT');
+      } catch (error) { database.connection.exec('ROLLBACK'); throw error; }
+      const globalPage = await repo.listActivityScoped({ actionPrefix: 'mcp_tool:' }, 500);
+      expect(globalPage.some((entry) => entry.id === 'quiet-recent')).toBe(false);
+      expect(repo.listRecentMcpWorkspaceActivity('2026-11-02T04:15:00.000Z', '2026-11-02T04:21:00.000Z'))
+        .toEqual([
+          { workspaceId: 'loud', timestamp: new Date(baseline + 549).toISOString() },
+          { workspaceId: 'quiet', timestamp: '2026-11-02T04:18:00.000Z' },
+        ]);
+      const plan = database.connection.prepare(
+        "EXPLAIN QUERY PLAN SELECT workspace_id, MAX(timestamp) FROM audit_events INDEXED BY idx_audit_events_timestamp WHERE timestamp >= ? AND timestamp <= ? AND workspace_id IS NOT NULL AND action LIKE 'mcp_tool:%' GROUP BY workspace_id",
+      ).all('2026-11-02T04:15:00.000Z', '2026-11-02T04:21:00.000Z') as { detail: string }[];
+      expect(plan.some((entry) => entry.detail.includes('SEARCH audit_events USING INDEX idx_audit_events_timestamp'))).toBe(true);
+    } finally { database.close(); }
+  });
+
+  it('resolves legacy unscoped references in registered workspaces beyond the old 512 limit', async () => {
+    const database = new SqliteDatabase(':memory:');
+    try {
+      const repo = new SqliteAuditRepository(database);
+      database.connection.exec('BEGIN');
+      try {
+        const addWorkspace = database.connection.prepare(
+          'INSERT INTO workspaces(id, display_name, root_path, real_root_path, created_at) VALUES(?,?,?,?,?)',
+        );
+        for (let i = 0; i < 513; i += 1) {
+          const id = `workspace-${String(i).padStart(3, '0')}`;
+          addWorkspace.run(id, id, `E:\\\\fixture\\\\${id}`, `E:\\\\fixture\\\\${id}`, '2026-01-01T00:00:00.000Z');
+        }
+        await repo.insert({
+          id: 'legacy-beyond-512', timestamp: '2026-01-01T00:00:00.000Z',
+          actorId: 'test', actorName: 'test', workspaceId: 'workspace-512',
+          action: 'mcp_tool:read_file', resultCode: 'STARTED', durationMs: 0,
+          metadata: { callId: 'old-call-id', phase: 'started', toolName: 'read_file',
+            activityTargetDetail: { kind: 'files', items: ['beyond-limit.ts'] } },
+        });
+        // Hide it from the bounded recent fallback to verify actual scope enumeration.
+        for (let i = 0; i < 1030; i += 1) {
+          await repo.insert({
+            id: `new-${i}`, timestamp: new Date(Date.parse('2026-11-02T04:20:00Z') + i).toISOString(),
+            actorId: 'test', actorName: 'test', workspaceId: 'workspace-000',
+            action: 'mcp_tool:read_file', resultCode: 'SUCCESS', durationMs: 1,
+            metadata: { callId: `new-${i}`, phase: 'completed', toolName: 'read_file' },
+          });
+        }
+        database.connection.exec('COMMIT');
+      } catch (error) { database.connection.exec('ROLLBACK'); throw error; }
+      await expect(repo.resolveActivityTargetDetail('old-call-id')).resolves.toEqual({
+        kind: 'files', items: ['beyond-limit.ts'],
+      });
+      expect((await repo.resolveActivityEvent('old-call-id', 'started-call'))?.id).toBe('legacy-beyond-512');
     } finally { database.close(); }
   });
 

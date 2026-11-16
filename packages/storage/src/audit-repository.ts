@@ -398,47 +398,145 @@ export class SqliteAuditRepository implements AuditEventRepository {
     });
   }
 
-  public async resolveActivityTargetDetail(idOrCallId: string): Promise<ActivityTargetDetail | null> {
+  /**
+   * Recent per-workspace MCP activity is independent of Work Log pagination.
+   * Seek the five-minute timestamp window; never page only 500 global events
+   * and accidentally mark a quieter project idle during another project's burst.
+   */
+  public listRecentMcpWorkspaceActivity(sinceIso: string, untilIso: string): readonly {
+    readonly workspaceId: string;
+    readonly timestamp: string;
+  }[] {
+    if (!Number.isFinite(Date.parse(sinceIso)) || !Number.isFinite(Date.parse(untilIso))
+      || sinceIso > untilIso) throw new Error('Invalid recent activity range');
+    const rows = this.database.connection.prepare(
+      `SELECT workspace_id, MAX(timestamp) AS last_at
+       FROM audit_events INDEXED BY idx_audit_events_timestamp
+       WHERE timestamp >= ? AND timestamp <= ? AND workspace_id IS NOT NULL
+         AND action LIKE 'mcp_tool:%'
+       GROUP BY workspace_id`,
+    ).all(sinceIso, untilIso);
+    return rows.flatMap((row) =>
+      isRecord(row) && typeof row.workspace_id === 'string' && typeof row.last_at === 'string'
+        ? [{ workspaceId: row.workspace_id, timestamp: row.last_at }] : []);
+  }
+
+  /** Legacy unscoped refs probe registered workspaces + NULL without a 512-workspace blind spot. */
+  private activityLookupScopes(workspaceId?: string | null): readonly (string | null)[] {
+    if (workspaceId !== undefined) return [workspaceId];
+    const rows = this.database.connection.prepare('SELECT id FROM workspaces ORDER BY id').all();
+    return [null, ...rows.flatMap((row) => isRecord(row) && typeof row.id === 'string' ? [row.id] : [])];
+  }
+
+  public async resolveActivityTargetDetail(idOrCallId: string, workspaceId?: string | null): Promise<ActivityTargetDetail | null> {
     if (idOrCallId.length === 0 || idOrCallId.length > 512) return null;
     const completedSuffix = ':completed';
     const phase = idOrCallId.endsWith(completedSuffix) ? 'completed' : 'started';
     const lookup = phase === 'completed' ? idOrCallId.slice(0, -completedSuffix.length) : idOrCallId;
-    const row = this.database.connection.prepare(
-      `SELECT metadata_json FROM audit_events
-       WHERE (id = ? OR json_extract(metadata_json, '$.callId') = ?)
-         AND json_extract(metadata_json, '$.phase') = ?
-         AND json_type(metadata_json, '$.activityTargetDetail') = 'object'
-       ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END, timestamp DESC, id DESC LIMIT 1`,
-    ).get(lookup, lookup, phase, lookup);
+    // Exact event identity always has priority over a possibly colliding call ID.
+    let row = this.database.connection.prepare(
+      `SELECT metadata_json FROM audit_events WHERE id = ? AND json_extract(metadata_json, '$.phase') = ?
+       AND json_type(metadata_json, '$.activityTargetDetail') = 'object'
+       ${workspaceId === undefined ? '' : 'AND workspace_id IS ?'} LIMIT 1`,
+    ).get(...(workspaceId === undefined ? [lookup, phase] : [lookup, phase, workspaceId]));
+    if (!isMetadataRow(row)) {
+      const statement = this.database.connection.prepare(
+        `SELECT metadata_json, timestamp, id FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation
+         WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?
+           AND json_extract(metadata_json, '$.phase') = ?
+           AND json_type(metadata_json, '$.activityTargetDetail') = 'object'
+         ORDER BY timestamp DESC, id DESC LIMIT 1`,
+      );
+      let latest: { metadata_json: string; timestamp: string; id: string } | null = null;
+      const scopes = this.activityLookupScopes(workspaceId);
+      for (let index = 0; index < scopes.length; index += 1) {
+        const found = statement.get(scopes[index]!, lookup, phase);
+        if (isTimedMetadataRow(found)
+          && (latest === null || found.timestamp > latest.timestamp
+            || (found.timestamp === latest.timestamp && found.id > latest.id))) {
+          latest = { metadata_json: found.metadata_json, timestamp: found.timestamp, id: found.id };
+        }
+        if ((index + 1) % 32 === 0 && index + 1 < scopes.length) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      }
+      if (workspaceId === undefined && latest === null) {
+        // Compatibility for recent unregistered/removed workspace calls. The
+        // materialized window is bounded; never scan the entire audit table.
+        const recent = this.database.connection.prepare(
+          `WITH recent AS MATERIALIZED (
+             SELECT metadata_json, timestamp, id FROM audit_events INDEXED BY idx_audit_events_timestamp
+             ORDER BY timestamp DESC LIMIT 1024
+           )
+           SELECT metadata_json, timestamp, id FROM recent
+           WHERE json_extract(metadata_json, '$.callId') = ?
+             AND json_extract(metadata_json, '$.phase') = ?
+             AND json_type(metadata_json, '$.activityTargetDetail') = 'object'
+           ORDER BY timestamp DESC, id DESC LIMIT 1`,
+        ).get(lookup, phase);
+        if (isTimedMetadataRow(recent)) {
+          latest = { metadata_json: recent.metadata_json, timestamp: recent.timestamp, id: recent.id };
+        }
+      }
+      row = latest ?? undefined;
+    }
     if (!isMetadataRow(row)) return null;
     try {
       const metadata = JSON.parse(row.metadata_json) as unknown;
-      if (!isRecord(metadata)) return null;
-      const detail = metadata.activityTargetDetail;
-      if (!isActivityTargetDetail(detail)) return null;
-      return redactActivityTargetDetail(detail);
+      if (!isRecord(metadata) || !isActivityTargetDetail(metadata.activityTargetDetail)) return null;
+      return redactActivityTargetDetail(metadata.activityTargetDetail);
     } catch {
       return null;
     }
   }
 
-  /** Resolves one compact activity event without loading another row's metadata. */
-  public async resolveActivityEvent(id: string, mode: 'event' | 'started-call' = 'event'): Promise<ActivityAuditEvent | null> {
+  /** Event IDs use the primary key; in-flight calls use indexed workspace+callId seeks. */
+  public async resolveActivityEvent(id: string, mode: 'event' | 'started-call' = 'event', workspaceId?: string | null): Promise<ActivityAuditEvent | null> {
     if (id.length === 0 || id.length > 512) return null;
-    const identityClause = mode === 'event'
-      ? 'id = ?'
-      : "json_extract(metadata_json, '$.callId') = ? AND json_extract(metadata_json, '$.phase') = 'started'";
-    const row = this.database.connection.prepare(
-      `SELECT id, timestamp, workspace_id, session_id, action, target_summary, result_code, duration_ms,
+    const columns = `id, timestamp, workspace_id, session_id, action, target_summary, result_code, duration_ms,
         json_extract(metadata_json, '$.toolName') AS tool_name,
         json_extract(metadata_json, '$.callId') AS call_id,
         json_extract(metadata_json, '$.phase') AS phase,
         json_extract(metadata_json, '$.errorMessage') AS error_message,
-        json_extract(metadata_json, '$.targetDetail') AS target_detail_json
-       FROM audit_events WHERE ${identityClause}
+        json_extract(metadata_json, '$.targetDetail') AS target_detail_json`;
+    if (mode === 'event') {
+      return toActivityEvent(this.database.connection.prepare(
+        `SELECT ${columns} FROM audit_events WHERE id = ?
+         ${workspaceId === undefined ? '' : 'AND workspace_id IS ?'} LIMIT 1`,
+      ).get(...(workspaceId === undefined ? [id] : [id, workspaceId])));
+    }
+    const statement = this.database.connection.prepare(
+      `SELECT ${columns} FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation
+       WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?
+         AND json_extract(metadata_json, '$.phase') = 'started'
        ORDER BY timestamp DESC, id DESC LIMIT 1`,
-    ).get(id);
-    return toActivityEvent(row);
+    );
+    let latest: ActivityAuditEvent | null = null;
+    const scopes = this.activityLookupScopes(workspaceId);
+    for (let index = 0; index < scopes.length; index += 1) {
+      const candidate = toActivityEvent(statement.get(scopes[index]!, id));
+      if (candidate !== null && (latest === null || candidate.timestamp > latest.timestamp
+        || (candidate.timestamp === latest.timestamp && candidate.id > latest.id))) latest = candidate;
+      if ((index + 1) % 32 === 0 && index + 1 < scopes.length) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+    if (workspaceId === undefined && latest === null) {
+      // Legacy unscoped callers can still find recent removed-workspace calls.
+      // Materialization caps the read at 1,024 rows, never the full audit table.
+      const candidate = toActivityEvent(this.database.connection.prepare(
+        `WITH recent AS MATERIALIZED (
+           SELECT * FROM audit_events INDEXED BY idx_audit_events_timestamp
+           ORDER BY timestamp DESC LIMIT 1024
+         )
+         SELECT ${columns} FROM recent
+         WHERE json_extract(metadata_json, '$.callId') = ?
+           AND json_extract(metadata_json, '$.phase') = 'started'
+         ORDER BY timestamp DESC, id DESC LIMIT 1`,
+      ).get(id));
+      if (candidate !== null) latest = candidate;
+    }
+    return latest;
   }
 
   /**
@@ -581,24 +679,24 @@ export class SqliteAuditRepository implements AuditEventRepository {
 
     const matched = new Set<string>();
     const batchSize = 500;
-    const statement = this.database.connection.prepare(
-      `WITH requested AS (SELECT value AS lookup FROM json_each(?))
-       SELECT
-         audit_events.id AS event_id,
-         json_extract(audit_events.metadata_json, '$.callId') AS call_id
-       FROM audit_events
-       WHERE json_extract(audit_events.metadata_json, '$.phase') = ?
-         AND (
-           audit_events.id IN (SELECT lookup FROM requested)
-           OR json_extract(audit_events.metadata_json, '$.callId') IN (SELECT lookup FROM requested)
-         )
-         AND EXISTS (
-           SELECT 1
-           FROM json_each(audit_events.metadata_json, '$.activityTargetDetail.items') AS item
-           WHERE typeof(item.value) = 'text'
-             AND instr(lower(item.value), ?) > 0
-         )`,
+    // Separate primary-key and workspace-call seeks. An OR across their
+    // different leading keys otherwise makes SQLite scan every audit row.
+    const detailMatch = `EXISTS (
+      SELECT 1 FROM json_each(audit_events.metadata_json, '$.activityTargetDetail.items') AS item
+      WHERE typeof(item.value) = 'text' AND instr(lower(item.value), ?) > 0
+    )`;
+    const exact = this.database.connection.prepare(
+      `SELECT id AS event_id, json_extract(metadata_json, '$.callId') AS call_id
+       FROM audit_events WHERE id IN (SELECT value FROM json_each(?))
+         AND json_extract(metadata_json, '$.phase') = ? AND ${detailMatch}`,
     );
+    const byCall = this.database.connection.prepare(
+      `SELECT id AS event_id, json_extract(metadata_json, '$.callId') AS call_id
+       FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation
+       WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') IN (SELECT value FROM json_each(?))
+         AND json_extract(metadata_json, '$.phase') = ? AND ${detailMatch}`,
+    );
+    const scopes = this.activityLookupScopes();
     const totalBatches = [...requestedByPhase.values()]
       .reduce((count, byLookup) => count + Math.ceil(byLookup.size / batchSize), 0);
     let completedBatches = 0;
@@ -606,7 +704,14 @@ export class SqliteAuditRepository implements AuditEventRepository {
       const lookups = [...byLookup.keys()];
       for (let offset = 0; offset < lookups.length; offset += batchSize) {
         const batch = lookups.slice(offset, offset + batchSize);
-        const rows = statement.all(JSON.stringify(batch), phase, needle);
+        const lookupJson = JSON.stringify(batch);
+        const rows = exact.all(lookupJson, phase, needle);
+        for (let index = 0; index < scopes.length; index += 1) {
+          rows.push(...byCall.all(scopes[index]!, lookupJson, phase, needle));
+          if ((index + 1) % 32 === 0 && index + 1 < scopes.length) {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+          }
+        }
         for (const row of rows) {
           if (!isRecord(row) || typeof row.event_id !== 'string') continue;
           const matchingLookups = typeof row.call_id === 'string' && row.call_id !== row.event_id
@@ -731,6 +836,11 @@ function isAuditSummaryRow(value: unknown): value is AuditSummaryRow {
 
 function isMetadataRow(value: unknown): value is { readonly metadata_json: string } {
   return isRecord(value) && typeof value.metadata_json === 'string';
+}
+
+function isTimedMetadataRow(value: unknown): value is { readonly metadata_json: string; readonly timestamp: string; readonly id: string } {
+  return isRecord(value) && typeof value.metadata_json === 'string'
+    && typeof value.timestamp === 'string' && typeof value.id === 'string';
 }
 
 function isActivityTargetDetail(value: unknown): value is ActivityTargetDetail {

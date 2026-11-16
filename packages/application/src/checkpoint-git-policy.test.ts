@@ -79,7 +79,7 @@ describe('Git-aware automatic checkpoint policy', () => {
     expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(false);
     await expect(run('git', ['-C', root, 'rev-parse', '--verify',
       'refs/lnwjing/recovery/' + head.trim()])).rejects.toThrow();
-  });
+  }, 20_000); // 64 sequential native Git launches on Windows can exceed the 5s default.
 
   it('defaults to Git-aware when no per-instance provider is configured', async () => {
     const { root, workspace } = await fixture();
