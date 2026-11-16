@@ -26,6 +26,7 @@ export const ipcChannels = {
   setWorkspaceArchived: 'lnwjing:set-workspace-archived',
   deleteWorkspace: 'lnwjing:delete-workspace',
   getDashboard: 'lnwjing:get-dashboard',
+  getRunningProjectsActivity: 'lnwjing:get-running-projects-activity',
   setPermissionProfile: 'lnwjing:set-permission-profile',
   setUnrestrictedMode: 'lnwjing:set-unrestricted-mode',
   setAiDeletePolicy: 'lnwjing:set-ai-delete-policy',
@@ -439,6 +440,8 @@ export type ActivityTargetDetail =
 
 export interface ResolveActivityTargetDetailRequest {
   readonly detailRef: string;
+  /** Scope for an index-backed call-ID lookup; legacy senders may omit it. */
+  readonly workspaceId?: string | null;
 }
 
 export interface ResolveActivityTargetDetailResult {
@@ -907,6 +910,10 @@ export interface DashboardEngineeringHarnessStatus {
   };
 }
 
+export type RunningProjectsActivitySnapshot =
+  Pick<DashboardSnapshot, 'activeWorkspaces' | 'selectedWorkspace' | 'inFlight' | 'workLog'>
+  & { readonly recentActivity: readonly { readonly workspaceId: string; readonly timestamp: string }[] };
+
 export interface DashboardSnapshot {
   /** Primary workspace used when a tool call omits workspaceId. */
   readonly selectedWorkspace: WorkspaceSummary | null;
@@ -1218,6 +1225,7 @@ export interface IpcRequestMap {
   readonly [ipcChannels.setWorkspaceArchived]: SetWorkspaceArchivedRequest;
   readonly [ipcChannels.deleteWorkspace]: DeleteWorkspaceRequest;
   readonly [ipcChannels.getDashboard]: undefined;
+  readonly [ipcChannels.getRunningProjectsActivity]: undefined;
   readonly [ipcChannels.setPermissionProfile]: SetPermissionProfileRequest;
   readonly [ipcChannels.setUnrestrictedMode]: SetUnrestrictedModeRequest;
   readonly [ipcChannels.setAiDeletePolicy]: SetAiDeletePolicyRequest;
@@ -1314,6 +1322,7 @@ export interface IpcResponseMap {
   readonly [ipcChannels.setWorkspaceArchived]: WorkspaceSummary;
   readonly [ipcChannels.deleteWorkspace]: { readonly deleted: boolean; readonly workspaceId: string; readonly rootPath: string; readonly backupId: string };
   readonly [ipcChannels.getDashboard]: DashboardSnapshot;
+  readonly [ipcChannels.getRunningProjectsActivity]: RunningProjectsActivitySnapshot;
   readonly [ipcChannels.setPermissionProfile]: { readonly profile: PermissionProfileName };
   readonly [ipcChannels.setUnrestrictedMode]: { readonly unrestricted: boolean; readonly restartRequired: boolean };
   readonly [ipcChannels.setAiDeletePolicy]: { readonly enabled: boolean; readonly policy: DestructiveDeletePolicy };
@@ -1388,7 +1397,7 @@ export interface IpcResponseMap {
   readonly [ipcChannels.clearLogBuffer]: { readonly cleared: boolean };
   readonly [ipcChannels.resolveActivityTargetDetail]: ResolveActivityTargetDetailResult;
   readonly [ipcChannels.searchActivityTargetDetails]: SearchActivityTargetDetailsResult;
-  readonly [ipcChannels.exportLogs]: { readonly exported: boolean };
+  readonly [ipcChannels.exportLogs]: { readonly exported: boolean; readonly unavailableCount?: number };
   readonly [ipcChannels.exportWorkLog]: { readonly exported: boolean };
   readonly [ipcChannels.captureIncident]: IncidentExportResult;
   readonly [ipcChannels.openLogViewer]: { readonly opened: boolean };
@@ -1413,6 +1422,7 @@ export interface LnwjingApi {
   setWorkspaceArchived(request: SetWorkspaceArchivedRequest): Promise<IpcResponseMap[typeof ipcChannels.setWorkspaceArchived]>;
   deleteWorkspace(request: DeleteWorkspaceRequest): Promise<IpcResponseMap[typeof ipcChannels.deleteWorkspace]>;
   getDashboard(): Promise<IpcResponseMap[typeof ipcChannels.getDashboard]>;
+  getRunningProjectsActivity(): Promise<RunningProjectsActivitySnapshot>;
   setPermissionProfile(request: SetPermissionProfileRequest): Promise<IpcResponseMap[typeof ipcChannels.setPermissionProfile]>;
   setUnrestrictedMode(request: SetUnrestrictedModeRequest): Promise<IpcResponseMap[typeof ipcChannels.setUnrestrictedMode]>;
   setAiDeletePolicy(request: SetAiDeletePolicyRequest): Promise<IpcResponseMap[typeof ipcChannels.setAiDeletePolicy]>;

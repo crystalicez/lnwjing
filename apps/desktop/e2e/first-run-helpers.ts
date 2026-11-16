@@ -15,7 +15,7 @@ const GUIDED_TUNNEL_STORAGE_KEY = 'lnwjing.guided-tunnel-setup.v1';
  * only then dismisses whichever onboarding surface the renderer actually chose.
  */
 export async function settleFirstRunAndOpenHome(page: Page): Promise<void> {
-  const tipDialog = page.getByRole('dialog', { name: /ตั้งค่า ChatGPT ให้ใช้ lnwjing|Set up ChatGPT to use lnwjing/ });
+  const tipDialog = page.getByRole('dialog', { name: /ตั้งค่า ChatGPT ให้ใช้ lnwjing|Connect ChatGPT to lnwjing|Set up ChatGPT to use lnwjing/ });
   const guidedSetup = page.getByTestId('guided-tunnel-setup');
   const homeHeading = page.getByRole('heading', { name: HOME_HEADING });
   const doctorHeading = page.getByRole('heading', { name: 'Doctor', exact: true });

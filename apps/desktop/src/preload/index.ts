@@ -19,6 +19,7 @@ import {
   type ConfigureTunnelProfileRequest,
   type DeleteWorkspaceRequest,
   type DashboardSnapshot,
+  type RunningProjectsActivitySnapshot,
   type DestructiveDeletePolicy,
   type DoctorCheck,
   type DoctorReport,
@@ -553,6 +554,20 @@ function stringRecordResponse(value: unknown): Readonly<Record<string, string>> 
   const entries = Object.entries(value);
   if (!entries.every((entry): entry is [string, string] => typeof entry[1] === 'string')) throw new Error('Invalid IPC response');
   return Object.fromEntries(entries);
+}
+
+function runningProjectsActivity(value: unknown): RunningProjectsActivitySnapshot {
+  if (!isRecord(value) || !Array.isArray(value.recentActivity)) throw new Error('Invalid IPC response');
+  return {
+    selectedWorkspace: value.selectedWorkspace === null ? null : workspaceSummary(value.selectedWorkspace),
+    activeWorkspaces: workspaceList(value.activeWorkspaces),
+    inFlight: inFlightItems(value.inFlight),
+    workLog: workLogEntries(value.workLog),
+    recentActivity: value.recentActivity.map((item: unknown) => {
+      if (!isRecord(item)) throw new Error('Invalid IPC response');
+      return { workspaceId: stringField(item, 'workspaceId'), timestamp: stringField(item, 'timestamp') };
+    }),
+  };
 }
 
 function dashboard(value: unknown): DashboardSnapshot {
@@ -1751,11 +1766,11 @@ function clearLogBuffer(request: ClearLogBufferRequest): Promise<{ readonly clea
   });
 }
 
-function exportLogs(request: ExportLogsRequest): Promise<{ readonly exported: boolean }> {
+function exportLogs(request: ExportLogsRequest): Promise<{ readonly exported: boolean; readonly unavailableCount?: number }> {
   if (!isRecord(request) || !isLogSource(request.source)) {
     return Promise.reject(new Error('Invalid IPC request'));
   }
-  if (!Array.isArray(request.lines) || request.lines.length > 5_000 || request.lines.some((line) => (
+  if (!Array.isArray(request.lines) || request.lines.length > 10_000 || request.lines.some((line) => (
     line === null || typeof line !== 'object' || !Number.isSafeInteger(line.lineId) || line.lineId <= 0 || (line.correlationRef !== null && typeof line.correlationRef !== 'string')
   ))) {
     return Promise.reject(new Error('Invalid IPC request'));
@@ -1769,7 +1784,13 @@ function exportLogs(request: ExportLogsRequest): Promise<{ readonly exported: bo
     lines: request.lines.map((line) => ({ lineId: line.lineId, correlationRef: line.correlationRef })),
   }).then((value: unknown) => {
     if (!isRecord(value)) throw new Error('Invalid IPC response');
-    return { exported: booleanField(value, 'exported') };
+    const unavailableCount = value.unavailableCount === undefined
+      ? undefined : integerField(value, 'unavailableCount');
+    if (unavailableCount !== undefined && (unavailableCount < 0 || unavailableCount > request.lines.length)) {
+      throw new Error('Invalid unavailable log row count');
+    }
+    return { exported: booleanField(value, 'exported'),
+      ...(unavailableCount === undefined ? {} : { unavailableCount }) };
   });
 }
 
@@ -1787,7 +1808,12 @@ function resolveActivityTargetDetail(request: ResolveActivityTargetDetailRequest
   if (!isRecord(request) || typeof request.detailRef !== 'string' || request.detailRef.length === 0 || request.detailRef.length > 512) {
     return Promise.reject(new Error('Invalid IPC request'));
   }
-  return invoke(ipcChannels.resolveActivityTargetDetail, { detailRef: request.detailRef }).then((value: unknown) => {
+  if (request.workspaceId !== undefined && request.workspaceId !== null
+    && (typeof request.workspaceId !== 'string' || request.workspaceId.length === 0 || request.workspaceId.length > 4096)) {
+    return Promise.reject(new Error('Invalid IPC request'));
+  }
+  return invoke(ipcChannels.resolveActivityTargetDetail, { detailRef: request.detailRef,
+    ...(request.workspaceId === undefined ? {} : { workspaceId: request.workspaceId }) }).then((value: unknown) => {
     if (!isRecord(value) || (value.status !== 'complete' && value.status !== 'unavailable')) throw new Error('Invalid IPC response');
     return { status: value.status, detail: value.detail === null ? null : activityTargetDetail(value.detail) };
   });
@@ -1924,6 +1950,7 @@ const api: LnwjingApi = {
   setWorkspaceArchived,
   deleteWorkspace,
   getDashboard: () => invoke(ipcChannels.getDashboard).then(dashboard),
+  getRunningProjectsActivity: () => invoke(ipcChannels.getRunningProjectsActivity).then(runningProjectsActivity),
   setPermissionProfile,
   setUnrestrictedMode,
   setAiDeletePolicy,

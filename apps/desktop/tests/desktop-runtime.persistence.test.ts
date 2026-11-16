@@ -6,7 +6,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { CodexDiscovery } from '@lnwjing/codex';
 import { ToolRegistry } from '@lnwjing/mcp-server';
 import { USER_SETTING_KEYS } from '@lnwjing/shared';
-import { SqliteAuditRepository, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository } from '@lnwjing/storage';
+import { hasExpiredRoutineReadCandidatesOffMain, SqliteAuditRepository, SqliteBackupService, SqliteDatabase, SqliteSettingsRepository } from '@lnwjing/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopRuntime as createNativeDesktopRuntime, type DesktopRuntime } from '../src/main/desktop-services.js';
 
@@ -394,19 +394,29 @@ describe('DesktopRuntime persistence', () => {
     } finally {
       seed.close();
     }
+    // The protected-evidence probe now runs in an isolated Worker, so
+    // spying on the old synchronous repository method would miss real work.
+    const databaseFile = path.join(root, 'lnwjing.sqlite');
+    const cutoff = '2026-11-01T00:00:00.000Z';
+    expect(await hasExpiredRoutineReadCandidatesOffMain(databaseFile, cutoff)).toBe(false);
     const backup = vi.spyOn(SqliteBackupService.prototype, 'ensureRecent');
-    const probe = vi.spyOn(SqliteAuditRepository.prototype, 'hasExpiredRoutineReadCandidates');
-    const purge = vi.spyOn(SqliteAuditRepository.prototype, 'purgeExpiredRoutineReads');
     const runtime = createDesktopRuntime(await realpath(root));
     try {
-      await vi.waitFor(() => expect(probe).toHaveBeenCalled(), { timeout: 5_000 });
+      await vi.waitFor(() => expect(backup).toHaveBeenCalledTimes(1), { timeout: 5_000 });
+      // Startup retention gets its own event-loop turn. No additional
+      // backup may be authorized when all old rows are protected.
+      await new Promise<void>((resolve) => setTimeout(resolve, 700));
       expect(backup).toHaveBeenCalledTimes(1);
-      expect(purge).not.toHaveBeenCalled();
     } finally {
       await runtime.close();
-      probe.mockRestore();
       backup.mockRestore();
-      purge.mockRestore();
+    }
+    const observer = new SqliteDatabase(databaseFile);
+    try {
+      expect((await new SqliteAuditRepository(observer).list()).map((row) => row.id))
+        .toContain('protected-old-mutation');
+    } finally {
+      observer.close();
     }
   }, RUNTIME_TEST_TIMEOUT_MS);
 

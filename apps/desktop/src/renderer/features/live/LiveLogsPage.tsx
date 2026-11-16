@@ -33,7 +33,8 @@ export function LiveLogsPage(props: LiveLogsPageProps): ReactElement {
   const tunnelPresentation = tunnelAuthPresentation({ auth: props.tunnelAuth });
   const [tab, setTab] = useState<LogTab>('tunnel');
   const sources: readonly LogTab[] = ['tunnel', 'mcp', 'process'];
-  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjing.resolveActivityTargetDetail({ detailRef })).detail, []);
+  const resolveTargetDetail = useCallback(async (detailRef: string, workspaceId?: string | null) =>
+    (await window.lnwjing.resolveActivityTargetDetail({ detailRef, ...(workspaceId === undefined ? {} : { workspaceId }) })).detail, []);
   const searchTargetDetails = useCallback(async (
     query: string,
     candidates: readonly { readonly id: string; readonly detailRef: string | null }[],

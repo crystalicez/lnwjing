@@ -1,6 +1,10 @@
 import type { LogLine } from '@lnwjing/ipc-contracts';
 
 const DEFAULT_MAX_RETAINED_BYTES = 24 * 1024 * 1024;
+// Match Main LogHub's per-source retention, so a renderer can never offer
+// >10,000 already-evicted rows to the single-source Export IPC.
+const MAX_LINES_PER_SOURCE = 10_000;
+const MAX_BYTES_PER_SOURCE = 8 * 1024 * 1024;
 const UTF8_ENCODER = new TextEncoder();
 const SERIALIZED_BYTES = new WeakMap<LogLine, number>();
 
@@ -64,12 +68,24 @@ function retainNewest(lines: readonly LogLine[], maxLines: number, maxBytes: num
   const byteLimit = Number.isFinite(maxBytes) ? Math.max(0, Math.floor(maxBytes)) : 0;
   const retained: LogLine[] = [];
   let retainedBytes = 0;
+  const perSourceCount = new Map<LogLine['source'], number>();
+  const perSourceBytes = new Map<LogLine['source'], number>();
+  const saturatedSources = new Set<LogLine['source']>();
   for (let index = lines.length - 1; index >= 0 && retained.length < lineLimit; index -= 1) {
     const line = lines[index]!;
+    if (saturatedSources.has(line.source)) continue;
     const lineBytes = serializedLogLineBytes(line);
+    const nextSourceCount = (perSourceCount.get(line.source) ?? 0) + 1;
+    const nextSourceBytes = (perSourceBytes.get(line.source) ?? 0) + lineBytes;
+    if (nextSourceCount > MAX_LINES_PER_SOURCE || nextSourceBytes > MAX_BYTES_PER_SOURCE) {
+      saturatedSources.add(line.source);
+      continue;
+    }
     if (retainedBytes + lineBytes > byteLimit) break;
     retained.push(line);
     retainedBytes += lineBytes;
+    perSourceCount.set(line.source, nextSourceCount);
+    perSourceBytes.set(line.source, nextSourceBytes);
   }
   retained.reverse();
   return retained;

@@ -18,7 +18,9 @@ describe('titlebar update notification', () => {
     expect(app).toContain('window.lnwjing.installUpdate()');
     expect(app).toContain("updateStatus?.phase === 'installing'");
     expect(app).toContain('updateInstallTransitionRef.current');
-    expect(app).toContain('refreshBusyRef.current || updateInstallTransitionRef.current');
+    expect(app).toContain('if (updateInstallTransitionRef.current) return;');
+    expect(app).toContain('if (refreshBusyRef.current) {');
+    expect(app).toContain('refreshPendingRef.current = true;');
     expect(main).toContain('confirmTunnelStopForUpdate');
     expect(main).toContain('runtime.services.stopTunnel()');
     expect(main).toContain('updaterTunnelStopConfirm');

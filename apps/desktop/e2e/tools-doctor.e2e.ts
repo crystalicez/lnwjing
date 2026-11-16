@@ -49,6 +49,13 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
       await expect(app.page.getByRole('tab', { name: new RegExp(`lnwjing \\(${FIRST_PARTY_TOOL_COUNT}\\)`) })).toBeVisible();
       await expect(app.page.locator('.tool-card')).toHaveCount(FIRST_PARTY_TOOL_COUNT);
       await expect(app.page.locator('.tool-status-strip')).toContainText(/พร้อม|ต้องดำเนินการ|ready|needs_setup/i);
+      // The catalog can be populated in the DOM but visually hidden when the
+      // filters wrap and the scroll list shrinks to a 20px strip.
+      await app.page.setViewportSize({ width: 700, height: 600 });
+      await expect.poll(() => app.page.locator('.tool-card-list').evaluate((list) => list.clientHeight))
+        .toBeGreaterThan(140);
+      await app.page.locator('.tool-card').first().scrollIntoViewIfNeeded();
+      await expect(app.page.locator('.tool-card').first()).toBeInViewport();
     } finally { await closeDesktop(app); }
   });
 
@@ -432,8 +439,8 @@ async function launchDesktop(options: { readonly dataRoot?: string; readonly fix
     }, { timeout: 30_000, intervals: [50, 100, 250, 500] }).toBe(true);
     return { process, browser, page, dataRoot, fixtureRoot, devToolsPort };
   } catch (cause: unknown) {
-    await browser?.close().catch(() => undefined);
     await terminateProcessTree(process);
+    await browser?.close().catch(() => undefined);
     await Promise.all([removeTemporaryRoot(dataRoot), removeTemporaryRoot(fixtureRoot)]);
     throw new Error(`Electron launch failed: ${stderr.join('').slice(-16_384)}`, { cause });
   }
@@ -523,8 +530,10 @@ async function waitForDevTools(port: number, electronProcess: ChildProcess, stde
 }
 
 async function closeDesktop(app: LaunchedDesktop, keepRoots = false): Promise<void> {
-  await app.browser.close().catch(() => undefined);
+  // Terminate this test-owned Electron tree *before* disconnecting CDP.
+  // Disconnecting first can orphan renderers and leave the Windows Job active.
   await terminateProcessTree(app.process);
+  await app.browser.close().catch(() => undefined);
   await terminateDevToolsProcess(app.devToolsPort);
   if (!keepRoots) await Promise.all([removeTemporaryRoot(app.dataRoot), removeTemporaryRoot(app.fixtureRoot)]);
 }

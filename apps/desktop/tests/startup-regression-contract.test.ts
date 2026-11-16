@@ -96,6 +96,10 @@ describe('desktop packaged startup regression contract', () => {
     expect(resetBootstrap).not.toContain('app.requestSingleInstanceLock()');
     expect(resetBootstrap).not.toContain('configureCrashRecovery(');
     const resetRequest = section('async function requestFactoryReset', 'function requestUpdateCheck');
+    expect(resetRequest).toContain("if (mode === 'preserve-settings') preflightSettingsPreservingResetSync(dataPath);");
+    expect(resetRequest.indexOf('preflightSettingsPreservingResetSync(dataPath)'))
+      .toBeLessThan(resetRequest.indexOf('stageFactoryResetSync(dataPath, mode)'));
+    expect(source).toContain('cancelBlockedFactoryResetSync(configuredUserDataPath)');
     expect(resetRequest).toContain('factoryResetBootstrapUserDataPath(dataPath)');
     expect(resetRequest).toContain('`--user-data-dir=${bootstrapUserDataPath}`');
     expect(resetRequest).toContain('FACTORY_RESET_APPLY_ARG');

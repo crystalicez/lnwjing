@@ -55,7 +55,7 @@
   --font-mono: Consolas, "Cascadia Mono", "JetBrains Mono", monospace;
   --font-sans: var(--font);
   --font-ui: var(--font);
-  --page-bottom-gap: 48px;
+  --page-bottom-gap: 16px;
   
   color: var(--text);
   background: var(--bg);
@@ -389,7 +389,7 @@ button.titlebar-whats-new {
 /* App Shell Layout */
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 196px) minmax(0, 1fr);
   width: 100%;
   min-width: 0;
   flex: 1;
@@ -402,8 +402,8 @@ button.titlebar-whats-new {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px 14px;
+  gap: 10px;
+  padding: 12px 10px;
   background: #07090e;
   border-right: 1px solid var(--border);
   position: relative;
@@ -428,7 +428,7 @@ button.titlebar-whats-new {
 
 .sidebar-nav {
   display: grid;
-  gap: 6px;
+  gap: 3px;
 }
 
 .nav-item {
@@ -436,9 +436,9 @@ button.titlebar-whats-new {
   background: transparent;
   border-color: transparent;
   color: var(--muted);
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 13.5px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -460,7 +460,7 @@ button.titlebar-whats-new {
   margin-top: auto;
   display: grid;
   gap: 4px;
-  padding: 12px 10px;
+  padding: 9px 10px;
   border-radius: 10px;
   background: rgba(17, 23, 33, 0.6);
   border: 1px solid var(--border-subtle);
@@ -521,7 +521,7 @@ button.titlebar-whats-new {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 24px 32px 0;
+  padding: 16px clamp(14px, 2vw, 26px) 16px;
 }
 
 .page-content {
@@ -530,14 +530,14 @@ button.titlebar-whats-new {
   flex: 0 0 auto;
   min-width: 0;
   min-height: 100%;
-  gap: 20px;
-  padding-bottom: var(--page-bottom-gap);
+  gap: 14px;
+  padding-bottom: 0;
 }
 
 .page-heading {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   align-items: start;
   flex-wrap: wrap;
 }
@@ -626,7 +626,7 @@ button.titlebar-whats-new {
   border-radius: 14px;
   background: var(--bg-panel);
   backdrop-filter: blur(14px);
-  padding: 20px 22px;
+  padding: 15px 17px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -641,18 +641,18 @@ button.titlebar-whats-new {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .home-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+  gap: 12px;
 }
 
 .info-cards {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .info-card p {
@@ -675,7 +675,7 @@ button.titlebar-whats-new {
   display: flex;
   gap: clamp(14px, 2.6vw, 26px);
   align-items: center;
-  min-height: 154px;
+  min-height: 118px;
   background:
     radial-gradient(ellipse at 10% 50%, rgba(246, 193, 61, .085), transparent 38%),
     linear-gradient(116deg, #141d2b, #0b111b 90%);
@@ -701,8 +701,8 @@ button.titlebar-whats-new {
   --prism-edge:#ffc13c;
   --prism-core:#ffc32d;
   --prism-shadow:#7c430b;
-  position:relative; width:116px; height:116px;
-  flex:0 0 116px; display:grid; place-items:center;
+  position:relative; width:90px; height:90px;
+  flex:0 0 90px; display:grid; place-items:center;
   isolation:isolate; border-radius:24px;
   background:radial-gradient(ellipse at 50% 60%,rgba(243,178,28,.15),transparent 68%);
 }
@@ -843,11 +843,25 @@ button.titlebar-whats-new {
 }
 
 /* Active Projects: passive view of enabled MCP scopes and in-flight calls. */
-.active-projects-overview { min-height: 0; }
+.active-projects-page { flex: 1; height: 100%; min-height: 0; overflow: hidden; }
+.active-projects-page > .page-heading { flex-shrink: 0; }
+.active-projects-overview { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.active-projects-toolbar { display: flex; gap: 8px 12px; align-items: end; flex-wrap: wrap; flex-shrink: 0; }
+.active-projects-toolbar > div { min-width: 140px; display: grid; gap: 5px; }
+.active-projects-toolbar .active-projects-search { flex: 1 1 200px; }
+.active-projects-toolbar .active-projects-sort { flex: 1 1 190px; }
+.active-projects-toolbar label { font-size: 12px; color: var(--muted); }
+.active-projects-toolbar input, .active-projects-toolbar select { width: 100%; min-width: 0; }
+.active-projects-summary { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 10px 0; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.active-projects-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: 5px; }
+.active-projects-scroll:focus-visible { outline: 2px solid var(--gold-primary); outline-offset: -2px; border-radius: 8px; }
+.active-projects-no-matches { padding: 18px 10px; color: var(--muted); }
+.active-projects-status-note { flex-shrink: 0; }
 .active-projects-running-total { color: var(--gold-bright); font-weight: 700; }
-.active-projects-list { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
-.active-projects-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: rgba(7, 12, 18, .55); }
-.active-projects-info { min-width: 0; }
+.active-projects-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); align-content: start; gap: 10px; }
+.active-projects-item { display: flex; flex-direction: column; align-items: stretch; justify-content: space-between; min-width: 0; min-height: 142px; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: rgba(7, 12, 18, .55); }
+.active-projects-item > button { align-self: flex-end; max-width: 100%; white-space: normal; }
+.active-projects-info { min-width: 0; width: 100%; }
 .active-projects-info p { margin: 5px 0; color: var(--muted); overflow-wrap: anywhere; }
 .active-projects-info small { color: var(--muted); }
 .active-projects-name { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -858,9 +872,9 @@ button.titlebar-whats-new {
 .active-projects-state.running .active-projects-dot { background: #45bdf5; }
 .active-projects-state.recent { color: #78dfa8; }
 .active-projects-state.recent .active-projects-dot { background: #55d895; }
-.active-projects-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
+.active-projects-footer { display: flex; justify-content: flex-end; flex-shrink: 0; margin-top: 12px; }
 .active-projects-empty { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-@media (max-width: 750px) { .active-projects-item { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 750px) { .active-projects-toolbar { gap: 8px; } }
 
 /* Work Log & Terminal Stream */
 .worklog-panel {
@@ -1347,12 +1361,47 @@ button.titlebar-whats-new {
   margin-bottom: 12px;
 }
 
-/* Viewport-sized data pages keep their chrome fixed and scroll long data inside the table/list. */
+/* Data-heavy screens own one scrollable list; avoid wasting viewport space
+   on a second page scrollbar or the generic bottom safety gutter. */
+.main-pane[data-screen="projects"],
+.main-pane[data-screen="active-projects"],
+.main-pane[data-screen="worklog"],
+.main-pane[data-screen="live"],
+.main-pane[data-screen="git"],
+.main-pane[data-screen="tools"] {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+.main-pane[data-screen="projects"] > .main-content,
+.main-pane[data-screen="active-projects"] > .main-content,
+.main-pane[data-screen="worklog"] > .main-content,
+.main-pane[data-screen="live"] > .main-content,
+.main-pane[data-screen="git"] > .main-content,
+.main-pane[data-screen="tools"] > .main-content {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .viewport-list-page,
 .live-logs-page {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  padding-bottom: 0;
+}
+
+/* A Git diff is a document, not a bounded list. Keep its page scrollbar so
+   long diffs and action buttons cannot be clipped outside the viewport. */
+.main-pane[data-screen="git"]:has(.git-page--diff-open) {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.main-pane[data-screen="git"]:has(.git-page--diff-open) > .main-content {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
 }
 
 .live-logs-page .log-panel {
@@ -1411,10 +1460,11 @@ button.titlebar-whats-new {
   overflow: hidden;
 }
 
-.project-list-scroll {
+ .project-list-scroll {
   display: grid;
-  gap: 24px;
+  gap: 16px;
   align-content: start;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding-right: 6px;
@@ -1447,12 +1497,12 @@ button.titlebar-whats-new {
   font-size: 12px;
 }
 
-.project-list {
+ .project-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 12px;
+  gap: 8px;
   align-content: start;
   min-height: 0;
 }
@@ -1462,7 +1512,7 @@ button.titlebar-whats-new {
   justify-content: space-between;
   gap: 14px;
   align-items: center;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   background: rgba(14, 19, 28, 0.6);
@@ -2411,11 +2461,12 @@ button.titlebar-whats-new {
 }
 
 /* Tools catalog */
-.tools-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.tools-page { display: flex; flex: 1 1 auto; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow: hidden; }
+.tools-page > :not(.tool-card-list) { flex-shrink: 0; }
 .tools-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .tool-origin-tabs, .tool-status-strip, .tool-filters, .tool-action-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .tool-origin-tabs button.active, .tool-status-strip button.active { border-color: var(--gold-primary); }
-.tool-status-strip button { display: grid; gap: 2px; min-width: 86px; text-align: left; }
+.tool-status-strip button { display: grid; gap: 2px; min-width: 72px; padding: 7px 10px; text-align: left; }
 .tool-status-strip button.active { border-width: 2px; }
 .tool-status-strip button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 .tool-status-strip strong { font-size: 18px; }
@@ -2424,10 +2475,10 @@ button.titlebar-whats-new {
 .tool-status-strip button.active strong { color: currentColor; }
 .tool-filters input { flex: 1 1 260px; min-width: 180px; }
 .tool-filters select { min-width: 150px; }
-.tool-card-list { display: grid; gap: 8px; }
+.tool-card-list { display: grid; flex: 1 1 auto; gap: 6px; min-height: 0; align-content: start; grid-auto-rows: max-content; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .tool-card { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 220px; align-items: stretch; gap: 0; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(14, 19, 28, 0.7); overflow: hidden; }
 .tool-card:hover, .tool-card:focus-within { border-color: var(--gold-primary); }
-.tool-card-open { width: 100%; min-width: 0; display: grid; grid-template-columns: 10px minmax(0, 1fr) minmax(220px, 330px); align-items: center; gap: 12px; padding: 13px 14px; text-align: left; border: 0; border-radius: 0; background: transparent; }
+.tool-card-open { width: 100%; min-width: 0; display: grid; grid-template-columns: 10px minmax(0, 1fr) minmax(220px, 330px); align-items: center; gap: 10px; padding: 9px 12px; text-align: left; border: 0; border-radius: 0; background: transparent; }
 .tool-card-open:hover, .tool-card-open:focus-visible { background: rgba(255,255,255,.018); }
 .tool-card-availability { min-width: 0; width: 220px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 9px 12px; border-left: 1px solid var(--border-subtle); }
 .tool-card-availability > button:not(.tool-availability-switch) { padding: 6px 8px; font-size: 11px; }
@@ -2543,13 +2594,13 @@ button.titlebar-whats-new {
 
 .doctor-list {
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
+  gap: 8px;
+  margin-top: 10px;
   align-content: start;
 }
 
 .doctor-check {
-  padding: 14px 16px;
+  padding: 11px 13px;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
   border-left: 4px solid #678bc4;
@@ -2897,8 +2948,8 @@ h1, h2, p {
 }
 
 h1 {
-  margin-bottom: 6px;
-  font-size: 28px;
+  margin-bottom: 4px;
+  font-size: 25px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -2912,11 +2963,11 @@ h2 {
 
 @media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 170px) minmax(0, 1fr);
   }
 
   .main-content {
-    padding: 20px;
+    padding: 14px;
   }
 
   .home-grid,
@@ -3142,15 +3193,15 @@ h2 {
 .security-overview-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .security-metric {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 12px 14px;
+  gap: 4px;
+  padding: 9px 11px;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   background: rgba(5, 8, 13, 0.48);
@@ -3485,11 +3536,11 @@ h2 {
 .diagnostics-filters .ui-combobox { min-width:160px; }
 
 /* Workflow design: responsive cards, named fields, and no overflowing inline labels */
-.workflows-page { --workflow-spacing:16px; display:flex; flex-direction:column; gap:var(--workflow-spacing); min-width:0; }
+.workflows-page { --workflow-spacing:12px; display:flex; flex-direction:column; gap:var(--workflow-spacing); min-width:0; }
 .workflows-page > h1 { margin:0; }
 .workflows-page > p { margin:0; color:var(--muted); line-height:1.65; }
-.workflow-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr)); gap:12px; width:100%; }
-.workflow-card { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; text-align:left; min-width:0; min-height:112px; gap:7px; padding:17px 18px; border:1px solid var(--border-subtle); border-radius:14px; background:linear-gradient(135deg,#141b26,#0c111a); }
+.workflow-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr)); gap:10px; width:100%; }
+.workflow-card { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; text-align:left; min-width:0; min-height:96px; gap:6px; padding:12px 14px; border:1px solid var(--border-subtle); border-radius:14px; background:linear-gradient(135deg,#141b26,#0c111a); }
 .workflow-card-heading { display:flex; align-items:center; gap:12px; width:100%; min-width:0; }
 .workflow-card-icon { display:grid; place-items:center; width:36px; height:36px; flex:0 0 36px; border-radius:10px; color:#d6dbef !important; background:rgba(122,141,176,.10); border:1px solid rgba(122,141,176,.18); }
 .workflow-card-icon svg { width:22px; height:22px; }
@@ -3498,7 +3549,7 @@ h2 {
 .workflow-card span { color:var(--muted); font-size:13px; line-height:1.55; overflow-wrap:anywhere; }
 .workflow-card small { margin-top:auto; color:var(--gold-primary); font-size:11px; }
 .workflow-card.selected { border-color:var(--gold-primary); background:linear-gradient(135deg,rgba(245,197,66,.13),#101722); box-shadow:inset 3px 0 var(--gold-primary); }
-.workflow-config,.workflow-preview { display:flex; flex-direction:column; align-items:stretch; gap:18px; padding:22px; border:1px solid var(--border-subtle); border-radius:16px; background:var(--bg-panel); min-width:0; }
+.workflow-config,.workflow-preview { display:flex; flex-direction:column; align-items:stretch; gap:14px; padding:16px; border:1px solid var(--border-subtle); border-radius:16px; background:var(--bg-panel); min-width:0; }
 .workflow-config h2,.workflow-preview h2 { margin:0; font-size:18px; }
 .workflow-input-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:16px; width:100%; min-width:0; }
 .workflow-field { display:flex; flex-direction:column; align-items:stretch; gap:8px; min-width:0; }
@@ -3524,7 +3575,7 @@ h2 {
 
 
 /* Doctor: compact, accessible segmented tabs. */
-.diagnostics-tabs { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px; margin:12px 0 18px; border:1px solid var(--border-subtle); border-radius:12px; background:rgba(12,17,26,.7); width:fit-content; max-width:100%; }
+.diagnostics-tabs { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:5px; margin:4px 0 8px; border:1px solid var(--border-subtle); border-radius:12px; background:rgba(12,17,26,.7); width:fit-content; max-width:100%; }
 .diagnostics-tabs [role="tab"] { min-height:36px; padding:8px 14px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--muted); }
 .diagnostics-tabs [role="tab"][aria-selected="true"] { background:rgba(245,197,66,.14); border-color:rgba(245,197,66,.4); color:var(--gold-bright); font-weight:600; }
 .diagnostics-tabs [role="tab"]:hover { color:var(--text); }
@@ -3693,3 +3744,77 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .git-tree-file-row .git-file-stats { min-width:0; }
 @media (max-width:760px) { .git-tree-file-row .git-file-stats { display:none; } .git-tree-diff-label { font-size:10px; } }
 .diff-hunk-header { font-family:var(--font-mono); }
+/* Compact window layout: navigation becomes a single horizontal strip rather
+   than consuming an entire second grid row above the working area. */
+@media (max-width: 640px) {
+  .app-shell { display: flex; flex-direction: column; }
+  .sidebar {
+    flex: 0 0 auto; width: 100%; height: auto; min-height: 0;
+    gap: 0; padding: 6px 8px; overflow: visible; border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar::before, .sidebar-footer { display: none; }
+  .sidebar-nav {
+    display: flex; flex-flow: row nowrap; gap: 4px;
+    overflow-x: auto; overscroll-behavior-x: contain;
+  }
+  .nav-item {
+    flex: 0 0 auto; width: auto; min-height: 34px;
+    padding: 7px 10px; white-space: nowrap;
+  }
+  .main-pane { flex: 1 1 auto; height: auto; min-height: 0; }
+  .main-content { padding: 12px; }
+  .page-content { gap: 11px; }
+  .panel, .info-card { padding: 12px 14px; }
+}
+
+/* With short desktop windows, allow the page itself to scroll so multi-row
+   filters/commands remain reachable; otherwise lists use the available height. */
+@media (max-width: 640px), (max-height: 580px) {
+  .main-pane:is([data-screen="projects"], [data-screen="active-projects"],
+    [data-screen="worklog"], [data-screen="live"], [data-screen="git"], [data-screen="tools"]) {
+    overflow-y: auto;
+  }
+  .main-pane:is([data-screen="projects"], [data-screen="active-projects"],
+    [data-screen="worklog"], [data-screen="live"], [data-screen="git"], [data-screen="tools"]) > .main-content {
+    height: auto; min-height: 100%; overflow: visible;
+  }
+  .viewport-list-page:not(.git-page--diff-open), .live-logs-page, .tools-page {
+    flex: 0 0 auto; height: auto; min-height: 100%; overflow: visible;
+  }
+  .project-list-panel, .active-projects-overview, .tools-page, .log-panel {
+    flex: 0 0 auto; overflow: visible;
+  }
+  .project-list-scroll, .active-projects-scroll, .tool-card-list,
+  .worklog-panel:not(.compact) .worklog-stream, .live-logs-page .log-stream,
+  .git-file-list {
+    flex: 0 0 auto; min-height: 140px; max-height: min(48vh, 320px);
+    overflow-y: auto;
+  }
+}
+
+/* The Tools toolbar has six readiness toggles and five filters. Between the
+   narrow/mobile breakpoints it can consume the entire flex column, shrinking
+   the catalog to 20px while all cards still exist in the DOM. Move only Tools
+   to a scrollable page before that happens; preserve the desktop list layout. */
+@media (min-width: 641px) and (max-width: 900px),
+       (min-width: 641px) and (max-height: 760px) {
+  .main-pane[data-screen="tools"] { overflow-y: auto; }
+  .main-pane[data-screen="tools"] > .main-content {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+  .main-pane[data-screen="tools"] .tools-page {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+  .main-pane[data-screen="tools"] .tool-card-list {
+    flex: 0 0 auto;
+    min-height: 200px;
+    max-height: min(52vh, 520px);
+    overflow-y: auto;
+  }
+}

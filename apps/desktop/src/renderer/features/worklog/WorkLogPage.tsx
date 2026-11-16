@@ -37,7 +37,8 @@ export function WorkLogPage(props: WorkLogPageProps): ReactElement {
       setOlderSessionsBusy(false);
     }
   };
-  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjing.resolveActivityTargetDetail({ detailRef })).detail, []);
+  const resolveTargetDetail = useCallback(async (detailRef: string, workspaceId?: string | null) =>
+    (await window.lnwjing.resolveActivityTargetDetail({ detailRef, ...(workspaceId === undefined ? {} : { workspaceId }) })).detail, []);
   const searchTargetDetails = useCallback(async (
     query: string,
     candidates: readonly { readonly id: string; readonly detailRef: string | null }[],

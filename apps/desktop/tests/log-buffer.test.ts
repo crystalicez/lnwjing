@@ -42,6 +42,17 @@ describe('log buffer helpers', () => {
     expect(retained[0]?.id).toBeGreaterThan(1);
   });
 
+  it('matches Main LogHub per-source retention so export never exceeds 10,000 lines', () => {
+    const mcp = Array.from({ length: 10_025 }, (_, index) => line(index + 1, 'm'));
+    const processLines = Array.from({ length: 30 }, (_, index) =>
+      ({ ...line(index + 10_026, 'p'), source: 'process' as const }));
+    const retained = appendLogBatch([], [...mcp, ...processLines]);
+    expect(retained.filter((entry) => entry.source === 'mcp')).toHaveLength(10_000);
+    expect(retained.filter((entry) => entry.source === 'process')).toHaveLength(30);
+    expect(retained.find((entry) => entry.source === 'mcp')?.id).toBe(26);
+    expect(retained.at(-1)?.id).toBe(10_055);
+  });
+
   it('keeps live-event dedupe ids bounded while preserving recent ids', () => {
     const ids = new Set<number>();
     for (let id = 1; id <= 8; id += 1) expect(rememberLogId(ids, id, 5)).toBe(true);

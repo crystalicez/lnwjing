@@ -1,9 +1,12 @@
 import { useMemo, useState, type ReactElement } from 'react';
 import { canonicalWorkspaceScopeId, type DashboardSnapshot, type UiLocale, type WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
-import { ActionButton } from '../ui/UiPrimitives.js';
+import { ActionButton, FormInput, FormSelect } from '../ui/UiPrimitives.js';
+import { DEFAULT_RUNNING_PROJECT_SORT, isRunningProjectSort, RUNNING_PROJECT_SORT_KEY, selectRunningProjects,
+  type RunningProjectFilter, type RunningProjectSort } from './active-projects-view.js';
 
 const RECENT_ACTIVITY_MS = 5 * 60 * 1_000;
+const DATE_LOCALES: Readonly<Record<UiLocale, string>> = { th: 'th-TH', en: 'en-US' };
 
 export interface ActiveProjectActivity {
   readonly workspace: WorkspaceSummary;
@@ -20,7 +23,8 @@ export interface ActiveProjectActivity {
  */
 export function deriveActiveProjectActivity(
   workspaces: readonly WorkspaceSummary[],
-  dashboard: Pick<DashboardSnapshot, 'activeWorkspaces' | 'selectedWorkspace' | 'inFlight' | 'workLog'>,
+  dashboard: Pick<DashboardSnapshot, 'activeWorkspaces' | 'selectedWorkspace' | 'inFlight' | 'workLog'>
+    & { readonly recentActivity?: readonly { readonly workspaceId: string; readonly timestamp: string }[] },
   nowMs = Date.now(),
 ): readonly ActiveProjectActivity[] {
   const activeIds = new Set(dashboard.activeWorkspaces.map((workspace) => workspace.id));
@@ -48,7 +52,13 @@ export function deriveActiveProjectActivity(
     }
   };
   for (const call of dashboard.inFlight) record(call.workspaceId, call.startedAt, true);
-  for (const entry of dashboard.workLog) record(entry.workspaceId, entry.timestamp, false);
+  // Recent activity is queried independently of the 500-entry global Work Log.
+  // Only the initial legacy dashboard (before lightweight IPC loads) uses workLog.
+  if (dashboard.recentActivity === undefined) {
+    for (const entry of dashboard.workLog) record(entry.workspaceId, entry.timestamp, false);
+  } else {
+    for (const entry of dashboard.recentActivity) record(entry.workspaceId, entry.timestamp, false);
+  }
   return active.map((workspace) => {
     const observation = observations.get(workspace.id)!;
     const state: ActiveProjectActivity['state'] = observation.running > 0 ? 'running'
@@ -76,9 +86,29 @@ interface ActiveProjectsPageProps {
 export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement {
   const t = createTranslator(props.locale);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<RunningProjectFilter>('all');
+  const [sort, setSort] = useState<RunningProjectSort>(() => {
+    try {
+      if (typeof window === 'undefined') return DEFAULT_RUNNING_PROJECT_SORT;
+      const value = window.localStorage.getItem(RUNNING_PROJECT_SORT_KEY);
+      return isRunningProjectSort(value) ? value : DEFAULT_RUNNING_PROJECT_SORT;
+    } catch { return DEFAULT_RUNNING_PROJECT_SORT; }
+  });
   const projects = useMemo(() => deriveActiveProjectActivity(props.workspaces, props.dashboard),
     [props.workspaces, props.dashboard]);
+  const visible = useMemo(() => selectRunningProjects(projects, {
+    sort, filter, search, locale: props.locale,
+  }), [projects, sort, filter, search, props.locale]);
   const running = projects.filter((project) => project.state === 'running').length;
+  const recent = projects.filter((project) => project.state === 'recent').length;
+  const ready = projects.length - running - recent;
+  function changeSort(value: string): void {
+    if (!isRunningProjectSort(value)) return;
+    setSort(value);
+    try { window.localStorage.setItem(RUNNING_PROJECT_SORT_KEY, value); }
+    catch { /* UI preference is optional; sorting must still work. */ }
+  }
   async function select(workspaceId: string): Promise<void> {
     setBusyId(workspaceId);
     try { await props.onSelectWorkspace(workspaceId); }
@@ -99,15 +129,53 @@ export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement
             {t('activeProjects.runningCount', { count: String(running) })}
           </span>
         </div>
-        <p className="hint">{t('activeProjects.statusNote')}</p>
+        <p className="hint active-projects-status-note">{t('activeProjects.statusNote')}</p>
         {projects.length === 0 ? (
           <div className="active-projects-empty">
             <p>{t('activeProjects.empty')}</p>
             <ActionButton type="button" onClick={props.onOpenProjects}>{t('activeProjects.manage')}</ActionButton>
           </div>
         ) : (
-          <ul className="active-projects-list">
-            {projects.map((project) => (
+          <>
+            <div className="active-projects-toolbar">
+              <div className="active-projects-search">
+                <label htmlFor="active-projects-search">{t('activeProjects.search')}</label>
+                <FormInput id="active-projects-search" type="search" value={search}
+                  placeholder={t('activeProjects.searchHint')} autoComplete="off"
+                  onChange={(event) => setSearch(event.currentTarget.value)} />
+              </div>
+              <div className="active-projects-filter">
+                <label htmlFor="active-projects-filter">{t('activeProjects.filter')}</label>
+                <FormSelect id="active-projects-filter" value={filter}
+                  onChange={(event) => setFilter(event.currentTarget.value as RunningProjectFilter)}>
+                  <option value="all">{t('activeProjects.filterAll')}</option>
+                  <option value="running">{t('activeProjects.running')}</option>
+                  <option value="recent">{t('activeProjects.recent')}</option>
+                  <option value="ready">{t('activeProjects.ready')}</option>
+                </FormSelect>
+              </div>
+              <div className="active-projects-sort">
+                <label htmlFor="active-projects-sort">{t('activeProjects.sort')}</label>
+                <FormSelect id="active-projects-sort" value={sort}
+                  onChange={(event) => changeSort(event.currentTarget.value)}>
+                  <option value="status">{t('activeProjects.sortStatus')}</option>
+                  <option value="name-asc">{t('activeProjects.sortNameAsc')}</option>
+                  <option value="name-desc">{t('activeProjects.sortNameDesc')}</option>
+                  <option value="activity">{t('activeProjects.sortActivity')}</option>
+                  <option value="calls">{t('activeProjects.sortCalls')}</option>
+                  <option value="main">{t('activeProjects.sortMain')}</option>
+                </FormSelect>
+              </div>
+            </div>
+            <div className="active-projects-summary" aria-live="polite">
+              <span>{t('activeProjects.showing', { shown: String(visible.length), total: String(projects.length) })}</span>
+              <span>{t('activeProjects.statusTotals', { running: String(running), recent: String(recent), ready: String(ready) })}</span>
+            </div>
+            <div className="active-projects-scroll" role="region" tabIndex={0} aria-label={t('activeProjects.list')}>
+              {visible.length === 0
+                ? <p className="active-projects-no-matches" role="status">{t('activeProjects.noMatches')}</p>
+                : <ul className="active-projects-list">
+            {visible.map((project) => (
               <li className="active-projects-item" key={project.workspace.id}>
                 <div className="active-projects-info">
                   <div className="active-projects-name">
@@ -124,7 +192,7 @@ export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement
                     {project.runningCalls > 0
                       ? t('activeProjects.calls', { count: String(project.runningCalls) })
                       : project.lastActivityAt !== null
-                        ? t('activeProjects.lastSeen', { time: new Date(project.lastActivityAt).toLocaleString(props.locale === 'th' ? 'th-TH' : 'en-US') })
+                        ? t('activeProjects.lastSeen', { time: new Date(project.lastActivityAt).toLocaleString(DATE_LOCALES[props.locale]) })
                         : t('activeProjects.noActivity')}
                   </small>
                 </div>
@@ -134,7 +202,9 @@ export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement
                 </ActionButton>
               </li>
             ))}
-          </ul>
+                </ul>}
+            </div>
+          </>
         )}
         {projects.length > 0 ? (
           <div className="active-projects-footer">

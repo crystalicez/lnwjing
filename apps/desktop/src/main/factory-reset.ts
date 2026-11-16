@@ -1,7 +1,7 @@
 import { lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { applySettingsPreservingResetSync } from './settings-preserving-reset.js';
+import { applySettingsPreservingResetSync, cancelBlockedSettingsPreservingResetSync } from './settings-preserving-reset.js';
 
 type FactoryResetMarker = { readonly version: 1 } | {
   readonly version: 2;
@@ -47,6 +47,27 @@ export function stageFactoryResetSync(dataPath: string, mode: 'all' | 'preserve-
 
 export function clearFactoryResetStageSync(dataPath: string): void {
   rmSync(factoryResetMarkerPath(dataPath), { force: true });
+}
+
+/** Release a blocked reset on the next launch without ever clearing a user project. */
+export function cancelBlockedFactoryResetSync(dataPath: string): boolean {
+  const markerPath = factoryResetMarkerPath(dataPath);
+  let raw: string;
+  try {
+    const metadata = lstatSync(markerPath);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('Factory reset marker is not a trusted regular file');
+    raw = readFileSync(markerPath, 'utf8');
+  } catch (error: unknown) {
+    if (isMissingFile(error)) return false;
+    throw error;
+  }
+  const marker = parseFactoryResetMarker(raw);
+  if (marker.version !== 2) return false;
+  if (!cancelBlockedSettingsPreservingResetSync(safeAbsoluteDirectory(dataPath, 'lnwjing data path'), marker.nonce)) {
+    return false;
+  }
+  rmSync(markerPath);
+  return true;
 }
 
 export function applyPendingFactoryResetSync(dataPath: string, tunnelProfileDirectory: string): boolean {

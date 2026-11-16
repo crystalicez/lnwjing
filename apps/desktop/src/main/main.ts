@@ -35,6 +35,7 @@ import {
   type ConfigureTunnelProfileRequest,
   type DeleteWorkspaceRequest,
   type DashboardSnapshot,
+  type RunningProjectsActivitySnapshot,
   type DestructiveDeletePolicy,
   type DoctorReport,
   type ToolCatalogSnapshot,
@@ -148,7 +149,8 @@ import { CrashDiagnosticsRecorder, RendererRecoveryBarrier, RendererRecoveryPoli
 import { DesktopSessionDiagnostics } from './desktop-session-diagnostics.js';
 import { configureNativeCrashDiagnostics, pruneNativeCrashDumpsForDataPath } from './native-crash-diagnostics.js';
 import { RuntimeDiagnosticsHistoryRecorder, type RuntimeDiagnosticsSample } from './runtime-diagnostics-history.js';
-import { FACTORY_RESET_APPLY_ARG, applyPendingFactoryResetSync, clearFactoryResetBootstrapSync, clearFactoryResetStageSync, factoryResetBootstrapUserDataPath, factoryResetMarkerPath, stageFactoryResetSync } from './factory-reset.js';
+import { FACTORY_RESET_APPLY_ARG, applyPendingFactoryResetSync, clearFactoryResetBootstrapSync, clearFactoryResetStageSync, factoryResetBootstrapUserDataPath, factoryResetMarkerPath, stageFactoryResetSync, cancelBlockedFactoryResetSync } from './factory-reset.js';
+import { preflightSettingsPreservingResetSync, ProtectedProjectInsideProfileError } from './settings-preserving-reset.js';
 import { decryptV3WindowsSafeStorageSecretIfPresent, isV3WindowsSafeStorageEnvelope } from './checkpoint-key-compat.js';
 import { mutationApprovalDialogOptions } from './mutation-approval.js';
 import { prependBundledRuntimeToolsToPath } from './runtime-tools.js';
@@ -188,6 +190,7 @@ export interface DesktopIpcServices {
   setWorkspaceArchived(request: SetWorkspaceArchivedRequest): Promise<WorkspaceSummary>;
   deleteWorkspace(request: DeleteWorkspaceRequest): Promise<{ readonly deleted: boolean; readonly workspaceId: string; readonly rootPath: string }>;
   getDashboard(): Promise<DashboardSnapshot>;
+  getRunningProjectsActivity(): Promise<RunningProjectsActivitySnapshot>;
   setPermissionProfile(request: SetPermissionProfileRequest): Promise<{ readonly profile: PermissionProfileName }>;
   setUnrestrictedMode(request: SetUnrestrictedModeRequest): Promise<{ readonly unrestricted: boolean; readonly restartRequired: boolean }>;
   setAiDeletePolicy(request: SetAiDeletePolicyRequest): Promise<{ readonly enabled: boolean; readonly policy: DestructiveDeletePolicy }>;
@@ -253,7 +256,7 @@ export interface DesktopIpcServices {
   listLogSessions(request: { readonly offset: number; readonly limit?: number }): Promise<IpcResponseMap[typeof ipcChannels.listLogSessions]>;
   loadLogSessionHistory(request: LoadLogSessionHistoryRequest): Promise<LoadLogSessionHistoryResult>;
   clearLogBuffer(request: ClearLogBufferRequest): Promise<{ readonly cleared: boolean }>;
-  resolveActivityTargetDetail(detailRef: string): Promise<{ readonly status: 'complete' | 'unavailable'; readonly detail: ActivityTargetDetail | null }>;
+  resolveActivityTargetDetail(detailRef: string, workspaceId?: string | null): Promise<{ readonly status: 'complete' | 'unavailable'; readonly detail: ActivityTargetDetail | null }>;
   searchActivityTargetDetails(candidates: readonly ActivityTargetSearchCandidate[], query: string): Promise<readonly string[]>;
   streamWorkLogExportRows(rowIds: readonly string[], locale?: UiLocale): AsyncIterable<string>;
   captureIncident(updaterEvents?: readonly string[]): Promise<IncidentReport>;
@@ -331,6 +334,7 @@ const defaultDesktopServices: DesktopIpcServices = {
   deleteWorkspace: async (): Promise<{ readonly deleted: boolean; readonly workspaceId: string; readonly rootPath: string }> => {
     throw new Error('Workspace service is not configured');
   },
+  getRunningProjectsActivity: async () => ({ selectedWorkspace: null, activeWorkspaces: [], inFlight: [], workLog: [], recentActivity: [] }),
   getDashboard: async (): Promise<DashboardSnapshot> => ({
     selectedWorkspace: null,
     activeWorkspaces: [],
@@ -571,6 +575,11 @@ export function registerIpcHandlers(
     assertTrustedSender(event, getMainWindow());
     assertNoPayload(payload);
     return services.getDashboard();
+  });
+  registerHandler(ipcChannels.getRunningProjectsActivity, async (event, payload: unknown) => {
+    assertTrustedSender(event, getMainWindow());
+    assertNoPayload(payload);
+    return services.getRunningProjectsActivity();
   });
   registerHandler(ipcChannels.setPermissionProfile, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
@@ -963,7 +972,8 @@ export function registerIpcHandlers(
   });
   registerHandler(ipcChannels.resolveActivityTargetDetail, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
-    return services.resolveActivityTargetDetail(parseResolveActivityTargetDetailRequest(payload));
+    const request = parseResolveActivityTargetDetailRequest(payload);
+    return services.resolveActivityTargetDetail(request.detailRef, request.workspaceId);
   });
   registerHandler(ipcChannels.searchActivityTargetDetails, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
@@ -1189,9 +1199,12 @@ function parseClearLogBufferRequest(payload: unknown): ClearLogBufferRequest {
   return { source: payload.source, ...(workspaceId === undefined ? {} : { workspaceId }), ...(sessionId === undefined ? {} : { sessionId }) };
 }
 
-function parseResolveActivityTargetDetailRequest(payload: unknown): string {
+function parseResolveActivityTargetDetailRequest(payload: unknown): { readonly detailRef: string; readonly workspaceId?: string | null } {
   if (!isRecord(payload)) throw new Error('Invalid IPC payload');
-  return boundedNonEmptyString(payload.detailRef, 'detailRef', 512);
+  const workspaceId = payload.workspaceId === undefined ? undefined : payload.workspaceId === null
+    ? null : boundedNonEmptyString(payload.workspaceId, 'workspaceId', 4096);
+  return { detailRef: boundedNonEmptyString(payload.detailRef, 'detailRef', 512),
+    ...(workspaceId === undefined ? {} : { workspaceId }) };
 }
 
 function parseSearchActivityTargetDetailsRequest(payload: unknown): { readonly query: string; readonly candidates: readonly ActivityTargetSearchCandidate[] } {
@@ -1215,7 +1228,7 @@ function parseExportLogsRequest(payload: unknown): ExportLogsRequest {
   const workspaceId = optionalScopeId(payload.workspaceId, 'workspaceId');
   const sessionId = optionalScopeId(payload.sessionId, 'sessionId');
   const locale = optionalUiLocale(payload.locale);
-  if (!Array.isArray(payload.lines) || payload.lines.length > 5_000) throw new Error('Invalid IPC payload: lines');
+  if (!Array.isArray(payload.lines) || payload.lines.length > 10_000) throw new Error('Invalid IPC payload: lines');
   const lines = payload.lines.map((line) => {
     if (!isRecord(line) || !Number.isSafeInteger(line.lineId) || Number(line.lineId) <= 0) throw new Error('Invalid IPC payload: lines');
     const correlationRef = line.correlationRef === null ? null : boundedNonEmptyString(line.correlationRef, 'correlationRef', 512);
@@ -1239,7 +1252,7 @@ function parseExportWorkLogRequest(payload: unknown): ExportWorkLogRequest {
   const locale = optionalUiLocale(payload.locale);
   const rowIds = payload.rowIds.map((rowId) => {
     const value = boundedNonEmptyString(rowId, 'rowId', 1_024);
-    if (!/^(audit|inflight):.+$/s.test(value)) throw new Error('Invalid IPC payload: rowIds');
+    if (!/^(audit|inflight|inflight-scoped):.+$/s.test(value)) throw new Error('Invalid IPC payload: rowIds');
     return value;
   });
   return { rowIds, ...(locale === undefined ? {} : { locale }) };
@@ -1270,13 +1283,14 @@ async function exportLogsToFile(
   window: BrowserWindow | null,
   services: DesktopIpcServices,
   request: ExportLogsRequest,
-): Promise<{ readonly exported: boolean }> {
+): Promise<{ readonly exported: boolean; readonly unavailableCount?: number }> {
   if (window === null) return { exported: false };
   const locale = request.locale ?? desktopLocale;
   const messages = nativeMessages(locale);
   const snapshot = await services.getLogSnapshot();
   const lineById = new Map(snapshot.lines.filter((line) => line.source === request.source).map((line) => [line.id, line] as const));
   const capturedRows = request.lines.map((reference) => ({ reference, line: lineById.get(reference.lineId) ?? null }));
+  const unavailableCount = capturedRows.filter(({ line }) => line === null).length;
   const result = await dialog.showSaveDialog(window, {
     title: 'Export lnwjing logs',
     defaultPath: `lnwjing-${request.source}-logs.log`,
@@ -1328,13 +1342,13 @@ async function exportLogsToFile(
       }
       const authoritativeRef = targetDetail?.detailRef ?? (line.correlation?.kind === 'mcp' ? line.correlation.callId : null);
       const requestedRef = reference.correlationRef === authoritativeRef ? reference.correlationRef : authoritativeRef;
-      const detail = requestedRef === null ? null : (await services.resolveActivityTargetDetail(requestedRef)).detail;
+      const detail = requestedRef === null ? null : (await services.resolveActivityTargetDetail(requestedRef, line.workspaceId ?? null)).detail;
       const detailExpected = targetDetail !== undefined && targetDetail.itemCount > targetDetail.preview.length;
       yield formatCompleteTargetDetail(baseWithMetadata, detail, detailExpected, locale);
     }
   }
   await writeSerializedLogRows(result.filePath, serializedRows());
-  return { exported: true };
+  return { exported: true, unavailableCount };
 }
 
 async function exportWorkLogToFile(window: BrowserWindow | null, services: DesktopIpcServices, request: ExportWorkLogRequest): Promise<{ readonly exported: boolean }> {
@@ -1842,6 +1856,8 @@ function refreshDesktopTrayMenu(): void {
 
 async function requestFactoryReset(dataPath: string, mode: 'all' | 'preserve-settings' = 'all'): Promise<{ readonly accepted: boolean }> {
   if (factoryResetQueued) return { accepted: true };
+  // A blocked reset must fail in the running UI, before staging a marker or exiting.
+  if (mode === 'preserve-settings') preflightSettingsPreservingResetSync(dataPath);
   const messages = nativeMessages(desktopLocale);
   const confirmation = await dialog.showMessageBox({
     type: 'warning',
@@ -3369,8 +3385,27 @@ if (factoryResetApplyRequested) {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'unknown resume error';
       console.error(`Pending lnwjing reset could not resume safely: ${message}`);
-      try { dialog.showErrorBox('lnwjing reset resume blocked', message); } catch { /* stderr stays available. */ }
-      app.exit(1);
+      let canceledProtectedReset = false;
+      if (error instanceof ProtectedProjectInsideProfileError) {
+        try {
+          canceledProtectedReset = cancelBlockedFactoryResetSync(configuredUserDataPath);
+        } catch (cancelError: unknown) {
+          console.error(`Cannot cancel blocked profile reset safely: ${cancelError instanceof Error ? cancelError.message : 'unknown error'}`);
+        }
+      }
+      if (canceledProtectedReset) {
+        try {
+          dialog.showErrorBox('lnwjing reset canceled to protect project files',
+            `${message}\n\nThe pending reset was canceled; the original profile remains available. lnwjing will reopen.`);
+        } catch { /* stderr stays available. */ }
+        const args = process.argv.slice(1).filter((argument) =>
+          argument !== FACTORY_RESET_APPLY_ARG && !argument.startsWith('--user-data-dir='));
+        app.relaunch({ args });
+        app.exit(0);
+      } else {
+        try { dialog.showErrorBox('lnwjing reset resume blocked', message); } catch { /* stderr stays available. */ }
+        app.exit(1);
+      }
     }
   } else {
     if (configuredUserDataPath !== undefined) {

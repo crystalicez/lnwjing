@@ -18,6 +18,7 @@ export function StandaloneLogViewer(): ReactElement {
   const [tunnelLogExists, setTunnelLogExists] = useState(false);
   const [tunnelAuth, setTunnelAuth] = useState<TunnelAuthStatus | undefined>(undefined);
   const [tab, setTab] = useState<LogSource>('tunnel');
+  const [operationError, setOperationError] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<readonly WorkspaceSummary[]>([]);
   const logIds = useRef<Set<number>>(new Set());
   const pendingLogLines = useRef<LogLine[]>([]);
@@ -39,7 +40,8 @@ export function StandaloneLogViewer(): ReactElement {
       logFlushTimer.current = window.setTimeout(flushPendingLogLines, 40);
     }
   }, [flushPendingLogLines]);
-  const resolveTargetDetail = useCallback(async (detailRef: string) => (await window.lnwjing.resolveActivityTargetDetail({ detailRef })).detail, []);
+  const resolveTargetDetail = useCallback(async (detailRef: string, workspaceId?: string | null) =>
+    (await window.lnwjing.resolveActivityTargetDetail({ detailRef, ...(workspaceId === undefined ? {} : { workspaceId }) })).detail, []);
   const searchTargetDetails = useCallback(async (
     query: string,
     candidates: readonly { readonly id: string; readonly detailRef: string | null }[],
@@ -87,32 +89,59 @@ export function StandaloneLogViewer(): ReactElement {
       ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
       ...(scope.sessionId === null ? {} : { sessionId: scope.sessionId }),
     };
-    await window.lnwjing.clearLogBuffer(request).catch(() => undefined);
-    pendingLogLines.current = pendingLogLines.current.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces));
-    setLines((previous) => previous.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces)));
+    setOperationError(null);
+    try {
+      const result = await window.lnwjing.clearLogBuffer(request);
+      if (!result.cleared) throw new Error('Log buffer is unavailable');
+      pendingLogLines.current = pendingLogLines.current.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces));
+      setLines((previous) => previous.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces)));
+    } catch (cause: unknown) {
+      setOperationError(`${t('error.logBufferClear')}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    }
   }
 
   async function clearAll(): Promise<void> {
-    await Promise.all(sources.map((source) => window.lnwjing.clearLogBuffer({ source }).catch(() => undefined)));
-    if (logFlushTimer.current !== null) {
-      window.clearTimeout(logFlushTimer.current);
-      logFlushTimer.current = null;
+    setOperationError(null);
+    const results = await Promise.allSettled(sources.map(async (source) => {
+      const result = await window.lnwjing.clearLogBuffer({ source });
+      if (!result.cleared) throw new Error('Log buffer is unavailable');
+    }));
+    const cleared = new Set(sources.filter((_, index) => results[index]?.status === 'fulfilled'));
+    if (cleared.size === sources.length) {
+      if (logFlushTimer.current !== null) {
+        window.clearTimeout(logFlushTimer.current);
+        logFlushTimer.current = null;
+      }
+      pendingLogLines.current = [];
+      logIds.current = new Set();
+      setLines([]);
+    } else {
+      // A failed source must remain visible, not be optimistically erased.
+      pendingLogLines.current = pendingLogLines.current.filter((line) => !cleared.has(line.source));
+      setLines((previous) => previous.filter((line) => !cleared.has(line.source)));
+      const failed = sources.filter((source) => !cleared.has(source));
+      setOperationError(`${t('error.logBufferClear')}: ${failed.join(', ')}`);
     }
-    pendingLogLines.current = [];
-    logIds.current = new Set();
-    setLines([]);
   }
 
   async function exportLogs(source: LogSource, scope: LogScopeSelection, query: string, lines: readonly LiveLogExportReference[]): Promise<void> {
-    await window.lnwjing.exportLogs({
-      source,
-      filePath: '',
-      locale,
-      ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
-      ...(scope.sessionId === null ? {} : { sessionId: scope.sessionId }),
-      ...(query.trim().length === 0 ? {} : { query: query.trim() }),
-      lines,
-    }).catch(() => undefined);
+    setOperationError(null);
+    try {
+      const outcome = await window.lnwjing.exportLogs({
+        source,
+        filePath: '',
+        locale,
+        ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
+        ...(scope.sessionId === null ? {} : { sessionId: scope.sessionId }),
+        ...(query.trim().length === 0 ? {} : { query: query.trim() }),
+        lines,
+      });
+      if (outcome.exported && (outcome.unavailableCount ?? 0) > 0) {
+        setOperationError(t('live.exportPartial', { count: String(outcome.unavailableCount) }));
+      }
+    } catch (cause: unknown) {
+      setOperationError(`${t('error.logExport')}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    }
   }
 
   return (
@@ -148,6 +177,7 @@ export function StandaloneLogViewer(): ReactElement {
           </div>
           <ActionButton type="button" className="clear-all-logs-button" onClick={() => { void clearAll(); }}>{t('live.clearAll')}</ActionButton>
         </div>
+        {operationError === null ? null : <p className="log-detail-error" role="alert">{operationError}</p>}
         <LogStreamPanel
           locale={locale}
           title={tab === 'tunnel' ? t(tunnelPresentation.logTabKey) : tab === 'mcp' ? t('live.tabMcp') : t('live.tabProcess')}

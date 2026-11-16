@@ -1,5 +1,6 @@
 import { ActionButton, FormInput } from '../ui/UiPrimitives.js';
 import { useDeferredValue, useEffect, useMemo, useReducer, useRef, useState, type ReactElement, type UIEvent } from 'react';
+import { searchTargetDetailCandidatesInBatches } from './detail-search-batches.js';
 import { canonicalWorkspaceScopeId, workspaceScopeMatches, type ActivityTargetDetail, type LiveLogExportReference, type LogLevel, type LogLine, type LogSessionSummary, type LogSource, type UiLocale, type WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { formatDisplayTimestampItem } from '@lnwjing/shared/date-time-display';
 import { copyTextToClipboard } from '../../clipboard.js';
@@ -39,7 +40,7 @@ interface LogStreamPanelProps {
   readonly copiedLabel?: string;
   readonly onClear: (scope: LogScopeSelection) => Promise<void>;
   readonly onExport: (scope: LogScopeSelection, query: string, lines: readonly LiveLogExportReference[]) => Promise<void>;
-  readonly onResolveTargetDetail?: (detailRef: string) => Promise<ActivityTargetDetail | null>;
+  readonly onResolveTargetDetail?: (detailRef: string, workspaceId?: string | null) => Promise<ActivityTargetDetail | null>;
   readonly onSearchTargetDetails?: (query: string, candidates: readonly { readonly id: string; readonly detailRef: string | null }[]) => Promise<readonly string[]>;
   readonly workspaces?: readonly WorkspaceSummary[];
   readonly sessions?: readonly LogSessionSummary[];
@@ -58,6 +59,16 @@ interface LogStreamPanelProps {
 
 
 const PROGRESSIVE_PAGE_SIZE = 120;
+// IPC lines are immutable. Cache their timestamps across many comparisons
+// instead of repeatedly parsing ISO dates during a 10k-row sort.
+const LOG_TIMESTAMP_MS = new WeakMap<LogLine, number>();
+function parsedLogTimestamp(line: LogLine): number {
+  const cached = LOG_TIMESTAMP_MS.get(line);
+  if (cached !== undefined) return cached;
+  const parsed = Date.parse(line.timestamp);
+  LOG_TIMESTAMP_MS.set(line, parsed);
+  return parsed;
+}
 
 export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
   const [paused, setPaused] = useState(false);
@@ -98,7 +109,9 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
   useEffect(() => {
     const query = normalizeDetailSearchQuery(deferredFilter);
     const generation = ++detailSearchGeneration.current;
-    if (query.length === 0 || props.onSearchTargetDetails === undefined) {
+    // A one-character query only filters cached summaries; deep-searching
+    // 10k rows on the first keystroke needlessly blocks Electron's main thread.
+    if (query.length < 2 || props.onSearchTargetDetails === undefined) {
       dispatchDetailSearch({ type: 'reset', generation });
       return;
     }
@@ -113,16 +126,26 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
         dispatchDetailSearch({ type: 'success', generation, query, matchingIds: [] });
         return;
       }
-      void props.onSearchTargetDetails?.(query, candidates).then((ids) => {
-        dispatchDetailSearch({ type: 'success', generation, query, matchingIds: ids });
+      void searchTargetDetailCandidatesInBatches(
+        query, candidates, props.onSearchTargetDetails!,
+        () => detailSearchGeneration.current === generation,
+      ).then((ids) => {
+        if (detailSearchGeneration.current === generation) {
+          dispatchDetailSearch({ type: 'success', generation, query, matchingIds: ids });
+        }
       }).catch(() => {
-        dispatchDetailSearch({ type: 'failure', generation, query });
+        if (detailSearchGeneration.current === generation) dispatchDetailSearch({ type: 'failure', generation, query });
       });
     }, 180);
     return (): void => window.clearTimeout(timeout);
   }, [deferredFilter, props.onSearchTargetDetails, searchCandidates]);
   const hiddenMatches = activeDetailMatchIds(detailSearchState, deferredFilter);
-  const matchingLines = useMemo(() => visibleLogLines(feedLines, scope, deferredFilter, feed.workspaces, hiddenMatches), [feed, scope, deferredFilter, hiddenMatches]);
+  // searchCandidates is already sorted. Filtering should never sort 10k rows
+  // a second time on each keystroke or completed deep-search response.
+  const matchingLines = useMemo(
+    () => filterLogLinesByScope(searchCandidates, scope, deferredFilter, feed.workspaces, hiddenMatches),
+    [searchCandidates, scope, deferredFilter, feed.workspaces, hiddenMatches],
+  );
   useEffect(() => setVisibleCount(PROGRESSIVE_PAGE_SIZE), [props.source, filter, workspaceId, sessionId]);
   const visible = useMemo(() => matchingLines.slice(0, visibleCount), [matchingLines, visibleCount]);
   const newestLineId = matchingLines[0]?.id ?? null;
@@ -143,7 +166,7 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
 
   async function copyLine(line: LogLine): Promise<void> {
     const detailRef = detailRefForLine(line);
-    const detail = detailRef === null || props.onResolveTargetDetail === undefined ? null : await props.onResolveTargetDetail(detailRef).catch(() => null);
+    const detail = detailRef === null || props.onResolveTargetDetail === undefined ? null : await props.onResolveTargetDetail(detailRef, line.workspaceId).catch(() => null);
     const needsFullDetail = line.targetDetail !== undefined && line.targetDetail.itemCount > line.targetDetail.preview.length;
     if (needsFullDetail && detail === null) {
       setCopyErrorId(line.id);
@@ -253,7 +276,7 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
                   errorLabel={props.detailErrorLabel ?? 'Complete details are unavailable.'}
                   emptyLabel={props.detailEmptyLabel ?? 'No target items.'}
                   legacyIncompleteLabel={props.legacyIncompleteLabel ?? 'Older log: the omitted items were not retained.'}
-                  {...(props.onResolveTargetDetail === undefined ? {} : { loadDetail: props.onResolveTargetDetail })}
+                  {...(props.onResolveTargetDetail === undefined ? {} : { loadDetail: (ref: string) => props.onResolveTargetDetail!(ref, line.workspaceId) })}
                 />
               )}
             </div>
@@ -303,8 +326,8 @@ export function logLevelFor(line: LogLine): LogLevel {
 }
 
 export function compareLogLinesNewestFirst(left: LogLine, right: LogLine): number {
-  const leftTime = Date.parse(left.timestamp);
-  const rightTime = Date.parse(right.timestamp);
+  const leftTime = parsedLogTimestamp(left);
+  const rightTime = parsedLogTimestamp(right);
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return rightTime - leftTime;
   return right.id - left.id;
 }

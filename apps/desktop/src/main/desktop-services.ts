@@ -531,6 +531,12 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const workLogViewState = new WorkLogViewState(settingsRepository);
   if (options.previousLogSessionStartedAt !== undefined) workLogViewState.migrateAutomaticStartupClear(options.previousLogSessionStartedAt);
   const auditRepository = new SqliteAuditRepository(database);
+  // Running Projects needs one last-seen value per workspace, not 500 full
+  // audit rows on each MCP push. Keep a short, read-only in-memory cache.
+  let runningRecentActivityCache: {
+    readonly checkedAt: number;
+    readonly entries: ReturnType<SqliteAuditRepository['listRecentMcpWorkspaceActivity']>;
+  } | null = null;
   const activitySessionCatalog = new ActivitySessionCatalog(auditRepository, workLogViewState);
   const auditService = new AuditService(auditRepository);
   const checkpointEncryptionKey = options.checkpointEncryptionKey ?? (options.checkpointCipher === undefined ? resolveTestCheckpointEncryptionKey() : undefined);
@@ -2073,17 +2079,46 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         workspaceRoot: workspace.realRootPath,
       });
       const backup = await backupService.create('manual');
-      await workspaceRepository.delete(workspace.id);
+      // Drain the native watcher before deleting its registration. Otherwise
+      // an in-flight index operation may observe WORKSPACE_NOT_FOUND halfway
+      // through the delete and leave an inconsistent running project.
       try {
         await workspaceIndex.forgetWorkspace(workspace.id);
       } catch (error: unknown) {
-        await repairSelectedWorkspace(workspace.id);
-        throw new Error('The workspace registration was removed, but its index cleanup failed. Reload the workspace list before retrying cleanup.', { cause: error });
+        throw new Error('Project registration was preserved because index cleanup failed. Retry after stopping its watcher.', { cause: error });
       }
+      await workspaceRepository.delete(workspace.id);
       await repairSelectedWorkspace(workspace.id);
       return { deleted: true, workspaceId: workspace.id, rootPath: workspace.realRootPath, backupId: backup.id };
     },
+    // Lightweight activity-only read for the Running Projects tab. Never
+    // invokes Git, backup, checkpoint, recovery, tunnel or process probes.
+    getRunningProjectsActivity: async () => {
+      const activeWorkspaces = await resolveActiveProjectWorkspaces();
+      const now = Date.now();
+      if (runningRecentActivityCache === null || now - runningRecentActivityCache.checkedAt >= 3_000
+        || now < runningRecentActivityCache.checkedAt) {
+        runningRecentActivityCache = {
+          checkedAt: now,
+          entries: auditRepository.listRecentMcpWorkspaceActivity(
+            new Date(now - 5 * 60_000).toISOString(), new Date(now).toISOString(),
+          ),
+        };
+      }
+      return {
+        selectedWorkspace: activeWorkspaces[0] === undefined ? null : toWorkspaceSummary(activeWorkspaces[0]),
+        activeWorkspaces: activeWorkspaces.map(toWorkspaceSummary),
+        inFlight: activityTracker.listInFlight().map((entry) => toInFlightItem(entry, logSessionId)),
+        // Kept for compatibility; recentActivity is the authoritative source.
+        workLog: [],
+        recentActivity: runningRecentActivityCache.entries,
+      };
+    },
     getDashboard: async (): Promise<DashboardSnapshot> => {
+      // Project deletion can occur while this asynchronous read is awaiting
+      // Git, recovery, or tunnel state. Retry once with a fresh selection
+      // rather than rejecting the entire dashboard with a stale workspace ID.
+      const buildSnapshot = async (): Promise<DashboardSnapshot> => {
       await sweepRecoveryRetention().catch((error: unknown) => {
         console.error(`Recovery retention sweep failed: ${error instanceof Error ? error.message : 'unknown error'}`);
       });
@@ -2175,6 +2210,16 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         hostArch: supportedHostArchitecture(process.arch),
         appVersion: APP_VERSION,
       };
+      };
+      try {
+        return await buildSnapshot();
+      } catch (cause: unknown) {
+        if (!(cause instanceof Error) || !cause.message.includes('Workspace was not found')) throw cause;
+        // Do not retry persistent errors indefinitely. If a registration
+        // disappeared during the first read, reconcile selection and rebuild.
+        await resolveActiveProjectWorkspaces();
+        return buildSnapshot();
+      }
     },
     setPermissionProfile: async (request: SetPermissionProfileRequest): Promise<{ readonly profile: IpcPermissionProfileName }> => {
       profileName = request.profile;
@@ -2206,6 +2251,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     createBackup: async (): Promise<IpcBackupSummary> => toIpcBackupSummary(await backupService.create('manual')),
     getStorageOverview: async () => storageOverview(),
     getProfileStorageInventory: (() => {
+      // Never run two expensive profile walks concurrently for the same
+      // Desktop runtime. Explicit button only; refresh/poll remain cheap.
       let inFlight: ReturnType<typeof inspectProfileStorageWithPhysicalOffMain> | null = null;
       return (): ReturnType<typeof inspectProfileStorageWithPhysicalOffMain> => {
         if (inFlight !== null) return inFlight;
@@ -2656,8 +2703,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       logHub.clear(request.source, request, workspaceSummaries);
       return { cleared: true };
     },
-    resolveActivityTargetDetail: async (detailRef): Promise<{ readonly status: 'complete' | 'unavailable'; readonly detail: ActivityTargetDetail | null }> => {
-      const detail = await auditRepository.resolveActivityTargetDetail(detailRef);
+    resolveActivityTargetDetail: async (detailRef, workspaceId): Promise<{ readonly status: 'complete' | 'unavailable'; readonly detail: ActivityTargetDetail | null }> => {
+      const detail = await auditRepository.resolveActivityTargetDetail(detailRef, workspaceId);
       return detail === null ? { status: 'unavailable', detail: null } : { status: 'complete', detail };
     },
     searchActivityTargetDetails: async (candidates, query): Promise<readonly string[]> => (
@@ -2906,6 +2953,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           const limitBytes = options.globalQuotaMiB * 1024 ** 2;
           const reserveBytes = Math.min(Math.floor(limitBytes * 0.1), 512 * 1024 ** 2);
           globalQuota.configure({ limitBytes, criticalReserveBytes: reserveBytes });
+          // User opted into profile-level admission. Do not stall the IPC or
+          // delete anything without a complete inventory and safe age proof.
           void globalQuota.reclaimIfPressured().catch((error: unknown) => {
             console.warn('Global quota diagnostic cleanup was skipped:', error instanceof Error ? error.message : 'unknown error');
           });
@@ -3952,7 +4001,9 @@ export async function* streamWorkLogExportRows(
   for (const identity of identities) {
     const parsed = parseWorkLogIdentity(identity);
     if (parsed === null) continue;
-    const event = await repository.resolveActivityEvent(parsed.value, parsed.kind === 'audit' ? 'event' : 'started-call');
+    const event = await repository.resolveActivityEvent(
+      parsed.value, parsed.kind === 'audit' ? 'event' : 'started-call', parsed.workspaceId,
+    );
     if (event === null) {
       yield 'Detail unavailable: the retained audit event no longer exists.';
       continue;
@@ -3962,7 +4013,7 @@ export async function* streamWorkLogExportRows(
       continue;
     }
     const detailRef = event.targetDetail.detailRef ?? event.callId ?? (parsed.kind === 'audit' ? event.id : parsed.value);
-    const detail = await repository.resolveActivityTargetDetail(detailRef);
+    const detail = await repository.resolveActivityTargetDetail(detailRef, event.workspaceId ?? null);
     yield formatActivityExportRow(event, detail, locale);
   }
 }
@@ -3977,12 +4028,27 @@ export async function writeSerializedLogRows(filePath: string, rows: Iterable<st
   }
 }
 
-function parseWorkLogIdentity(value: string): { readonly kind: 'audit' | 'inflight'; readonly value: string } | null {
+function parseWorkLogIdentity(value: string): {
+  readonly kind: 'audit' | 'inflight';
+  readonly value: string;
+  readonly workspaceId?: string;
+} | null {
   const separator = value.indexOf(':');
   if (separator <= 0 || separator === value.length - 1) return null;
   const kind = value.slice(0, separator);
+  const payload = value.slice(separator + 1);
+  if (kind === 'inflight-scoped') {
+    const boundary = payload.indexOf(':');
+    if (boundary <= 0 || boundary === payload.length - 1) return null;
+    try {
+      const workspaceId = decodeURIComponent(payload.slice(0, boundary));
+      const callId = decodeURIComponent(payload.slice(boundary + 1));
+      if (!workspaceId || !callId || workspaceId.length > 4096 || callId.length > 512) return null;
+      return { kind: 'inflight', value: callId, workspaceId };
+    } catch { return null; }
+  }
   if (kind !== 'audit' && kind !== 'inflight') return null;
-  return { kind, value: value.slice(separator + 1) };
+  return { kind, value: payload };
 }
 
 function formatActivityExportRow(event: ActivityAuditEvent, detail: ActivityTargetDetail | null, locale: UiLocale): string {

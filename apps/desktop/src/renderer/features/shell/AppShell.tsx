@@ -129,7 +129,7 @@ export function AppShell(props: AppShellProps): ReactElement {
           </div>
         </aside>
 
-        <div className="main-pane">
+        <div className="main-pane" data-screen={props.screen}>
           <main className="main-content">{props.children}</main>
         </div>
       </div>

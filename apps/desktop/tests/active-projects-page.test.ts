@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { DashboardSnapshot, InFlightWorkItem, WorkLogEntry, WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { ActiveProjectsPage, deriveActiveProjectActivity } from '../src/renderer/features/projects/ActiveProjectsPage.js';
+import { isRunningProjectSort, selectRunningProjects } from '../src/renderer/features/projects/active-projects-view.js';
 import { AppShell } from '../src/renderer/features/shell/AppShell.js';
 
 function workspace(id: string, extras: Partial<WorkspaceSummary> = {}): WorkspaceSummary {
@@ -46,6 +47,53 @@ describe('Active Projects dashboard', () => {
     expect(projects[1]?.lastActivityAt).toBe('2026-11-02T04:18:00.000Z');
     expect(deriveActiveProjectActivity(workspaces, dashboard(), Date.parse(at) + 20 * 60_000)
       .find((project) => project.workspace.id === 'recent')?.state).toBe('ready');
+  });
+
+  it('uses authoritative per-workspace recent activity instead of the truncated global Work Log', () => {
+    const snapshot = {
+      ...dashboard(),
+      workLog: [],
+      recentActivity: [{ workspaceId: 'recent', timestamp: '2026-11-02T04:18:00.000Z' }],
+    };
+    const projects = deriveActiveProjectActivity(workspaces, snapshot, Date.parse(at));
+    expect(projects.find((project) => project.workspace.id === 'recent')?.state).toBe('recent');
+    expect(projects.find((project) => project.workspace.id === 'ready')?.state).toBe('ready');
+  });
+
+  it('sorts by name, recent activity, active call count and main project without extra queries', () => {
+    const items = deriveActiveProjectActivity(workspaces, dashboard(), Date.parse(at));
+    const options = { sort: 'status' as const, filter: 'all' as const, search: '', locale: 'en' as const };
+    const select = (sort: Parameters<typeof selectRunningProjects>[1]['sort']): string[] =>
+      selectRunningProjects(items, { ...options, sort }).map((project) => project.workspace.id);
+    expect(select('status')).toEqual(['running', 'recent', 'ready']);
+    expect(select('name-asc')).toEqual(['ready', 'recent', 'running']);
+    expect(select('name-desc')).toEqual(['running', 'recent', 'ready']);
+    expect(select('activity')).toEqual(['running', 'recent', 'ready']);
+    expect(select('calls')).toEqual(['running', 'recent', 'ready']);
+    expect(select('main')).toEqual(['recent', 'running', 'ready']);
+    expect(selectRunningProjects(items, { ...options, filter: 'recent' }).map((item) => item.workspace.id))
+      .toEqual(['recent']);
+    expect(selectRunningProjects(items, { ...options, search: items.find((item) => item.workspace.id === 'ready')!.workspace.realRootPath.toUpperCase() })
+      .map((item) => item.workspace.id)).toEqual(['ready']);
+    expect(selectRunningProjects(items, { ...options, search: 'no-matching-project' })).toEqual([]);
+    expect(isRunningProjectSort('bad-option')).toBe(false);
+    expect(isRunningProjectSort('name-desc')).toBe(true);
+  });
+
+  it('sorts natural numeric names and uses a stable ID tie-breaker', () => {
+    const spaces = [
+      workspace('id-10', { displayName: 'Project 10' }),
+      workspace('id-2', { displayName: 'Project 2' }),
+      workspace('id-3', { displayName: 'Project 2' }),
+      workspace('thai', { displayName: 'โปรเจกต์ ก' }),
+    ];
+    const snapshot = { ...dashboard(), activeWorkspaces: spaces, selectedWorkspace: spaces[0]!, inFlight: [], workLog: [] };
+    const items = deriveActiveProjectActivity(spaces, snapshot, Date.parse(at));
+    const list = selectRunningProjects(items, { sort: 'name-asc', filter: 'all', search: '', locale: 'th' });
+    expect(list.filter((item) => item.workspace.displayName.startsWith('Project')).map((item) => item.workspace.id))
+      .toEqual(['id-2', 'id-3', 'id-10']);
+    expect(selectRunningProjects(items, { sort: 'main', filter: 'all', search: '', locale: 'th' })[0]?.workspace.id)
+      .toBe('id-10');
   });
 
   it('renders a dedicated sidebar tab and project status without displaying inactive or archived projects', () => {

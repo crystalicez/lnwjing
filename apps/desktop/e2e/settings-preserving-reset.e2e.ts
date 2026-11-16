@@ -46,6 +46,38 @@ async function launchTestGui(profile: string, build: GuiBuild): Promise<Electron
   }
 }
 
+test('source GUI blocks a reset when the profile itself is a registered project', async () => {
+  test.setTimeout(110_000);
+  const auditRoot = path.join(projectRoot, '.audit');
+  await mkdir(auditRoot, { recursive: true });
+  const root = await mkdtemp(path.join(auditRoot, 'settings-reset-protected-ui-'));
+  const profile = path.join(root, 'profile');
+  const protectedProject = path.join(profile, 'do-not-delete');
+  await Promise.all([protectedProject, path.join(root, 'roaming'), path.join(root, 'local'), path.join(root, 'temp')]
+    .map(async directory => mkdir(directory, { recursive: true })));
+  await writeFile(path.join(protectedProject, 'source.ts'), 'keep protected source');
+  let app: ElectronApplication | undefined;
+  try {
+    app = await launchTestGui(profile, 'source');
+    const db = new DatabaseSync(path.join(profile, 'lnwjing.sqlite'));
+    try {
+      db.prepare('INSERT INTO workspaces(id,display_name,root_path,real_root_path,created_at) VALUES (?,?,?,?,?)')
+        .run('profile-root', 'Protected profile root', profile, profile, '2026-11-11T00:00:00.000Z');
+    } finally { db.close(); }
+    const page = await app.firstWindow();
+    await page.getByRole('button', { name: /^(Settings|ตั้งค่า)$/ }).click();
+    await page.locator('.settings-subnav .settings-nav-item').filter({ hasText: /Recovery|กู้คืนข้อมูล/ }).click();
+    await page.getByTestId('preserve-settings-reset').getByRole('button').click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Cannot clear profile' }))
+      .toContainText(`Project: ${profile}`);
+    expect(existsSync(factoryResetMarkerPath(profile))).toBe(false);
+    expect(await readFile(path.join(protectedProject, 'source.ts'), 'utf8')).toBe('keep protected source');
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  }
+});
+
 for (const build of ['source', 'packaged-candidate'] as const) {
 test(`${build} real Electron Settings button preserves configuration across offline clear and a clean GUI restart`, async () => {
   test.skip(build === 'packaged-candidate' && !existsSync(packagedCandidate), 'Test-only packaged candidate is missing');
@@ -169,9 +201,10 @@ test(`${build} native confirmation commits a v2 reset request and quiesces the a
   const testRoot = await mkdtemp(path.join(auditRoot, 'settings-reset-confirm-'));
   const profile = path.join(testRoot, 'profile');
   const tunnel = path.join(testRoot, 'external-tunnel');
-  const project = path.join(testRoot, 'code');
-  await Promise.all([profile, tunnel, project, path.join(testRoot, 'roaming'), path.join(testRoot, 'local'),
+  const project = path.join(profile, 'nested-user-code');
+  await Promise.all([profile, tunnel, path.join(testRoot, 'roaming'), path.join(testRoot, 'local'),
     path.join(testRoot, 'temp')].map(async folder => mkdir(folder)));
+  await mkdir(project);
   await writeFile(path.join(project, 'README.md'), 'user-owned code must be kept');
   let app: ElectronApplication | undefined;
   try {
@@ -184,6 +217,8 @@ test(`${build} native confirmation commits a v2 reset request and quiesces the a
     try {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)').run('ui_locale', 'en');
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)').run('checkpoint_creation_mode_v1', 'always');
+      db.prepare('INSERT INTO workspaces(id,display_name,root_path,real_root_path,created_at) VALUES (?,?,?,?,?)')
+        .run('protected-e2e', 'User-owned source', project, project, '2026-11-11T00:00:00.000Z');
       db.prepare('INSERT INTO audit_events(id,timestamp,actor_id,actor_name,action,result_code,duration_ms,metadata_json)'
         + 'VALUES(?,?,?,?,?,?,?,?)').run('reset-confirm-audit', '2026-11-01T00:00:00.000Z',
         'fixture', 'Fixture', 'mcp_tool:read_file', 'SUCCESS', 0, '{}');
@@ -248,6 +283,9 @@ test(`${build} native confirmation commits a v2 reset request and quiesces the a
       expect(checkpoint.prepare("SELECT value FROM settings WHERE key='checkpoint_creation_mode_v1'").get())
         .toMatchObject({ value: 'always' });
       expect(checkpoint.prepare("SELECT name FROM sqlite_master WHERE name='audit_events'").get()).toBeUndefined();
+      expect(checkpoint.prepare("SELECT name FROM sqlite_master WHERE name='workspaces'").get()).toBeUndefined();
+      expect(JSON.parse((checkpoint.prepare("SELECT value FROM settings WHERE key='reset_protected_project_roots_v1'").get() as { value: string }).value))
+        .toEqual(['nested-user-code']);
     } finally { checkpoint.close(); }
     app = await launchTestGui(profile, build);
     const dashboard = await (await app.firstWindow()).evaluate(() => window.lnwjing.getDashboard());

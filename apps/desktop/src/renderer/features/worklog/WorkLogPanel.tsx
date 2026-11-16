@@ -10,6 +10,7 @@ import { SearchableSelect } from '../../components/ui/SearchableSelect.js';
 import { ExpandableTargetDetail } from '../logs/ExpandableTargetDetail.js';
 import { activeDetailMatchIds, activeLogFeed, createDetailSearchState, normalizeDetailSearchQuery, reduceDetailSearchState, transitionLogFeedFreeze } from '../logs/detail-search-state.js';
 import { collectSessionFilterOptions, collectWorkspaceFilterOptions, type ScopeFilterSample } from '../../scope-filter-options.js';
+import { searchTargetDetailCandidatesInBatches } from '../live/detail-search-batches.js';
 
 export type WorkLogFilter = 'all' | 'warn' | 'error';
 
@@ -37,7 +38,7 @@ interface WorkLogPanelProps {
   readonly onClear: (scope: LogScopeSelection) => Promise<void>;
   readonly exportLabel?: string;
   readonly onExport?: (rowIds: readonly string[]) => Promise<void>;
-  readonly onResolveTargetDetail?: (detailRef: string) => Promise<ActivityTargetDetail | null>;
+  readonly onResolveTargetDetail?: (detailRef: string, workspaceId?: string | null) => Promise<ActivityTargetDetail | null>;
   readonly onSearchTargetDetails?: (query: string, candidates: readonly { readonly id: string; readonly detailRef: string | null }[]) => Promise<readonly string[]>;
   readonly entries: readonly WorkLogEntry[];
   readonly inFlight: readonly InFlightWorkItem[];
@@ -125,10 +126,15 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
         dispatchDetailSearch({ type: 'success', generation, query, matchingIds: [] });
         return;
       }
-      void props.onSearchTargetDetails?.(query, searchCandidates).then((ids) => {
-        dispatchDetailSearch({ type: 'success', generation, query, matchingIds: ids });
+      void searchTargetDetailCandidatesInBatches(
+        query, searchCandidates, props.onSearchTargetDetails!,
+        () => detailSearchGeneration.current === generation,
+      ).then((ids) => {
+        if (detailSearchGeneration.current === generation) {
+          dispatchDetailSearch({ type: 'success', generation, query, matchingIds: ids });
+        }
       }).catch(() => {
-        dispatchDetailSearch({ type: 'failure', generation, query });
+        if (detailSearchGeneration.current === generation) dispatchDetailSearch({ type: 'failure', generation, query });
       });
     }, 180);
     return (): void => window.clearTimeout(timeout);
@@ -155,7 +161,7 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
   async function copyRow(row: WorkLogRow): Promise<void> {
     const detailRef = row.item.targetDetail.detailRef;
     const needsFullDetail = row.item.targetDetail.itemCount > row.item.targetDetail.preview.length;
-    const detail = detailRef === null || props.onResolveTargetDetail === undefined ? null : await props.onResolveTargetDetail(detailRef).catch(() => null);
+    const detail = detailRef === null || props.onResolveTargetDetail === undefined ? null : await props.onResolveTargetDetail(detailRef, row.item.workspaceId).catch(() => null);
     if (needsFullDetail && detail === null) {
       setCopyErrorId(row.id);
       return;
@@ -192,7 +198,7 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
           >
             {props.filterErrorLabel}
           </ActionButton>
-          {props.onExport === undefined ? null : <ActionButton type="button" onClick={() => { void props.onExport?.(rows.map(workLogRowIdentity)); }}>{props.exportLabel ?? 'Export'}</ActionButton>}
+          {props.onExport === undefined ? null : <ActionButton type="button" onClick={() => { void props.onExport?.(rows.map(workLogExportIdentity)); }}>{props.exportLabel ?? 'Export'}</ActionButton>}
           <ActionButton type="button" disabled={sessionId === null} onClick={() => { if (sessionId !== null) void props.onClear({ workspaceId: null, sessionId }); }}>{props.clearSessionLabel}</ActionButton>
           <ActionButton type="button" disabled={workspaceId === null} onClick={() => { if (workspaceId !== null) void props.onClear({ workspaceId, sessionId: null }); }}>{props.clearWorkspaceLabel}</ActionButton>
           <ActionButton type="button" onClick={() => { void props.onClear({ workspaceId: null, sessionId: null }); }}>{props.clearAllLabel}</ActionButton>
@@ -247,7 +253,7 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
             <span className="worklog-duration" />
             <CopyButton row={row} copiedId={copiedId} copyLabel={props.copyLabel} copiedLabel={props.copiedLabel} onCopy={copyRow} />
             {copyErrorId === row.id ? <p className="log-detail-error row-copy-error" role="alert">{props.detailErrorLabel ?? 'Complete details are unavailable; nothing was copied.'}</p> : null}
-            <ExpandableTargetDetail {...detailProps(props)} reference={row.item.targetDetail} legacySummary={row.item.targetSummary} {...(props.onResolveTargetDetail === undefined ? {} : { loadDetail: props.onResolveTargetDetail })} />
+            <ExpandableTargetDetail {...detailProps(props)} reference={row.item.targetDetail} legacySummary={row.item.targetSummary} {...(props.onResolveTargetDetail === undefined ? {} : { loadDetail: (ref: string) => props.onResolveTargetDetail!(ref, row.item.workspaceId) })} />
           </div>
         ) : (
           <div key={`entry:${row.item.id}`} className={`worklog-line ${row.item.kind} ${workLogLevel(row.item)}`}>
@@ -259,7 +265,7 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
             {row.item.kind !== 'task' ? <em>{row.item.durationMs}ms</em> : <span className="worklog-duration" />}
             <CopyButton row={row} copiedId={copiedId} copyLabel={props.copyLabel} copiedLabel={props.copiedLabel} onCopy={copyRow} />
             {copyErrorId === row.id ? <p className="log-detail-error row-copy-error" role="alert">{props.detailErrorLabel ?? 'Complete details are unavailable; nothing was copied.'}</p> : null}
-            <ExpandableTargetDetail {...detailProps(props)} reference={row.item.targetDetail} legacySummary={row.item.targetSummary} {...(props.onResolveTargetDetail === undefined ? {} : { loadDetail: props.onResolveTargetDetail })} />
+            <ExpandableTargetDetail {...detailProps(props)} reference={row.item.targetDetail} legacySummary={row.item.targetSummary} {...(props.onResolveTargetDetail === undefined ? {} : { loadDetail: (ref: string) => props.onResolveTargetDetail!(ref, row.item.workspaceId) })} />
           </div>
         ))}
       </div>
@@ -430,6 +436,14 @@ function workLogMetadataLines(row: WorkLogRow): readonly string[] {
 
 export function workLogRowIdentity(row: WorkLogRow): string {
   return row.kind === 'inflight' ? `inflight:${row.item.callId}` : `audit:${row.item.id}`;
+}
+
+function workLogExportIdentity(row: WorkLogRow): string {
+  // Export cannot safely re-resolve an in-flight call by its ID without the
+  // workspace scope, even if a collision is extremely unlikely for UUIDs.
+  return row.kind === 'inflight' && row.item.workspaceId !== null
+    ? `inflight-scoped:${encodeURIComponent(row.item.workspaceId)}:${encodeURIComponent(row.item.callId)}`
+    : workLogRowIdentity(row);
 }
 
 function appendCompleteTargetDetail(base: string, detail: ActivityTargetDetail | null, locale: UiLocale): string {

@@ -261,6 +261,8 @@ describe('production desktop IPC acceptance', () => {
     registerIpcHandlers(() => ({}) as never, services);
     const trusted = { senderFrame: { url: pathToFileURL(getRendererEntryPath()).href } };
 
+    await expect(requiredHandler(ipcChannels.getRunningProjectsActivity)(trusted)).resolves.toEqual({ selectedWorkspace: null, activeWorkspaces: [], inFlight: [], workLog: [], recentActivity: [] });
+    expect(services.getDashboard).not.toHaveBeenCalled();
     await expect(requiredHandler(ipcChannels.clearWorkLog)(trusted, { workspaceId: 'ws-a', sessionId: 'session-a' })).resolves.toEqual({ cleared: true });
     expect(services.clearWorkLog).toHaveBeenCalledWith({ workspaceId: 'ws-a', sessionId: 'session-a' });
 
@@ -269,6 +271,9 @@ describe('production desktop IPC acceptance', () => {
 
     await expect(requiredHandler(ipcChannels.clearLogBuffer)(trusted, { source: 'mcp', sessionId: '' })).rejects.toThrow(/sessionId/);
     await expect(requiredHandler(ipcChannels.resolveActivityTargetDetail)(trusted, { detailRef: 'call-9' })).resolves.toEqual({ status: 'unavailable', detail: null });
+    await expect(requiredHandler(ipcChannels.resolveActivityTargetDetail)(trusted, { detailRef: 'call-9', workspaceId: 'ws-a' })).resolves.toEqual({ status: 'unavailable', detail: null });
+    expect(services.resolveActivityTargetDetail).toHaveBeenCalledWith('call-9', 'ws-a');
+    await expect(requiredHandler(ipcChannels.resolveActivityTargetDetail)(trusted, { detailRef: 'call-9', workspaceId: '' })).rejects.toThrow(/workspaceId/);
     await expect(requiredHandler(ipcChannels.searchActivityTargetDetails)(trusted, { query: 'needle', candidates: [{ id: 'audit:event-9', detailRef: 'call-9' }] })).resolves.toEqual({ matchingIds: [] });
     await expect(requiredHandler(ipcChannels.searchActivityTargetDetails)(trusted, { query: 'needle', candidates: [{ id: 'inflight:call-9', detailRef: 'call-9', workspaceId: 'ws-a' }] })).resolves.toEqual({ matchingIds: [] });
     expect(services.searchActivityTargetDetails).toHaveBeenCalledWith([
@@ -276,11 +281,24 @@ describe('production desktop IPC acceptance', () => {
     ], 'needle');
     await expect(requiredHandler(ipcChannels.searchActivityTargetDetails)(trusted, { query: 'needle', candidates: [{ id: 'inflight:call-9', detailRef: 'call-9', workspaceId: '' }] })).rejects.toThrow(/workspaceId/);
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, { source: 'mcp', filePath: '', workspaceId: 'ws-a', sessionId: 'session-a', query: 'needle', lines: [{ lineId: 9, correlationRef: 'call-9' }, { lineId: 4, correlationRef: null }] })).resolves.toEqual({ exported: false });
+    // LogHub keeps 10k lines per source; exporting the full retained buffer
+    // must not fail at the old 5k IPC guard.
+    const fullRetainedLog = Array.from({ length: 10_000 }, (_, index) =>
+      ({ lineId: index + 1, correlationRef: null }));
+    await expect(requiredHandler(ipcChannels.exportLogs)(trusted, {
+      source: 'mcp', filePath: '', lines: fullRetainedLog,
+    })).resolves.toEqual({ exported: false });
+    await expect(requiredHandler(ipcChannels.exportLogs)(trusted, {
+      source: 'mcp', filePath: '', lines: [...fullRetainedLog, { lineId: 10_001, correlationRef: null }],
+    })).rejects.toThrow(/lines/);
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, { source: 'mcp', filePath: '', workspaceId: '' })).rejects.toThrow(/workspaceId/);
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, { source: 'mcp', filePath: '', lines: [{ lineId: 0, correlationRef: null }] })).rejects.toThrow(/lines/);
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, { source: 'mcp', filePath: '', lines: [{ lineId: 1, correlationRef: 7 }] })).rejects.toThrow(/correlationRef/);
 
     await expect(requiredHandler(ipcChannels.exportWorkLog)(trusted, { rowIds: ['audit:event-9', 'inflight:call-9'] })).resolves.toEqual({ exported: false });
+    await expect(requiredHandler(ipcChannels.exportWorkLog)(trusted, {
+      rowIds: ['inflight-scoped:ws-a:call-9'],
+    })).resolves.toEqual({ exported: false });
     await expect(requiredHandler(ipcChannels.exportWorkLog)(trusted, { rowIds: ['invalid-row-id'] })).rejects.toThrow(/rowIds/);
   });
 
@@ -295,7 +313,7 @@ describe('production desktop IPC acceptance', () => {
 
     await expect(requiredHandler(ipcChannels.exportLogs)(trusted, {
       source: 'mcp', filePath: '', locale: 'en', lines: [{ lineId: 99, correlationRef: 'call-missing' }],
-    })).resolves.toEqual({ exported: true });
+    })).resolves.toEqual({ exported: true, unavailableCount: 1 });
 
     const exported = await readFile(filePath, 'utf8');
     expect(exported).toContain('lineId=99');
@@ -344,6 +362,7 @@ function desktopServices(): DesktopIpcServices {
     setWorkspaceArchived: vi.fn(async (request) => ({ id: request.workspaceId, displayName: 'Production', rootPath: 'E:\\workspace-production', realRootPath: 'E:\\workspace-production', createdAt: new Date(0).toISOString(), archivedAt: request.archived ? new Date().toISOString() : null, kind: 'project' as const })),
     deleteWorkspace: vi.fn(async (request) => ({ deleted: true, workspaceId: request.workspaceId, rootPath: 'E:\\workspace-production', backupId: 'backup-production' })),
     getDashboard: vi.fn(async () => { throw new Error('unused'); }),
+    getRunningProjectsActivity: vi.fn(async () => ({ selectedWorkspace: null, activeWorkspaces: [], inFlight: [], workLog: [], recentActivity: [] })),
     setPermissionProfile: vi.fn(async (request) => ({ profile: request.profile })),
     setUnrestrictedMode: vi.fn(async (request) => ({ unrestricted: request.enabled, restartRequired: false })),
     setAiDeletePolicy: vi.fn(async (request) => ({ enabled: request.enabled })),

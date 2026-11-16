@@ -45,7 +45,8 @@ describe('Storage Management UI', () => {
     expect(markup).toContain('Scan entire profile');
     expect(markup).toContain('data-testid="preserve-settings-reset"');
     expect(markup).toContain('Clear all data except Settings</button>');
-    expect(markup).toContain('Your actual project files are never deleted');
+    expect(markup).toContain('Registered project files remain in place even inside the profile');
+    expect(markup).toContain('unsafe overlapping paths block the reset');
     expect(markup).not.toContain('VACUUM now');
   });
 

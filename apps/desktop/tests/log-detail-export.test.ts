@@ -243,6 +243,35 @@ describe('complete log detail resolution and export', () => {
     fixture.database.close();
   });
 
+  it('keeps in-flight Work Log exports inside the encoded workspace scope when call IDs collide', async () => {
+    const database = new SqliteDatabase(':memory:');
+    const repository = new SqliteAuditRepository(database);
+    try {
+      for (const [workspaceId, suffix, seconds] of [
+        ['ws-a', 'A-only', '00'], ['ws-b', 'B-only', '01'],
+      ] as const) {
+        await repository.insert({
+          id: `started-${workspaceId}`, timestamp: `2026-08-20T00:00:${seconds}.000Z`,
+          actorId: 'test', actorName: 'test', workspaceId,
+          action: 'mcp_tool:read_file', resultCode: 'STARTED', durationMs: 0,
+          metadata: {
+            callId: 'shared', phase: 'started', toolName: 'read_file',
+            targetDetail: { detailRef: 'shared', itemCount: 1, preview: [suffix], legacyIncomplete: false },
+            activityTargetDetail: { kind: 'files', items: [suffix] },
+          },
+        });
+      }
+      const resolveRows = (desktopServices as unknown as { resolveWorkLogExportRows?: ResolveWorkLogExportRows }).resolveWorkLogExportRows;
+      const scoped = await resolveRows!(repository, ['inflight-scoped:ws-a:shared']);
+      expect(scoped).toHaveLength(1);
+      expect(scoped[0]).toContain('A-only');
+      expect(scoped[0]).not.toContain('B-only');
+      const other = await resolveRows!(repository, ['inflight-scoped:ws-b:shared']);
+      expect(other[0]).toContain('B-only');
+      expect(await resolveRows!(repository, ['inflight-scoped:%E0%A4%A:shared'])).toEqual([]);
+    } finally { database.close(); }
+  });
+
   it('marks a legacy (+N) export incomplete without mislabeling a complete compact legacy row', async () => {
     const fixture = await createAuditFixture('legacy-export-call', ['a.ts', 'b.ts', 'c.ts', 'd.ts']);
     const started = (await fixture.repository.listActivityScoped({ actionPrefix: 'mcp_tool:' }, 10)).find((event) => event.phase === 'started')!;

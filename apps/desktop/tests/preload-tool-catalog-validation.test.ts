@@ -101,6 +101,35 @@ describe('preload Tool Catalog validation', () => {
     await expect(electron.exposed!.getStorageOverview()).rejects.toThrow(/budget sizes/);
   });
 
+  it('validates on-demand profile inventory and rejects fabricated totals', async () => {
+    const inventory = {
+      scope: 'profile', scannedAt: '2026-11-10T00:00:00.000Z',
+      logicalBytes: 30, allocatedBytes: null, files: 2, directories: 1,
+      visitedEntries: 3, skippedLinks: 0, unreadableEntries: 0,
+      incomplete: false, reason: 'complete',
+      categories: [
+        { id: 'database', retention: 'protected', logicalBytes: 20, files: 1, directories: 0 },
+        { id: 'cache', retention: 'rebuildable', logicalBytes: 10, files: 1, directories: 1 },
+      ],
+      potentiallyReclaimableLogicalBytes: 10, rebuildableLogicalBytes: 10,
+    };
+    electron.invoke.mockResolvedValueOnce(inventory);
+    await expect(electron.exposed!.getProfileStorageInventory()).resolves.toMatchObject({
+      logicalBytes: 30, files: 2, potentiallyReclaimableLogicalBytes: 10,
+    });
+    expect(electron.invoke).toHaveBeenLastCalledWith(ipcChannels.getProfileStorageInventory);
+    electron.invoke.mockResolvedValueOnce({ ...inventory, logicalBytes: 31 });
+    await expect(electron.exposed!.getProfileStorageInventory()).rejects.toThrow(/totals/);
+    electron.invoke.mockResolvedValueOnce({ ...inventory, visitedEntries: -1 });
+    await expect(electron.exposed!.getProfileStorageInventory()).rejects.toThrow(/counters/);
+    electron.invoke.mockResolvedValueOnce({ ...inventory, incomplete: false, reason: 'entry-limit' });
+    await expect(electron.exposed!.getProfileStorageInventory()).rejects.toThrow(/inventory/);
+    electron.invoke.mockResolvedValueOnce({ ...inventory, categories: [
+      { id: 'cache', retention: 'magic', logicalBytes: 30, files: 2, directories: 1 },
+    ] });
+    await expect(electron.exposed!.getProfileStorageInventory()).rejects.toThrow(/category/);
+  });
+
   it('preserves ECC opt-in state through the preload settings parser', async () => {
     const enabled = { ...userSettingsFixture, eccEnabled: true };
     electron.invoke.mockResolvedValueOnce({ settings: enabled, restartRequired: false });

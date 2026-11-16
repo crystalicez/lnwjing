@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import { EMPTY_INSTALL_ACTIVITY, workspaceScopeMatches } from '@lnwjing/ipc-contracts';
 import type {
   DashboardSnapshot,
+  RunningProjectsActivitySnapshot,
   DestructiveDeletePolicy,
   DoctorReport,
   ToolCatalogSnapshot,
@@ -63,6 +64,10 @@ export function App(): ReactElement {
   const activeProjectsRefreshTimer = useRef<number | null>(null);
   const refreshActiveProjectsRef = useRef<() => void>(() => undefined);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
+  const [runningActivity, setRunningActivity] = useState<RunningProjectsActivitySnapshot | null>(null);
+  const runningActivityBusyRef = useRef(false);
+  const runningActivityPendingRef = useRef(false);
+  const runningActivityRevisionRef = useRef(0);
   const [workspaces, setWorkspaces] = useState<readonly WorkspaceSummary[]>([]);
   const [doctor, setDoctor] = useState<DoctorReport | null>(null);
   const [toolCatalog, setToolCatalog] = useState<ToolCatalogSnapshot | null>(null);
@@ -93,6 +98,7 @@ export function App(): ReactElement {
   const [ponytailPolicyError, setPonytailPolicyError] = useState<string | null>(null);
   const incidentBusyRef = useRef(false);
   const refreshBusyRef = useRef(false);
+  const refreshPendingRef = useRef(false);
   const mcpDashboardStateRef = useRef(new McpDashboardState());
   const logIds = useRef<Set<number>>(new Set());
   const pendingLogLines = useRef<LogLine[]>([]);
@@ -202,11 +208,12 @@ export function App(): ReactElement {
 
   async function clearLogSource(source: LogSource, scope: LogScopeSelection): Promise<void> {
     try {
-      await window.lnwjing.clearLogBuffer({
+      const result = await window.lnwjing.clearLogBuffer({
         source,
         ...(scope.workspaceId === null ? {} : { workspaceId: scope.workspaceId }),
         ...(scope.sessionId === null ? {} : { sessionId: scope.sessionId }),
       });
+      if (!result.cleared) throw new Error('Log buffer is unavailable');
       pendingLogLines.current = pendingLogLines.current.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces));
       setLogLines((previous) => previous.filter((line) => line.source !== source || !lineMatchesScope(line, scope, workspaces)));
     } catch (cause: unknown) {
@@ -216,14 +223,25 @@ export function App(): ReactElement {
 
   async function clearAllLogs(): Promise<void> {
     try {
-      await Promise.all((['tunnel', 'mcp', 'process'] as const).map((source) => window.lnwjing.clearLogBuffer({ source })));
-      if (logFlushTimer.current !== null) {
-        window.clearTimeout(logFlushTimer.current);
-        logFlushTimer.current = null;
+      const sources = ['tunnel', 'mcp', 'process'] as const;
+      const results = await Promise.allSettled(sources.map(async (source) => {
+        const result = await window.lnwjing.clearLogBuffer({ source });
+        if (!result.cleared) throw new Error('Log buffer is unavailable');
+      }));
+      const cleared = new Set<LogSource>(sources.filter((_, index) => results[index]?.status === 'fulfilled'));
+      if (cleared.size === sources.length) {
+        if (logFlushTimer.current !== null) {
+          window.clearTimeout(logFlushTimer.current);
+          logFlushTimer.current = null;
+        }
+        pendingLogLines.current = [];
+        logIds.current = new Set();
+        setLogLines([]);
+      } else {
+        pendingLogLines.current = pendingLogLines.current.filter((line) => !cleared.has(line.source));
+        setLogLines((previous) => previous.filter((line) => !cleared.has(line.source)));
+        throw new Error(`Could not clear log buffers: ${sources.filter((source) => !cleared.has(source)).join(', ')}`);
       }
-      pendingLogLines.current = [];
-      logIds.current = new Set();
-      setLogLines([]);
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.logBufferClear')));
     }
@@ -231,7 +249,7 @@ export function App(): ReactElement {
 
   async function exportLogSource(source: LogSource, scope: LogScopeSelection, query: string, lines: readonly LiveLogExportReference[]): Promise<void> {
     try {
-      await window.lnwjing.exportLogs({
+      const outcome = await window.lnwjing.exportLogs({
         source,
         filePath: '',
         locale,
@@ -240,6 +258,9 @@ export function App(): ReactElement {
         ...(query.trim().length === 0 ? {} : { query: query.trim() }),
         lines,
       });
+      if (outcome.exported && (outcome.unavailableCount ?? 0) > 0) {
+        setError(t('live.exportPartial', { count: String(outcome.unavailableCount) }));
+      }
     } catch (cause: unknown) {
       setError(errorMessage(cause, t('error.logExport')));
     }
@@ -275,7 +296,13 @@ export function App(): ReactElement {
   }
 
   const refresh = useCallback(async (): Promise<void> => {
-    if (refreshBusyRef.current || updateInstallTransitionRef.current) return;
+    if (updateInstallTransitionRef.current) return;
+    if (refreshBusyRef.current) {
+      // A user-triggered Delete/Archive/Select must not lose its refresh
+      // just because the 30-second dashboard reconciliation was in flight.
+      refreshPendingRef.current = true;
+      return;
+    }
     refreshBusyRef.current = true;
     const mcpStatusRevision = mcpDashboardStateRef.current.captureRevision();
     try {
@@ -302,10 +329,43 @@ export function App(): ReactElement {
       setBootError(updateInstallTransitionRef.current || failures.length === 0 ? null : failures.join(' · '));
     } finally {
       refreshBusyRef.current = false;
+      if (refreshPendingRef.current && !updateInstallTransitionRef.current) {
+        refreshPendingRef.current = false;
+        window.setTimeout(() => { void refresh(); }, 0);
+      }
     }
   }, [locale]);
-  refreshActiveProjectsRef.current = (): void => { void refresh(); };
-  useEffect(() => { activeProjectsVisibleRef.current = screen === 'active-projects'; }, [screen]);
+  const refreshRunningProjects = useCallback(async (): Promise<void> => {
+    if (updateInstallTransitionRef.current || !activeProjectsVisibleRef.current) return;
+    if (runningActivityBusyRef.current) {
+      runningActivityPendingRef.current = true;
+      return;
+    }
+    runningActivityBusyRef.current = true;
+    const revision = runningActivityRevisionRef.current;
+    try {
+      const activity = await window.lnwjing.getRunningProjectsActivity();
+      if (activeProjectsVisibleRef.current && revision === runningActivityRevisionRef.current) setRunningActivity(activity);
+    } catch {
+      // Transient IPC failures do not block the 30-second dashboard reconciliation.
+    } finally {
+      runningActivityBusyRef.current = false;
+      if (activeProjectsVisibleRef.current
+        && (runningActivityPendingRef.current || revision !== runningActivityRevisionRef.current)) {
+        runningActivityPendingRef.current = false;
+        window.setTimeout(() => refreshActiveProjectsRef.current(), 0);
+      }
+    }
+  }, []);
+  refreshActiveProjectsRef.current = (): void => { void refreshRunningProjects(); };
+  useEffect(() => {
+    runningActivityRevisionRef.current += 1;
+    activeProjectsVisibleRef.current = screen === 'active-projects';
+    if (screen === 'active-projects') {
+      setRunningActivity(null);
+      void refreshRunningProjects();
+    }
+  }, [screen, selectedWorkspaceId, refreshRunningProjects]);
 
   useEffect(() => {
     if (updateStatus?.phase === 'installing') {
@@ -961,7 +1021,7 @@ export function App(): ReactElement {
         const target = startupDoctorNavigationTarget(startupDoctorReady, nextScreen);
         if (target === 'settings') setRequestedSettingsSection(undefined);
         setScreen(target);
-        if (target === 'worklog' || target === 'active-projects') void refresh();
+        if (target === 'worklog') void refresh();
         if (target === 'tools') void loadToolCatalog(['external_mcp_connection']);
       }}
       onLocaleChange={(next) => { void changeLocale(next); }}
@@ -1011,7 +1071,7 @@ export function App(): ReactElement {
         />
       ) : null}
       {screen === 'active-projects' ? (
-        <ActiveProjectsPage locale={locale} dashboard={dashboard} workspaces={workspaces}
+        <ActiveProjectsPage locale={locale} dashboard={runningActivity === null ? dashboard : { ...dashboard, ...runningActivity }} workspaces={workspaces}
           onSelectWorkspace={selectWorkspace} onOpenProjects={() => setScreen('projects')} />
       ) : null}
       {screen === 'tools' ? (
