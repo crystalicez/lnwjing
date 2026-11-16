@@ -57,6 +57,8 @@ import {
   type CancelScheduledContinuationRecordResult,
 } from '@lnwjing/domain';
 import type { SqliteDatabase } from './database.js';
+import { SqliteGoalEventStore } from './goal-event-store.js';
+import { currentGoalEventAuthorization } from '@lnwjing/shared/goal-event-authorization';
 
 const MAX_TRACKED_TASKS = 50;
 const SCHEDULE_RECEIPT_TIME_TOLERANCE_MS = 1_000;
@@ -187,7 +189,10 @@ const EXPEDITE_MIN_SECONDS = 120;
 const EXPEDITE_MAX_SECONDS = 5 * 60;
 
 export class SqliteGoalRepository implements GoalRepository, ScheduledContinuationRepository {
-  public constructor(private readonly database: SqliteDatabase) {}
+  public constructor(
+    private readonly database: SqliteDatabase,
+    private readonly authorizationMode: () => 'standard' | 'full_bypass' | 'unknown' = currentGoalEventAuthorization,
+  ) {}
 
   public async acquire(request: AcquireGoalRecordRequest): Promise<AcquireGoalRecordResult> {
     return this.transaction(() => {
@@ -226,7 +231,9 @@ export class SqliteGoalRepository implements GoalRepository, ScheduledContinuati
           request.now,
         );
         if (request.workflow !== undefined) this.database.connection.prepare('UPDATE goals SET workflow_json = ? WHERE id = ?').run(JSON.stringify(request.workflow), request.goalId);
-        return { goal: this.requireById(request.goalId), acquired: true };
+        const goal = this.requireById(request.goalId);
+        new SqliteGoalEventStore(this.database).stageTransition(null, goal, this.authorizationMode());
+        return { goal, acquired: true };
       }
 
       const existing = this.toGoalRecord(existingRow);
@@ -532,7 +539,9 @@ export class SqliteGoalRepository implements GoalRepository, ScheduledContinuati
         trackedTasks: [],
         createdAt: request.now,
       });
-      return this.requireById(request.goalId);
+      const goal = this.requireById(request.goalId);
+      new SqliteGoalEventStore(this.database).stageTransition(current, goal, this.authorizationMode());
+      return goal;
     });
   }
 
@@ -606,7 +615,9 @@ export class SqliteGoalRepository implements GoalRepository, ScheduledContinuati
         trackedTasks,
         createdAt: request.now,
       });
-      return { goal: this.requireById(request.goalId), trackedTaskIds, trackedTasks };
+      const goal = this.requireById(request.goalId);
+      new SqliteGoalEventStore(this.database).stageTransition(current, goal, this.authorizationMode());
+      return { goal, trackedTaskIds, trackedTasks };
     });
   }
 
@@ -671,7 +682,9 @@ export class SqliteGoalRepository implements GoalRepository, ScheduledContinuati
         trackedTasks: [],
         createdAt: request.now,
       });
-      return this.requireById(request.goalId);
+      const goal = this.requireById(request.goalId);
+      new SqliteGoalEventStore(this.database).stageTransition(current, goal, this.authorizationMode());
+      return goal;
     });
   }
 

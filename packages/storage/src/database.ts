@@ -33,6 +33,7 @@ import { ENGINEERING_HARNESS_MIGRATION_SQL } from './migrations/engineering-harn
 import { WORKFLOW_METADATA_MIGRATION_SQL } from './migrations/workflow-metadata-migration.js';
 import { CALL_OBSERVABILITY_MIGRATION_SQL } from './migrations/call-observability-migration.js';
 import { AUDIT_CALL_HISTORY_PAGING_MIGRATION_SQL } from './migrations/audit-call-history-paging-migration.js';
+import { GOAL_EVENTS_MIGRATION_SQL } from './migrations/goal-events-migration.js';
 
 export interface SqliteDatabaseOptions {
   readonly backupDirectory?: string;
@@ -140,6 +141,7 @@ export class SqliteDatabase {
       { id: '027_checkpoint_storage_rollup', sql: CHECKPOINT_ROLLUP_MIGRATION_SQL },
       { id: '028_checkpoint_rollup_replace_fix', sql: CHECKPOINT_ROLLUP_REPLACE_MIGRATION_SQL },
       { id: '029_checkpoint_count_source_of_truth', sql: CHECKPOINT_COUNT_SOURCE_MIGRATION_SQL },
+      { id: '030_goal_events', sql: GOAL_EVENTS_MIGRATION_SQL },
     ]);
   }
 

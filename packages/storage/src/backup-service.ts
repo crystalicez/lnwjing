@@ -597,8 +597,11 @@ function restoreOldSqliteSidecars(databasePath: string): void {
 function finishRestoredDatabase(
   databasePath: string, directory: string, journal: RestoreSwapJournal,
   options: SqliteRestoreOptions, alreadyValidated = false,
+  revokedGoalEventSubscriptions?: readonly string[],
 ): PendingRestoreResult {
   if (!alreadyValidated) validateDatabase(databasePath);
+  const effectiveRevokedGoalEvents = revokedGoalEventSubscriptions
+    ?? revokeRestoredGoalEventAuthority(databasePath, (options.now ?? ((): Date => new Date()))().toISOString());
   const quarantinedFiles = journal.crossHost
     ? quarantineHostBoundFiles(databasePath, journal.backupId, journal.stagedFile, options.hostBoundPaths) : [];
   const db = new DatabaseSync(databasePath, { readOnly: true });
@@ -611,8 +614,8 @@ function finishRestoredDatabase(
   } finally {
     db.close();
   }
-  const allQuarantinedItems = [...new Set([...(notice?.quarantinedItems ?? []), ...quarantinedFiles])];
-  if (journal.crossHost && quarantinedFiles.length > 0 && notice !== null) {
+  const allQuarantinedItems = [...new Set([...(notice?.quarantinedItems ?? []), ...quarantinedFiles, ...effectiveRevokedGoalEvents])];
+  if (journal.crossHost && (quarantinedFiles.length > 0 || effectiveRevokedGoalEvents.length > 0) && notice !== null) {
     appendRestoreNotice(databasePath, notice, allQuarantinedItems);
   }
   const oldPath = databasePath + '.pre-restore';
@@ -788,6 +791,7 @@ function applyPendingSqliteRestoreUnlocked(
       targetPlatform: platform,
       targetArch: arch,
     });
+    const revokedGoalEventSubscriptions = revokeRestoredGoalEventAuthority(temporary, now().toISOString());
     validateDatabase(temporary);
     const hadOriginal = existsSync(dbPath);
     if (hadOriginal) createEmergencyBackup(dbPath, directory, platform, arch);
@@ -810,7 +814,7 @@ function applyPendingSqliteRestoreUnlocked(
     renameSync(temporary, dbPath);
     validateDatabase(dbPath);
     writeSwapJournalSync(directory, { ...journal, phase: 'installed' });
-    return finishRestoredDatabase(dbPath, directory, journal, options, true);
+    return finishRestoredDatabase(dbPath, directory, journal, options, true, revokedGoalEventSubscriptions);
   } catch (error) {
     if (existsSync(swapJournalPath(directory))) {
       try {
@@ -1241,6 +1245,28 @@ function appendRestoreNotice(databaseFilename: string, original: BackupRestoreNo
   } finally {
     database.close();
   }
+}
+
+function revokeRestoredGoalEventAuthority(filename: string, now: string): readonly string[] {
+  const database = new DatabaseSync(filename);
+  try {
+    if (!hasTable(database, 'goal_event_subscribers')) return [];
+    const rows = database.prepare('SELECT id FROM goal_event_subscribers WHERE revoked_at IS NULL').all();
+    database.prepare('UPDATE goal_event_subscribers SET revoked_at = ?, epoch = epoch + 1 WHERE revoked_at IS NULL').run(now);
+    const items = rows.map((row) => {
+      if (typeof row.id !== 'string') throw new Error('Goal event subscription state is invalid');
+      return `goal-event-subscription:${row.id}`;
+    });
+    if (hasTable(database, 'goal_event_signing_keys')) {
+      const keys = database.prepare('SELECT key_id FROM goal_event_signing_keys').all();
+      for (const key of keys) {
+        if (typeof key.key_id !== 'string') throw new Error('Goal event signing key state is invalid');
+        items.push(`goal-event-signing-key:${key.key_id}`);
+      }
+      database.exec('DELETE FROM goal_event_signing_keys');
+    }
+    return items;
+  } finally { database.close(); }
 }
 
 function quarantineHostBoundFiles(databaseFilename: string, backupIdValue: string, stagedFile: string, configuredPaths: readonly string[] | undefined): string[] {

@@ -14,6 +14,7 @@ export * from './hard-limit-recovery-worker.js';
 export * from './checkpoint-hard-limit-recovery.js';
 export * from './sqlite-wal-maintenance.js';
 export * from './goal-repository.js';
+export * from './goal-event-store.js';
 export * from './migrations/scheduled-continuation-migration.js';
 export * from './migrations/goal-lease-repair-migration.js';
 export * from './migrations/goal-live-continuation-lease-quarantine-migration.js';

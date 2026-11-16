@@ -3057,6 +3057,11 @@ function bootstrapDesktop(configuredDataPath?: string): void {
     }).catch((error: unknown) => {
       console.error(`Watcher auto-start failed: ${error instanceof Error ? error.message : 'unknown error'}`);
     });
+    void runtime.autoStartGoalEvents().then((endpoint) => {
+      if (endpoint !== null) console.info(`Goal Event API online ${endpoint}`);
+    }).catch(() => {
+      console.error('Goal Event API auto-start failed; companion delivery is unavailable');
+    });
     void runtime.autoStartTunnel().catch((error: unknown) => {
       console.error(`Tunnel persistent runtime auto-start failed: ${error instanceof Error ? error.message : 'unknown error'}`);
     });
