@@ -368,7 +368,7 @@ export interface GoalContinuationServiceOptions {
   readonly scheduledContinuations?: Pick<ScheduledContinuationRepository, 'markGoalFinishedForScheduledContinuation' | 'getLiveScheduledContinuation'>;
   readonly workerLiveness?: ScheduledContinuationWorkerLivenessPort;
   readonly taskCancellation?: Pick<GoalTaskCancellationPort, 'cancelForGoal'>;
-  readonly requestCancellation?: Pick<GoalRequestCancellationPort, 'cancelForGoal'>;
+  readonly requestCancellation?: Pick<GoalRequestCancellationPort, 'cancelForGoal' | 'admitRecoveredGeneration'>;
 }
 
 export class GoalContinuationService {
@@ -377,7 +377,7 @@ export class GoalContinuationService {
   private readonly scheduledContinuations: Pick<ScheduledContinuationRepository, 'markGoalFinishedForScheduledContinuation' | 'getLiveScheduledContinuation'> | undefined;
   private readonly workerLiveness: ScheduledContinuationWorkerLivenessPort | undefined;
   private readonly taskCancellation: Pick<GoalTaskCancellationPort, 'cancelForGoal'> | undefined;
-  private readonly requestCancellation: Pick<GoalRequestCancellationPort, 'cancelForGoal'> | undefined;
+  private readonly requestCancellation: Pick<GoalRequestCancellationPort, 'cancelForGoal' | 'admitRecoveredGeneration'> | undefined;
 
   public constructor(
     private readonly workspaces: WorkspaceRepository,
@@ -839,7 +839,7 @@ export class GoalContinuationService {
       // stop every request/task still owned by the just-terminal goal so a
       // stale worker cannot continue into a later native wake.
       const [requestCancellation, taskCancellations] = await Promise.all([
-        this.cancelInFlightRequests(goalId),
+        this.cancelInFlightRequests(goalId, goal.leaseGeneration),
         this.cancelTrackedTasks(ownerClientId, goal.workspaceId, trackedTasks),
       ]);
       return ok({
@@ -877,7 +877,7 @@ export class GoalContinuationService {
         now,
       });
       const [requestCancellation, taskCancellations] = await Promise.all([
-        this.cancelInFlightRequests(goalId),
+        this.cancelInFlightRequests(goalId, cancelled.goal.leaseGeneration),
         this.cancelTrackedTasks(ownerClientId, cancelled.goal.workspaceId, cancelled.trackedTasks ?? legacyTrackedTasks(cancelled.trackedTaskIds)),
       ]);
       let scheduledTaskCancellation: ScheduledTaskCancellationInstruction = {
@@ -1090,12 +1090,12 @@ export class GoalContinuationService {
     }
   }
 
-  private async cancelInFlightRequests(goalId: string): Promise<GoalRequestCancellationResult> {
+  private async cancelInFlightRequests(goalId: string, leaseGeneration: number): Promise<GoalRequestCancellationResult> {
     if (this.requestCancellation === undefined) {
       return { goalId, requested: 0, stopped: 0, remaining: 0, timedOut: false, requestIds: [] };
     }
     try {
-      return await this.requestCancellation.cancelForGoal(goalId);
+      return await this.requestCancellation.cancelForGoal(goalId, leaseGeneration);
     } catch {
       return { goalId, requested: 0, stopped: 0, remaining: 0, timedOut: true, requestIds: [] };
     }

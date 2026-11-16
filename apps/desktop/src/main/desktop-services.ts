@@ -787,6 +787,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const scheduledContinuationService = new ScheduledContinuationService(goalRepository, {
     workerLiveness: goalMutationFence,
     automationResumes: automationRepository,
+    workspaceWriterFence: workspaceWriterLease,
   });
   const extensionsService: ExtensionsService = createLocalExtensionsService({
     settingsJson: settingsRepository.get(EXTENSIONS_SETTINGS_KEY),

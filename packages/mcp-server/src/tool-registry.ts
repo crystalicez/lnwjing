@@ -73,14 +73,14 @@ import { capabilityTools } from './tools/capability-tools.js';
 import { fileTools } from './tools/file-tools.js';
 import { engineeringTools } from './tools/engineering-tools.js';
 import { gitTools } from './tools/git-tools.js';
-import { goalTools } from './tools/goal-tools.js';
+import { goalTools, GOAL_TOOL_NAMES } from './tools/goal-tools.js';
 import { observedMutationReceipt } from './task-mutation-receipt.js';
 import { workflowTools } from './tools/workflow-tools.js';
 import { mcpBridgeTools } from './tools/mcp-bridge-tools.js';
 import { processTools } from './tools/process-tools.js';
 import { sessionTools } from './tools/session-tools.js';
 import { searchTools } from './tools/search-tools.js';
-import { scheduledContinuationTools } from './tools/scheduled-continuation-tools.js';
+import { scheduledContinuationTools, SCHEDULED_CONTINUATION_TOOL_NAMES } from './tools/scheduled-continuation-tools.js';
 import { skillTools } from './tools/skill-tools.js';
 import { workspaceTools } from './tools/workspace-tools.js';
 import type { McpApplicationServices, McpInternalInvocationContext, McpToolContext, McpToolDefinition } from './tools/tool-types.js';
@@ -730,7 +730,7 @@ export class ToolRegistry {
           admitted.value.leaseGeneration,
         );
       }
-      if (goalLease !== undefined && mutationDecision.kind !== 'read') {
+      if (goalLease !== undefined) {
         // An admitted Goal mutation fence has already verified this exact proof and
         // workspace; do not require a second validator from hosts that expose only
         // the fenced mutation contract. Without a fence, validate independently.
@@ -746,11 +746,13 @@ export class ToolRegistry {
             return response;
           }
         }
+        this.services.goalRequestCancellation?.admitRecoveredGeneration?.(goalLease.goalId, goalLease.leaseGeneration);
         this.activity.bindVerifiedGoal(callId, goalLease.goalId);
       }
       if (mutationDecision.kind !== 'read'
         && mutationFenceWorkspaceId !== undefined
         && !WORKSPACE_WRITER_LEASE_CONTROL_TOOLS.has(tool.name)
+        && !GOAL_AND_CONTINUATION_CONTROL_TOOLS.has(tool.name)
         && this.services.workspaceWriterLease !== undefined) {
         const admitted = await this.services.workspaceWriterLease.begin(
           mutationFenceWorkspaceId,
@@ -789,6 +791,7 @@ export class ToolRegistry {
         parentSignal,
         goalLease === undefined ? undefined : goalLease.goalId,
         callId,
+        goalLease?.leaseGeneration,
         { ...internal, checkedInvocation: {
           ...(goalLease === undefined ? {} : { goalLease }),
           ...(engineeringTask === undefined ? {} : { engineeringTask }),
@@ -1220,12 +1223,13 @@ export class ToolRegistry {
     parentSignal?: AbortSignal,
     goalId?: string,
     callId?: string,
+    leaseGeneration?: number,
     internal?: McpInternalInvocationContext,
   ): Promise<BudgetedToolExecution> {
     const controller = new AbortController();
     const registration = goalId === undefined || callId === undefined || this.services.goalRequestCancellation === undefined
       ? undefined
-      : this.services.goalRequestCancellation.register(goalId, callId, controller);
+      : this.services.goalRequestCancellation.register(goalId, callId, controller, leaseGeneration);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let settled = false;
     let deadlineExceeded = false;
@@ -1462,6 +1466,10 @@ const WORKSPACE_WRITER_LEASE_CONTROL_TOOLS = new Set([
   'workspace_writer_lease_acquire', 'workspace_writer_lease_status',
   'workspace_writer_lease_renew', 'workspace_writer_lease_release',
 ]);
+const GOAL_AND_CONTINUATION_CONTROL_TOOLS = new Set<string>([
+  ...GOAL_TOOL_NAMES,
+  ...SCHEDULED_CONTINUATION_TOOL_NAMES,
+]);
 const ENGINEERING_GUARDED_MUTATION_TOOLS = new Set([
   'write_file', 'apply_patch', 'edit_file', 'move_file', 'copy_file', 'delete_file', 'restore_deleted_file', 'restore_checkpoint',
   'lsp_rename', 'git', 'git_clone_safe', 'git_clone_cancel', 'shell', 'wsl_exec', 'process_start', 'process_stop',
@@ -1542,7 +1550,9 @@ function withEngineeringTaskEnvelope(tool: McpToolDefinition): McpToolDefinition
 }
 
 function withWorkspaceWriterLeaseEnvelope(tool: McpToolDefinition): McpToolDefinition {
-  if (WORKSPACE_WRITER_LEASE_CONTROL_TOOLS.has(tool.name) || (tool.permission === 'READ' && !SCHEDULED_CONTINUATION_FENCED_TOOLS.has(tool.name))) return tool;
+  if (WORKSPACE_WRITER_LEASE_CONTROL_TOOLS.has(tool.name)
+    || GOAL_AND_CONTINUATION_CONTROL_TOOLS.has(tool.name)
+    || (tool.permission === 'READ' && !SCHEDULED_CONTINUATION_FENCED_TOOLS.has(tool.name))) return tool;
   const extend = (schema: z.ZodObject): z.ZodObject =>
     schema.safeExtend({ writerLease: workspaceWriterLeaseProofSchema.optional() });
   const inputSchema = tool.inputSchema instanceof z.ZodObject

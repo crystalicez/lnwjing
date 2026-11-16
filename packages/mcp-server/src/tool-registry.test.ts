@@ -1,16 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { appError, err, ok } from '@lnwjing/domain';
+import {
+  appError,
+  err,
+  ok,
+  type Result,
+  type ScheduledContinuationWorkerLiveness,
+} from '@lnwjing/domain';
 import { LocalCapabilityService, ShellCapabilityBackend, SqliteWorkspaceWriterLease } from '@lnwjing/capabilities';
 import { permissionProfiles, type PermissionProfile } from '@lnwjing/permissions';
 import { DEFAULT_DESTRUCTIVE_AUTO_APPROVAL_POLICY, type DestructiveAutoApprovalPolicy, type ToolAvailabilitySnapshot } from '@lnwjing/shared';
 import { ActivityTracker, type ActivitySinkEvent } from './activity-tracker.js';
 import { CODEX_DELEGATION_TOOL_NAMES, isCodexDelegationTool, ToolRegistry, type McpApplicationServices, type ToolRegistryOptions, type WorkspaceScope } from './tool-registry.js';
-import { GoalRequestCancellationService, RepositoryImportService } from '@lnwjing/application';
+import { GoalContinuationService, GoalRequestCancellationService, RepositoryImportService } from '@lnwjing/application';
+import { SqliteDatabase } from '../../storage/src/database.js';
+import { SqliteGoalRepository } from '../../storage/src/goal-repository.js';
+import { SqliteWorkspaceRepository } from '../../storage/src/workspace-repository.js';
 import { ToolWorkloadAdmission } from './tool-workload-admission.js';
 import { CODEX_TOOL_NAMES } from './tools/codex-tools.js';
 import { AUTOMATION_TOOL_NAMES } from './tools/automation-tools.js';
@@ -148,6 +157,84 @@ describe('MCP tool registry', () => {
       expect(await lease.inspect('workspace-a')).toMatchObject({ ok: true, value: { generation: 2, state: 'active' } });
       expect(await lease.begin('workspace-a', actor.clientId, 'old-session', 'stale', first.value))
         .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not block goal lifecycle tools (claim_scheduled_continuation, run_goal) behind workspace writer lease', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-goal-tools-unblocked-'));
+    try {
+      const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'));
+      const priorLease = await lease.acquire('workspace-a', actor.clientId, 'dead-worker-session', 600);
+      expect(priorLease.ok).toBe(true);
+
+      const claimCalled = vi.fn(async () => ok({
+        outcome: 'recurring_acquired' as const,
+        continuation: { continuationId: 'cont-1', goalId: 'goal-1', status: 'scheduled' } as never,
+        goal: { goalId: 'goal-1', status: 'active', revision: 1 } as never,
+        leaseToken: 'token-123',
+        leaseGeneration: 1,
+        acquisition: 'normal' as const,
+        runKey: 'run-key-1',
+        nextRequiredAction: 'continue_work_with_existing_recurring_watchdog' as const,
+        currentWakeMayReturn: false as const,
+      }));
+      const runGoalCalled = vi.fn(async () => ok({
+        goalId: 'goal-1',
+        goalKey: 'gk-1',
+        revision: 1,
+        status: 'active' as const,
+        acquired: true,
+        leaseToken: 'lease-token-1',
+        leaseGeneration: 1,
+        leaseExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+        plan: { steps: [] },
+      }));
+
+      const registry = new ToolRegistry({
+        workspaceWriterLease: lease,
+        scheduledContinuations: {
+          claimScheduledContinuation: claimCalled,
+          getScheduledContinuation: async () => null,
+        } as never,
+        goals: { runGoal: runGoalCalled } as never,
+        file: {
+          readFile: async () => err(appError('FILE_NOT_FOUND', 'not found')),
+          editFile: async () => ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 }),
+        } as never,
+      }, actor, {
+        sessionId: 'new-chat-wake-session',
+        profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full,
+        authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
+      });
+
+      const claimResult = await registry.invoke('claim_scheduled_continuation', {
+        continuationId: 'cont-1',
+        workspaceId: 'workspace-a',
+        goalId: 'goal-1',
+      });
+      expect(claimResult.isError).not.toBe(true);
+      expect(claimCalled).toHaveBeenCalledTimes(1);
+
+      const runResult = await registry.invoke('run_goal', {
+        workspaceId: 'workspace-a',
+        goalKey: 'gk-1',
+        objective: 'Test unblocked run_goal',
+      });
+      expect(runResult.isError).not.toBe(true);
+      expect(runGoalCalled).toHaveBeenCalledTimes(1);
+
+      const editResult = await registry.invoke('edit_file', {
+        workspaceId: 'workspace-a',
+        path: 'file.ts',
+        oldText: 'a',
+        newText: 'b',
+      });
+      expect(editResult.isError).toBe(true);
+      expect(editResult).toMatchObject({
+        structuredContent: { error: { code: 'CONFLICT' } },
+      });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -1479,11 +1566,102 @@ describe('MCP tool registry', () => {
 
     for (let attempt = 0; attempt < 20 && !started; attempt += 1) await Promise.resolve();
     expect(started).toBe(true);
-    await expect(cancellation.cancelForGoal('goal-cancel')).resolves.toMatchObject({
+    await expect(cancellation.cancelForGoal('goal-cancel', 1)).resolves.toMatchObject({
       goalId: 'goal-cancel', requested: 1, stopped: 1, remaining: 0, timedOut: false,
     });
     expect(aborted).toBe(true);
     await expect(pending).resolves.toMatchObject({ structuredContent: { path: 'src/file.ts' } });
+  });
+
+  it.each(['validated lease', 'mutation fence', 'validated read'])('admits a recovered goal after real lease reacquisition through %s', async (validation) => {
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-recovered-goal-'));
+    const database = new SqliteDatabase(path.join(root, 'state.sqlite'));
+    try {
+      const source = path.join(root, 'project');
+      await mkdir(source);
+      const workspaces = new SqliteWorkspaceRepository(database);
+      const now = new Date('2026-11-11T00:00:00Z');
+      await workspaces.insert({ id: 'workspace', displayName: 'Fixture', rootPath: source, realRootPath: source, createdAt: now.toISOString() });
+      const repository = new SqliteGoalRepository(database);
+      const cancellation = new GoalRequestCancellationService({ waitMs: 1 });
+      const goals = new GoalContinuationService(workspaces, repository, {
+        requestCancellation: cancellation,
+        now: (): Date => now,
+        workerLiveness: { async observe(goalId): Promise<ScheduledContinuationWorkerLiveness> {
+          const goal = await repository.getById(goalId);
+          if (goal === null) throw new Error('Missing fixture goal');
+          return { trustworthy: true, observedAt: now.toISOString(), leaseGeneration: goal.leaseGeneration, leaseActivitySeq: goal.leaseActivitySeq, liveFencedCallCount: 0, blockingTaskStates: [] };
+        } },
+      });
+      const started = await goals.runGoal(actor, { workspaceId: 'workspace', goalKey: 'recovered', objective: 'Fix source behavior', plan: { steps: [] } });
+      if (!started.ok || started.value.leaseToken === undefined) throw new Error('Goal fixture did not acquire a lease');
+      const released = await goals.checkpointGoal(actor, { goalId: started.value.goalId, leaseToken: started.value.leaseToken, expectedRevision: started.value.revision, currentPhase: 'handoff', summary: 'Release current lease', stepUpdates: [], nextAction: 'Reacquire', blockers: [], evidence: [], trackedTasks: [], releaseLease: true });
+      if (!released.ok) throw new Error(released.error.message);
+      await cancellation.cancelForGoal(started.value.goalId, started.value.leaseGeneration);
+      const reacquired = await goals.runGoal(actor, { workspaceId: 'workspace', goalKey: 'recovered' });
+      if (!reacquired.ok || reacquired.value.leaseToken === undefined) throw new Error('Reacquisition failed');
+      expect(reacquired.value.leaseGeneration).toBeGreaterThan(started.value.leaseGeneration);
+      const editFile = vi.fn(async () => ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 }));
+      const execute = vi.fn(async () => ok({ tasks: [] }));
+      const registry = new ToolRegistry({
+        goals,
+        goalRequestCancellation: cancellation,
+        file: { editFile } as never,
+        capabilities: { execute } as never,
+        ...(validation === 'mutation fence' ? { goalMutationFence: {
+          async inspectWorkspaceFence(): Promise<Result<{ goalId: string; leaseGeneration: number }>> { return ok({ goalId: reacquired.value.goalId, leaseGeneration: reacquired.value.leaseGeneration }); },
+          async begin(_actor, _workspaceId, _callId, proof): Promise<Result<{ goalId: string; leaseGeneration: number }>> {
+            const validated = await goals.validateGoalLease(actor, { goalId: proof.goalId, leaseToken: proof.leaseToken });
+            return validated.ok && validated.value.leaseGeneration === proof.leaseGeneration
+              ? ok({ goalId: proof.goalId, leaseGeneration: proof.leaseGeneration })
+              : err(appError('CONFLICT', 'Stale goal lease'));
+          },
+          async heartbeat(): Promise<void> {},
+          async end(): Promise<void> {},
+        } satisfies NonNullable<McpApplicationServices['goalMutationFence']> } : {}),
+      }, actor, { profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full, authorizationModeProvider: (): 'full_bypass' => 'full_bypass' });
+      const input = { workspaceId: 'workspace', path: 'file.ts', oldText: 'a', newText: 'b', goalLease: { goalId: reacquired.value.goalId, leaseToken: reacquired.value.leaseToken, leaseGeneration: reacquired.value.leaseGeneration } };
+      if (validation === 'validated read') {
+        const read = { workspaceId: 'workspace', operation: 'list', goalLease: input.goalLease };
+        await expect(registry.invoke('shell', read)).resolves.toMatchObject({ structuredContent: { tasks: [] } });
+        expect(execute).toHaveBeenCalledTimes(1);
+        await expect(registry.invoke('shell', { ...read, goalLease: { goalId: started.value.goalId, leaseToken: started.value.leaseToken, leaseGeneration: started.value.leaseGeneration } })).resolves.toMatchObject({ isError: true });
+        expect(execute).toHaveBeenCalledTimes(1);
+      }
+      const stale = await registry.invoke('edit_file', { ...input, goalLease: { goalId: started.value.goalId, leaseToken: started.value.leaseToken, leaseGeneration: started.value.leaseGeneration } });
+      expect(stale).toMatchObject({ isError: true });
+      expect(editFile).not.toHaveBeenCalled();
+      await expect(registry.invoke('edit_file', input)).resolves.toMatchObject({ structuredContent: { path: 'file.ts', replacements: 1, bytesWritten: 1 } });
+      await cancellation.cancelForGoal(reacquired.value.goalId, started.value.leaseGeneration);
+      await expect(registry.invoke('edit_file', input)).resolves.not.toMatchObject({ isError: true });
+      expect(editFile).toHaveBeenCalledTimes(2);
+      const cancelled = await goals.cancelGoal(actor, { goalId: reacquired.value.goalId, expectedRevision: reacquired.value.revision, summary: 'Stop authorized work', evidence: [] });
+      expect(cancelled.ok).toBe(true);
+      await expect(registry.invoke('edit_file', input)).resolves.toMatchObject({ isError: true });
+      expect(editFile).toHaveBeenCalledTimes(2);
+    } finally {
+      database.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not reopen request admission when cancellation races validated dispatch', async () => {
+    const cancellation = new GoalRequestCancellationService({ waitMs: 1 });
+    await cancellation.cancelForGoal('goal-race', 7);
+    expect(cancellation.admitRecoveredGeneration('goal-race', 8)).toBe(true);
+    const editFile = vi.fn(async () => ok({ path: 'file.ts', replacements: 1, bytesWritten: 1 }));
+    const registry = new ToolRegistry({
+      goalRequestCancellation: cancellation,
+      goals: { async validateGoalLease(): Promise<ReturnType<typeof ok>> {
+        await cancellation.cancelForGoal('goal-race', 9);
+        return ok({ workspaceId: 'workspace', leaseGeneration: 9 });
+      } } as never,
+      file: { editFile } as never,
+    }, actor, { profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full, authorizationModeProvider: (): 'full_bypass' => 'full_bypass' });
+    const input = { workspaceId: 'workspace', path: 'file.ts', oldText: 'a', newText: 'b', goalLease: { goalId: 'goal-race', leaseToken: 'current', leaseGeneration: 9 } };
+    await expect(registry.invoke('edit_file', input)).resolves.toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    await expect(registry.invoke('edit_file', input)).resolves.toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    expect(editFile).not.toHaveBeenCalled();
   });
 
   it('propagates task_create goalLease identity and rejects a terminal goal before shell launch', async () => {

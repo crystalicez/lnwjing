@@ -26,6 +26,10 @@ describe('durable multi-session workspace writer lease', () => {
     expect(await two.inspect('workspace')).toMatchObject({
       ok: true, value: { state: 'blocked', activeCalls: 1, generation: 0 },
     });
+    expect(await two.assessAbandonment('workspace', 'new-owner'))
+      .toMatchObject({ ok: true, value: { live: true, reason: 'live_invocation' } });
+    expect(await two.revokeAbandoned('workspace', 'new-owner'))
+      .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
     expect(await two.acquire('workspace', 'new-owner', 'session-two', 60))
       .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
     await one.end('workspace', 'unleased-call', 0);
@@ -113,7 +117,6 @@ describe('durable multi-session workspace writer lease', () => {
     time += 61_000;
     expect(await two.acquire('workspace', 'other-owner', 'new-session', 600, true)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
     expect(await two.acquire('workspace', 'owner', 'new-session', 600)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
-    expect(await two.acquire('workspace', 'owner', 'old-session', 600, true)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
     const second = await two.acquire('workspace', 'owner', 'new-session', 600, true);
     expect(second.ok).toBe(true);
     if (!second.ok) return;
@@ -152,5 +155,118 @@ describe('durable multi-session workspace writer lease', () => {
     expect(result.filter((entry) => !entry.ok)).toHaveLength(1);
     expect(result.find((entry) => entry.ok)).toMatchObject({ ok: true, value: { generation: 2 } });
     expect(result.find((entry) => !entry.ok)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+  });
+
+  it('allows same-client same-session recovery after grace when reconnecting or proof is lost', async () => {
+    let time = 100_000;
+    const { one } = await fixture(() => time);
+    const original = await one.acquire('workspace', 'desktop-mcp-http', 'tunnel-session-1', 600);
+    expect(original.ok).toBe(true);
+    if (!original.ok) return;
+
+    // Within 60 seconds: recovery blocked even with recoverAbandoned
+    time += 30_000;
+    expect(await one.acquire('workspace', 'desktop-mcp-http', 'tunnel-session-1', 600, true))
+      .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+
+    // After 60 seconds: same session can safely recover its own abandoned lease
+    time += 31_000;
+    const recovered = await one.acquire('workspace', 'desktop-mcp-http', 'tunnel-session-1', 600, true);
+    expect(recovered.ok).toBe(true);
+    if (!recovered.ok) return;
+    expect(recovered.value.generation).toBe(original.value.generation + 1);
+
+    // Old proof is rejected
+    expect(await one.begin('workspace', 'desktop-mcp-http', 'tunnel-session-1', 'call-stale', original.value))
+      .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+
+    // New proof is admitted
+    expect(await one.begin('workspace', 'desktop-mcp-http', 'tunnel-session-1', 'call-new', recovered.value))
+      .toMatchObject({ ok: true, value: { required: true, generation: 2 } });
+    await one.end('workspace', 'call-new', 2);
+  });
+
+  it('heartbeat extends activity and resets the 60-second stale-recovery grace window', async () => {
+    let time = 100_000;
+    const { one, two } = await fixture(() => time);
+    const acquired = await one.acquire('workspace', 'owner', 'session-1', 600);
+    expect(acquired.ok).toBe(true);
+    if (!acquired.ok) return;
+
+    const admitted = await one.begin('workspace', 'owner', 'session-1', 'call-long', acquired.value);
+    expect(admitted.ok).toBe(true);
+
+    // Advance 50 seconds and heartbeat
+    time += 50_000;
+    await one.heartbeat('workspace', 'call-long', acquired.value.generation);
+
+    // Another 30 seconds (80 seconds total from acquire, but only 30 from heartbeat)
+    time += 30_000;
+    expect(await two.assessAbandonment('workspace', 'owner')).toMatchObject({
+      ok: true,
+      value: { live: true, reason: 'live_invocation' },
+    });
+
+    // In-flight call still active: recovery blocked
+    expect(await two.acquire('workspace', 'owner', 'session-2', 600, true))
+      .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+
+    await one.end('workspace', 'call-long', acquired.value.generation);
+
+    // Right after call ends: grace window resets from end(), so 30 seconds is still within grace
+    time += 30_000;
+    expect(await two.assessAbandonment('workspace', 'owner')).toMatchObject({
+      ok: true,
+      value: { live: true, reason: 'within_stale_grace' },
+    });
+    expect(await two.acquire('workspace', 'owner', 'session-2', 600, true))
+      .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+
+    // Advance full 60 seconds after call ended: now idle beyond grace
+    time += 60_000;
+    expect(await two.assessAbandonment('workspace', 'owner')).toMatchObject({
+      ok: true,
+      value: { live: false, reason: 'idle_beyond_grace' },
+    });
+    expect(await two.acquire('workspace', 'owner', 'session-2', 600, true))
+      .toMatchObject({ ok: true, value: { generation: acquired.value.generation + 1 } });
+  });
+
+  it('atomically revokes abandoned lease and rejects previous generation mutations', async () => {
+    let time = 100_000;
+    const { one, two } = await fixture(() => time);
+    const first = await one.acquire('workspace', 'owner', 'session-1', 600);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    // Cannot revoke while owner is active
+    expect(await two.revokeAbandoned('workspace', 'owner')).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+
+    time += 61_000;
+    // Beyond grace: atomic revoke succeeds and increments generation
+    const revoked = await two.revokeAbandoned('workspace', 'owner');
+    expect(revoked).toMatchObject({
+      ok: true,
+      value: { revoked: true, previousGeneration: 1, generation: 2 },
+    });
+
+    // Subsequent revoke on already unleased returns revoked: false without extra increment
+    expect(await two.revokeAbandoned('workspace', 'owner')).toMatchObject({
+      ok: true,
+      value: { revoked: false, previousGeneration: 2, generation: 2 },
+    });
+
+    // Old proof is rejected
+    expect(await one.begin('workspace', 'owner', 'session-1', 'call-stale', first.value))
+      .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+
+    // Inspect shows unleased
+    expect(await two.inspect('workspace')).toMatchObject({
+      ok: true,
+      value: { state: 'unleased', generation: 2 },
+    });
   });
 });

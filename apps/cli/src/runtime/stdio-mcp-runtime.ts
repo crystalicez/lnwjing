@@ -259,6 +259,7 @@ export function createStdioMcpRuntime(
   const scheduledContinuationService = new ScheduledContinuationService(goalRepository, {
     workerLiveness: goalMutationFence,
     automationResumes: automationRepository,
+    workspaceWriterFence: workspaceWriterLease,
   });
   const sharedActivityLease = createSharedActivityLease(process.env.TUNNEL_CLIENT_PROFILE_DIR);
   const activityReady = sharedActivityLease.then(async (lease) => lease?.initialize());
