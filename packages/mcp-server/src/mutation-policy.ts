@@ -112,6 +112,27 @@ export function inspectMutationOperation(
       return read('owner- and workspace-scoped durable automation read');
     case 'automation_create':
       return boundedWrite('automation_create persists a bounded plan beneath an already leased Goal');
+    // Only bounded, app-owned SQLite goal/continuation state changes. These
+    // never execute plans, launch tasks, modify Git, or create native tasks.
+    case 'run_goal':
+    case 'engineering_start_task':
+    case 'update_goal_plan':
+    case 'update_goal_acceptance':
+    case 'revise_goal_intent':
+    case 'create_context_capsule':
+    case 'record_delivery_receipt':
+    case 'advance_goal_iteration':
+    case 'checkpoint_goal':
+    case 'checkpoint_goal_engineering':
+    case 'prepare_scheduled_continuation':
+    case 'record_scheduled_continuation_receipt':
+    case 'claim_scheduled_continuation':
+    case 'expedite_scheduled_continuation':
+      return boundedWrite(`${toolName} updates bounded app-owned goal or continuation metadata`);
+    case 'reconcile_goals':
+      return value.apply === true
+        ? opaque('reconcile_goals apply changes durable goal ownership and terminal state')
+        : read('reconcile_goals defaults to a no-side-effect preview');
     case 'automation_run':
       return opaque('automation_run may launch the next stored shell milestone under the current Goal lease');
     case 'automation_control':

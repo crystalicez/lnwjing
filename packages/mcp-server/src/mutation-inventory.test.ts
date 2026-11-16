@@ -23,6 +23,7 @@ const mandatoryCases = [
  */
 const mixedOperationReadCases = [
   ['recipe_run', { name: 'safe-job', dryRun: true }, 'EXECUTE'],
+  ['reconcile_goals', { workspaceId: 'workspace-1', goalIds: ['goal-1'], reason: 'abandoned', summary: 'Preview only' }, 'WRITE'],
   ['workspace_list', {}, 'READ'],
   ['skills_list', {}, 'READ'],
   ['skills_read', { skillId: 'agents-skills/executing-plans' }, 'READ'],

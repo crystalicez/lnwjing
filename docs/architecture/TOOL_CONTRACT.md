@@ -122,7 +122,7 @@ Run `pnpm docs:tools` after intentionally changing the registry; CI runs `pnpm d
 | 79 | `workspace_context` | READ | default | operational | service_dispatch | yes | no |
 | 80 | `workspace_context_continue` | READ | default | operational | service_dispatch | yes | no |
 | 81 | `workspace_full_scan` | READ | default | operational | service_dispatch | yes | no |
-| 82 | `workspace_full_scan_continue` | READ | default | operational | deterministic_operation | yes | no |
+| 82 | `workspace_full_scan_continue` | READ | default | operational | service_dispatch | yes | no |
 | 83 | `workspace_snapshot` | READ | default | operational | service_dispatch | yes | no |
 | 84 | `search_all` | READ | default | operational | service_dispatch | yes | no |
 | 85 | `read_many_files` | READ | default | operational | service_dispatch | yes | no |

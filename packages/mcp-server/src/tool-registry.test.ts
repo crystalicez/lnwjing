@@ -1512,6 +1512,29 @@ describe('MCP tool registry', () => {
     expect(capabilityCalls).toBe(0);
   });
 
+  it('admits run_goal with Custom WRITE=ALLOW and DANGEROUS=DENY without weakening task cancellation', async () => {
+    const restrictedCustom: PermissionProfile = {
+      name: 'custom',
+      defaults: { READ: 'ALLOW', WRITE: 'ALLOW', EXECUTE: 'ALLOW', DANGEROUS: 'DENY' },
+      allowedProjectExecutables: permissionProfiles.custom.allowedProjectExecutables,
+    };
+    const runGoal = vi.fn(async () => err(appError('CONFLICT', 'test goal already owned')));
+    const finishGoal = vi.fn(async () => ok({ status: 'completed' }));
+    const registry = new ToolRegistry({ goals: { runGoal, finishGoal } } as unknown as McpApplicationServices, actor, {
+      profileProvider: (): PermissionProfile => restrictedCustom,
+    });
+    const started = await registry.invoke('run_goal', {
+      workspaceId: 'workspace-1', goalKey: 'permission-check', scheduledContinuation: 'off',
+    });
+    expect(runGoal).toHaveBeenCalledTimes(1);
+    expect(started).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    const stopped = await registry.invoke('finish_goal', {
+      goalId: 'goal-1', leaseToken: 'test-token', expectedRevision: 0, status: 'completed', summary: 'Done', evidence: [],
+    });
+    expect(stopped).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+    expect(finishGoal).not.toHaveBeenCalled();
+  });
+
   it('honors Custom ALLOW for ordinary replacement and opaque operations instead of silently converting it to ASK', async () => {
     const customAllow: PermissionProfile = {
       name: 'custom',
