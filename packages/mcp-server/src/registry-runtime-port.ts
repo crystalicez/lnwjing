@@ -65,4 +65,5 @@ export interface McpRegistryRuntimePort {
   validate(name: string, input: unknown): Result<unknown>;
   invoke(name: string, input: unknown, signal?: AbortSignal, envelope?: CheckedInvocationEnvelope): Promise<McpToolResponse>;
   describeInputJsonSchema?(name: string): Record<string, unknown> | undefined;
+  listTools?(): readonly Pick<import('./tools/tool-types.js').McpToolDefinition, 'name' | 'description' | 'permission'>[];
 }

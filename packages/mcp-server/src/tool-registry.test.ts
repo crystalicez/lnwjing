@@ -34,6 +34,28 @@ afterEach(() => {
 });
 
 describe('MCP tool registry', () => {
+  it('discovers every advertised tool by exact name and describes its published input schema', async () => {
+    const registry = new ToolRegistry({ agentSwarm: {} } as unknown as McpApplicationServices, actor, { codexToolsEnabled: true });
+    expect(registry.list().map((tool) => tool.name)).toContain('agent_swarm_run');
+    for (const tool of registry.list()) {
+      const found = await registry.invoke('tool_search', { query: tool.name, limit: 1 });
+      expect(found.structuredContent, tool.name).toMatchObject({
+        matches: [{ name: tool.name, permission: tool.permission }],
+        authorizationUnchanged: true,
+      });
+      const schema = registry.describeInputJsonSchema(tool.name);
+      expect(schema, tool.name).toBeDefined();
+      const described = await registry.invoke('tool_describe', { name: tool.name });
+      expect(described.structuredContent, tool.name).toMatchObject({
+        found: true, name: tool.name, inputSchema: schema,
+      });
+    }
+    for (const name of ['tool_search', 'tool_function_find', 'tool_dynamic_filter']) {
+      const result = await registry.invoke(name, { query: 'zzqxxnonexistenttoolzzqxx', limit: 5 });
+      expect(result.structuredContent).toMatchObject({ matches: [], totalMatches: 0 });
+    }
+  });
+
   it('prevents lease takeover while a previously unleased MCP mutation remains in flight', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-unleased-race-'));
     try {
@@ -778,6 +800,10 @@ describe('MCP tool registry', () => {
     expect((await registry.invoke('codex_run', {})).isError).toBe(true);
     expect(reads).toBe(1);
     expect(registry.listAll().map((tool) => tool.name)).toContain('read_file');
+    const search = await registry.invoke('tool_search', { query: 'read_file', limit: 100 });
+    expect(search.structuredContent?.matches).not.toContainEqual(expect.objectContaining({ name: 'read_file' }));
+    expect((await registry.invoke('tool_describe', { name: 'read_file' })).structuredContent)
+      .toMatchObject({ found: false, name: 'read_file' });
   });
 
   it('lets an already-started call settle after disable while blocking future calls', async () => {

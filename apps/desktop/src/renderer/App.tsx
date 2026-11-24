@@ -65,6 +65,8 @@ export function App(): ReactElement {
   const refreshActiveProjectsRef = useRef<() => void>(() => undefined);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
   const [runningActivity, setRunningActivity] = useState<RunningProjectsActivitySnapshot | null>(null);
+  const [runningActivityUpdatedAt, setRunningActivityUpdatedAt] = useState<number | null>(null);
+  const [runningActivityFailed, setRunningActivityFailed] = useState(false);
   const runningActivityBusyRef = useRef(false);
   const runningActivityPendingRef = useRef(false);
   const runningActivityRevisionRef = useRef(0);
@@ -345,9 +347,13 @@ export function App(): ReactElement {
     const revision = runningActivityRevisionRef.current;
     try {
       const activity = await window.lnwjing.getRunningProjectsActivity();
-      if (activeProjectsVisibleRef.current && revision === runningActivityRevisionRef.current) setRunningActivity(activity);
+      if (activeProjectsVisibleRef.current && revision === runningActivityRevisionRef.current) {
+        setRunningActivity(activity);
+        setRunningActivityUpdatedAt(Date.now());
+        setRunningActivityFailed(false);
+      }
     } catch {
-      // Transient IPC failures do not block the 30-second dashboard reconciliation.
+      if (activeProjectsVisibleRef.current && revision === runningActivityRevisionRef.current) setRunningActivityFailed(true);
     } finally {
       runningActivityBusyRef.current = false;
       if (activeProjectsVisibleRef.current
@@ -363,6 +369,8 @@ export function App(): ReactElement {
     activeProjectsVisibleRef.current = screen === 'active-projects';
     if (screen === 'active-projects') {
       setRunningActivity(null);
+      setRunningActivityUpdatedAt(null);
+      setRunningActivityFailed(false);
       void refreshRunningProjects();
     }
   }, [screen, selectedWorkspaceId, refreshRunningProjects]);
@@ -373,15 +381,14 @@ export function App(): ReactElement {
       return;
     }
     void refresh();
-    const reconcileInterval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh();
-    }, 30_000);
-    const refreshOnFocus = (): void => {
-      if (document.visibilityState === 'visible') void refresh();
+    const reconcileVisible = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      void refresh();
+      if (activeProjectsVisibleRef.current) refreshActiveProjectsRef.current();
     };
-    const refreshOnVisibility = (): void => {
-      if (document.visibilityState === 'visible') void refresh();
-    };
+    const reconcileInterval = window.setInterval(reconcileVisible, 30_000);
+    const refreshOnFocus = reconcileVisible;
+    const refreshOnVisibility = reconcileVisible;
     window.addEventListener('focus', refreshOnFocus);
     document.addEventListener('visibilitychange', refreshOnVisibility);
     return (): void => {
@@ -1072,6 +1079,7 @@ export function App(): ReactElement {
       ) : null}
       {screen === 'active-projects' ? (
         <ActiveProjectsPage locale={locale} dashboard={runningActivity === null ? dashboard : { ...dashboard, ...runningActivity }} workspaces={workspaces}
+          activityUpdatedAt={runningActivityUpdatedAt} activityFailed={runningActivityFailed}
           onSelectWorkspace={selectWorkspace} onOpenProjects={() => setScreen('projects')} />
       ) : null}
       {screen === 'tools' ? (

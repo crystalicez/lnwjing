@@ -8,9 +8,9 @@ describe('desktop performance contract', () => {
     expect(source).toContain('if (refreshBusyRef.current) {');
     expect(source).toContain('refreshPendingRef.current = true;');
     expect(source).toContain('window.setTimeout(() => { void refresh(); }, 0);');
-    expect(source).toContain("const reconcileInterval = window.setInterval(() => {");
-    expect(source).toContain("if (document.visibilityState === 'visible') void refresh();");
-    expect(source).toContain('}, 30_000);');
+    expect(source).toContain('const reconcileInterval = window.setInterval(reconcileVisible, 30_000);');
+    expect(source).toContain("if (document.visibilityState !== 'visible') return;");
+    expect(source).toContain('if (activeProjectsVisibleRef.current) refreshActiveProjectsRef.current();');
     expect(source).toContain("window.addEventListener('focus', refreshOnFocus)");
     expect(source).toContain("document.addEventListener('visibilitychange', refreshOnVisibility)");
     expect(source).not.toContain('window.setInterval(() => { void refresh(); }, 2_000)');

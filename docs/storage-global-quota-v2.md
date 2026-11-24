@@ -134,7 +134,7 @@ notice. The terminal outcome and mutation receipt remain in the audit.
 This is an intentionally conservative admission boundary, NOT a physical quota
 for independently writing SQLite services: other non-MCP database writers,
 native helpers, cache and temporary files can still grow without this ledger.
-Each new MCP call while the option is enabled performs a bounded inventory,
+Each new MCP call eligible for reservation while the option is enabled performs a bounded inventory,
 including read-only calls; large profiles can therefore incur metadata-I/O
 latency or fail closed on incomplete scans. The fixed per-call estimate cannot
 guarantee that arbitrarily large SQLite audit rows or WAL growth fit. Global
@@ -162,7 +162,11 @@ The sweep is capped at **8 batches of 128 files**, with no more than 2,048
 entries inspected per batch, and stops early once estimated logical pressure
 and volume headroom have recovered. A writer attempting admission likewise
 may reclaim several batches and then **re-inventories** before admitting a
-write. It never recursively purges unknown directories, symlink/junction
+write.
+An impossible request larger than the entire ordinary budget is refused before
+inventory or reclaim. Admission rechecks live quota limits and outstanding
+reservations between bounded reclaim batches; policy changes observed during
+inventory do not trigger deletion under the superseded limits. It never recursively purges unknown directories, symlink/junction
 targets or user repositories. Each candidate's identity, size, parent
 directory identity and modification time are rechecked before unlinking.
 A refusal or incomplete scan is not bypassed; exhaustion of the bounded

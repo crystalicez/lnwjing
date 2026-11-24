@@ -239,7 +239,7 @@ export function inspectMutationOperation(
       if (['list', 'get_active', 'get_bounds', 'get_display'].includes(operation)) return read('window inspection action');
       if (operation === 'close') return opaque('closing a window can discard unsaved application state');
       if (['activate', 'move', 'resize', 'minimize', 'maximize', 'restore', 'set_window_frame'].includes(operation)) {
-        return boundedWrite('window state change does not authorize project-data replacement');
+        return boundedWrite(`Window ${operation} changes the desktop window state and requires confirmation`);
       }
       return opaque('unknown window action is not provably safe');
     }

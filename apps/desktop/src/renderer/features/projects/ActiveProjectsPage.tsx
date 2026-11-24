@@ -79,6 +79,8 @@ interface ActiveProjectsPageProps {
   readonly locale: UiLocale;
   readonly workspaces: readonly WorkspaceSummary[];
   readonly dashboard: DashboardSnapshot;
+  readonly activityUpdatedAt?: number | null;
+  readonly activityFailed?: boolean;
   readonly onSelectWorkspace: (workspaceId: string) => Promise<void>;
   readonly onOpenProjects: () => void;
 }
@@ -130,6 +132,9 @@ export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement
           </span>
         </div>
         <p className="hint active-projects-status-note">{t('activeProjects.statusNote')}</p>
+        <p className="hint" role="status" data-testid="running-activity-freshness">
+          {props.activityFailed ? t('activeProjects.activityFailed') : props.activityUpdatedAt == null ? t('activeProjects.activityLoading') : t('activeProjects.activityUpdated', { time: new Date(props.activityUpdatedAt).toLocaleTimeString(DATE_LOCALES[props.locale]) })}
+        </p>
         {projects.length === 0 ? (
           <div className="active-projects-empty">
             <p>{t('activeProjects.empty')}</p>

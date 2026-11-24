@@ -201,9 +201,9 @@ const SEARCH_CATALOG: readonly SearchCatalogEntry[] = dedupeSearchEntries([
   ...CAPABILITY_SEARCH_ENTRIES,
   ...UPGRADE_TOOL_CATALOG,
 ]);
-const SEARCH_ENTRY_INDEX: ReadonlyMap<string, SearchEntryIndex> = new Map(
-  SEARCH_CATALOG.map((entry) => [entry.name, indexSearchEntry(entry)]),
-);
+
+const SEARCH_METADATA = new Map(SEARCH_CATALOG.map((entry) => [entry.name, entry]));
+const SEARCH_ENTRY_INDEX = new Map(SEARCH_CATALOG.map((entry) => [entry.name, indexSearchEntry(entry)]));
 
 const ENGINEERING_PRIMITIVE_SCHEMAS: Readonly<Record<string, Record<string, unknown>>> = {
   engineering_prepare_task: {
@@ -397,7 +397,7 @@ export class UpgradeRuntimeService {
         const misses = verification.misses + Math.max(0, contextEconomy.filesDelivered - contextEconomy.ledgerHits);
         const bytesSaved = verification.bytesSaved + contextEconomy.previouslySeenBytesAvoided;
         const entries = verification.entries + contextEconomy.ledgerEntries;
-        const exposedToolNames = SEARCH_CATALOG.filter((entry) => this.isToolExposed(entry.name)).map((entry) => entry.name).sort();
+        const exposedToolNames = this.searchCatalog().map((entry) => entry.name).sort();
         const toolCatalogKey = createHash('sha256').update(JSON.stringify(exposedToolNames)).digest('hex');
         const workspaceId = readString(input, 'workspaceId');
         let workspaceIndexKey: string | null = null;
@@ -697,6 +697,17 @@ export class UpgradeRuntimeService {
     }
   }
 
+  private searchCatalog(): readonly SearchCatalogEntry[] {
+    const registered = this.registryRuntime?.listTools?.();
+    if (registered === undefined) return SEARCH_CATALOG.filter((entry) => this.isToolExposed(entry.name));
+    return registered.map((tool) => {
+      const metadata = SEARCH_METADATA.get(tool.name);
+      return metadata === undefined
+        ? primitiveEntry(tool.name, tool.description, tool.permission, tokenize(tool.name))
+        : { ...metadata, description: tool.description, permission: tool.permission };
+    });
+  }
+
   private searchTools(query: string, input: Record<string, unknown> = {}): Record<string, unknown> {
     const normalized = query.toLowerCase().trim();
     const queryTokens = tokenize(normalized);
@@ -706,12 +717,11 @@ export class UpgradeRuntimeService {
     const category = readString(input, 'category')?.toLowerCase();
     const route = routeIntent(query);
     const telemetry = this.activityTracker?.telemetrySnapshot();
-    const scored = SEARCH_CATALOG
-      .filter((entry) => this.isToolExposed(entry.name))
+    const scored = this.searchCatalog()
       .filter((entry) => category === undefined || entry.tags.some((tag) => tag.toLowerCase() === category))
       .map((entry) => scoreToolEntry(entry, normalized, queryTokens, queryTokenSet, route, telemetry?.byTool[entry.name], telemetry))
-      .filter((entry) => normalized.length === 0 || entry.score > 0)
-      .sort((left, right) => right.score - left.score || Number(right.entry.primitive === true) - Number(left.entry.primitive === true) || left.entry.name.localeCompare(right.entry.name));
+      .filter((entry) => normalized.length === 0 || entry.relevant)
+      .sort((left, right) => Number(right.entry.name === normalized) - Number(left.entry.name === normalized) || right.score - left.score || Number(right.entry.primitive === true) - Number(left.entry.primitive === true) || left.entry.name.localeCompare(right.entry.name));
     const rankedCandidates: readonly RankedToolCandidate[] = scored.slice(0, limit).map((candidate) => ({
       name: candidate.entry.name,
       score: Number(candidate.score.toFixed(4)),
@@ -753,10 +763,11 @@ export class UpgradeRuntimeService {
   }
 
   private describeTool(name: string | undefined): unknown {
-    const entry = SEARCH_CATALOG.find((candidate) => candidate.name === name && this.isToolExposed(candidate.name));
+    const entry = this.searchCatalog().find((candidate) => candidate.name === name);
+    const authoritativeSchema = name === undefined || !this.isToolExposed(name) ? undefined : this.registryRuntime?.describeInputJsonSchema?.(name);
     if (entry === undefined) {
       if (name === undefined || !this.isToolExposed(name)) return { found: false, name: name ?? null };
-      const registrySchema = this.registryRuntime?.describeInputJsonSchema?.(name);
+      const registrySchema = authoritativeSchema;
       if (registrySchema === undefined) return { found: false, name };
       return {
         found: true,
@@ -770,18 +781,18 @@ export class UpgradeRuntimeService {
     }
     const upgradeEntry = UPGRADE_TOOL_CATALOG.find((candidate) => candidate.name === entry.name);
     if (upgradeEntry === undefined) {
-      const explicitSchema = ENGINEERING_PRIMITIVE_SCHEMAS[entry.name];
+      const explicitSchema = authoritativeSchema ?? ENGINEERING_PRIMITIVE_SCHEMAS[entry.name];
       return {
         found: true,
         ...entry,
         schema: explicitSchema ?? { type: 'object', additionalProperties: true },
         ...(explicitSchema === undefined ? {} : { inputSchema: explicitSchema }),
         schemaDiagnostic: this.describeInputSchemaDiagnostic(entry.name),
-        contractSource: 'primitive-registry',
+        contractSource: authoritativeSchema === undefined ? 'primitive-registry' : 'tool-registry',
         authorizationUnchanged: true,
       };
     }
-    const inputSchema = upgradeToolInputJsonSchema(upgradeEntry);
+    const inputSchema = authoritativeSchema ?? upgradeToolInputJsonSchema(upgradeEntry);
     return {
       found: true,
       ...entry,
@@ -3181,10 +3192,12 @@ function scoreToolEntry(
 ): {
   readonly entry: SearchCatalogEntry;
   readonly score: number;
+  readonly relevant: boolean;
   readonly reasonCodes: readonly string[];
   readonly rankingSignals: RankedToolCandidate['rankingSignals'];
 } {
-  const indexed = SEARCH_ENTRY_INDEX.get(entry.name) ?? indexSearchEntry(entry);
+  const cached = SEARCH_ENTRY_INDEX.get(entry.name);
+  const indexed = cached === undefined ? indexSearchEntry(entry) : { ...cached, description: entry.description.toLowerCase() };
   const schemaMatchedFields = schemaFieldMatches(indexed, queryTokenSet);
   const completedTelemetrySamples = toolTelemetry === undefined ? 0 : Math.max(0, toolTelemetry.calls - toolTelemetry.active);
   const successRate = completedTelemetrySamples === 0 || toolTelemetry === undefined
@@ -3197,7 +3210,7 @@ function scoreToolEntry(
     successRate,
     p95LatencyMs: completedTelemetrySamples === 0 || toolTelemetry === undefined ? null : toolTelemetry.p95LatencyMs,
   };
-  if (query.length === 0) return { entry, score: 0, reasonCodes: ['empty-query'], rankingSignals };
+  if (query.length === 0) return { entry, score: 0, relevant: true, reasonCodes: ['empty-query'], rankingSignals };
 
   let score = 0;
   const reasons = new Set<string>();
@@ -3221,6 +3234,7 @@ function scoreToolEntry(
       reasons.add(`description-token:${token}`);
     }
   }
+  const relevant = score > 0 || schemaMatchedFields.length > 0;
   if (route.route !== 'workspace' && entry.tags.some((tag) => route.route === tag || route.domain.split('/').some((part) => tag === part))) {
     score += 0.5;
     reasons.add(`route:${route.route}`);
@@ -3268,7 +3282,7 @@ function scoreToolEntry(
       reasons.add('telemetry:high-latency');
     }
   }
-  return { entry, score, reasonCodes: [...reasons], rankingSignals };
+  return { entry, score, relevant, reasonCodes: [...reasons], rankingSignals };
 }
 
 function indexSearchEntry(entry: SearchCatalogEntry): SearchEntryIndex {

@@ -269,6 +269,11 @@ export class GlobalStorageQuotaReservations {
         if (!safeBytes(reserved)) throw new Error('Invalid global quota reserved size');
         return { ...state, reserved };
       });
+      // A request larger than the entire ordinary budget cannot be helped by
+      // deleting files. Reject before scanning or reclaiming anything.
+      if (bytes > initial.limit_bytes - initial.reserve_bytes) {
+        throw new Error('Global storage quota has insufficient unreserved space');
+      }
       // Shared only while a revision-matched scan is actively running.
       // Never reuse across a release, a new writer, or a policy change.
       const inventory = await this.completeInventory(initial.revision);
@@ -282,18 +287,21 @@ export class GlobalStorageQuotaReservations {
       ) < BigInt(bytes) + BigInt(MIN_VOLUME_RESERVE_BYTES);
       if (!reclaimAttempted && (inventory.logicalBytes + initial.reserved + bytes >= reclaimThreshold
         || physicalPressure)) {
-        reclaimAttempted = true;
         let removedLogicalBytes = 0;
         for (let batch = 0; batch < MAX_PRESSURE_RECLAIM_BATCHES; batch++) {
           // Delete only as much verified old disposable data as necessary to
           // recover the proactive threshold and requested volume headroom.
+          const current = this.status();
+          if (current === null || current.policy.limitBytes !== initial.limit_bytes
+            || current.policy.criticalReserveBytes !== initial.reserve_bytes) break;
           const volumeAvailable = volumeHeadroom(
             safeVolumeFreeBytes(this.getAvailableVolumeBytes()),
-            initial.reserved, initial.reserve_bytes,
+            current.reservedBytes, current.policy.criticalReserveBytes,
           );
-          if (inventory.logicalBytes - removedLogicalBytes + initial.reserved + bytes
+          if (inventory.logicalBytes - removedLogicalBytes + current.reservedBytes + bytes
             < reclaimThreshold
             && volumeAvailable >= BigInt(bytes) + BigInt(MIN_VOLUME_RESERVE_BYTES)) break;
+          reclaimAttempted = true;
           const reclaimed = await reclaimExpiredDisposableFiles(this.root);
           removedLogicalBytes += reclaimed.removedLogicalBytes;
           if (reclaimed.removed === 0 || !reclaimed.truncated) break;

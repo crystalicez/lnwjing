@@ -15,6 +15,32 @@ const actor: FileActor = {
 };
 
 describe('MCP server live tool availability', () => {
+  it('publishes the same schema in tools/list and tool_describe for every advertised tool', async () => {
+    const server = createMcpServer({ services: { agentSwarm: {} } as unknown as McpApplicationServices, actor, codexToolsEnabled: true });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'discovery-schema-parity', version: '1.0.0' });
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      const listed = await client.listTools();
+      expect(listed.tools.length).toBeGreaterThan(200);
+      for (const tool of listed.tools) {
+        const result = readStructuredToolResult(await client.callTool({ name: 'tool_describe', arguments: { name: tool.name } }));
+        expect(result.inputSchema, tool.name).toEqual(tool.inputSchema);
+        expect(result.schemaDiagnostic, tool.name).toMatchObject({
+          status: 'available', inputSchemaSha256: createHash('sha256').update(canonicalJson(tool.inputSchema)).digest('hex'),
+        });
+      }
+      const permission = listed.tools.find((tool) => tool.name === 'permission_check');
+      expect(permission?.inputSchema).toMatchObject({ properties: { tool: { type: 'string' }, input: { type: 'object' } } });
+      const preview = await client.callTool({ name: 'permission_check', arguments: { tool: 'read_file', input: { workspaceId: 'fixture', path: 'a.txt' } } });
+      expect(readStructuredToolResult(preview)).toMatchObject({ decision: 'allow', advisory: true, sideEffectsStarted: false });
+    } finally {
+      await client.close().catch(() => undefined);
+      await server.close().catch(() => undefined);
+    }
+  }, 30_000);
+
   it('allows direct content-only external MCP results while preserving batch parity', async () => {
     const server = createMcpServer({
       services: { extensions: {

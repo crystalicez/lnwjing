@@ -53,6 +53,7 @@ test('Running Projects scrolls 19 enabled projects and keeps Sort after navigati
     const list = page.locator('.active-projects-scroll');
     await expect(list).toBeVisible();
     await expect(list.locator('.active-projects-item')).toHaveCount(19);
+    await expect(page.getByTestId('running-activity-freshness')).toContainText('Activity last updated:');
     const gridGeometry = async (): Promise<{
       readonly firstTop: number;
       readonly secondTop: number;

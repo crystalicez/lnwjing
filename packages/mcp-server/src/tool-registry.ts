@@ -299,6 +299,7 @@ export class ToolRegistry {
         },
         invoke: (name, input, signal, envelope) => this.invoke(name, this.withCheckedEnvelope(name, input, envelope), undefined, signal),
         describeInputJsonSchema: (name) => this.describeInputJsonSchema(name),
+        listTools: () => this.list(),
       },
       isToolExposed: (name) => this.isEffectivelyExposed(name),
       setPonytailSessionSuppressed: (workspaceId, goalId, suppressed) => this.setPonytailSessionSuppressed(workspaceId, goalId, suppressed),
@@ -378,7 +379,8 @@ export class ToolRegistry {
     try {
       const jsonSchema = z.toJSONSchema(inputSchema, { io: 'input', target: 'draft-2020-12' });
       return typeof jsonSchema === 'object' && jsonSchema !== null && !Array.isArray(jsonSchema)
-        ? jsonSchema as Record<string, unknown>
+        // MCP tools/list requires an object at the root, including Zod object unions.
+        ? { ...jsonSchema, type: 'object' } as Record<string, unknown>
         : undefined;
     } catch {
       return undefined;

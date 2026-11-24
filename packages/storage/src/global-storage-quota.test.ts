@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GlobalStorageQuotaReservations } from './global-storage-quota.js';
+import { inspectProfileStorageOffMain } from './profile-storage-inventory.js';
 
 const MIB = 1024 * 1024;
 async function fixture(): Promise<{ root: string; dispose: () => Promise<void> }> {
@@ -46,6 +47,49 @@ function departedOwner(ledger: string, bytes: number): Promise<void> {
 }
 
 describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
+  it('rejects an impossible reservation before inventory or disposable reclaim', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      let scans = 0;
+      const quota = new GlobalStorageQuotaReservations(root, {
+        availableVolumeBytes: (): bigint => BigInt(256 * MIB),
+        scanProfileInventory: async (): ReturnType<typeof inspectProfileStorageOffMain> => {
+          scans++;
+          return inspectProfileStorageOffMain(root);
+        },
+      });
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 128 * 1024 });
+      await expect(quota.reserve(MIB)).rejects.toThrow(/insufficient unreserved space/);
+      expect(scans).toBe(0);
+      expect(quota.status()?.activeReservations).toBe(0);
+    } finally { await dispose(); }
+  });
+
+  it('does not reclaim from a stale policy after a concurrent quota increase', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      let scans = 0;
+      const quota = new GlobalStorageQuotaReservations(root, {
+        availableVolumeBytes: (): bigint => BigInt(256 * MIB),
+        scanProfileInventory: async (): ReturnType<typeof inspectProfileStorageOffMain> => {
+          const inventory = await inspectProfileStorageOffMain(root);
+          if (++scans === 1) quota.configure({ limitBytes: 8 * MIB, criticalReserveBytes: 128 * 1024 });
+          return inventory;
+        },
+      });
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 128 * 1024 });
+      await mkdir(path.join(root, 'logs'));
+      const oldLog = path.join(root, 'logs', 'old.log');
+      await writeFile(oldLog, Buffer.alloc(690 * 1024));
+      const old = new Date('2020-01-01T00:00:00Z');
+      await utimes(oldLog, old, old);
+      const proof = await quota.reserve(64 * 1024);
+      quota.release(proof);
+      expect(scans).toBeGreaterThanOrEqual(2);
+      expect(existsSync(oldLog)).toBe(true);
+    } finally { await dispose(); }
+  });
+
   it('reclaims proactively before the ordinary budget runs out', async () => {
     const { root, dispose } = await fixture();
     try {

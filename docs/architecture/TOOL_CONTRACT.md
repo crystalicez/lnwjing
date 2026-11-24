@@ -590,6 +590,12 @@ with ranked candidates, deterministic scores, reason codes, selected model,
 permission metadata, and `authorizationUnchanged: true`. Local rerank is
 opt-in; when no local model is configured it falls back to deterministic scoring
 without sending prompt or file data off-machine.
+The live search surface is derived from the currently exposed ToolRegistry,
+with catalog tags as enrichment rather than an independent allowlist. An exact
+tool name ranks first; readiness and telemetry cannot turn a nonmatching
+query into a match. `tool_describe` uses the same input schema as `tools/list`,
+including the root object type required by the MCP SDK for object unions.
+Discovery never grants authorization or proves an optional backend is ready.
 
 ### Context aggregation
 

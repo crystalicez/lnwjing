@@ -96,6 +96,19 @@ describe('Active Projects dashboard', () => {
       .toBe('id-10');
   });
 
+  it('distinguishes fresh, pending and failed activity observations', () => {
+    const props = {
+      locale: 'en' as const, dashboard: dashboard() as DashboardSnapshot, workspaces,
+      onSelectWorkspace: async (): Promise<void> => {}, onOpenProjects: (): void => {},
+    };
+    const pending = renderToStaticMarkup(createElement(ActiveProjectsPage, props));
+    expect(pending).toContain('Checking latest activity');
+    const fresh = renderToStaticMarkup(createElement(ActiveProjectsPage, { ...props, activityUpdatedAt: Date.parse(at) }));
+    expect(fresh).toContain('Activity last updated:');
+    const failed = renderToStaticMarkup(createElement(ActiveProjectsPage, { ...props, activityUpdatedAt: Date.parse(at), activityFailed: true }));
+    expect(failed).toContain('The displayed data may be stale.');
+  });
+
   it('renders a dedicated sidebar tab and project status without displaying inactive or archived projects', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(at));
