@@ -3171,9 +3171,11 @@ function capabilitySearchEntry(descriptor: CapabilityDescriptor): SearchCatalogE
   return {
     name: descriptor.name,
     phase: 0,
-    description: `${descriptor.name} local capability (${descriptor.auditTarget})`,
+    description: descriptor.name === 'wsl_exec'
+      ? 'Run a Linux developer command inside Windows Subsystem for Linux (WSL).'
+      : `${descriptor.name} local capability (${descriptor.auditTarget})`,
     permission: descriptor.permission,
-    tags: [descriptor.name, descriptor.auditTarget, 'capability'],
+    tags: [descriptor.name, descriptor.auditTarget, 'capability', ...(descriptor.name === 'wsl_exec' ? ['wsl', 'linux', 'command', 'execute'] : [])],
     deliveryState: 'operational',
     parallelSafe: descriptor.permission === 'READ',
     primitive: true,
