@@ -1008,7 +1008,7 @@ export class ToolRegistry {
         // Fall through to the existing activity resolver / explicit workspace fallback.
       }
     }
-    const explicitWorkspaceId = readExplicitWorkspaceId(input);
+    const explicitWorkspaceId = readInvocationWorkspaceId(name, input);
     if (explicitWorkspaceId !== undefined) return explicitWorkspaceId;
     return candidatePath === undefined ? undefined : this.activityWorkspaceResolver(candidatePath);
   }
@@ -1113,7 +1113,7 @@ export class ToolRegistry {
       }
     }
     const policy = this.destructivePolicyProvider();
-    const mutationWorkspaceId = readExplicitWorkspaceId(activeRoutedInput);
+    const mutationWorkspaceId = readInvocationWorkspaceId(tool.name, activeRoutedInput);
     const nativePathScopeRequired = requiresNativePathScope(tool.name, activeRoutedInput);
     const activeWorkspaceScope = !this.enforceActiveWorkspaceScope || (mutationDecision.kind === 'read' && !nativePathScopeRequired)
       ? null : await this.resolveActiveWorkspaceScope(mutationWorkspaceId);
@@ -1135,7 +1135,7 @@ export class ToolRegistry {
     const permissionDecision = fullBypass ? 'ALLOW' : this.permissionEngine.decide(profile, {
       action: 'mcp:' + tool.name,
       level: policyAllowsScopedDestructive ? 'WRITE' : permissionLevelForMutationDecision(mutationDecision),
-      workspaceId: readWorkspaceId(activeRoutedInput),
+      workspaceId: mutationWorkspaceId ?? 'system',
       target: tool.name,
       destructive: isDestructiveMutation(mutationDecision),
     });
@@ -2138,12 +2138,11 @@ function readExplicitWorkspaceId(input: unknown): string | undefined {
   const value = (input as { workspaceId?: unknown }).workspaceId;
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
-function readWorkspaceId(input: unknown): string {
-  if (typeof input === 'object' && input !== null && 'workspaceId' in input) {
-    const value = (input as { workspaceId?: unknown }).workspaceId;
-    if (typeof value === 'string' && value.trim().length > 0) return value;
-  }
-  return 'system';
+function readInvocationWorkspaceId(toolName: string, input: unknown): string | undefined {
+  // workflow_start carries its validated scope inside the immutable draft.
+  // Use the same identity for permission, admission, and audit attribution.
+  if (toolName === 'workflow_start' && isRecord(input)) return readExplicitWorkspaceId(input.draft);
+  return readExplicitWorkspaceId(input);
 }
 function readErrorCode(response: McpToolResponse): string | undefined { return readErrorField(response, 'code'); }
 function readErrorMessage(response: McpToolResponse): string | undefined { return readErrorField(response, 'message'); }

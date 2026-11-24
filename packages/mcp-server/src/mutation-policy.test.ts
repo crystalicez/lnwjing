@@ -41,6 +41,7 @@ const cases: readonly MutationCase[] = [
   { label: 'exact file edit', tool: 'edit_file', input: { path: 'old.txt', edits: [{ oldText: 'a', newText: 'b' }] }, permission: 'WRITE', kind: 'bounded_write' },
   { label: 'file move removes the source path', tool: 'move_file', input: { sourcePath: 'old.txt', destinationPath: 'new.txt' }, permission: 'WRITE', kind: 'replace' },
   { label: 'durable goal creation and lease acquisition', tool: 'run_goal', input: { workspaceId: 'w', goalKey: 'job', scheduledContinuation: 'off' }, permission: 'WRITE', kind: 'bounded_write' },
+  { label: 'validated workflow goal creation', tool: 'workflow_start', input: { draft: { workspaceId: 'w' } }, permission: 'WRITE', kind: 'bounded_write' },
   { label: 'engineering goal creation', tool: 'engineering_start_task', input: { workspaceId: 'w', goalKey: 'job', objective: 'Fix bug' }, permission: 'WRITE', kind: 'bounded_write' },
   { label: 'durable goal plan update', tool: 'update_goal_plan', input: {}, permission: 'WRITE', kind: 'bounded_write' },
   { label: 'durable goal acceptance update', tool: 'update_goal_acceptance', input: {}, permission: 'WRITE', kind: 'bounded_write' },

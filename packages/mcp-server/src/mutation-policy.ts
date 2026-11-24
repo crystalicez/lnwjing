@@ -116,6 +116,7 @@ export function inspectMutationOperation(
     // Only bounded, app-owned SQLite goal/continuation state changes. These
     // never execute plans, launch tasks, modify Git, or create native tasks.
     case 'run_goal':
+    case 'workflow_start':
     case 'engineering_start_task':
     case 'update_goal_plan':
     case 'update_goal_acceptance':

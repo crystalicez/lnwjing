@@ -1,5 +1,5 @@
 import { ActionButton, Surface } from '../ui/UiPrimitives.js';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { UiLocale, WorkflowDraft, WorkflowTemplate, WorkflowTemplateId } from '@lnwjing/ipc-contracts';
 import { WorkflowInputForm } from './WorkflowInputForm.js';
 import { workflowLaunchPrompt } from './workflow-launch-prompt.js';
@@ -26,6 +26,7 @@ export function WorkflowsPage(props: { readonly workspaceId: string | null; read
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<WorkflowDraft | null>(null);
   const [busy, setBusy] = useState(false);
+  const prepareGeneration = useRef(0);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageError, setMessageError] = useState(false);
@@ -33,6 +34,8 @@ export function WorkflowsPage(props: { readonly workspaceId: string | null; read
   const copy = v580Strings(props.locale).workflows;
   useEffect(() => {
     let live = true;
+    prepareGeneration.current += 1;
+    setBusy(false);
     setTemplates([]); setSelected(null); setDraft(null); setInputs({}); setMessage(null); setMessageError(false); setInvalidFields(new Set());
     setLoadingTemplates(props.workspaceId !== null);
     if (props.workspaceId !== null) {
@@ -41,9 +44,11 @@ export function WorkflowsPage(props: { readonly workspaceId: string | null; read
         .catch((error: unknown) => { if (live) { setMessage(error instanceof Error ? error.message : String(error)); setMessageError(true); } })
         .finally(() => { if (live) setLoadingTemplates(false); });
     }
-    return (): void => { live = false; };
+    return (): void => { live = false; prepareGeneration.current += 1; };
   }, [props.workspaceId]);
   function choose(template: WorkflowTemplate): void {
+    prepareGeneration.current += 1;
+    setBusy(false);
     setSelected(template);
     setDraft(null);
     setMessage(null);
@@ -70,14 +75,17 @@ export function WorkflowsPage(props: { readonly workspaceId: string | null; read
       return;
     }
     setInvalidFields(new Set());
+    const generation = ++prepareGeneration.current;
     setBusy(true); setDraft(null); setMessage(null);
     try {
       const result = await window.lnwjing.prepareWorkflow({ workspaceId: props.workspaceId, templateId: selected.id, inputs });
-      setDraft(result);
+      if (generation === prepareGeneration.current) setDraft(result);
     } catch (error: unknown) {
-      setMessage(error instanceof Error ? error.message : String(error));
-      setMessageError(true);
-    } finally { setBusy(false); }
+      if (generation === prepareGeneration.current) {
+        setMessage(error instanceof Error ? error.message : String(error));
+        setMessageError(true);
+      }
+    } finally { if (generation === prepareGeneration.current) setBusy(false); }
   }
   async function copyPrompt(): Promise<void> {
     if (!draft || !selected || draft.readiness !== 'ready') return;
@@ -111,7 +119,7 @@ export function WorkflowsPage(props: { readonly workspaceId: string | null; read
           <h2>{workflowLocalized(props.locale,{th:selected.titleTh,en:selected.titleEn})}</h2>
           <WorkflowInputForm key={selected.id} template={selected} workspaceId={props.workspaceId} locale={props.locale} values={inputs} disabled={busy}
             invalidKeys={invalidFields}
-            onChange={(values) => { setInputs(values); setDraft(null); setMessage(null);
+            onChange={(values) => { prepareGeneration.current += 1; setBusy(false); setInputs(values); setDraft(null); setMessage(null);
               setInvalidFields((current) => new Set([...current].filter((key) => !(values[key] ?? '').trim())));
             }}/>
           <ActionButton type="button" className="workflow-primary-action" onClick={() => { void prepare(); }} disabled={busy || !props.workspaceId}>

@@ -1688,6 +1688,13 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     if (activityTracker.listInFlight().some((entry) => entry.workspaceId === workspaceId)) {
       throw new Error('Workspace has MCP work in progress; wait for it to finish before archiving or deleting it');
     }
+    // MCP shell launches return before the actual process exits. Consult the
+    // authoritative host projections, not the UI's cached Running Projects view.
+    const jobs = await capabilityRuntime.shell.listRunningWorkspaceJobs();
+    if (jobs.some((job) => job.workspaceId === workspaceId)
+      || processService.listRunningWorkspaceJobs().some((job) => job.workspaceId === workspaceId)) {
+      throw new Error('Workspace has a background job running; wait for it to finish before archiving or deleting it');
+    }
     for (const [processId, ownerWorkspaceId] of trackedProcesses) {
       if (ownerWorkspaceId !== workspaceId) continue;
       const status = await processService.status(actor, workspaceId, processId);
@@ -2100,7 +2107,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (request.archived) {
         if (workspace.archivedAt !== undefined && workspace.archivedAt !== null) return toWorkspaceSummary(workspace);
         await assertWorkspaceIdle(workspace.id);
-        await workspaceIndex.stopWatch(workspace.id);
+        unwrap(await workspaceIndex.stopWatch(workspace.id), 'Could not stop the project watcher');
+        await assertWorkspaceIdle(workspace.id);
         await workspaceRepository.archive(workspace.id);
         await repairSelectedWorkspace(workspace.id);
       } else if (workspace.archivedAt !== undefined && workspace.archivedAt !== null) {
@@ -2123,6 +2131,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         workspaceId: workspace.id,
         workspaceRoot: workspace.realRootPath,
       });
+      await assertWorkspaceIdle(workspace.id);
       const backup = await backupService.create('manual');
       // Drain the native watcher before deleting its registration. Otherwise
       // an in-flight index operation may observe WORKSPACE_NOT_FOUND halfway
@@ -2132,6 +2141,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       } catch (error: unknown) {
         throw new Error('Project registration was preserved because index cleanup failed. Retry after stopping its watcher.', { cause: error });
       }
+      await assertWorkspaceIdle(workspace.id);
       await workspaceRepository.delete(workspace.id);
       await repairSelectedWorkspace(workspace.id);
       return { deleted: true, workspaceId: workspace.id, rootPath: workspace.realRootPath, backupId: backup.id };

@@ -31,6 +31,8 @@ export function ProjectsPage(props: ProjectsPageProps): ReactElement {
     try {
       await action();
       setConfirmingDeleteId((current) => current === workspaceId ? null : current);
+    } catch {
+      // App already displays the operation error; do not emit an unhandled rejection.
     } finally {
       setBusyWorkspaceId(null);
     }

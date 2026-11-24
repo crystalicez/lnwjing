@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -324,6 +324,183 @@ test('real Git staged and unstaged content agrees with git CLI and rendered diff
     await writeFile(path.join(first, 'alpha.txt'), 'staged-sentinel\n');
     git(['add', '--', 'alpha.txt']);
     await writeFile(path.join(first, 'alpha.txt'), 'working-sentinel\n');
+  });
+});
+
+test('real project lifecycle refuses archive while a durable shell job is still running', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ page, client, first, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    await writeFile(path.join(first, 'wait.mjs'), "import { existsSync } from 'node:fs';\nconst end = Date.now() + 30000;\nconst t = setInterval(() => { if (existsSync('release') || Date.now() > end) clearInterval(t); }, 100);\n");
+    const job = await good('shell', { workspaceId, executable: 'node', arguments: ['wait.mjs'], timeout_seconds: 40 });
+    const taskId = String(job.task_id);
+    const taskStatus = async (): Promise<unknown> => (await client.callTool({ name: 'shell', arguments: { workspaceId, operation: 'status', task_id: taskId } })).structuredContent?.state;
+    try {
+      await expect.poll(taskStatus).toBe('running');
+      await nav(page, /^(Projects|โปรเจกต์)$/);
+      const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+      await row.locator('.project-archive-button').click();
+      await expect.poll(async () => {
+        const current = (await page.evaluate(() => window.lnwjing.listWorkspaces())).find(w => w.id === workspaceId);
+        return current?.archivedAt ? 'archived' : (await page.locator('.error-banner').count()) > 0 ? 'rejected' : 'pending';
+      }).toBe('rejected');
+      await expect(page.locator('.error-banner')).toContainText('background job running');
+      expect((await page.evaluate(() => window.lnwjing.listWorkspaces())).find(w => w.id === workspaceId)?.archivedAt ?? null).toBeNull();
+      await expect(row).not.toHaveClass('archived');
+      expect.soft(await taskStatus()).toBe('running');
+    } finally {
+      await writeFile(path.join(first, 'release'), 'go');
+      // Restore only our disposable registration if the baseline incorrectly archived it.
+      const current = (await page.evaluate(() => window.lnwjing.listWorkspaces())).find(w => w.id === workspaceId);
+      if (current?.archivedAt) await page.evaluate(id => window.lnwjing.setWorkspaceArchived({ workspaceId: id, archived: false }), workspaceId);
+      await expect.poll(taskStatus, { timeout: 40_000 }).toBe('completed');
+    }
+    const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+    await row.locator('.project-archive-button').click();
+    await expect(row).toHaveClass('archived');
+    expect(await readFile(path.join(first, 'alpha.txt'), 'utf8')).toBe('first-sentinel\n');
+    const denied = await client.callTool({ name: 'read_file', arguments: { workspaceId, path: 'alpha.txt' } });
+    expect(denied.isError).toBe(true);
+    await row.getByRole('button', { name: /^(Restore|นำกลับมาใช้งาน)$/ }).click();
+    await expect(row).not.toHaveClass('archived');
+    expect(await good('read_file', { workspaceId, path: 'alpha.txt' })).toMatchObject({ content: 'first-sentinel\n' });
+  });
+});
+
+test('real deletion rechecks a managed process that starts during native approval', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ app, page, first, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    await writeFile(path.join(first, 'wait.mjs'), "import { existsSync } from 'node:fs';\nconst end = Date.now() + 30000;\nconst t = setInterval(() => { if (existsSync('release') || Date.now() > end) clearInterval(t); }, 100);\n");
+    await nav(page, /^(Projects|โปรเจกต์)$/);
+    const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+    await row.locator('.project-delete-button').click();
+    const opened = app.waitForEvent('window');
+    await row.locator('.project-delete-button.confirm').click();
+    const approval = await opened;
+    await expect(approval.getByRole('alertdialog')).toContainText(first);
+    const process = await good('process_start', { workspaceId, executable: 'node', args: ['wait.mjs'], timeoutMs: 40000 });
+    const processId = String(process.processId);
+    const status = async (): Promise<Record<string, unknown>> => good('process_status', { workspaceId, processId });
+    try {
+      await expect.poll(status).toMatchObject({ state: 'running' });
+      await approval.locator('.mutation-approval-confirm').click().catch((error: unknown) => {
+        if (!approval.isClosed() || !String(error).includes('Target page, context or browser has been closed')) throw error;
+      });
+      await expect(page.locator('.error-banner')).toContainText('background job running');
+      await expect(row).toBeVisible();
+      expect((await page.evaluate(() => window.lnwjing.listWorkspaces())).some(w => w.id === workspaceId)).toBe(true);
+      expect(await status()).toMatchObject({ state: 'running' });
+      expect(await readFile(path.join(first, 'alpha.txt'), 'utf8')).toBe('first-sentinel\n');
+    } finally {
+      await writeFile(path.join(first, 'release'), 'go');
+      await expect.poll(status, { timeout: 40_000 }).toMatchObject({ state: 'exited', exitCode: 0 });
+    }
+  });
+});
+
+test('real workflow preview cannot attach a stale draft to a different selected template', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ page, first, second, client, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    const args = { workspaceId, templateId: 'project-check', inputs: { projectPath: first, focus: 'general' } };
+    const draft = await good('workflow_prepare', args);
+    expect(draft).toMatchObject({ workspaceId, templateId: 'project-check', readiness: 'ready' });
+    expect((await good('workflow_prepare', args)).digest).toBe(draft.digest);
+    const outside = await client.callTool({ name: 'workflow_prepare', arguments: { ...args, inputs: { ...args.inputs, projectPath: second } } });
+    expect(outside.isError).toBe(true);
+    const tampered = await client.callTool({ name: 'workflow_start', arguments: { draft: { ...draft, objective: 'not the prepared objective' }, idempotencyKey: randomUUID() } });
+    expect(tampered).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    await nav(page, /^(Workflows|เวิร์กโฟลว์)$/);
+    const project = page.locator('.workflow-card').filter({ hasText: /Project Check|ตรวจสอบโปรเจกต์/ });
+    const review = page.locator('.workflow-card').filter({ hasText: /Code Review|รีวิวโค้ด/ });
+    await project.click();
+    const prepare = page.locator('.workflow-config .workflow-primary-action');
+    await prepare.click();
+    await expect(page.locator('.workflow-preview')).toContainText('Project Check');
+    await project.click();
+    await expect(page.locator('.workflow-preview')).toHaveCount(0);
+    // Both events run in the same renderer turn. The first sends a real IPC
+    // prepare request; the second changes the selected template before its
+    // asynchronous result can be delivered.
+    await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('.workflow-config .workflow-primary-action')!.click();
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.workflow-card')).find(card => /Code Review|รีวิวโค้ด/.test(card.innerText))!.click();
+    });
+    await expect(review).toHaveClass(/selected/);
+    await expect(prepare).toBeEnabled();
+    expect(await page.locator('.workflow-preview').count()).toBe(0);
+    await prepare.click();
+    await expect(page.locator('.workflow-preview')).toContainText('Code Review');
+    await expect(page.locator('.workflow-preview')).not.toContainText('Project Check');
+  });
+});
+
+test('real index watcher handles external create, rename, delete and project deactivation', async () => {
+  test.setTimeout(120_000);
+  await withRuntime(async ({ page, first, second, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    await nav(page, /^(Projects|โปรเจกต์)$/);
+    await page.locator('#workspace-root').fill(second);
+    await page.getByRole('button', { name: /^(Add project|เพิ่มโปรเจกต์)$/ }).click();
+    await expect(page.locator('.project-list li').filter({ hasText: 'second-project' })).toBeVisible();
+    const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+    const controls = row.locator('.project-watcher-controls');
+    await controls.getByRole('button', { name: /^(Refresh status|ดูสถานะ)$/ }).click();
+    const start = controls.getByRole('button', { name: /^(Start watcher|เปิด Watcher)$/ });
+    await expect(start).toBeEnabled();
+    await start.click();
+    const compact = async (): Promise<Record<string, unknown>> => good('workspace_index_status', { workspaceId, summaryOnly: true });
+    await expect.poll(compact).toMatchObject({ snapshotEntryCount: 1, snapshotEntriesOmitted: true, watcher: expect.any(Object) });
+    expect((await compact()).snapshot).toMatchObject({ entries: [] });
+    const paths = async (): Promise<string[]> => {
+      const status = await good('workspace_index_status', { workspaceId, summaryOnly: false });
+      const snapshot = status.snapshot as { entries: { relativePath: string }[] };
+      return snapshot.entries.map(entry => entry.relativePath).sort();
+    };
+    await writeFile(path.join(first, 'watch-one.txt'), 'new content');
+    await expect.poll(paths, { timeout: 15_000 }).toEqual(['alpha.txt', 'watch-one.txt']);
+    await rename(path.join(first, 'watch-one.txt'), path.join(first, 'watch-two.txt'));
+    await expect.poll(paths, { timeout: 15_000 }).toEqual(['alpha.txt', 'watch-two.txt']);
+    await rm(path.join(first, 'watch-two.txt'));
+    await expect.poll(paths, { timeout: 15_000 }).toEqual(['alpha.txt']);
+    await row.getByRole('button', { name: /^(Deactivate|ปิดใช้งาน)$/ }).click();
+    await expect(row).not.toHaveClass('active');
+    await expect.poll(async () => page.evaluate(id => window.lnwjing.getWorkspaceIndexStatus({ workspaceId: id }), workspaceId)).toMatchObject({ watching: false, entryCount: 1 });
+    await expect(controls.getByRole('button', { name: /^(Start watcher|เปิด Watcher)$/ })).toBeDisabled();
+    expect(await readFile(path.join(first, 'alpha.txt'), 'utf8')).toBe('first-sentinel\n');
+  });
+});
+
+test('real workflow start preserves idempotency and rejects changed input under the same key', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ page, client, first, second, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    const idempotencyKey = randomUUID();
+    const args = { workspaceId, templateId: 'project-check', inputs: { projectPath: first, focus: 'tests' } };
+    const draft = await good('workflow_prepare', args);
+    const started = await good('workflow_start', { draft, idempotencyKey });
+    expect(started).toMatchObject({ goalId: expect.any(String), reused: false, workerState: 'attached', scheduledContinuation: 'off' });
+    const repeat = await good('workflow_start', { draft, idempotencyKey });
+    expect(repeat).toMatchObject({ goalId: started.goalId, reused: true, scheduledContinuation: 'off' });
+    const changed = await good('workflow_prepare', { ...args, inputs: { ...args.inputs, focus: 'build' } });
+    const conflict = await client.callTool({ name: 'workflow_start', arguments: { draft: changed, idempotencyKey } });
+    expect(conflict).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+    const state = await good('get_goal', { goalId: started.goalId });
+    expect(state).toMatchObject({ goalId: started.goalId, workflow: { inputDigest: draft.digest } });
+    await nav(page, /^(Projects|โปรเจกต์)$/);
+    await page.locator('#workspace-root').fill(second);
+    await page.getByRole('button', { name: /^(Add project|เพิ่มโปรเจกต์)$/ }).click();
+    const row = page.locator('.project-list li').filter({ hasText: 'second-project' });
+    await expect(row).toHaveClass('active');
+    const secondId = (await page.evaluate(() => window.lnwjing.listWorkspaces())).find(w => w.realRootPath.toLowerCase() === second.toLowerCase())!.id;
+    const otherDraft = await good('workflow_prepare', { ...args, workspaceId: secondId, inputs: { ...args.inputs, projectPath: second } });
+    await row.getByRole('button', { name: /^(Deactivate|ปิดใช้งาน)$/ }).click();
+    await expect(row).not.toHaveClass('active');
+    const denied = await client.callTool({ name: 'workflow_start', arguments: { draft: otherDraft, idempotencyKey: randomUUID() } });
+    expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+    expect(await readFile(path.join(second, 'beta.txt'), 'utf8')).toBe('second-sentinel\n');
+    expect(await readFile(path.join(first, 'alpha.txt'), 'utf8')).toBe('first-sentinel\n');
   });
 });
 

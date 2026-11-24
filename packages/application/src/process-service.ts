@@ -186,7 +186,7 @@ export class ProcessService {
     this.pruneOwners(processes);
     return processes.flatMap((process) => {
       const owner = this.owners.get(process.processId);
-      return owner !== undefined && process.state === 'running'
+      return owner !== undefined && (process.state === 'starting' || process.state === 'running' || process.state === 'termination_unverified')
         ? [{ workspaceId: owner.workspaceId, startedAt: process.startedAt }] : [];
     });
   }

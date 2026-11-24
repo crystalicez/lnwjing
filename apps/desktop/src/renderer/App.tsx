@@ -1179,7 +1179,7 @@ export function App(): ReactElement {
         />
       ) : null}
       {screen === 'workflows' ? (
-        <WorkflowsPage locale={locale} workspaceId={selectedWorkspaceId} workspacePath={dashboard?.selectedWorkspace?.rootPath ?? null} />
+        <WorkflowsPage key={selectedWorkspaceId} locale={locale} workspaceId={selectedWorkspaceId} workspacePath={dashboard?.selectedWorkspace?.rootPath ?? null} />
       ) : null}
       {screen === 'doctor' ? (
         <DiagnosticsPage locale={locale} workspaceId={selectedWorkspaceId} checks={
