@@ -271,6 +271,17 @@ describe('one-click Windows x64 portable build', () => {
     }
   });
 
+  it('keeps the Windows NSIS compiler deadline bounded without extending other builder commands', async () => {
+    const workspace = await readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    const lockfile = await readFile(path.join(root, 'pnpm-lock.yaml'), 'utf8');
+    const patch = await readFile(path.join(root, 'patches', 'builder-util@26.16.0.patch'), 'utf8');
+    expect(workspace).toContain('builder-util@26.16.0: patches/builder-util@26.16.0.patch');
+    expect(lockfile).toContain('path: patches/builder-util@26.16.0.patch');
+    expect(patch).toContain('process.platform === "win32" && path.basename(command).toLowerCase() === "makensis.exe" ? 15 : 4');
+    expect(patch).toContain('}, timeoutMinutes * 60 * 1000);');
+    expect(patch).toContain('childProcess.kill();');
+  });
+
   it('ships a persistent side-by-side runtime instead of unpacking to TEMP', async () => {
     const config = await readFile(path.join(root, 'apps', 'desktop', 'electron-builder.yml'), 'utf8');
     const workspace = await readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8');

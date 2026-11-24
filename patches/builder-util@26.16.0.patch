@@ -1,0 +1,28 @@
+diff --git a/out/util.js b/out/util.js
+index d05ba71ce55b1bb6f3b70329ba499227107dfacb..8d8edbc4147496dae2065ed1f8625082c4103bec 100644
+--- a/out/util.js
++++ b/out/util.js
+@@ -290,10 +290,13 @@ function spawnAndWriteWithOutput(command, args, data, options) {
+         let stdout = "";
+         let stderr = "";
+         let timedOut = false;
++        // lnwjing embeds the full portable payload directly in NSIS. Keep a
++        // bounded compiler deadline, but do not abort slow Windows builds at 4m.
++        const timeoutMinutes = process.platform === "win32" && path.basename(command).toLowerCase() === "makensis.exe" ? 15 : 4;
+         const timeout = setTimeout(() => {
+             timedOut = true;
+             childProcess.kill();
+-        }, 4 * 60 * 1000);
++        }, timeoutMinutes * 60 * 1000);
+         childProcess.on("error", (err) => {
+             clearTimeout(timeout);
+             reject(err);
+@@ -314,7 +317,7 @@ function spawnAndWriteWithOutput(command, args, data, options) {
+         childProcess.once("close", (code) => {
+             clearTimeout(timeout);
+             if (timedOut) {
+-                reject(new Error(`${command} timed out after 4 minutes`));
++                reject(new Error(`${command} timed out after ${timeoutMinutes} minutes`));
+             }
+             else if (code === 0) {
+                 resolve({ stdout, stderr });

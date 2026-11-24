@@ -12,6 +12,9 @@ patchedDependencies:
   app-builder-lib@26.17.0:
     hash: dfe5ff3cfc1ceaba82802f661228fe68575efe2b0c150a1692a3b956a1790f4c
     path: patches/app-builder-lib@26.17.0.patch
+  builder-util@26.16.0:
+    hash: 941152b7d3c4568bb4c7ad08835ed243cdbf88e006b38ffff75212430720166e
+    path: patches/builder-util@26.16.0.patch
 
 importers:
 
@@ -4267,7 +4270,7 @@ snapshots:
       ajv: 8.20.0
       asn1js: 3.0.10
       async-exit-hook: 2.0.1
-      builder-util: 26.16.0
+      builder-util: 26.16.0(patch_hash=941152b7d3c4568bb4c7ad08835ed243cdbf88e006b38ffff75212430720166e)
       builder-util-runtime: 9.7.0
       chromium-pickle-js: 0.2.0
       ci-info: 4.3.1
@@ -4445,7 +4448,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  builder-util@26.16.0:
+  builder-util@26.16.0(patch_hash=941152b7d3c4568bb4c7ad08835ed243cdbf88e006b38ffff75212430720166e):
     dependencies:
       '@types/debug': 4.1.13
       builder-util-runtime: 9.7.0
@@ -4653,7 +4656,7 @@ snapshots:
   dmg-builder@26.17.0(electron-builder-squirrel-windows@26.17.0):
     dependencies:
       app-builder-lib: 26.17.0(patch_hash=dfe5ff3cfc1ceaba82802f661228fe68575efe2b0c150a1692a3b956a1790f4c)(dmg-builder@26.17.0)(electron-builder-squirrel-windows@26.17.0)
-      builder-util: 26.16.0
+      builder-util: 26.16.0(patch_hash=941152b7d3c4568bb4c7ad08835ed243cdbf88e006b38ffff75212430720166e)
       fs-extra: 10.1.0
       js-yaml: 4.3.2
     transitivePeerDependencies:
@@ -4701,7 +4704,7 @@ snapshots:
   electron-builder-squirrel-windows@26.17.0(dmg-builder@26.17.0):
     dependencies:
       app-builder-lib: 26.17.0(patch_hash=dfe5ff3cfc1ceaba82802f661228fe68575efe2b0c150a1692a3b956a1790f4c)(dmg-builder@26.17.0)(electron-builder-squirrel-windows@26.17.0)
-      builder-util: 26.16.0
+      builder-util: 26.16.0(patch_hash=941152b7d3c4568bb4c7ad08835ed243cdbf88e006b38ffff75212430720166e)
       electron-winstaller: 5.4.0
     transitivePeerDependencies:
       - dmg-builder
@@ -4710,7 +4713,7 @@ snapshots:
   electron-builder@26.17.0(electron-builder-squirrel-windows@26.17.0):
     dependencies:
       app-builder-lib: 26.17.0(patch_hash=dfe5ff3cfc1ceaba82802f661228fe68575efe2b0c150a1692a3b956a1790f4c)(dmg-builder@26.17.0)(electron-builder-squirrel-windows@26.17.0)
-      builder-util: 26.16.0
+      builder-util: 26.16.0(patch_hash=941152b7d3c4568bb4c7ad08835ed243cdbf88e006b38ffff75212430720166e)
       builder-util-runtime: 9.7.0
       chalk: 4.1.2
       ci-info: 4.4.0
@@ -4727,7 +4730,7 @@ snapshots:
     dependencies:
       '@types/fs-extra': 9.0.13
       aws4: 1.13.2
-      builder-util: 26.16.0
+      builder-util: 26.16.0(patch_hash=941152b7d3c4568bb4c7ad08835ed243cdbf88e006b38ffff75212430720166e)
       builder-util-runtime: 9.7.0
       chalk: 4.1.2
       form-data: 4.0.6

@@ -2,13 +2,14 @@ packages:
   - apps/*
   - packages/*
 
-overrides:
-  "@electron/osx-sign>isbinaryfile": 5.0.7
-  js-yaml: 4.3.2
-
 onlyBuiltDependencies:
   - electron
   - esbuild
 
+overrides:
+  '@electron/osx-sign>isbinaryfile': 5.0.7
+  js-yaml: 4.3.2
+
 patchedDependencies:
   app-builder-lib@26.17.0: patches/app-builder-lib@26.17.0.patch
+  builder-util@26.16.0: patches/builder-util@26.16.0.patch
