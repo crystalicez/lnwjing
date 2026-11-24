@@ -557,7 +557,7 @@ function stringRecordResponse(value: unknown): Readonly<Record<string, string>> 
 }
 
 function runningProjectsActivity(value: unknown): RunningProjectsActivitySnapshot {
-  if (!isRecord(value) || !Array.isArray(value.recentActivity)) throw new Error('Invalid IPC response');
+  if (!isRecord(value) || !Array.isArray(value.recentActivity) || (value.runningJobs !== undefined && !Array.isArray(value.runningJobs))) throw new Error('Invalid IPC response');
   return {
     selectedWorkspace: value.selectedWorkspace === null ? null : workspaceSummary(value.selectedWorkspace),
     activeWorkspaces: workspaceList(value.activeWorkspaces),
@@ -567,6 +567,10 @@ function runningProjectsActivity(value: unknown): RunningProjectsActivitySnapsho
       if (!isRecord(item)) throw new Error('Invalid IPC response');
       return { workspaceId: stringField(item, 'workspaceId'), timestamp: stringField(item, 'timestamp') };
     }),
+    ...(value.runningJobs === undefined ? {} : { runningJobs: value.runningJobs.map((item: unknown) => {
+      if (!isRecord(item)) throw new Error('Invalid IPC response');
+      return { workspaceId: stringField(item, 'workspaceId'), startedAt: stringField(item, 'startedAt') };
+    }) }),
   };
 }
 

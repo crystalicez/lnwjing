@@ -912,7 +912,8 @@ export interface DashboardEngineeringHarnessStatus {
 
 export type RunningProjectsActivitySnapshot =
   Pick<DashboardSnapshot, 'activeWorkspaces' | 'selectedWorkspace' | 'inFlight' | 'workLog'>
-  & { readonly recentActivity: readonly { readonly workspaceId: string; readonly timestamp: string }[] };
+  & { readonly recentActivity: readonly { readonly workspaceId: string; readonly timestamp: string }[];
+      readonly runningJobs?: readonly { readonly workspaceId: string; readonly startedAt: string }[] };
 
 export interface DashboardSnapshot {
   /** Primary workspace used when a tool call omits workspaceId. */

@@ -231,7 +231,7 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
     } finally { await closeDesktop(app); }
   });
 
-  test('selected dependency recheck recovers the tool and preserves the full Doctor report', async () => {
+  test('selected dependency recheck distinguishes configured executables from verified LSP and preserves the full Doctor report', async () => {
     const app = await launchDesktop();
     try {
       await openTools(app.page);
@@ -247,10 +247,11 @@ test.describe('Tools catalog and Doctor real Electron acceptance', () => {
       const lspCheck = app.page.getByTestId('doctor-check-configured_lsp');
       await expect(lspCheck).toHaveClass(/doctor-warn/);
       await lspCheck.getByRole('button', { name: /ตรวจรายการนี้ใหม่|Recheck this issue/ }).click();
-      await expect(lspCheck).toHaveClass(/doctor-pass/);
+      await expect(lspCheck).toHaveClass(/doctor-unknown/);
+      await expect(lspCheck).toContainText('LSP protocol handshake not verified');
       await expect(app.page.getByTestId('doctor-check-persistent_tunnel_identity')).toHaveCount(1);
       await openTools(app.page);
-      await expect(toolCard(app.page, 'lsp_diagnostics')).toHaveClass(/tool-ready/);
+      await expect(toolCard(app.page, 'lsp_diagnostics')).toHaveClass(/tool-unknown/);
     } finally { await closeDesktop(app); }
   });
 

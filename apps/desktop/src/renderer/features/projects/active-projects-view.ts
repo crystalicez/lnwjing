@@ -47,7 +47,7 @@ export function selectRunningProjects(
       case 'name-asc': return nameOrder(a, b);
       case 'name-desc': return nameOrder(b, a);
       case 'activity': return lastActivityMs(b) - lastActivityMs(a) || statusOrder(a, b);
-      case 'calls': return b.runningCalls - a.runningCalls || statusOrder(a, b);
+      case 'calls': return (b.runningCalls + b.runningJobs) - (a.runningCalls + a.runningJobs) || statusOrder(a, b);
       case 'main': return Number(b.primary) - Number(a.primary) || statusOrder(a, b);
       case 'status': return statusOrder(a, b);
     }

@@ -284,6 +284,20 @@ export class DurableShellTaskStore {
     }
   }
 
+  /** Host UI needs only active workspace identities, not command output or history. */
+  public async listRunningWorkspaceJobs(): Promise<readonly { workspaceId: string; startedAt: string }[]> {
+    const ids = await this.activeIndex.listActiveTaskIds();
+    const results = await mapWithConcurrency(ids, 4, async (taskId) => {
+      const metadata = await this.readMetadata(taskId, false, 1);
+      if (!metadata.ok || metadata.value.state !== 'running') return undefined;
+      const current = await this.reconcile(metadata.value);
+      const workspaceId = metadataOwner(current).workspaceId;
+      return current.state === 'running' && workspaceId !== undefined
+        ? { workspaceId, startedAt: current.started_at } : undefined;
+    });
+    return results.filter((item): item is { workspaceId: string; startedAt: string } => item !== undefined);
+  }
+
   public async list(owner?: CapabilityTaskOwner): Promise<Record<string, unknown>[]> {
     await mkdir(this.rootDirectory, { recursive: true });
     const taskIds = (await readdir(this.rootDirectory, { withFileTypes: true }).catch(() => []))

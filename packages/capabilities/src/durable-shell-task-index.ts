@@ -179,6 +179,11 @@ export class DurableShellTaskIndex {
     return marker?.taskId === taskId && marker.requestDigest === requestDigest;
   }
 
+  /** Host-only activity projection: inspect reservation markers, never scan task history. */
+  public async listActiveTaskIds(): Promise<readonly string[]> {
+    return (await this.readMarkers()).flatMap(({ record }) => record === undefined ? [] : [record.taskId]);
+  }
+
   public async listLaunches(options: {
     readonly limit: number;
     readonly cursor?: string;

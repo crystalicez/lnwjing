@@ -218,7 +218,10 @@ describe('upgrade runtime', () => {
     }
     expect(described).toEqual({ ok: true, value: { found: false, name: 'read_file' } });
     if (beforeCategories.ok && afterCategories.ok) {
-      expect(afterCategories.value.categories).toEqual(beforeCategories.value.categories);
+      const expected = beforeCategories.value.categories.map((category) => ({
+        ...category, tools: category.tools - (['workspace', 'file', 'read'].includes(category.category) ? 1 : 0),
+      })).filter((category) => category.tools > 0);
+      expect(afterCategories.value.categories).toEqual(expected);
     }
   });
 

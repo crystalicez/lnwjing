@@ -11,6 +11,7 @@ const DATE_LOCALES: Readonly<Record<UiLocale, string>> = { th: 'th-TH', en: 'en-
 export interface ActiveProjectActivity {
   readonly workspace: WorkspaceSummary;
   readonly runningCalls: number;
+  readonly runningJobs: number;
   readonly lastActivityAt: string | null;
   readonly state: 'running' | 'recent' | 'ready';
   readonly primary: boolean;
@@ -18,40 +19,42 @@ export interface ActiveProjectActivity {
 
 /**
  * "Active" means enabled in the MCP active workspace set, not "busy".
- * Running is based on actual in-flight tool calls, and Recent is observed
- * audit activity within five minutes. No extra watcher or SQLite poll.
+ * Running includes in-flight MCP calls and observed managed background jobs.
+ * Recent is audit activity within five minutes.
  */
 export function deriveActiveProjectActivity(
   workspaces: readonly WorkspaceSummary[],
   dashboard: Pick<DashboardSnapshot, 'activeWorkspaces' | 'selectedWorkspace' | 'inFlight' | 'workLog'>
-    & { readonly recentActivity?: readonly { readonly workspaceId: string; readonly timestamp: string }[] },
+    & { readonly recentActivity?: readonly { readonly workspaceId: string; readonly timestamp: string }[]; readonly runningJobs?: readonly { readonly workspaceId: string; readonly startedAt: string }[] },
   nowMs = Date.now(),
 ): readonly ActiveProjectActivity[] {
   const activeIds = new Set(dashboard.activeWorkspaces.map((workspace) => workspace.id));
   const active = workspaces.filter((workspace) => workspace.kind !== 'machine_root'
     && (workspace.archivedAt === undefined || workspace.archivedAt === null)
     && activeIds.has(workspace.id));
-  const observations = new Map<string, { running: number; lastMs: number }>();
+  const observations = new Map<string, { running: number; jobs: number; lastMs: number }>();
   const activeByCanonicalScope = new Map<string, string[]>();
   for (const workspace of active) {
-    observations.set(workspace.id, { running: 0, lastMs: -Infinity });
+    observations.set(workspace.id, { running: 0, jobs: 0, lastMs: -Infinity });
     const canonical = canonicalWorkspaceScopeId(workspaces, workspace.id);
     const ids = activeByCanonicalScope.get(canonical) ?? [];
     ids.push(workspace.id);
     activeByCanonicalScope.set(canonical, ids);
   }
-  const record = (workspaceId: string | null, timestamp: string, inFlight: boolean): void => {
+  const record = (workspaceId: string | null, timestamp: string, inFlight: boolean, job = false): void => {
     if (workspaceId === null) return;
     const related = activeByCanonicalScope.get(canonicalWorkspaceScopeId(workspaces, workspaceId));
     if (related === undefined) return;
     const time = Date.parse(timestamp);
     for (const id of related) {
       const current = observations.get(id)!;
-      if (inFlight) current.running += 1;
+      if (job) current.jobs += 1;
+      else if (inFlight) current.running += 1;
       if (Number.isFinite(time)) current.lastMs = Math.max(current.lastMs, time);
     }
   };
   for (const call of dashboard.inFlight) record(call.workspaceId, call.startedAt, true);
+  for (const job of dashboard.runningJobs ?? []) record(job.workspaceId, job.startedAt, false, true);
   // Recent activity is queried independently of the 500-entry global Work Log.
   // Only the initial legacy dashboard (before lightweight IPC loads) uses workLog.
   if (dashboard.recentActivity === undefined) {
@@ -61,10 +64,10 @@ export function deriveActiveProjectActivity(
   }
   return active.map((workspace) => {
     const observation = observations.get(workspace.id)!;
-    const state: ActiveProjectActivity['state'] = observation.running > 0 ? 'running'
+    const state: ActiveProjectActivity['state'] = observation.running + observation.jobs > 0 ? 'running'
       : nowMs >= observation.lastMs && nowMs - observation.lastMs <= RECENT_ACTIVITY_MS ? 'recent' : 'ready';
     return {
-      workspace, runningCalls: observation.running, state,
+      workspace, runningCalls: observation.running, runningJobs: observation.jobs, state,
       lastActivityAt: Number.isFinite(observation.lastMs) ? new Date(observation.lastMs).toISOString() : null,
       primary: dashboard.selectedWorkspace?.id === workspace.id,
     };
@@ -78,7 +81,7 @@ export function deriveActiveProjectActivity(
 interface ActiveProjectsPageProps {
   readonly locale: UiLocale;
   readonly workspaces: readonly WorkspaceSummary[];
-  readonly dashboard: DashboardSnapshot;
+  readonly dashboard: DashboardSnapshot & { readonly runningJobs?: readonly { readonly workspaceId: string; readonly startedAt: string }[] };
   readonly activityUpdatedAt?: number | null;
   readonly activityFailed?: boolean;
   readonly onSelectWorkspace: (workspaceId: string) => Promise<void>;
@@ -194,8 +197,9 @@ export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement
                   </div>
                   <p title={project.workspace.realRootPath}>{project.workspace.realRootPath}</p>
                   <small>
-                    {project.runningCalls > 0
-                      ? t('activeProjects.calls', { count: String(project.runningCalls) })
+                    {project.runningCalls + project.runningJobs > 0
+                      ? [project.runningCalls > 0 ? t('activeProjects.calls', { count: String(project.runningCalls) }) : '',
+                        project.runningJobs > 0 ? t('activeProjects.jobs', { count: String(project.runningJobs) }) : ''].filter(Boolean).join(' · ')
                       : project.lastActivityAt !== null
                         ? t('activeProjects.lastSeen', { time: new Date(project.lastActivityAt).toLocaleString(DATE_LOCALES[props.locale]) })
                         : t('activeProjects.noActivity')}

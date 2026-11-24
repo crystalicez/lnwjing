@@ -1098,6 +1098,20 @@ export class ToolRegistry {
     const prohibitedReason = fullBypass ? undefined : prohibitedInvocationReason(tool.name, activeRoutedInput);
     if (prohibitedReason !== undefined) return err(appError('PERMISSION_DENIED', prohibitedReason));
     let mutationDecision = inspectMutationOperation(tool.name, activeRoutedInput, tool.permission);
+    // A lease-bound, revision-matched completion with no tracked work is a
+    // metadata transition, not task cancellation. The finish CAS rechecks the
+    // same revision; concurrent checkpoints cannot turn this into a stop.
+    if (tool.name === 'finish_goal' && isRecord(activeRoutedInput)
+      && activeRoutedInput.status === 'completed' && typeof activeRoutedInput.goalId === 'string'
+      && typeof activeRoutedInput.leaseToken === 'string' && this.services.goals?.validateGoalLease !== undefined) {
+      const lease = await this.services.goals.validateGoalLease(this.actor, {
+        goalId: activeRoutedInput.goalId, leaseToken: activeRoutedInput.leaseToken,
+      });
+      if (lease.ok && lease.value.revision === activeRoutedInput.expectedRevision
+        && lease.value.trackedTasks.length === 0 && lease.value.activeTaskIds.length === 0) {
+        mutationDecision = { kind: 'bounded_write', reason: 'Lease- and revision-bound goal completion without tracked tasks' };
+      }
+    }
     const policy = this.destructivePolicyProvider();
     const mutationWorkspaceId = readExplicitWorkspaceId(activeRoutedInput);
     const nativePathScopeRequired = requiresNativePathScope(tool.name, activeRoutedInput);

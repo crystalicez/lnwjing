@@ -49,6 +49,14 @@ describe('Active Projects dashboard', () => {
       .find((project) => project.workspace.id === 'recent')?.state).toBe('ready');
   });
 
+  it('distinguishes managed background work from in-flight calls', () => {
+    const snapshot = { ...dashboard(), inFlight: [], runningJobs: [{ workspaceId: 'ready', startedAt: at }] };
+    const projects = deriveActiveProjectActivity(workspaces, snapshot, Date.parse(at));
+    expect(projects.find((project) => project.workspace.id === 'ready')).toMatchObject({ state: 'running', runningCalls: 0, runningJobs: 1 });
+    expect(deriveActiveProjectActivity(workspaces, { ...snapshot, runningJobs: [] }, Date.parse(at))
+      .find((project) => project.workspace.id === 'ready')).toMatchObject({ state: 'ready', runningJobs: 0 });
+  });
+
   it('uses authoritative per-workspace recent activity instead of the truncated global Work Log', () => {
     const snapshot = {
       ...dashboard(),

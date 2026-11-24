@@ -180,6 +180,17 @@ export class ProcessService {
     return ok({ matched: true, state: 'termination_unverified', detail: after.value.state });
   }
 
+  /** Trusted host-only activity projection, without exposing another session's handles. */
+  public listRunningWorkspaceJobs(): readonly { workspaceId: string; startedAt: string }[] {
+    const processes = this.processManager.list?.() ?? [];
+    this.pruneOwners(processes);
+    return processes.flatMap((process) => {
+      const owner = this.owners.get(process.processId);
+      return owner !== undefined && process.state === 'running'
+        ? [{ workspaceId: owner.workspaceId, startedAt: process.startedAt }] : [];
+    });
+  }
+
   public async list(actor: FileActor, workspaceId: string): Promise<Result<readonly ManagedProcess[]>> {
     const workspace = await this.getWorkspace(workspaceId);
     if (!workspace.ok) return workspace;

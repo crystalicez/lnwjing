@@ -540,6 +540,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     readonly checkedAt: number;
     readonly entries: ReturnType<SqliteAuditRepository['listRecentMcpWorkspaceActivity']>;
   } | null = null;
+  const runningJobsCache = new AsyncTtlCache<readonly { workspaceId: string; startedAt: string }[]>(3_000);
   const activitySessionCatalog = new ActivitySessionCatalog(auditRepository, workLogViewState);
   const auditService = new AuditService(auditRepository);
   const checkpointEncryptionKey = options.checkpointEncryptionKey ?? (options.checkpointCipher === undefined ? resolveTestCheckpointEncryptionKey() : undefined);
@@ -1815,7 +1816,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     if (commands.length === 0) return { status: 'warn', detail: 'No local language-server command is configured' };
     const availability = await Promise.all(commands.map(resolveConfiguredExecutable));
     return availability.some(Boolean)
-      ? { status: 'pass', detail: `${availability.filter(Boolean).length} configured language-server command(s) resolved` }
+      ? { status: 'unknown', detail: `${availability.filter(Boolean).length} configured language-server executable(s) resolved; LSP protocol handshake not verified. Invoke lsp_diagnostics with an actual workspace file to verify.` }
       : { status: 'warn', detail: 'Configured language-server commands could not be resolved' };
   };
   const windowsSandboxRequirement = async (): Promise<RequirementProbeResult> => {
@@ -2156,6 +2157,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         // Kept for compatibility; recentActivity is the authoritative source.
         workLog: [],
         recentActivity: runningRecentActivityCache.entries,
+        runningJobs: [...processService.listRunningWorkspaceJobs(), ...await runningJobsCache.get(() => capabilityRuntime.shell.listRunningWorkspaceJobs())],
       };
     },
     getDashboard: async (): Promise<DashboardSnapshot> => {

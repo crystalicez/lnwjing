@@ -179,6 +179,14 @@ export class ShellCapabilityBackend implements CapabilityBackend {
     }
   }
 
+  /** Trusted host-only summary, not an MCP session's task-list permission. */
+  public async listRunningWorkspaceJobs(): Promise<readonly { workspaceId: string; startedAt: string }[]> {
+    const durable = await this.durableStore?.listRunningWorkspaceJobs() ?? [];
+    return [...durable, ...Array.from(this.tasks.values()).flatMap((task) =>
+      task.state === 'running' && task.owner.workspaceId !== undefined
+        ? [{ workspaceId: task.owner.workspaceId, startedAt: task.startedAt }] : [])];
+  }
+
   /** Trusted owner probe. Never equate workspace membership with actual task ownership. */
   public async isOwnedGoalTask(ownerClientId: string, workspaceId: string, taskId: string): Promise<boolean> {
     const record = this.tasks.get(taskId);

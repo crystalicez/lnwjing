@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { electronExecutablePath, terminateProcessTree } from './electron-runtime.js';
 import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
-import { chromium, expect, test, type Page } from '@playwright/test';
+import { _electron, chromium, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { AuditService, redactActivityTargetDetail } from '@lnwjing/audit';
 import { SqliteAuditRepository, SqliteDatabase } from '@lnwjing/storage';
 
@@ -240,38 +240,22 @@ test('Git page supports real vertical page scrolling plus X/Y diff scrolling', a
   await mkdir(path.join(fixtureRoot, 'src', 'unit'), { recursive: true });
   await writeFile(path.join(fixtureRoot, 'src', 'unit', 'nested.ts'), 'export const nested = true;\n', 'utf8');
 
-  const devToolsPort = await findEphemeralPort();
-  const launchExecutable = packagedExecutable ?? electronExecutable;
-  const launchArguments = packagedExecutable === undefined
-    ? [`--remote-debugging-port=${devToolsPort}`, `--user-data-dir=${dataRoot}`, mainEntry]
-    : [`--remote-debugging-port=${devToolsPort}`, `--user-data-dir=${dataRoot}`];
-  const electronProcess = spawn(launchExecutable, launchArguments, {
-    cwd: desktopRoot,
-    detached: process.platform !== 'win32',
-    shell: false,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      APPDATA: dataRoot,
-      LNWJING_DATA_PATH: dataRoot,
-      LNWJING_WORKSPACE: fixtureRoot,
-      LNWJING_UNRESTRICTED: '1',
-      LNWJING_E2E_FIXTURE: '1',
-      LNWJING_E2E_NODE_PATH: process.execPath,
-      GIT_CEILING_DIRECTORIES: gitCeilingDirectories,
-    },
-  });
+  let app: ElectronApplication | undefined;
   const stderr: string[] = [];
-  electronProcess.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk.toString()));
-
   try {
-    await waitForDevTools(devToolsPort, electronProcess, stderr);
-    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${devToolsPort}`);
-    const context = browser.contexts()[0];
-    if (context === undefined) throw new Error('Electron did not create a browser context');
-    await expect.poll(() => context.pages().length, { timeout: 30_000 }).toBeGreaterThan(0);
-    const page = context.pages()[0];
-    if (page === undefined) throw new Error('Electron did not create a renderer page');
+    app = await _electron.launch({
+      executablePath: packagedExecutable ?? electronExecutable,
+      args: ['--user-data-dir=' + dataRoot, ...(packagedExecutable === undefined ? [mainEntry] : [])],
+      cwd: desktopRoot,
+      env: {
+        ...process.env, APPDATA: dataRoot, LOCALAPPDATA: dataRoot, TEMP: dataRoot, TMP: dataRoot,
+        LNWJING_DATA_PATH: dataRoot, LNWJING_WORKSPACE: fixtureRoot, LNWJING_UNRESTRICTED: '1',
+        LNWJING_E2E_FIXTURE: '1', LNWJING_E2E_NODE_PATH: process.execPath, GIT_CEILING_DIRECTORIES: gitCeilingDirectories,
+      },
+      timeout: 45_000,
+    });
+    app.process().stderr?.on('data', (chunk: Buffer) => stderr.push(chunk.toString()));
+    const page = await app.firstWindow();
 
     await settleFirstRunAndOpenHome(page);
     await page.setViewportSize({ width: 1720, height: 820 });
@@ -334,14 +318,15 @@ test('Git page supports real vertical page scrolling plus X/Y diff scrolling', a
     });
     expect(mainScrollTop).toBeGreaterThan(0);
 
-    await browser.close();
+    await app.close();
+    app = undefined;
   } catch (error: unknown) {
     const stderrPath = testInfo.outputPath('git-scroll-electron-stderr.txt');
     await writeFile(stderrPath, stderr.join(''), 'utf8');
     await testInfo.attach('electron-stderr', { path: stderrPath, contentType: 'text/plain' });
     throw error;
   } finally {
-    await terminateProcessTree(electronProcess);
+    await app?.close();
     await Promise.all([
       removeTemporaryRoot(fixtureRoot),
       removeTemporaryRoot(dataRoot),

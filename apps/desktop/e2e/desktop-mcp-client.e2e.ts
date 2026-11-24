@@ -1,16 +1,14 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { electronExecutablePath, terminateProcessTree } from './electron-runtime.js';
+import { electronExecutablePath } from './electron-runtime.js';
 import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
 import { promisify } from 'node:util';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { isAdvertisedDeliveryState, isCodexDelegationTool, UPGRADE_TOOL_CATALOG } from '@lnwjing/mcp-server';
-import { chromium, expect, test, type Page } from '@playwright/test';
+import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 
 const execFileAsync = promisify(execFile);
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,43 +21,23 @@ test('desktop serves the real MCP client development workflow', async () => {
   const fixtureRoot = await createFixture();
   const fixtureRealRoot = await realpath(fixtureRoot);
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-mcp-client-data-'));
-  let electronProcess: ChildProcess | undefined;
-  let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
+  let app: ElectronApplication | undefined;
   let page: Page | undefined;
   let client: Client | undefined;
 
   try {
-    const devToolsPort = await findEphemeralPort();
-    const launchExecutable = packagedExecutable ?? electronExecutable;
-    const launchArguments = packagedExecutable === undefined
-      ? [`--remote-debugging-port=${devToolsPort}`, `--user-data-dir=${dataRoot}`, mainEntry]
-      : [`--remote-debugging-port=${devToolsPort}`, `--user-data-dir=${dataRoot}`];
-    electronProcess = spawn(launchExecutable, launchArguments, {
+    app = await _electron.launch({
+      executablePath: packagedExecutable ?? electronExecutable,
+      args: ['--user-data-dir=' + dataRoot, ...(packagedExecutable === undefined ? [mainEntry] : [])],
       cwd: desktopRoot,
-      detached: process.platform !== 'win32',
-      shell: false,
-      windowsHide: true,
       env: {
-        ...process.env,
-        APPDATA: dataRoot,
-        LOCALAPPDATA: dataRoot, TEMP: dataRoot, TMP: dataRoot,
-        LNWJING_DATA_PATH: dataRoot,
-        LNWJING_WORKSPACE: fixtureRoot,
-        LNWJING_UNRESTRICTED: '1',
-        LNWJING_E2E_FIXTURE: '1',
-        LNWJING_E2E_NODE_PATH: process.execPath,
+        ...process.env, APPDATA: dataRoot, LOCALAPPDATA: dataRoot, TEMP: dataRoot, TMP: dataRoot,
+        LNWJING_DATA_PATH: dataRoot, LNWJING_WORKSPACE: fixtureRoot,
+        LNWJING_UNRESTRICTED: '1', LNWJING_E2E_FIXTURE: '1', LNWJING_E2E_NODE_PATH: process.execPath,
       },
+      timeout: 45_000,
     });
-    const stderr: string[] = [];
-    electronProcess.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk.toString()));
-
-    await waitForDevTools(devToolsPort, electronProcess, stderr);
-    browser = await chromium.connectOverCDP(`http://127.0.0.1:${devToolsPort}`);
-    const context = browser.contexts()[0];
-    if (context === undefined) throw new Error('Electron did not create a browser context');
-    await expect.poll(() => context.pages().length, { timeout: 30_000 }).toBeGreaterThan(0);
-    page = context.pages()[0];
-    if (page === undefined) throw new Error('Electron did not create a renderer page');
+    page = await app.firstWindow();
 
     await settleFirstRunAndOpenHome(page);
 
@@ -171,13 +149,13 @@ test('desktop serves the real MCP client development workflow', async () => {
     await agentActions.getByRole('button', { name: /^(หยุด Desktop Agent|Stop Desktop Agent)$/ }).click();
     await expect.poll(async () => (await page!.evaluate(() => window.lnwjing.getDashboard())).mcp.running, { timeout: 30_000 }).toBe(false);
     await expect(page.getByTestId('mcp-status')).toHaveText(/Agent หยุดทำงาน|Agent stopped/, { timeout: 30_000 });
-    await browser.close();
-    browser = undefined;
+    await app.close();
+    app = undefined;
+    page = undefined;
   } finally {
     if (client !== undefined) await client.close().catch(() => undefined);
     if (page !== undefined) await page.evaluate(() => window.lnwjing.stopMcp()).catch(() => undefined);
-    if (browser !== undefined) await browser.close().catch(() => undefined);
-    if (electronProcess !== undefined) await terminateProcessTree(electronProcess);
+    await app?.close();
     await Promise.all([removeTemporaryRoot(fixtureRoot), removeTemporaryRoot(dataRoot)]);
   }
 });
@@ -198,32 +176,6 @@ async function createFixture(): Promise<string> {
   await execFileAsync('git', ['add', '--', 'package.json', 'package-lock.json', 'src'], { cwd: root, windowsHide: true });
   await execFileAsync('git', ['commit', '--quiet', '-m', 'fixture'], { cwd: root, windowsHide: true });
   return root;
-}
-
-async function findEphemeralPort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen({ host: '127.0.0.1', port: 0 }, () => resolve());
-  });
-  const address = server.address();
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => error === undefined ? resolve() : reject(error));
-  });
-  if (address === null || typeof address === 'string') throw new Error('Could not allocate an ephemeral port');
-  return address.port;
-}
-
-async function waitForDevTools(port: number, electronProcess: ChildProcess, stderr: readonly string[]): Promise<void> {
-  await expect.poll(async () => {
-    if (electronProcess.exitCode !== null) throw new Error(`Electron exited with ${electronProcess.exitCode}: ${stderr.join('')}`);
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/json/version`);
-      return response.ok;
-    } catch {
-      return false;
-    }
-  }, { timeout: 15_000, intervals: [50, 100, 250] }).toBe(true);
 }
 
 async function removeTemporaryRoot(root: string): Promise<void> {

@@ -374,6 +374,15 @@ export function App(): ReactElement {
       void refreshRunningProjects();
     }
   }, [screen, selectedWorkspaceId, refreshRunningProjects]);
+  // Durable jobs can finish after their MCP launch call has returned. Poll
+  // only the bounded activity projection while this view is actually visible.
+  useEffect(() => {
+    if (screen !== 'active-projects') return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshRunningProjects();
+    }, 5_000);
+    return (): void => window.clearInterval(timer);
+  }, [screen, refreshRunningProjects]);
 
   useEffect(() => {
     if (updateStatus?.phase === 'installing') {

@@ -202,6 +202,7 @@ const SEARCH_CATALOG: readonly SearchCatalogEntry[] = dedupeSearchEntries([
   ...UPGRADE_TOOL_CATALOG,
 ]);
 
+const SEARCH_STOP_WORDS = new Set(['a','an','the','and','or','to','of','for','from','in','on','at','with','by','before','after','without','is','be','can','could','would','should','please','i','you','your','it','this','that','as','use','using']);
 const SEARCH_METADATA = new Map(SEARCH_CATALOG.map((entry) => [entry.name, entry]));
 const SEARCH_ENTRY_INDEX = new Map(SEARCH_CATALOG.map((entry) => [entry.name, indexSearchEntry(entry)]));
 
@@ -710,16 +711,25 @@ export class UpgradeRuntimeService {
 
   private searchTools(query: string, input: Record<string, unknown> = {}): Record<string, unknown> {
     const normalized = query.toLowerCase().trim();
-    const queryTokens = tokenize(normalized);
+    const queryTokens = [...new Set(searchTokens(normalized))];
     const queryTokenSet = new Set(queryTokens);
     const limit = boundedInteger(input.limit ?? input.topK, 20, 1, 100);
     const requestedReranker = readString(input, 'reranker') ?? readString(input, 'model') ?? 'deterministic';
     const category = readString(input, 'category')?.toLowerCase();
     const route = routeIntent(query);
     const telemetry = this.activityTracker?.telemetrySnapshot();
-    const scored = this.searchCatalog()
+    const catalog = this.searchCatalog();
+    const distinctiveTokens = new Set(queryTokens.filter((token) => {
+      let count = 0;
+      for (const entry of catalog) {
+        const index = SEARCH_ENTRY_INDEX.get(entry.name) ?? indexSearchEntry(entry);
+        if ((index.nameTokens.has(token) || index.tagTokens.has(token)) && ++count > 8) return false;
+      }
+      return count > 0;
+    }));
+    const scored = catalog
       .filter((entry) => category === undefined || entry.tags.some((tag) => tag.toLowerCase() === category))
-      .map((entry) => scoreToolEntry(entry, normalized, queryTokens, queryTokenSet, route, telemetry?.byTool[entry.name], telemetry))
+      .map((entry) => scoreToolEntry(entry, normalized, queryTokens, queryTokenSet, distinctiveTokens, route, telemetry?.byTool[entry.name], telemetry))
       .filter((entry) => normalized.length === 0 || entry.relevant)
       .sort((left, right) => Number(right.entry.name === normalized) - Number(left.entry.name === normalized) || right.score - left.score || Number(right.entry.primitive === true) - Number(left.entry.primitive === true) || left.entry.name.localeCompare(right.entry.name));
     const rankedCandidates: readonly RankedToolCandidate[] = scored.slice(0, limit).map((candidate) => ({
@@ -860,9 +870,8 @@ export class UpgradeRuntimeService {
 
   private categories(): { readonly categories: readonly { readonly category: string; readonly tools: number }[] } {
     const counts = new Map<string, number>();
-    for (const entry of UPGRADE_TOOL_CATALOG) {
-      if (!this.isToolExposed(entry.name)) continue;
-      for (const tag of entry.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    for (const entry of this.searchCatalog()) {
+      for (const tag of new Set(entry.tags.map((value) => value.toLowerCase()))) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     }
     return { categories: [...counts.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([category, tools]) => ({ category, tools })) };
   }
@@ -3186,6 +3195,7 @@ function scoreToolEntry(
   query: string,
   queryTokens: readonly string[],
   queryTokenSet: ReadonlySet<string>,
+  distinctiveTokens: ReadonlySet<string>,
   route: ReturnType<typeof routeIntent>,
   toolTelemetry?: ToolTelemetrySnapshot,
   globalTelemetry?: ActivityTelemetrySnapshot,
@@ -3197,7 +3207,7 @@ function scoreToolEntry(
   readonly rankingSignals: RankedToolCandidate['rankingSignals'];
 } {
   const cached = SEARCH_ENTRY_INDEX.get(entry.name);
-  const indexed = cached === undefined ? indexSearchEntry(entry) : { ...cached, description: entry.description.toLowerCase() };
+  const indexed = cached ?? indexSearchEntry(entry);
   const schemaMatchedFields = schemaFieldMatches(indexed, queryTokenSet);
   const completedTelemetrySamples = toolTelemetry === undefined ? 0 : Math.max(0, toolTelemetry.calls - toolTelemetry.active);
   const successRate = completedTelemetrySamples === 0 || toolTelemetry === undefined
@@ -3222,19 +3232,35 @@ function scoreToolEntry(
     score += 1;
     reasons.add('name-phrase');
   }
+  const descriptionTokens = new Set(searchTokens(indexed.description));
+  let lexicalMatches = 0;
+  let strongMatches = 0;
   for (const token of queryTokens) {
     if (indexed.nameTokens.has(token)) {
-      score += 1;
+      score += 2;
+      lexicalMatches += 1;
+      strongMatches += 1;
       reasons.add(`name-token:${token}`);
     } else if (indexed.tagTokens.has(token)) {
-      score += 0.8;
+      score += 1.2;
+      lexicalMatches += 1;
+      strongMatches += 1;
       reasons.add(`tag-token:${token}`);
-    } else if (indexed.description.includes(token)) {
-      score += 0.25;
+    } else if (descriptionTokens.has(token)) {
+      score += 0.5;
+      lexicalMatches += 1;
       reasons.add(`description-token:${token}`);
     }
   }
-  const relevant = score > 0 || schemaMatchedFields.length > 0;
+  const schemaTokens = new Set(schemaMatchedFields.flatMap(searchTokens));
+  const matched = new Set(queryTokens.filter((token) => indexed.nameTokens.has(token) || indexed.tagTokens.has(token) || descriptionTokens.has(token) || schemaTokens.has(token))).size;
+  // Require more than an incidental shared word for multi-word intents. Exact
+  // names and short queries remain discoverable, including schema-only queries.
+  const relevant = indexed.normalizedName === query || indexed.normalizedName.includes(query)
+    || (matched >= Math.min(2, queryTokens.length) && (lexicalMatches > 0 || schemaMatchedFields.length > 0))
+    || queryTokens.some((token) => distinctiveTokens.has(token) && (indexed.nameTokens.has(token) || indexed.tagTokens.has(token)));
+  score += strongMatches * 0.2 + matched / Math.max(1, queryTokens.length)
+    + 2.5 * queryTokens.filter((token) => distinctiveTokens.has(token) && (indexed.nameTokens.has(token) || indexed.tagTokens.has(token))).length;
   if (route.route !== 'workspace' && entry.tags.some((tag) => route.route === tag || route.domain.split('/').some((part) => tag === part))) {
     score += 0.5;
     reasons.add(`route:${route.route}`);
@@ -3292,10 +3318,10 @@ function indexSearchEntry(entry: SearchCatalogEntry): SearchEntryIndex {
     : {};
   return {
     normalizedName: entry.name.toLowerCase(),
-    nameTokens: new Set(tokenize(entry.name)),
-    tagTokens: new Set(entry.tags.flatMap((tag) => tokenize(tag))),
+    nameTokens: new Set(searchTokens(entry.name)),
+    tagTokens: new Set(entry.tags.flatMap(searchTokens)),
     description: entry.description.toLowerCase(),
-    schemaFields: Object.keys(properties).map((field) => ({ field, tokens: tokenize(field) })),
+    schemaFields: Object.keys(properties).map((field) => ({ field, tokens: searchTokens(field) })),
   };
 }
 
@@ -3312,6 +3338,16 @@ function tokenize(value: string): string[] {
     .toLowerCase()
     .split(/[^a-z0-9ก-๙]+/u)
     .filter((token) => token.length > 0);
+}
+
+// Intent search uses whole words, not arbitrary substrings in long tool instructions.
+function searchTokens(value: string): string[] {
+  const translated = value
+    .replace(/อ่าน/g, ' read ').replace(/ไฟล์/g, ' file ').replace(/โปรเจกต์|โครงการ/g, ' workspace ')
+    .replace(/ค้นหา/g, ' search ').replace(/แก้ไข/g, ' edit ').replace(/เขียน/g, ' write ')
+    .replace(/สิทธิ์/g, ' permission ').replace(/ตรวจสอบ/g, ' check ').replace(/สถานะ/g, ' status ');
+  return tokenize(translated).filter((token) => token.length > 1 && !SEARCH_STOP_WORDS.has(token))
+    .map((token) => token.length > 4 && token.endsWith('s') && !token.endsWith('ss') && !token.endsWith('us') ? token.slice(0, -1) : token);
 }
 
 async function readJsonlTail(filePath: string, maxBytes: number): Promise<readonly string[]> {
