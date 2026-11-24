@@ -89,6 +89,68 @@ describe('MCP tool registry', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+  it('releases an admitted goal fence if the real workspace lifecycle journal denies the writer', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-lifecycle-fence-'));
+    try {
+      const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'));
+      const barrier = await lease.holdWorkspaceLifecycle('workspace');
+      if (!barrier.ok) throw new Error(barrier.error.message);
+      const proof = { goalId: 'goal', leaseToken: 'proof', leaseGeneration: 1 };
+      const end = vi.fn(async (): Promise<void> => {});
+      const writeFile = vi.fn(async () => ok({ path: 'file.txt', bytesWritten: 1 }));
+      const registry = new ToolRegistry({
+        workspaceWriterLease: lease,
+        goalMutationFence: {
+          async inspectWorkspaceFence(): Promise<Result<{ goalId: string; leaseGeneration: number }>> { return ok({ goalId: 'goal', leaseGeneration: 1 }); },
+          async begin(): Promise<Result<{ goalId: string; leaseGeneration: number }>> { return ok({ goalId: 'goal', leaseGeneration: 1 }); },
+          async heartbeat(): Promise<void> {},
+          end,
+        },
+        file: { writeFile } as never,
+      }, actor, { profileProvider: (): typeof permissionProfiles.full => permissionProfiles.full, authorizationModeProvider: (): 'full_bypass' => 'full_bypass' });
+      try {
+        const denied = await registry.invoke('write_file', { workspaceId: 'workspace', path: 'file.txt', content: 'x', goalLease: proof });
+        expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+        expect(writeFile).not.toHaveBeenCalled();
+        expect(end).toHaveBeenCalledTimes(1);
+        expect(await lease.inspect('workspace')).toMatchObject({ ok: true, value: { activeCalls: 1 } });
+      } finally { await barrier.value.release(); }
+      expect(await lease.inspect('workspace')).toMatchObject({ ok: true, value: { activeCalls: 0 } });
+      const accepted = await registry.invoke('write_file', { workspaceId: 'workspace', path: 'file.txt', content: 'x', goalLease: proof });
+      expect(accepted.isError).not.toBe(true);
+      expect(writeFile).toHaveBeenCalledTimes(1);
+      expect(end).toHaveBeenCalledTimes(2);
+      expect(await lease.inspect('workspace')).toMatchObject({ ok: true, value: { activeCalls: 0 } });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it('revalidates active scope after real writer admission and releases the journal on rejection', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-scope-race-'));
+    try {
+      const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'));
+      let active = true;
+      const begin = lease.begin.bind(lease);
+      vi.spyOn(lease, 'begin').mockImplementation(async (...args) => {
+        const admitted = await begin(...args);
+        active = false;
+        return admitted;
+      });
+      const writeFile = vi.fn(async () => ok({ path: 'file.txt', bytesWritten: 1 }));
+      const registry = new ToolRegistry({ workspaceWriterLease: lease, file: { writeFile } as never }, actor, {
+        activeWorkspaceScopesProvider: async (): Promise<readonly WorkspaceScope[]> => active ? [{ workspaceId: 'workspace', rootPath: root }] : [],
+        profileProvider: (): typeof permissionProfiles.balanced => permissionProfiles.balanced,
+      });
+      const denied = await registry.invoke('write_file', { workspaceId: 'workspace', path: 'file.txt', content: 'x' });
+      expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+      expect(writeFile).not.toHaveBeenCalled();
+      expect(await lease.inspect('workspace')).toMatchObject({ ok: true, value: { activeCalls: 0 } });
+      active = true;
+      vi.restoreAllMocks();
+      expect((await registry.invoke('write_file', { workspaceId: 'workspace', path: 'file.txt', content: 'x' })).isError).not.toBe(true);
+      expect(writeFile).toHaveBeenCalledTimes(1);
+    } finally { vi.restoreAllMocks(); await rm(root, { recursive: true, force: true }); }
+  });
+
   it('routes a strict five-field safe import through the authorized dedicated use-case, not generic Git', async () => {
     const runtimeCalls: unknown[] = [];
     const repositoryImport = new RepositoryImportService({

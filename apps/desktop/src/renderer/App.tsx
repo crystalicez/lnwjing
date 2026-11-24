@@ -1105,6 +1105,7 @@ export function App(): ReactElement {
       ) : null}
       {screen === 'git' ? (
         <GitPage
+          key={dashboard.selectedWorkspace?.id ?? 'none'}
           locale={locale}
           gitSummary={dashboard.gitSummary}
           selectedWorkspace={dashboard.selectedWorkspace}

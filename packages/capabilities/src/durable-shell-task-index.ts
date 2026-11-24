@@ -6,7 +6,7 @@ import { appError, err, ok, type Result } from '@lnwjing/domain';
 
 export type ActiveTaskInspection = 'active' | 'terminal' | 'missing' | 'unknown';
 
-export type DurableMutationKind = 'opaque' | 'repository_import' | 'opaque_uncontained' | 'opaque_contained_process';
+export type DurableMutationKind = 'opaque' | 'repository_import' | 'opaque_uncontained' | 'opaque_contained_process' | 'workspace_lifecycle';
 
 export interface DurableTaskReservation {
   readonly mutationKind?: DurableMutationKind;
@@ -77,7 +77,8 @@ export class DurableShellTaskIndex {
   }
 
   public async reserve(input: DurableTaskReservation): Promise<Result<DurableTaskReservationResult>> {
-    if ((input.mutationKind !== undefined && input.mutationKind !== 'opaque' && input.mutationKind !== 'repository_import' && input.mutationKind !== 'opaque_uncontained' && input.mutationKind !== 'opaque_contained_process')
+    if ((input.mutationKind !== undefined && input.mutationKind !== 'opaque' && input.mutationKind !== 'repository_import' && input.mutationKind !== 'opaque_uncontained' && input.mutationKind !== 'opaque_contained_process' && input.mutationKind !== 'workspace_lifecycle')
+      || (input.mutationKind === 'workspace_lifecycle' && !input.ownerWorkspaceId)
       || (input.mutationKind === 'opaque_contained_process' && (typeof input.nativeReceiptPath !== 'string' || !path.isAbsolute(input.nativeReceiptPath)))
       || !isSafeTaskId(input.taskId)
       || !/^[a-f0-9]{64}$/i.test(input.requestDigest)
@@ -103,6 +104,8 @@ export class DurableShellTaskIndex {
           if (marker.record === undefined) {
             return err(appError('CONFLICT', 'A managed writer reservation is unreadable; resolve its state before launching another writer', true));
           }
+          const lifecycleConflict = (input.mutationKind === 'workspace_lifecycle' || marker.record.mutationKind === 'workspace_lifecycle')
+            && (input.ownerWorkspaceId === undefined || marker.record.ownerWorkspaceId === undefined || input.ownerWorkspaceId === marker.record.ownerWorkspaceId);
           if (marker.record.mutationKind === 'opaque_contained_process') {
             const native = marker.record.nativeReceiptPath === undefined
               ? undefined : await readWindowsContainmentReceipt(marker.record.nativeReceiptPath);
@@ -110,6 +113,7 @@ export class DurableShellTaskIndex {
               await rm(marker.path, { force: true }).catch(() => undefined);
               continue;
             }
+            if (lifecycleConflict) return err(appError('CONFLICT', 'Workspace lifecycle change conflicts with unverified native process descendants', true));
             if (input.mutationKind === 'repository_import') {
               return err(appError('CONFLICT', 'Unverified native process descendants block repository import', true));
             }
@@ -122,6 +126,7 @@ export class DurableShellTaskIndex {
             await rm(marker.path, { force: true }).catch(() => undefined);
             continue;
           }
+          if (lifecycleConflict) return err(appError('CONFLICT', 'Workspace lifecycle change conflicts with a live or unresolved managed writer', true));
           if (input.mutationKind === 'repository_import' || marker.record.mutationKind === 'repository_import') {
             return err(appError('CONFLICT', 'Repository import requires exclusive managed writer admission; a live or unresolved task holds it', true));
           }
@@ -456,13 +461,13 @@ async function isReady(filename: string): Promise<boolean> {
 async function readMarker(filename: string): Promise<MarkerRecord | undefined> {
   const value = await readJson(filename);
   if (!isRecord(value) || value.version !== 1 || typeof value.taskId !== 'string') return undefined;
-  if (value.mutationKind !== undefined && value.mutationKind !== 'opaque' && value.mutationKind !== 'repository_import' && value.mutationKind !== 'opaque_uncontained' && value.mutationKind !== 'opaque_contained_process') return undefined;
+  if (value.mutationKind !== undefined && value.mutationKind !== 'opaque' && value.mutationKind !== 'repository_import' && value.mutationKind !== 'opaque_uncontained' && value.mutationKind !== 'opaque_contained_process' && value.mutationKind !== 'workspace_lifecycle') return undefined;
   if (value.requestDigest !== null && (typeof value.requestDigest !== 'string' || !/^[a-f0-9]{64}$/i.test(value.requestDigest))) return undefined;
   return {
     version: 1,
     taskId: value.taskId,
     requestDigest: value.requestDigest,
-    mutationKind: value.mutationKind === 'repository_import' ? 'repository_import' : value.mutationKind === 'opaque_uncontained' ? 'opaque_uncontained' : value.mutationKind === 'opaque_contained_process' ? 'opaque_contained_process' : 'opaque',
+    mutationKind: value.mutationKind === 'workspace_lifecycle' ? 'workspace_lifecycle' : value.mutationKind === 'repository_import' ? 'repository_import' : value.mutationKind === 'opaque_uncontained' ? 'opaque_uncontained' : value.mutationKind === 'opaque_contained_process' ? 'opaque_contained_process' : 'opaque',
     ...(typeof value.ownerClientId === 'string' ? { ownerClientId: value.ownerClientId } : {}),
     ...(typeof value.ownerWorkspaceId === 'string' ? { ownerWorkspaceId: value.ownerWorkspaceId } : {}),
     ...(typeof value.nativeReceiptPath === 'string' && path.isAbsolute(value.nativeReceiptPath) ? { nativeReceiptPath: value.nativeReceiptPath } : {}),

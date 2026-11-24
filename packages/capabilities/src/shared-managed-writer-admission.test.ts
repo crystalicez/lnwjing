@@ -34,6 +34,43 @@ describe('global managed writer admission', () => {
     }
   }, 20000);
 
+  it('serializes workspace lifecycle against real durable shell launches without blocking unrelated workspaces', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-lifecycle-admission-')));
+    try {
+      const gate = new SharedManagedWriterAdmission(root);
+      const peer = new SharedManagedWriterAdmission(root);
+      const store = new DurableShellTaskStore(root);
+      const barrier = await gate.holdWorkspaceLifecycle('first');
+      if (!barrier.ok) throw new Error('lifecycle not admitted');
+      const launch = {
+        taskId: 'lifecycle-test',
+        executable: process.execPath, arguments: ['-e', 'process.stdout.write("completed")'],
+        cwd: root, timeoutSeconds: 30, maxOutputBytes: 1024, includeStdout: true, includeStderr: false,
+        owner: { clientId: 'peer', sessionId: 'session', workspaceId: 'first' },
+      };
+      try {
+        expect(await store.launch(launch)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+        expect(await peer.holdWorkspaceLifecycle('first')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+        const unrelated = await peer.enter({ actorClientId: 'peer', workspaceId: 'second', kind: 'synchronous_mutation' });
+        if (!unrelated.ok) throw new Error('unrelated workspace blocked');
+        await unrelated.value.releaseAfterVerifiedTermination();
+      } finally { await barrier.value.releaseAfterVerifiedTermination(); }
+      const active = await peer.enter({ actorClientId: 'peer', workspaceId: 'first', kind: 'synchronous_mutation' });
+      if (!active.ok) throw new Error('writer not admitted');
+      try {
+        expect(await gate.holdWorkspaceLifecycle('first')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+        const unrelated = await gate.holdWorkspaceLifecycle('second');
+        if (!unrelated.ok) throw new Error('unrelated lifecycle blocked');
+        await unrelated.value.releaseAfterVerifiedTermination();
+      } finally { await active.value.releaseAfterVerifiedTermination(); }
+      expect(await store.launch(launch)).toMatchObject({ ok: true });
+      await expect.poll(async (): Promise<string> => {
+        const observed = await store.snapshot(launch.taskId);
+        return observed.ok ? String(observed.value.state) : 'unknown';
+      }, { timeout: 20000 }).toBe('completed');
+    } finally { await rm(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 200 }); }
+  }, 45000);
+
   it('refuses same-client idle recovery until the global managed writer is released', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-recover-managed-writer-'));
     try {

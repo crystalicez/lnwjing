@@ -198,11 +198,35 @@ export class SqliteWorkspaceWriterLease implements WorkspaceWriterLeasePort {
     } catch { return unavailable(); }
   }
 
+  /** Host-only exclusion using the existing cross-process invocation journal.
+   * Generation -1 is reserved for lifecycle operations, never a client proof.
+   * A dead host can be recovered, but a live or unknown PID is never preempted.
+   */
+  public async holdWorkspaceLifecycle(workspaceId: string): Promise<Result<{ release: () => Promise<void> }>> {
+    if (!validIdentity(workspaceId)) return invalid();
+    try {
+      return this.transaction((db) => {
+        const row = this.row(db, workspaceId);
+        if (row?.lease_id && row.expires_at > this.now()) return conflict('Workspace writer lease is active');
+        if (!this.clearVerifiedDeadCalls(db, workspaceId)) return conflict('Workspace has an admitted writer or lifecycle operation in progress');
+        const callId = 'workspace-lifecycle-' + randomUUID();
+        db.prepare('INSERT INTO workspace_writer_calls(call_id,workspace_id,generation,pid) VALUES(?,?,?,?)')
+          .run(callId, workspaceId, -1, process.pid);
+        return ok({ release: (): Promise<void> => this.end(workspaceId, callId, -1) });
+      });
+    } catch { return unavailable(); }
+  }
+
   /** Atomic read + call reservation eliminates validation-versus-expiry TOCTOU. */
   public async begin(workspaceId: string, clientId: string, sessionId: string, callId: string, proof?: WorkspaceWriterLeaseProof): Promise<Result<{ required: boolean; generation: number }>> {
     if (!validIdentity(workspaceId, clientId, sessionId) || !callId) return invalid();
     try {
       return this.transaction((db) => {
+        const lifecycleCalls = db.prepare('SELECT call_id,pid FROM workspace_writer_calls WHERE workspace_id=? AND generation=-1').all(workspaceId) as unknown as CallRow[];
+        for (const call of lifecycleCalls) {
+          if (processAlive(call.pid) !== 'dead') return conflict('Workspace lifecycle change is in progress');
+          db.prepare('DELETE FROM workspace_writer_calls WHERE call_id=? AND generation=-1').run(call.call_id);
+        }
         const row = this.row(db, workspaceId);
         if (row === undefined || row.lease_id === null) {
           if (proof !== undefined) return conflict('No active workspace writer lease accepts this proof');

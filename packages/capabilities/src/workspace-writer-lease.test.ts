@@ -37,6 +37,27 @@ describe('durable multi-session workspace writer lease', () => {
       .toMatchObject({ ok: true, value: { generation: 1 } });
   });
 
+  it('atomically excludes workspace lifecycle changes and admitted writers in both directions', async () => {
+    const { one, two } = await fixture();
+    const writer = await one.begin('workspace', 'client', 'session', 'first');
+    if (!writer.ok) throw new Error('writer not admitted');
+    expect(await two.holdWorkspaceLifecycle('workspace')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    await one.end('workspace', 'first', writer.value.generation);
+    const lifecycle = await two.holdWorkspaceLifecycle('workspace');
+    if (!lifecycle.ok) throw new Error('lifecycle not admitted');
+    try {
+      expect(await one.begin('workspace', 'client', 'session', 'second')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+      expect(await one.acquire('workspace', 'client', 'session', 60)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+      expect(await one.holdWorkspaceLifecycle('workspace')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+      const other = await one.begin('other', 'client', 'session', 'third');
+      if (!other.ok) throw new Error('unrelated writer blocked');
+      await one.end('other', 'third', other.value.generation);
+    } finally { await lifecycle.value.release(); }
+    const next = await one.begin('workspace', 'client', 'session', 'fourth');
+    if (!next.ok) throw new Error('writer not admitted after release');
+    await one.end('workspace', 'fourth', next.value.generation);
+  });
+
   it('rejects lease proof when there is no active lease instead of silently ignoring it', async () => {
     const { one } = await fixture();
     expect(await one.begin('workspace', 'owner', 'session', 'forged-call', {

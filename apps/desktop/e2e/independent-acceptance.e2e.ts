@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { SharedManagedWriterAdmission, SqliteWorkspaceWriterLease } from '@lnwjing/capabilities';
 import { electronExecutablePath } from './electron-runtime.js';
 import { settleFirstRunAndOpenHome } from './first-run-helpers.js';
 
@@ -327,6 +328,98 @@ test('real Git staged and unstaged content agrees with git CLI and rendered diff
   });
 });
 
+test('real Git responses arriving out of order cannot overwrite the selected file', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ app, page, first }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    const expected = execFileSync('git', ['diff', '--', 'alpha.txt'], { cwd: first, encoding: 'utf8' });
+    const channel = 'lnwjing:get-git-diff';
+    // Fault injection delays delivery of a genuine completed IPC result,
+    // rather than mocking Git, the preload bridge, or the renderer response.
+    await app.evaluate(({ ipcMain }, name) => {
+      type Handler = (event: Electron.IpcMainInvokeEvent, payload: { path: string }) => Promise<{ patch: string }>;
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers;
+      const original = handlers.get(name);
+      if (!original) throw new Error('Real Git IPC handler not found');
+      const state = { original, held: null as null | string, release: null as null | (() => void), returned: false };
+      Reflect.set(globalThis, '__acceptanceGitDelivery', state);
+      ipcMain.removeHandler(name);
+      ipcMain.handle(name, async (event, payload: { path: string }) => {
+        const result = await original(event, payload);
+        if (payload.path === 'alpha.txt' && state.held === null) {
+          await new Promise<void>(resolve => { state.release = resolve; state.held = result.patch; });
+          state.returned = true;
+        }
+        return result;
+      });
+    }, channel);
+    try {
+      await nav(page, /^Git$/);
+      await page.getByRole('treeitem', { name: 'alpha.txt' }).click();
+      await expect.poll(() => app.evaluate(() => Reflect.get(globalThis, '__acceptanceGitDelivery').held)).toBe(expected);
+      await page.getByRole('treeitem', { name: 'beta.txt' }).click();
+      const diff = page.locator('.git-diff-container-section');
+      await expect(diff).toContainText('beta-current-sentinel');
+      await expect(diff).not.toContainText('alpha-current-sentinel');
+      await app.evaluate(() => { Reflect.get(globalThis, '__acceptanceGitDelivery').release(); });
+      await expect.poll(() => app.evaluate(() => Reflect.get(globalThis, '__acceptanceGitDelivery').returned)).toBe(true);
+      // Round-trip through the same IPC channel and let the renderer settle
+      // the previous delivery before checking the selected file again.
+      const readback = await page.evaluate(request => window.lnwjing.getGitDiff(request), { workspaceId, path: 'beta.txt', staged: false });
+      expect(readback.patch).toContain('+beta-current-sentinel');
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await expect(diff).toContainText('beta-current-sentinel');
+      await expect(diff).not.toContainText('alpha-current-sentinel');
+    } finally {
+      await app.evaluate(({ ipcMain }, name) => {
+        const state = Reflect.get(globalThis, '__acceptanceGitDelivery');
+        state.release?.();
+        ipcMain.removeHandler(name);
+        ipcMain.handle(name, state.original);
+        Reflect.deleteProperty(globalThis, '__acceptanceGitDelivery');
+      }, channel);
+    }
+  }, async first => {
+    const git = (args: string[]): string => execFileSync('git', args, { cwd: first, encoding: 'utf8' });
+    await writeFile(path.join(first, 'beta.txt'), 'beta-original\n');
+    git(['init', '-q']);
+    git(['config', 'core.autocrlf', 'false']);
+    git(['add', '--', 'alpha.txt', 'beta.txt']);
+    git(['-c', 'user.name=Acceptance Fixture', '-c', 'user.email=fixture@invalid.example', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture']);
+    await writeFile(path.join(first, 'alpha.txt'), 'alpha-current-sentinel\n');
+    await writeFile(path.join(first, 'beta.txt'), 'beta-current-sentinel\n');
+  });
+});
+
+test('real Git preview never invents additions for clean, unstaged-only or ignored files', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ page, first }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    const diff = async (name: string, staged: boolean): Promise<string> =>
+      (await page.evaluate(request => window.lnwjing.getGitDiff(request), { workspaceId, path: name, staged })).patch;
+    const git = (args: string[]): string => execFileSync('git', args, { cwd: first, encoding: 'utf8' });
+    expect(git(['diff', '--', 'alpha.txt'])).toBe('');
+    expect(git(['diff', '--cached', '--', 'alpha.txt'])).toBe('');
+    expect.soft(await diff('alpha.txt', false)).toBe('');
+    expect.soft(await diff('alpha.txt', true)).toBe('');
+    await writeFile(path.join(first, 'alpha.txt'), 'working-only\n');
+    expect.soft(await diff('alpha.txt', true)).toBe(git(['diff', '--cached', '--', 'alpha.txt']));
+    expect.soft(await diff('alpha.txt', false)).toBe(git(['diff', '--', 'alpha.txt']));
+    await writeFile(path.join(first, 'untracked.txt'), 'new-sentinel\n');
+    expect.soft(await diff('untracked.txt', true)).toBe('');
+    expect.soft(await diff('untracked.txt', false)).toContain('+new-sentinel');
+    await writeFile(path.join(first, 'ignored.txt'), 'ignored-sentinel\n');
+    expect.soft(await diff('ignored.txt', false)).toBe('');
+  }, async first => {
+    const git = (args: string[]): string => execFileSync('git', args, { cwd: first, encoding: 'utf8' });
+    git(['init', '-q']);
+    git(['config', 'core.autocrlf', 'false']);
+    await writeFile(path.join(first, '.gitignore'), 'ignored.txt\n');
+    git(['add', '--', 'alpha.txt', '.gitignore']);
+    git(['-c', 'user.name=Acceptance Fixture', '-c', 'user.email=fixture@invalid.example', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture']);
+  });
+});
+
 test('real project lifecycle refuses archive while a durable shell job is still running', async () => {
   test.setTimeout(90_000);
   await withRuntime(async ({ page, client, first, good }) => {
@@ -500,6 +593,51 @@ test('real workflow start preserves idempotency and rejects changed input under 
     const denied = await client.callTool({ name: 'workflow_start', arguments: { draft: otherDraft, idempotencyKey: randomUUID() } });
     expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
     expect(await readFile(path.join(second, 'beta.txt'), 'utf8')).toBe('second-sentinel\n');
+    expect(await readFile(path.join(first, 'alpha.txt'), 'utf8')).toBe('first-sentinel\n');
+  });
+});
+
+test('real cross-process lifecycle gates block same-workspace mutations but preserve other project work', async () => {
+  test.setTimeout(120_000);
+  await withRuntime(async ({ page, client, connect, root, first, second, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    await nav(page, /^(Projects|โปรเจกต์)$/);
+    await page.locator('#workspace-root').fill(second);
+    await page.getByRole('button', { name: /^(Add project|เพิ่มโปรเจกต์)$/ }).click();
+    await expect(page.locator('.project-list li').filter({ hasText: 'second-project' })).toHaveClass('active');
+    const secondId = (await page.evaluate(() => window.lnwjing.listWorkspaces())).find(w => w.realRootPath.toLowerCase() === second.toLowerCase())!.id;
+    const peer = await connect();
+    // The test runner and Electron main are separate OS processes, using the
+    // same actual on-disk admission journals in this disposable profile.
+    const profile = path.join(root, 'profile');
+    const managed = new SharedManagedWriterAdmission(path.join(profile, 'background-tasks'));
+    const journal = new SqliteWorkspaceWriterLease(path.join(profile, 'workspace-writer-leases.sqlite'));
+    const gate = await managed.holdWorkspaceLifecycle(workspaceId);
+    if (!gate.ok) throw new Error(gate.error.message);
+    try {
+      const blocked = await client.callTool({ name: 'shell', arguments: { workspaceId, executable: 'node', arguments: ['--version'], timeout_seconds: 15 } });
+      expect(blocked).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+      const other = await peer.callTool({ name: 'write_file', arguments: { workspaceId: secondId, path: 'other.txt', content: 'other-project' } });
+      expect(other.isError).not.toBe(true);
+      expect(await readFile(path.join(second, 'other.txt'), 'utf8')).toBe('other-project');
+      const reservation = await journal.holdWorkspaceLifecycle(workspaceId);
+      if (!reservation.ok) throw new Error(reservation.error.message);
+      try {
+        const denied = await client.callTool({ name: 'write_file', arguments: { workspaceId, path: 'blocked.txt', content: 'not allowed' } });
+        expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
+        await expect(readFile(path.join(first, 'blocked.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+        await row.locator('.project-archive-button').click();
+        await expect(page.locator('.error-banner')).toBeVisible();
+        await expect(row).not.toHaveClass('archived');
+      } finally { await reservation.value.release(); }
+    } finally { await gate.value.releaseAfterVerifiedTermination(); }
+    await good('write_file', { workspaceId, path: 'allowed.txt', content: 'after release' });
+    expect(await readFile(path.join(first, 'allowed.txt'), 'utf8')).toBe('after release');
+    expect(await journal.inspect(workspaceId)).toMatchObject({ ok: true, value: { activeCalls: 0 } });
+    const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+    await row.locator('.project-archive-button').click();
+    await expect(row).toHaveClass('archived');
     expect(await readFile(path.join(first, 'alpha.txt'), 'utf8')).toBe('first-sentinel\n');
   });
 });

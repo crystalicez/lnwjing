@@ -764,6 +764,8 @@ export class ToolRegistry {
           writerLease,
         );
         if (!admitted.ok) {
+          await fencedMutationEnd?.();
+          fencedMutationEnd = undefined;
           await this.activity.end(callId, admitted.error.code, Date.now() - started, admitted.error.message);
           return mapError(admitted.error);
         }
@@ -772,6 +774,18 @@ export class ToolRegistry {
             this.services.workspaceWriterLease, mutationFenceWorkspaceId, callId, admitted.value.generation,
           )
           : (): Promise<void> => this.services.workspaceWriterLease!.end(mutationFenceWorkspaceId, callId, admitted.value.generation);
+        // Scope may have changed between the initial policy check and the
+        // durable admission. Revalidate while the invocation is fenced.
+        if (!fullBypass && this.enforceActiveWorkspaceScope && activeWorkspaceScope !== null
+          && !(await this.resolveActiveWorkspaceScope(activeWorkspaceScope.workspaceId))) {
+          const message = 'Active workspace changed before mutation admission; retry with an active project';
+          await workspaceWriterLeaseEnd();
+          workspaceWriterLeaseEnd = undefined;
+          await fencedMutationEnd?.();
+          fencedMutationEnd = undefined;
+          await this.activity.end(callId, 'PERMISSION_DENIED', Date.now() - started, message);
+          return mapError(appError('PERMISSION_DENIED', message));
+        }
       }
       const resolvedActivityInput = this.withRememberedActivityTarget(
         name,

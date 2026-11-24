@@ -1,5 +1,5 @@
 import { ActionButton, FormInput, FilterBar } from '../ui/UiPrimitives.js';
-import { useDeferredValue, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { DashboardSnapshot, GitImagePreview, GitStatusEntrySummary, UiLocale, WorkspaceSummary } from '@lnwjing/ipc-contracts';
 import { createTranslator } from '../../i18n/index.js';
 import { v580Strings } from '../../i18n/v580-copy.js';
@@ -32,6 +32,7 @@ export function GitPage({
   const isRepo = gitSummary.isRepo ?? (gitSummary.message !== 'Not a Git repository' && gitSummary.message !== 'No workspace selected');
   const currentPath = gitSummary.repositoryPath ?? selectedWorkspace?.realRootPath ?? '—';
 
+  const diffGeneration = useRef(0);
   const [selectedFile, setSelectedFile] = useState<GitStatusEntrySummary | null>(null);
   const [selectedStaged, setSelectedStaged] = useState(false);
   const [query, setQuery] = useState('');
@@ -45,7 +46,12 @@ export function GitPage({
     else next.add(path);
     return next;
   });
-  useEffect(() => { setSelectedFile(null); setDiffData(null); setQuery(''); setStatusFilter('all'); setVisibleCount(250); setCollapsedFolders(new Set()); }, [selectedWorkspace?.id]);
+  useEffect(() => {
+    diffGeneration.current += 1;
+    setSelectedFile(null); setDiffData(null); setQuery(''); setStatusFilter('all'); setVisibleCount(250); setCollapsedFolders(new Set());
+    return (): void => { diffGeneration.current += 1; };
+  }, [selectedWorkspace?.id]);
+  const closeDiff = (): void => { diffGeneration.current += 1; setSelectedFile(null); setDiffData(null); };
   const filteredEntries = useMemo(
     () => filterGitFiles(gitSummary.entries ?? [], deferredQuery, statusFilter),
     [gitSummary.entries, deferredQuery, statusFilter],
@@ -91,6 +97,7 @@ export function GitPage({
     staged = entry.indexStatus !== ' ' && entry.worktreeStatus === ' ',
   ): Promise<void> => {
     if (!selectedWorkspace) return;
+    const generation = ++diffGeneration.current;
     setSelectedFile(entry);
     setSelectedStaged(staged);
     setDiffData({ patch: '', loading: true });
@@ -100,6 +107,7 @@ export function GitPage({
         path: entry.path,
         staged,
       });
+      if (generation !== diffGeneration.current) return;
       setDiffData({
         patch: res.patch,
         ...(res.preview === undefined ? {} : { preview: res.preview }),
@@ -113,6 +121,7 @@ export function GitPage({
         loading: false,
       });
     } catch (err: unknown) {
+      if (generation !== diffGeneration.current) return;
       setDiffData({
         patch: '',
         loading: false,
@@ -179,7 +188,7 @@ export function GitPage({
             ) : diffData?.error ? (
               <div className="diff-error-box">
                 <p>{diffData.error}</p>
-                <ActionButton type="button" onClick={() => { setSelectedFile(null); }}>
+                <ActionButton type="button" onClick={closeDiff}>
                   {t('git.close')}
                 </ActionButton>
               </div>
@@ -218,7 +227,7 @@ export function GitPage({
                   deletions={diffData?.deletions}
                   oldLabel={selectedStaged ? 'HEAD' : 'Index'}
                   newLabel={selectedStaged ? 'Index (Staged)' : 'Working Tree'}
-                  onClose={() => { setSelectedFile(null); }}
+                  onClose={closeDiff}
                 />
               </>
             )}

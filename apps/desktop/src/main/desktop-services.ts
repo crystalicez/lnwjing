@@ -1708,6 +1708,21 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     }
   }
 
+  // Acquire both existing cross-process admission layers. The managed writer
+  // reservation covers children that outlive their MCP receipt; the SQLite
+  // journal covers admitted synchronous calls. Never hold either across a dialog.
+  async function withWorkspaceLifecycle<T>(workspaceId: string, action: () => Promise<T>): Promise<T> {
+    await assertWorkspaceIdle(workspaceId);
+    const managed = unwrap(await writerAdmission.holdWorkspaceLifecycle(workspaceId), 'Workspace has a background job running or unresolved');
+    try {
+      const invocation = unwrap(await workspaceWriterLease.holdWorkspaceLifecycle(workspaceId), 'Workspace has an admitted operation in progress');
+      try {
+        await assertWorkspaceIdle(workspaceId);
+        return await action();
+      } finally { await invocation.release(); }
+    } finally { await managed.releaseAfterVerifiedTermination(); }
+  }
+
   async function repairSelectedWorkspace(removedWorkspaceId: string): Promise<void> {
     const remainingIds = parseStoredWorkspaceIds(settingsRepository.get(activeWorkspaceIdsSettingKey)).filter((id) => id !== removedWorkspaceId);
     persistStoredWorkspaceIds(settingsRepository, activeWorkspaceIdsSettingKey, remainingIds);
@@ -2106,11 +2121,12 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       const workspace = await resolveManageableWorkspace(request.workspaceId);
       if (request.archived) {
         if (workspace.archivedAt !== undefined && workspace.archivedAt !== null) return toWorkspaceSummary(workspace);
-        await assertWorkspaceIdle(workspace.id);
-        unwrap(await workspaceIndex.stopWatch(workspace.id), 'Could not stop the project watcher');
-        await assertWorkspaceIdle(workspace.id);
-        await workspaceRepository.archive(workspace.id);
-        await repairSelectedWorkspace(workspace.id);
+        await withWorkspaceLifecycle(workspace.id, async () => {
+          await resolveManageableWorkspace(workspace.id);
+          unwrap(await workspaceIndex.stopWatch(workspace.id), 'Could not stop the project watcher');
+          await workspaceRepository.archive(workspace.id);
+          await repairSelectedWorkspace(workspace.id);
+        });
       } else if (workspace.archivedAt !== undefined && workspace.archivedAt !== null) {
         await assertWorkspaceRelinkable(workspace);
         await workspaceRepository.restore(workspace.id);
@@ -2131,20 +2147,19 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         workspaceId: workspace.id,
         workspaceRoot: workspace.realRootPath,
       });
-      await assertWorkspaceIdle(workspace.id);
-      const backup = await backupService.create('manual');
-      // Drain the native watcher before deleting its registration. Otherwise
-      // an in-flight index operation may observe WORKSPACE_NOT_FOUND halfway
-      // through the delete and leave an inconsistent running project.
-      try {
-        await workspaceIndex.forgetWorkspace(workspace.id);
-      } catch (error: unknown) {
-        throw new Error('Project registration was preserved because index cleanup failed. Retry after stopping its watcher.', { cause: error });
-      }
-      await assertWorkspaceIdle(workspace.id);
-      await workspaceRepository.delete(workspace.id);
-      await repairSelectedWorkspace(workspace.id);
-      return { deleted: true, workspaceId: workspace.id, rootPath: workspace.realRootPath, backupId: backup.id };
+      return withWorkspaceLifecycle(workspace.id, async () => {
+        await resolveManageableWorkspace(workspace.id);
+        const backup = await backupService.create('manual');
+        // Drain the watcher while new writers are excluded.
+        try {
+          await workspaceIndex.forgetWorkspace(workspace.id);
+        } catch (error: unknown) {
+          throw new Error('Project registration was preserved because index cleanup failed. Retry after stopping its watcher.', { cause: error });
+        }
+        await workspaceRepository.delete(workspace.id);
+        await repairSelectedWorkspace(workspace.id);
+        return { deleted: true, workspaceId: workspace.id, rootPath: workspace.realRootPath, backupId: backup.id };
+      });
     },
     // Lightweight activity-only read for the Running Projects tab. Never
     // invokes Git, backup, checkpoint, recovery, tunnel or process probes.
@@ -2818,17 +2833,34 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       });
       if (statResult.ok && statResult.value.exitCode === 0) applyNumstat(numstat, statResult.value.stdout);
       const stats = numstat.get(relativePath);
-      const imagePreview = await readGitImagePreview(workspace.realRootPath, relativePath, request.staged === true, patch, resolved.realPath);
+      // An empty diff is not evidence of a new file. Ask Git for this
+      // candidate only; never synthesize a staged or ignored addition.
+      let untracked = false;
+      if (!patch && !truncated && request.staged !== true && resolved.exists) {
+        const result = await gitService.run(fileActor, {
+          workspaceId: workspace.id,
+          args: ['ls-files', '--others', '--exclude-standard', '-z', '--', relativePath],
+        });
+        untracked = result.ok && result.value.exitCode === 0 && result.value.stdout.split('\0').includes(relativePath);
+      }
+      const imagePreview = patch || untracked
+        ? await readGitImagePreview(workspace.realRootPath, relativePath, request.staged === true, patch, resolved.realPath)
+        : {};
 
       const inspection = await inspectGitWorkingFile(resolved.realPath, relativePath);
       let newContent: string | undefined;
-      if (imagePreview.oldImage === undefined && imagePreview.newImage === undefined && imagePreview.error === undefined
-        && !patch && inspection.kind === 'text' && resolved.exists && resolved.realPath !== undefined) {
+      if (untracked && imagePreview.oldImage === undefined && imagePreview.newImage === undefined && imagePreview.error === undefined
+        && inspection.kind === 'text' && resolved.realPath !== undefined) {
         const bounded = await readBoundedGitTextFile(resolved.realPath);
         if (bounded !== null) {
           newContent = bounded;
-          const lines = bounded.split(/\r?\n/);
-          patch = `--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${lines.length} @@\n` + lines.map((line) => `+${line}`).join('\n') + '\n';
+          const lines = bounded.length === 0 ? [] : bounded.split(/\r?\n/);
+          if (bounded.endsWith('\n')) lines.pop();
+          patch = '--- /dev/null\n+++ b/' + relativePath + '\n';
+          if (lines.length > 0) {
+            patch += '@@ -0,0 +1,' + lines.length + ' @@\n' + lines.map((line) => '+' + line).join('\n') + '\n';
+            if (!bounded.endsWith('\n')) patch += '\\ No newline at end of file\n';
+          }
         }
       }
 

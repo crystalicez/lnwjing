@@ -52,6 +52,17 @@ export class SharedManagedWriterAdmission {
     });
   }
 
+  /** Host-only barrier; unrelated workspace writers continue normally. */
+  async holdWorkspaceLifecycle(workspaceId: string): Promise<Result<ManagedWriterAdmissionLease>> {
+    if (!workspaceId) return err(appError('INVALID_INPUT', 'Workspace ID required'));
+    const id = 'workspace-lifecycle-' + randomUUID();
+    const requestDigest = createHash('sha256').update(id + ':' + workspaceId).digest('hex');
+    const reserved = await this.index.reserve({ taskId: id, requestDigest, mutationKind: 'workspace_lifecycle',
+      ownerClientId: 'lnwjing-workspace-lifecycle', ownerWorkspaceId: workspaceId });
+    if (!reserved.ok) return reserved;
+    return ok({ id, releaseAfterVerifiedTermination: (): Promise<void> => this.index.release(id, requestDigest) });
+  }
+
   async enter(input: {
     readonly actorClientId: string;
     readonly workspaceId: string;
