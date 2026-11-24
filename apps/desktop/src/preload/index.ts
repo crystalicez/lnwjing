@@ -1376,7 +1376,7 @@ function profileStorageInventory(value: unknown): ProfileStorageInventory {
   if (!isRecord(value) || value.scope !== 'profile' || typeof value.scannedAt !== 'string'
     || !Number.isFinite(Date.parse(value.scannedAt))
     || typeof value.reason !== 'string'
-    || !['complete', 'entry-limit', 'time-limit', 'unreadable', 'links-or-mounts'].includes(value.reason)
+    || !['complete', 'entry-limit', 'time-limit', 'unreadable', 'links-or-mounts', 'changed-during-scan'].includes(value.reason)
     || typeof value.incomplete !== 'boolean' || value.incomplete !== (value.reason !== 'complete')
     || !Array.isArray(value.categories) || value.categories.length > 20) {
     throw new Error('Invalid profile storage inventory');

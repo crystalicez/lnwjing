@@ -124,6 +124,75 @@ describe('revision-fenced, in-flight-only quota inventory coalescing', () => {
     }
   }, 20_000);
 
+  it('retries an incomplete rename/unlink scan with fresh inventory, preserving a live reservation', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-quota-vanished-'));
+    let scans = 0;
+    let race = false;
+    const scan = async (): Promise<ProfileStorageInventory> => {
+      const result = await inspectProfileStorageOffMain(root);
+      scans++;
+      if (race && scans === 2) return { ...result, incomplete: true, reason: 'changed-during-scan', unreadableEntries: 1 };
+      return result;
+    };
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, { scanProfileInventory: scan });
+      quota.configure({ limitBytes: 8 * MIB, criticalReserveBytes: 64 * 1024 });
+      const first = await quota.reserve(MIB);
+      race = true;
+      const second = await quota.reserve(MIB);
+      expect(scans).toBe(3);
+      expect(quota.status()).toMatchObject({ activeReservations: 2, reservedBytes: 2 * MIB });
+      quota.release(second);
+      expect(quota.status()?.reservedBytes).toBe(MIB);
+      quota.release(first);
+      expect(quota.status()?.reservedBytes).toBe(0);
+    } finally { await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  }, 20_000);
+
+  it.each([
+    ['changed-during-scan', 3],
+    ['unreadable', 1],
+    ['links-or-mounts', 1],
+    ['time-limit', 1],
+    ['entry-limit', 1],
+  ] as const)('fails closed on persistent %s with bounded fresh scans', async (reason, expectedScans) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-quota-incomplete-'));
+    let scans = 0;
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, {
+        scanProfileInventory: async (): Promise<ProfileStorageInventory> => {
+          scans++;
+          return { ...emptyInventory, incomplete: true, reason,
+            skippedLinks: reason === 'links-or-mounts' ? 1 : 0, unreadableEntries: 1 };
+        },
+      });
+      quota.configure({ limitBytes: 8 * MIB, criticalReserveBytes: 64 * 1024 });
+      await expect(quota.reserve(MIB)).rejects.toThrow(reason);
+      expect(scans).toBe(expectedScans);
+      expect(quota.status()?.activeReservations).toBe(0);
+    } finally { await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  }, 20_000);
+
+  it('does not admit using the incomplete count when a fresh scan reveals over-limit data', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-quota-retry-over-limit-'));
+    let scans = 0;
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, {
+        scanProfileInventory: async (): Promise<ProfileStorageInventory> => {
+          if (++scans === 1) {
+            await writeFile(path.join(root, 'retained.bin'), Buffer.alloc(MIB));
+            return { ...emptyInventory, incomplete: true, reason: 'changed-during-scan', unreadableEntries: 1 };
+          }
+          return inspectProfileStorageOffMain(root);
+        },
+      });
+      quota.configure({ limitBytes: MIB, criticalReserveBytes: 64 * 1024 });
+      await expect(quota.reserve(64 * 1024)).rejects.toThrow(/insufficient unreserved/);
+      expect(scans).toBe(2);
+      expect(quota.status()?.activeReservations).toBe(0);
+    } finally { await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  }, 20_000);
+
   it('preserves quota revision across disable/re-enable, rejecting a stale scan after policy ABA', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-quota-aba-'));
     const beforeCommit = Promise.withResolvers<void>();

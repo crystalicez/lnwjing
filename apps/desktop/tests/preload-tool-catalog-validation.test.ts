@@ -118,6 +118,10 @@ describe('preload Tool Catalog validation', () => {
       logicalBytes: 30, files: 2, potentiallyReclaimableLogicalBytes: 10,
     });
     expect(electron.invoke).toHaveBeenLastCalledWith(ipcChannels.getProfileStorageInventory);
+    electron.invoke.mockResolvedValueOnce({ ...inventory, incomplete: true, reason: 'changed-during-scan', unreadableEntries: 1 });
+    await expect(electron.exposed!.getProfileStorageInventory()).resolves.toMatchObject({
+      incomplete: true, reason: 'changed-during-scan', unreadableEntries: 1,
+    });
     electron.invoke.mockResolvedValueOnce({ ...inventory, logicalBytes: 31 });
     await expect(electron.exposed!.getProfileStorageInventory()).rejects.toThrow(/totals/);
     electron.invoke.mockResolvedValueOnce({ ...inventory, visitedEntries: -1 });

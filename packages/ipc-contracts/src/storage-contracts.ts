@@ -24,7 +24,7 @@ export interface ProfileStorageInventory {
   readonly skippedLinks: number;
   readonly unreadableEntries: number;
   readonly incomplete: boolean;
-  readonly reason: 'complete' | 'entry-limit' | 'time-limit' | 'unreadable' | 'links-or-mounts';
+  readonly reason: 'complete' | 'entry-limit' | 'time-limit' | 'unreadable' | 'links-or-mounts' | 'changed-during-scan';
   readonly categories: readonly {
     readonly id: string;
     readonly retention: 'protected' | 'managed' | 'rebuildable' | 'unknown';

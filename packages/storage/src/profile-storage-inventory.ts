@@ -23,7 +23,7 @@ export interface ProfileStorageInventory {
   readonly skippedLinks: number;
   readonly unreadableEntries: number;
   readonly incomplete: boolean;
-  readonly reason: 'complete' | 'entry-limit' | 'time-limit' | 'unreadable' | 'links-or-mounts';
+  readonly reason: 'complete' | 'entry-limit' | 'time-limit' | 'unreadable' | 'links-or-mounts' | 'changed-during-scan';
   readonly categories: readonly ProfileStorageCategory[];
   /** Potentially manageable content; not eligible-for-deletion or saved bytes. */
   readonly potentiallyReclaimableLogicalBytes: number;
@@ -76,7 +76,13 @@ function run() {
     }
     return item;
   };
-  let files=0, directories=0, visitedEntries=0, skippedLinks=0, unreadableEntries=0;
+  let files=0, directories=0, visitedEntries=0, skippedLinks=0, unreadableEntries=0, vanishedEntries=0;
+  // ENOENT may be a concurrent rename/unlink, not an inaccessible file.
+  // Keep it incomplete; admission can retry a fresh scan, never ignore it.
+  const countUnavailable = error => {
+    unreadableEntries++;
+    if (error.code==='ENOENT') vanishedEntries++;
+  };
   let logicalBytes=0, allocatedBytes=0, allocatedSupported=process.platform!=='win32', stoppedFor=null;
   const deadline=Date.now() + workerData.maxDurationMs;
   const pending=[{directory:root,top:null}];
@@ -86,7 +92,7 @@ function run() {
     let handle;
     try { handle=fs.opendirSync(dir.directory); }
     catch(error) {
-      if (error && ['EACCES','EPERM','ENOENT'].includes(error.code)) { unreadableEntries++; continue; }
+      if (error && ['EACCES','EPERM','ENOENT'].includes(error.code)) { countUnavailable(error); continue; }
       throw error;
     }
     try {
@@ -96,7 +102,7 @@ function run() {
         let entry;
         try { entry=handle.readSync(); }
         catch(error) {
-          if (error && ['EACCES','EPERM','ENOENT'].includes(error.code)) { unreadableEntries++; break; }
+          if (error && ['EACCES','EPERM','ENOENT'].includes(error.code)) { countUnavailable(error); break; }
           throw error;
         }
         if (entry === null) break;
@@ -107,7 +113,7 @@ function run() {
         const name=path.join(dir.directory,entry.name);
         try { s=fs.lstatSync(name,{bigint:true}); }
         catch(error) {
-          if (error && ['EACCES','EPERM','ENOENT'].includes(error.code)) { unreadableEntries++; continue; }
+          if (error && ['EACCES','EPERM','ENOENT'].includes(error.code)) { countUnavailable(error); continue; }
           throw error;
         }
         if (s.isSymbolicLink() || (s.isDirectory() && s.dev !== rootDev)) {
@@ -136,7 +142,7 @@ function run() {
     .reduce((n,x)=>n+x.logicalBytes,0);
   const rebuildable=values.filter(x=>x.retention==='rebuildable')
     .reduce((n,x)=>n+x.logicalBytes,0);
-  const reason=stoppedFor||(unreadableEntries?'unreadable':skippedLinks?'links-or-mounts':'complete');
+  const reason=stoppedFor||(unreadableEntries>vanishedEntries?'unreadable':skippedLinks?'links-or-mounts':vanishedEntries?'changed-during-scan':'complete');
   return {
     scope:'profile',scannedAt:new Date().toISOString(),logicalBytes,
     allocatedBytes:allocatedSupported?allocatedBytes:null,

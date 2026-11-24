@@ -51,6 +51,8 @@ const MAX_RESERVATIONS = 2048;
 const MAX_IDENTITY_PROBES_PER_ADMISSION = 8;
 let cachedOwnProcessIdentity: Promise<QuotaProcessIdentity> | null = null;
 const MAX_SCAN_ATTEMPTS = 4;
+/** Retry only a transient rename/unlink, never an unreadable path or link. */
+const MAX_CHANGED_INVENTORY_ATTEMPTS = 3;
 /** Maximum 8 × 128 verified old disposable files per pressure event. */
 const MAX_PRESSURE_RECLAIM_BATCHES = 8;
 const RECLAIM_USAGE_RATIO = 0.75;
@@ -488,13 +490,25 @@ export class GlobalStorageQuotaReservations {
   }
 
   private async completeInventory(revision?: number): Promise<ProfileStorageInventory> {
-    const inventory = revision === undefined
-      ? await this.scanProfileInventory()
-      : await coalesceQuotaInventory(this.root, revision, this.scanProfileInventory);
-    if (inventory.incomplete || inventory.allocatedBytes !== null && !safeBytes(inventory.allocatedBytes)) {
+    const scanComplete = async (): Promise<ProfileStorageInventory> => {
+      for (let attempt = 0; attempt < MAX_CHANGED_INVENTORY_ATTEMPTS; attempt++) {
+        const inventory = await this.scanProfileInventory();
+        if (!inventory.incomplete && (inventory.allocatedBytes === null || safeBytes(inventory.allocatedBytes))) {
+          return inventory;
+        }
+        // An ENOENT observed mid-walk is not evidence of a complete inventory.
+        // Retry the whole walk; never reuse an incomplete count or subtract
+        // guessed bytes. The caller still checks its original ledger revision.
+        if (inventory.reason !== 'changed-during-scan' || inventory.skippedLinks !== 0
+          || attempt + 1 === MAX_CHANGED_INVENTORY_ATTEMPTS) {
+          throw new Error('Global quota cannot admit writes without a complete profile inventory (' + inventory.reason + ')');
+        }
+      }
       throw new Error('Global quota cannot admit writes without a complete profile inventory');
-    }
-    return inventory;
+    };
+    return revision === undefined
+      ? scanComplete()
+      : coalesceQuotaInventory(this.root, revision, scanComplete);
   }
 
   private assertRoot(): void {
