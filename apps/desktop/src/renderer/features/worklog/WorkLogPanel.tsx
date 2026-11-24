@@ -8,7 +8,7 @@ import { formatLogExportDateTime, formatLogUiTime } from '../../log-timestamp.js
 import { CopyableScopeBadge } from '../CopyableScopeBadge.js';
 import { SearchableSelect } from '../../components/ui/SearchableSelect.js';
 import { ExpandableTargetDetail } from '../logs/ExpandableTargetDetail.js';
-import { activeDetailMatchIds, activeLogFeed, createDetailSearchState, normalizeDetailSearchQuery, reduceDetailSearchState, transitionLogFeedFreeze } from '../logs/detail-search-state.js';
+import { activeDetailMatchIds, createDetailSearchState, normalizeDetailSearchQuery, reduceDetailSearchState } from '../logs/detail-search-state.js';
 import { collectSessionFilterOptions, collectWorkspaceFilterOptions, type ScopeFilterSample } from '../../scope-filter-options.js';
 import { searchTargetDetailCandidatesInBatches } from '../live/detail-search-batches.js';
 
@@ -79,8 +79,9 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
     () => ({ entries: props.entries, inFlight: props.inFlight, workspaces: props.workspaces }),
     [props.entries, props.inFlight, props.workspaces],
   );
-  const [feedFreeze, setFeedFreeze] = useState<typeof currentFeed | null>(null);
-  const feed = activeLogFeed(feedFreeze, currentFeed);
+  // Keep keystrokes urgent without indefinitely freezing an older dashboard.
+  // A query entered before navigation refresh completes must see the new rows.
+  const feed = useDeferredValue(currentFeed);
   const scopeFilterSamples = useMemo<readonly ScopeFilterSample[]>(() => [
     ...feed.entries.map((entry) => ({ workspaceId: entry.workspaceId, sessionId: entry.sessionId, timestamp: entry.timestamp })),
     ...feed.inFlight.map((item) => ({ workspaceId: item.workspaceId, sessionId: item.sessionId, timestamp: item.startedAt })),
@@ -234,7 +235,6 @@ export function WorkLogPanel(props: WorkLogPanelProps): ReactElement {
         value={search}
         onChange={(event) => {
           const nextSearch = event.target.value;
-          setFeedFreeze((state) => transitionLogFeedFreeze(state, currentFeed, normalizeDetailSearchQuery(nextSearch).length > 0));
           setSearch(nextSearch);
         }}
       />
@@ -493,4 +493,4 @@ function tagFor(kind: WorkLogEntry['kind']): string {
 }
 
 export type { MessageKey };
-export { activeDetailMatchIds, activeLogFeed, createDetailSearchState, reduceDetailSearchState, transitionLogFeedFreeze };
+export { activeDetailMatchIds, createDetailSearchState, reduceDetailSearchState };

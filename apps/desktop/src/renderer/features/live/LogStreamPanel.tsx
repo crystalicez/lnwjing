@@ -87,7 +87,7 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
   );
   const [feedFreeze, setFeedFreeze] = useState<typeof currentFeed | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
-  const feed = activeLogFeed(feedFreeze, currentFeed);
+  const feed = useDeferredValue(activeLogFeed(feedFreeze, currentFeed));
   const feedLines = feed.lines;
   const sessionSamples = useMemo(() => [
     ...feedLines,
@@ -185,7 +185,7 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
         <div className="worklog-actions">
           <ActionButton type="button" className={paused ? 'active' : undefined} onClick={() => {
             const nextPaused = !paused;
-            setFeedFreeze((state) => transitionLogFeedFreeze(state, currentFeed, nextPaused || normalizeDetailSearchQuery(filter).length > 0));
+            setFeedFreeze((state) => transitionLogFeedFreeze(state, currentFeed, nextPaused));
             setPaused(nextPaused);
           }}>
             {paused ? props.followLabel : props.pauseLabel}
@@ -227,9 +227,7 @@ export function LogStreamPanel(props: LogStreamPanelProps): ReactElement {
         placeholder={props.filterPlaceholder}
         value={filter}
         onChange={(event) => {
-          const nextFilter = event.target.value;
-          setFeedFreeze((state) => transitionLogFeedFreeze(state, currentFeed, paused || normalizeDetailSearchQuery(nextFilter).length > 0));
-          setFilter(nextFilter);
+          setFilter(event.target.value);
         }}
         aria-label={props.filterPlaceholder}
       />

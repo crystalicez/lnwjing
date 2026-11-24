@@ -61,30 +61,6 @@ const mockErrorEntry: WorkLogEntry = {
 };
 
 describe('WorkLogPanel', () => {
-  it('keeps rows and workspace metadata in one stable search snapshot until search clears', () => {
-    const transition = (workLogPanelModule as unknown as { transitionLogFeedFreeze?: <T>(state: T | null, current: T, freeze: boolean) => T | null }).transitionLogFeedFreeze;
-    const activeFeed = (workLogPanelModule as unknown as { activeLogFeed?: <T>(state: T | null, current: T) => T }).activeLogFeed;
-    expect(typeof transition).toBe('function');
-    expect(typeof activeFeed).toBe('function');
-
-    const first = { entries: mockEntries.slice(0, 1), inFlight: mockInFlight, workspaces: [{ id: 'workspace-1', displayName: 'Frozen' }] };
-    let state: typeof first | null = null;
-    state = transition!(state, first, true);
-    const withNewRows = {
-      entries: mockEntries,
-      inFlight: [...mockInFlight, { ...mockInFlight[0]!, callId: 'new-call' }],
-      workspaces: [{ id: 'workspace-1', displayName: 'Refreshed' }],
-    };
-    expect(activeFeed!(state, withNewRows)).toBe(first);
-    expect(activeFeed!(state, withNewRows).workspaces[0]?.displayName).toBe('Frozen');
-
-    state = transition!(state, withNewRows, true);
-    expect(activeFeed!(state, withNewRows)).toBe(first);
-
-    state = transition!(state, withNewRows, false);
-    expect(activeFeed!(state, withNewRows)).toBe(withNewRows);
-  });
-
   it('keeps a 500-row dashboard snapshot compact when every call has 500 maximum-length targets', () => {
     const maximumLengthPath = `E:\\${'x'.repeat(4_093)}`;
     const boundedPreview = maximumLengthPath.slice(0, 256);

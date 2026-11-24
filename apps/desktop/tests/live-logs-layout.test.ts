@@ -10,7 +10,7 @@ import { collectSessionFilterOptions, collectWorkspaceFilterOptions } from '../s
 const noop = async (): Promise<void> => undefined;
 
 describe('viewport-sized log and list layout', () => {
-  it('freezes live lines and workspace metadata through search/pause overlap and resumes only when neither is active', () => {
+  it('preserves a paused snapshot and resumes into the latest live feed', () => {
     const transition = (logStreamPanelModule as unknown as { transitionLogFeedFreeze?: <T>(state: T | null, current: T, freeze: boolean) => T | null }).transitionLogFeedFreeze;
     const activeFeed = (logStreamPanelModule as unknown as { activeLogFeed?: <T>(state: T | null, current: T) => T }).activeLogFeed;
     expect(typeof transition).toBe('function');

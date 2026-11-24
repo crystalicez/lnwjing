@@ -10,6 +10,7 @@ export interface RankedSkillMatch<T extends SkillMatchCandidate = SkillMatchCand
   readonly skill: T;
   readonly score: number;
   readonly matchedTokens: number;
+  readonly matchedNameTokens: number;
   readonly explicit: boolean;
 }
 
@@ -26,7 +27,7 @@ export function rankSkillMatches<T extends SkillMatchCandidate>(
   const boundedLimit = Math.max(1, Math.min(50, Math.trunc(limit) || 8));
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) {
-    return skills.slice(0, boundedLimit).map((skill) => ({ skill, score: 0, matchedTokens: 0, explicit: false }));
+    return skills.slice(0, boundedLimit).map((skill) => ({ skill, score: 0, matchedTokens: 0, matchedNameTokens: 0, explicit: false }));
   }
 
   const queryTokens = new Set(tokenize(normalizedQuery));
@@ -45,8 +46,11 @@ export function selectAutoSkillMatches<T extends SkillMatchCandidate>(
 ): readonly RankedSkillMatch<T>[] {
   const explicit = ranked.filter((match) => match.explicit).slice(0, maxExplicit);
   if (explicit.length > 0) return explicit;
-  const top = ranked.find((match) => match.skill.trustTier !== 'external');
-  return top !== undefined && top.score >= 25 && top.matchedTokens >= 2 ? [top] : [];
+  // Description-only matches are useful for discovery, but generic words
+  // such as audit, validate and tool must not inject an unrelated skill.
+  const top = ranked.find((match) => match.skill.trustTier !== 'external'
+    && match.matchedNameTokens > 0 && match.score >= 25 && match.matchedTokens >= 2);
+  return top === undefined ? [] : [top];
 }
 
 function scoreSkill<T extends SkillMatchCandidate>(
@@ -67,6 +71,7 @@ function scoreSkill<T extends SkillMatchCandidate>(
 
   let score = explicit ? 500 : 0;
   let matchedTokens = 0;
+  let matchedNameTokens = 0;
   if (normalizedName.length > 0 && normalizedQuery.includes(normalizedName)) score += 120;
   if (normalizedDescription.length > 0 && normalizedDescription.includes(normalizedQuery)) score += 80;
 
@@ -74,6 +79,7 @@ function scoreSkill<T extends SkillMatchCandidate>(
     if (nameTokens.has(token)) {
       score += 30;
       matchedTokens += 1;
+      matchedNameTokens += 1;
     } else if (descriptionTokens.has(token)) {
       score += 10;
       matchedTokens += 1;
@@ -86,7 +92,7 @@ function scoreSkill<T extends SkillMatchCandidate>(
     }
   }
 
-  return { skill, score, matchedTokens, explicit };
+  return { skill, score, matchedTokens, matchedNameTokens, explicit };
 }
 
 function explicitlyNamesSkill(query: string, skill: SkillMatchCandidate): boolean {
