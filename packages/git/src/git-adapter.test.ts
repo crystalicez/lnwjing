@@ -43,7 +43,7 @@ describe('GitAdapter', () => {
 
     expect(result).toEqual({ ok: true, value: { patch: '01234', truncated: true } });
     expect(runner.calls[0]).toEqual({
-      args: ['diff', '--no-ext-diff', '--no-color', '--', 'src\\space file.txt'],
+      args: ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-color', '--', 'src\\space file.txt'],
       cwd: 'C:\\workspace',
     });
   });

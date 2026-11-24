@@ -1242,7 +1242,8 @@ export class ToolRegistry {
         if (workspaceId === undefined) return scopes[0] ?? null;
         return scopes.find((scope) => scope.workspaceId === workspaceId) ?? null;
       }
-      return await this.activeWorkspaceScopeProvider();
+      const scope = await this.activeWorkspaceScopeProvider();
+      return workspaceId === undefined || scope?.workspaceId === workspaceId ? scope : null;
     } catch { return null; }
   }
 

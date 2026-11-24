@@ -93,7 +93,7 @@ export class GitAdapter {
   public async diff(cwd: string, request: GitDiffRequest = {}, signal?: AbortSignal): Promise<Result<GitDiffResult>> {
     const maxBytes = request.maxBytes ?? 1024 * 1024;
     if (!this.isLimit(maxBytes, 4 * 1024 * 1024)) return err(appError('INVALID_INPUT', 'Git diff byte limit is invalid'));
-    const args = ['diff', '--no-ext-diff', '--no-color'];
+    const args = [...(request.path === undefined ? [] : ['--literal-pathspecs']), 'diff', '--no-ext-diff', '--no-color'];
     if (request.staged === true) args.push('--cached');
     args.push('--');
     if (request.path !== undefined) args.push(request.path);

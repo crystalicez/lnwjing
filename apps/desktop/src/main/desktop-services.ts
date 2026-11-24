@@ -1676,24 +1676,31 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     const active = [...await resolveActiveProjectWorkspaces()];
     if (!active.some((workspace) => workspace.id === workspaceId)) return;
     if (active.length <= 1) throw new Error('At least one Active Project is required');
-    const nextIds = active.filter((workspace) => workspace.id !== workspaceId).map((workspace) => workspace.id);
-    // Inactive projects must not retain expensive recursive desktop watchers.
-    // A failed drain leaves the registration unchanged instead of claiming success.
-    unwrap(await workspaceIndex.stopWatch(workspaceId), 'Could not stop the inactive project watcher');
-    persistStoredWorkspaceIds(settingsRepository, activeWorkspaceIdsSettingKey, nextIds);
-    if (settingsRepository.get(selectedWorkspaceSettingKey) === workspaceId) settingsRepository.set(selectedWorkspaceSettingKey, nextIds[0]!);
+    await withWorkspaceLifecycle(workspaceId, async () => {
+      // Drain while new managed writers and watcher starts are excluded.
+      unwrap(await workspaceIndex.stopWatch(workspaceId), 'Could not stop the inactive project watcher');
+      // Re-read the active set after draining, since another project may have
+      // changed while we were awaiting its watcher. Commit without an await.
+      await resolveActiveProjectWorkspaces();
+      const ids = parseStoredWorkspaceIds(settingsRepository.get(activeWorkspaceIdsSettingKey));
+      if (!ids.includes(workspaceId)) return;
+      if (ids.length <= 1) throw new Error('At least one Active Project is required');
+      const nextIds = ids.filter(id => id !== workspaceId);
+      if (settingsRepository.get(selectedWorkspaceSettingKey) === workspaceId) settingsRepository.set(selectedWorkspaceSettingKey, nextIds[0]!);
+      persistStoredWorkspaceIds(settingsRepository, activeWorkspaceIdsSettingKey, nextIds);
+    });
   }
 
   async function assertWorkspaceIdle(workspaceId: string): Promise<void> {
     if (activityTracker.listInFlight().some((entry) => entry.workspaceId === workspaceId)) {
-      throw new Error('Workspace has MCP work in progress; wait for it to finish before archiving or deleting it');
+      throw new Error('Workspace has MCP work in progress; wait for it to finish before changing its project registration');
     }
     // MCP shell launches return before the actual process exits. Consult the
     // authoritative host projections, not the UI's cached Running Projects view.
     const jobs = await capabilityRuntime.shell.listRunningWorkspaceJobs();
     if (jobs.some((job) => job.workspaceId === workspaceId)
       || processService.listRunningWorkspaceJobs().some((job) => job.workspaceId === workspaceId)) {
-      throw new Error('Workspace has a background job running; wait for it to finish before archiving or deleting it');
+      throw new Error('Workspace has a background job running; wait for it to finish before changing its project registration');
     }
     for (const [processId, ownerWorkspaceId] of trackedProcesses) {
       if (ownerWorkspaceId !== workspaceId) continue;
@@ -1703,7 +1710,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         continue;
       }
       if (status.value.state === 'starting' || status.value.state === 'running' || status.value.state === 'termination_unverified') {
-        throw new Error('Workspace has a managed process running; stop it before archiving or deleting it');
+        throw new Error('Workspace has a managed process running; stop it before changing its project registration');
       }
     }
   }
@@ -1718,7 +1725,9 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       const invocation = unwrap(await workspaceWriterLease.holdWorkspaceLifecycle(workspaceId), 'Workspace has an admitted operation in progress');
       try {
         await assertWorkspaceIdle(workspaceId);
-        return await action();
+        const result = await action();
+        runningJobsCache.clear();
+        return result;
       } finally { await invocation.release(); }
     } finally { await managed.releaseAfterVerifiedTermination(); }
   }
@@ -2097,14 +2106,23 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         throw new Error('Activate this project before starting its index watcher');
       }
       if (!Number.isInteger(request.debounceMs) || request.debounceMs < 0 || request.debounceMs > 60_000) throw new Error('Invalid debounce interval');
-      const existing = unwrap(await workspaceIndex.compactStatus(workspace.id), 'Could not inspect index watcher');
-      // Apply debounce without replacing the native watcher or rescanning 30k+ paths.
-      if (existing.watcher !== null && existing.watcherError === null) {
-        unwrap(await workspaceIndex.updateWatchDebounce(workspace.id, request.debounceMs), 'Could not update watcher debounce');
-      } else {
-        unwrap(await workspaceIndex.startWatch(workspace.id, { debounceMs: request.debounceMs }), 'Could not start index watcher');
+      const callId = 'desktop-watcher-' + randomUUID();
+      const admission = unwrap(await workspaceWriterLease.begin(workspace.id, actor.clientId, 'desktop-watcher', callId), 'Workspace lifecycle change or writer lease is in progress');
+      try {
+        if (!(await resolveActiveProjectWorkspaces()).some(active => active.id === workspace.id)) {
+          throw new Error('Activate this project before starting its index watcher');
+        }
+        const existing = unwrap(await workspaceIndex.compactStatus(workspace.id), 'Could not inspect index watcher');
+        // Apply debounce without replacing the native watcher or rescanning 30k+ paths.
+        if (existing.watcher !== null && existing.watcherError === null) {
+          unwrap(await workspaceIndex.updateWatchDebounce(workspace.id, request.debounceMs), 'Could not update watcher debounce');
+        } else {
+          unwrap(await workspaceIndex.startWatch(workspace.id, { debounceMs: request.debounceMs }), 'Could not start index watcher');
+        }
+        return await compactWorkspaceIndexStatus(workspace.id);
+      } finally {
+        await workspaceWriterLease.end(workspace.id, callId, admission.generation);
       }
-      return compactWorkspaceIndexStatus(workspace.id);
     },
     stopWorkspaceIndexWatch: async (request: WorkspaceIndexWatchRequest): Promise<WorkspaceIndexWatchSummary> => {
       const workspace = await resolveManageableWorkspace(request.workspaceId);
@@ -2827,21 +2845,14 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       let patch = diffResult.value.patch;
       const truncated = diffResult.value.truncated;
       const numstat = new Map<string, { additions: number; deletions: number }>();
-      const statResult = await gitService.run(fileActor, {
-        workspaceId: workspace.id,
-        args: ['diff', ...(request.staged === true ? ['--cached'] : []), '--numstat', '--', relativePath],
-      });
+      const statResult = await gitService.fileNumstat(workspace.id, relativePath, request.staged === true);
       if (statResult.ok && statResult.value.exitCode === 0) applyNumstat(numstat, statResult.value.stdout);
       const stats = numstat.get(relativePath);
       // An empty diff is not evidence of a new file. Ask Git for this
       // candidate only; never synthesize a staged or ignored addition.
       let untracked = false;
       if (!patch && !truncated && request.staged !== true && resolved.exists) {
-        const result = await gitService.run(fileActor, {
-          workspaceId: workspace.id,
-          args: ['ls-files', '--others', '--exclude-standard', '-z', '--', relativePath],
-        });
-        untracked = result.ok && result.value.exitCode === 0 && result.value.stdout.split('\0').includes(relativePath);
+        untracked = unwrap(await gitService.isUntrackedFile(workspace.id, relativePath), 'Could not verify untracked file status');
       }
       const imagePreview = patch || untracked
         ? await readGitImagePreview(workspace.realRootPath, relativePath, request.staged === true, patch, resolved.realPath)

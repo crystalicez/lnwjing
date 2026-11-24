@@ -124,7 +124,7 @@ describe('MCP tool registry', () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
-  it('revalidates active scope after real writer admission and releases the journal on rejection', async () => {
+  it.each(['multi', 'single'] as const)('revalidates %s active scope after real writer admission and releases the journal on rejection', async (provider) => {
     const root = await mkdtemp(path.join(tmpdir(), 'lnwjing-mcp-scope-race-'));
     try {
       const lease = new SqliteWorkspaceWriterLease(path.join(root, 'leases.sqlite'));
@@ -137,7 +137,11 @@ describe('MCP tool registry', () => {
       });
       const writeFile = vi.fn(async () => ok({ path: 'file.txt', bytesWritten: 1 }));
       const registry = new ToolRegistry({ workspaceWriterLease: lease, file: { writeFile } as never }, actor, {
-        activeWorkspaceScopesProvider: async (): Promise<readonly WorkspaceScope[]> => active ? [{ workspaceId: 'workspace', rootPath: root }] : [],
+        ...(provider === 'multi' ? {
+          activeWorkspaceScopesProvider: async (): Promise<readonly WorkspaceScope[]> => active ? [{ workspaceId: 'workspace', rootPath: root }] : [],
+        } : {
+          activeWorkspaceScopeProvider: async (): Promise<WorkspaceScope> => ({ workspaceId: active ? 'workspace' : 'other-workspace', rootPath: root }),
+        }),
         profileProvider: (): typeof permissionProfiles.balanced => permissionProfiles.balanced,
       });
       const denied = await registry.invoke('write_file', { workspaceId: 'workspace', path: 'file.txt', content: 'x' });

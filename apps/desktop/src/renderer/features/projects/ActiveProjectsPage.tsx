@@ -29,9 +29,14 @@ export function deriveActiveProjectActivity(
   nowMs = Date.now(),
 ): readonly ActiveProjectActivity[] {
   const activeIds = new Set(dashboard.activeWorkspaces.map((workspace) => workspace.id));
+  const busyIds = new Set<string>();
+  for (const call of dashboard.inFlight) if (call.workspaceId !== null) busyIds.add(call.workspaceId);
+  for (const job of dashboard.runningJobs ?? []) busyIds.add(job.workspaceId);
+  // A disabled project may still own a live job (e.g. after recovery or
+  // external host state changes). Never hide authoritative running work.
   const active = workspaces.filter((workspace) => workspace.kind !== 'machine_root'
-    && (workspace.archivedAt === undefined || workspace.archivedAt === null)
-    && activeIds.has(workspace.id));
+    && (busyIds.has(workspace.id) || ((workspace.archivedAt === undefined || workspace.archivedAt === null)
+    && activeIds.has(workspace.id))));
   const observations = new Map<string, { running: number; jobs: number; lastMs: number }>();
   const activeByCanonicalScope = new Map<string, string[]>();
   for (const workspace of active) {
@@ -189,6 +194,8 @@ export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement
                   <div className="active-projects-name">
                     <strong>{project.workspace.displayName}</strong>
                     {project.primary ? <span className="project-status-badge system">{t('home.primaryBadge')}</span> : null}
+                    {!props.dashboard.activeWorkspaces.some(workspace => workspace.id === project.workspace.id)
+                      ? <span className="project-status-badge">{t('project.inactiveBadge')}</span> : null}
                     <span className={`active-projects-state ${project.state}`}>
                       <span className="active-projects-dot" aria-hidden="true" />
                       {t(project.state === 'running' ? 'activeProjects.running'
@@ -205,7 +212,7 @@ export function ActiveProjectsPage(props: ActiveProjectsPageProps): ReactElement
                         : t('activeProjects.noActivity')}
                   </small>
                 </div>
-                <ActionButton type="button" disabled={busyId !== null || project.primary}
+                <ActionButton type="button" disabled={busyId !== null || project.primary || !props.dashboard.activeWorkspaces.some(workspace => workspace.id === project.workspace.id)}
                   onClick={() => { void select(project.workspace.id); }}>
                   {project.primary ? t('home.primaryBadge') : t('project.setMain')}
                 </ActionButton>

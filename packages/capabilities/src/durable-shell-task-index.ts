@@ -186,7 +186,12 @@ export class DurableShellTaskIndex {
 
   /** Host-only activity projection: inspect reservation markers, never scan task history. */
   public async listActiveTaskIds(): Promise<readonly string[]> {
-    return (await this.readMarkers()).flatMap(({ record }) => record === undefined ? [] : [record.taskId]);
+    // First use may precede any shell launch. Bootstrap rather than reporting
+    // an unreadable index as an empty activity set.
+    if (!(await isReady(this.readyPath))) await this.initialize();
+    const markers = await this.readMarkers();
+    if (markers.some(marker => marker.record === undefined)) throw new Error('Managed writer activity is unavailable: unreadable reservation');
+    return markers.flatMap(({ record }) => record === undefined ? [] : [record.taskId]);
   }
 
   public async listLaunches(options: {
@@ -220,13 +225,21 @@ export class DurableShellTaskIndex {
 
   private async ensureDirectories(): Promise<void> {
     await mkdir(this.rootDirectory, { recursive: true });
-    await mkdir(this.activeDirectory, { recursive: true });
+    // A previously initialized index missing its reservation directory is
+    // damaged, not empty. Do not silently recreate it and admit a new writer.
+    try {
+      if (!(await stat(this.activeDirectory)).isDirectory()) throw new Error('Managed writer reservation directory is invalid');
+    } catch (error: unknown) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+      if (await isReady(this.readyPath)) throw new Error('Managed writer reservation directory is missing');
+      await mkdir(this.activeDirectory, { recursive: true });
+    }
   }
 
   private async initializeUnlocked(): Promise<void> {
     if (await isReady(this.readyPath)) return;
     await mkdir(this.activeDirectory, { recursive: true });
-    const entries = await readdir(this.rootDirectory, { withFileTypes: true }).catch(() => []);
+    const entries = await readdir(this.rootDirectory, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name === '.index') continue;
       const inspection = await this.options.inspectTask(entry.name).catch(() => 'unknown' as const);
@@ -260,7 +273,7 @@ export class DurableShellTaskIndex {
   private async rebuildJournalUnlocked(taskIds?: readonly string[]): Promise<void> {
     const launchRecords: DurableTaskLaunchRecord[] = [];
     if (this.options.loadLaunchRecord !== undefined) {
-      const ids = taskIds ?? (await readdir(this.rootDirectory, { withFileTypes: true }).catch(() => []))
+      const ids = taskIds ?? (await readdir(this.rootDirectory, { withFileTypes: true }))
         .filter((entry) => entry.isDirectory() && entry.name !== '.index')
         .map((entry) => entry.name);
       for (const taskId of ids) {
@@ -331,12 +344,12 @@ export class DurableShellTaskIndex {
   }
 
   private async readMarkers(): Promise<readonly MarkerRead[]> {
-    const entries = await readdir(this.activeDirectory, { withFileTypes: true }).catch(() => []);
+    const entries = await readdir(this.activeDirectory, { withFileTypes: true });
     return Promise.all(entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .filter((entry) => entry.name.endsWith('.json'))
       .map(async (entry) => {
         const markerPath = path.join(this.activeDirectory, entry.name);
-        const record = await readMarker(markerPath);
+        const record = entry.isFile() ? await readMarker(markerPath) : undefined;
         return record === undefined
           ? { path: markerPath }
           : { path: markerPath, record };

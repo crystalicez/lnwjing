@@ -217,6 +217,25 @@ describe('DurableShellTaskIndex', () => {
     expect(await replacement.hasReservation(owner.taskId, owner.requestDigest)).toBe(false);
   });
 
+  it('fails closed for non-file markers and a missing initialized reservation directory', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-index-damage-'));
+    temporaryRoots.push(root);
+    const index = new DurableShellTaskIndex(root, { maxConcurrentTasks: 10, inspectTask: async (): Promise<'active'> => 'active' });
+    expect(await index.listActiveTaskIds()).toEqual([]);
+    const owner = { taskId: 'writer', requestDigest: 'a'.repeat(64), ownerClientId: 'client', ownerWorkspaceId: 'workspace' };
+    expect(await index.reserve(owner)).toMatchObject({ ok: true });
+    const active = path.join(root, '.index', 'v1', 'active');
+    const marker = path.join(active, (await readdir(active))[0]!);
+    await rm(marker);
+    await mkdir(marker);
+    await expect(index.listActiveTaskIds()).rejects.toThrow('unreadable reservation');
+    expect(await index.reserve({ ...owner, taskId: 'next' })).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    await rm(active, { recursive: true });
+    await expect(index.listActiveTaskIds()).rejects.toThrow();
+    expect(await index.reserve({ ...owner, taskId: 'next' })).toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } });
+    await expect(readdir(active)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('reclaims a missing pre-metadata reservation only after its launcher is proven gone', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-abandoned-'));
     temporaryRoots.push(root);

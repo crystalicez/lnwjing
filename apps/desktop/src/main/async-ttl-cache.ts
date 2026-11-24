@@ -15,8 +15,10 @@ export class AsyncTtlCache<T> {
     if (this.inFlight !== null) return this.inFlight;
 
     const pending = load().then((value) => {
-      this.value = value;
-      this.expiresAt = this.now() + this.ttlMs;
+      if (this.inFlight === pending) {
+        this.value = value;
+        this.expiresAt = this.now() + this.ttlMs;
+      }
       return value;
     });
     this.inFlight = pending;
@@ -29,5 +31,7 @@ export class AsyncTtlCache<T> {
   public clear(): void {
     this.value = undefined;
     this.expiresAt = 0;
+    // Existing callers may finish, but cannot repopulate a cleared cache.
+    this.inFlight = null;
   }
 }

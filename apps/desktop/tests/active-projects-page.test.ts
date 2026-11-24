@@ -57,6 +57,18 @@ describe('Active Projects dashboard', () => {
       .find((project) => project.workspace.id === 'ready')).toMatchObject({ state: 'ready', runningJobs: 0 });
   });
 
+  it('shows live work on an inactive project until it actually finishes', () => {
+    const snapshot = { ...dashboard(), inFlight: [], runningJobs: [{ workspaceId: 'inactive', startedAt: at }] };
+    const projects = deriveActiveProjectActivity(workspaces, snapshot, Date.parse(at));
+    expect(projects.find(project => project.workspace.id === 'inactive')).toMatchObject({ state: 'running', runningJobs: 1, primary: false });
+    const rendered = renderToStaticMarkup(createElement(ActiveProjectsPage, {
+      locale: 'en', dashboard: snapshot as DashboardSnapshot, workspaces,
+      onSelectWorkspace: async (): Promise<void> => {}, onOpenProjects: (): void => {},
+    }));
+    expect(rendered).toContain('Inactive');
+    expect(deriveActiveProjectActivity(workspaces, { ...snapshot, runningJobs: [] }, Date.parse(at)).some(project => project.workspace.id === 'inactive')).toBe(false);
+  });
+
   it('uses authoritative per-workspace recent activity instead of the truncated global Work Log', () => {
     const snapshot = {
       ...dashboard(),

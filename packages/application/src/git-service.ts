@@ -92,6 +92,28 @@ export class GitService {
     }, signal);
   }
 
+  /** Fixed read-only commands for a single guarded literal file. Unlike generic
+   * git_run, these never accept caller-provided flags or pathspec expressions. */
+  public async fileNumstat(workspaceId: string, filePath: string, staged: boolean): Promise<Result<GitCommandResult>> {
+    return this.literalFileRead(workspaceId, filePath, ['diff', '--no-ext-diff', '--no-textconv', ...(staged ? ['--cached'] : []), '--numstat']);
+  }
+
+  public async isUntrackedFile(workspaceId: string, filePath: string): Promise<Result<boolean>> {
+    const result = await this.literalFileRead(workspaceId, filePath, ['ls-files', '--others', '--exclude-standard', '-z']);
+    if (!result.ok) return result;
+    if (result.value.exitCode !== 0) return err(appError('INTERNAL_ERROR', 'Git could not verify untracked file status', true));
+    return ok(result.value.stdout.split('\0').includes(filePath.replace(/\\/g, '/')));
+  }
+
+  private async literalFileRead(workspaceId: string, filePath: string, fixedArgs: readonly string[]): Promise<Result<GitCommandResult>> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (!workspace.ok) return workspace;
+    const resolved = await this.guard.resolveForWrite(workspace.value, filePath);
+    if (!resolved.ok) return resolved;
+    const relativePath = resolved.value.relativePath.replace(/\\/g, '/');
+    return this.adapter.run(workspace.value.realRootPath, ['--literal-pathspecs', ...fixedArgs, '--', relativePath]);
+  }
+
   public async log(
     actor: FileActor,
     workspaceId: string,

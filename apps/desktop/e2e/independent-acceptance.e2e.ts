@@ -161,6 +161,43 @@ test('real user journey: add and remove project, exact-edit conflict, scoped con
   });
 });
 
+test('real busy project cannot deactivate or hide its running shell; idle deactivation still works', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ page, client, first, second, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    await nav(page, /^(Projects|โปรเจกต์)$/);
+    await page.locator('#workspace-root').fill(second);
+    await page.getByRole('button', { name: /^(Add project|เพิ่มโปรเจกต์)$/ }).click();
+    await expect(page.locator('.project-list li').filter({ hasText: 'second-project' })).toHaveClass('active');
+    await writeFile(path.join(first, 'audit-wait.mjs'), "import { existsSync } from 'node:fs';\nconst end = Date.now() + 30000;\nconst timer = setInterval(() => { if (existsSync('release') || Date.now() > end) clearInterval(timer); }, 100);\n");
+    const job = await good('shell', { workspaceId, executable: 'node', arguments: ['audit-wait.mjs'], timeout_seconds: 40 });
+    const status = async (): Promise<unknown> => (await client.callTool({ name: 'shell', arguments: { workspaceId, operation: 'status', task_id: job.task_id } })).structuredContent?.state;
+    try {
+      await expect.poll(status).toBe('running');
+      await nav(page, /^Running Projects$/);
+      await expect(page.locator('.active-projects-item').filter({ hasText: 'first-project' }).locator('.active-projects-state')).toHaveClass(/running/);
+      await nav(page, /^(Projects|โปรเจกต์)$/);
+      const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+      await row.getByRole('button', { name: /^(Deactivate|ปิดใช้งาน)$/ }).click();
+      await expect(page.locator('.error-banner')).toContainText('background job running');
+      expect((await page.evaluate(() => window.lnwjing.getDashboard())).activeWorkspaces.some(w => w.id === workspaceId)).toBe(true);
+      await nav(page, /^Running Projects$/);
+      await expect(page.locator('.active-projects-item').filter({ hasText: 'first-project' }).locator('.active-projects-state')).toHaveClass(/running/);
+      expect(await status()).toBe('running');
+    } finally {
+      await writeFile(path.join(first, 'release'), 'go');
+      await expect.poll(status, { timeout: 40000 }).toBe('completed');
+    }
+    await nav(page, /^(Projects|โปรเจกต์)$/);
+    const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
+    await row.getByRole('button', { name: /^(Deactivate|ปิดใช้งาน)$/ }).click();
+    await expect.poll(async () => (await page.evaluate(() => window.lnwjing.getDashboard())).activeWorkspaces.some(w => w.id === workspaceId)).toBe(false);
+    await nav(page, /^Running Projects$/);
+    await expect(page.locator('.active-projects-item').filter({ hasText: 'first-project' })).toHaveCount(0);
+    expect(await readFile(path.join(first, 'alpha.txt'), 'utf8')).toBe('first-sentinel\n');
+  });
+});
+
 test('real concurrent background jobs stay scoped and Running Projects tracks independent terminal outcomes', async () => {
   test.setTimeout(120_000);
   await withRuntime(async ({ page, client, connect, first, second, good }) => {
@@ -388,6 +425,50 @@ test('real Git responses arriving out of order cannot overwrite the selected fil
     git(['-c', 'user.name=Acceptance Fixture', '-c', 'user.email=fixture@invalid.example', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture']);
     await writeFile(path.join(first, 'alpha.txt'), 'alpha-current-sentinel\n');
     await writeFile(path.join(first, 'beta.txt'), 'beta-current-sentinel\n');
+  });
+});
+
+test('real Git literal previews preserve bracket and Unicode paths, staged scope and exact content', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ page, first, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    const diff = async (name: string, staged: boolean): Promise<string> =>
+      (await page.evaluate(request => window.lnwjing.getGitDiff(request), { workspaceId, path: name, staged })).patch;
+    const git = (args: string[]): string => execFileSync('git', args, { cwd: first, encoding: 'utf8' });
+    const literal = (args: string[]): string => git(['--literal-pathspecs', ...args]);
+    for (const name of ['normal.txt', 'ไฟล์.txt', 'new[1].txt', 'new{2}.txt']) {
+      await writeFile(path.join(first, name), 'actual-content\n');
+      expect(await diff(name, false)).toContain('@@ -0,0 +1,1 @@\n+actual-content\n');
+      expect(await diff(name, true)).toBe('');
+    }
+    await writeFile(path.join(first, 'empty[1].txt'), '');
+    expect(await diff('empty[1].txt', false)).toContain('+++ b/empty[1].txt');
+    expect(await diff('empty[1].txt', false)).not.toContain('@@');
+    await writeFile(path.join(first, 'no-newline[1].txt'), 'last-line');
+    expect(await diff('no-newline[1].txt', false)).toContain('+last-line\n\\ No newline at end of file');
+    await writeFile(path.join(first, 'ignored[1].txt'), 'not a change\n');
+    expect(await diff('ignored[1].txt', false)).toBe('');
+    const name = 'tracked[1].txt';
+    await writeFile(path.join(first, name), 'staged-content\n');
+    literal(['add', '--', name]);
+    await writeFile(path.join(first, name), 'working-content\n');
+    await writeFile(path.join(first, 'tracked1.txt'), 'decoy-content\n');
+    for (const staged of [true, false]) {
+      const expected = literal(['diff', ...(staged ? ['--cached'] : []), '--', name]);
+      expect(expected).toContain(staged ? '+staged-content' : '+working-content');
+      expect(expected).not.toContain('decoy-content');
+      expect(await diff(name, staged)).toBe(expected);
+      expect((await good('git_diff', { workspaceId, path: name, staged })).patch).toBe(expected);
+    }
+  }, async first => {
+    const git = (args: string[]): string => execFileSync('git', args, { cwd: first, encoding: 'utf8' });
+    git(['init', '-q']);
+    git(['config', 'core.autocrlf', 'false']);
+    await writeFile(path.join(first, 'tracked[1].txt'), 'original-content\n');
+    await writeFile(path.join(first, 'tracked1.txt'), 'original-decoy\n');
+    await writeFile(path.join(first, '.gitignore'), 'ignored\\[1\\].txt\n');
+    git(['--literal-pathspecs', 'add', '--', 'alpha.txt', 'tracked[1].txt', 'tracked1.txt', '.gitignore']);
+    git(['-c', 'user.name=Acceptance Fixture', '-c', 'user.email=fixture@invalid.example', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture']);
   });
 });
 
@@ -626,6 +707,8 @@ test('real cross-process lifecycle gates block same-workspace mutations but pres
         const denied = await client.callTool({ name: 'write_file', arguments: { workspaceId, path: 'blocked.txt', content: 'not allowed' } });
         expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT' } } });
         await expect(readFile(path.join(first, 'blocked.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(page.evaluate(id => window.lnwjing.startWorkspaceIndexWatch({ workspaceId: id, debounceMs: 1000 }), workspaceId)).rejects.toThrow();
+        expect((await page.evaluate(id => window.lnwjing.getWorkspaceIndexStatus({ workspaceId: id }), workspaceId)).watching).toBe(false);
         const row = page.locator('.project-list li').filter({ hasText: 'first-project' });
         await row.locator('.project-archive-button').click();
         await expect(page.locator('.error-banner')).toBeVisible();
