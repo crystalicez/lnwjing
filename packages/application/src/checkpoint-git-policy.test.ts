@@ -9,9 +9,13 @@ import type { Checkpoint, Workspace, WorkspaceRepository } from '@lnwjing/worksp
 import { FileService } from './file-service.js';
 import { canRecoverEntirelyFromGit } from './checkpoint-git-policy.js';
 
-const run = promisify(execFile);
+const exec = promisify(execFile);
+const run = (file: string, args: readonly string[], options: { readonly timeout?: number } = {}): Promise<{ stdout: string; stderr: string }> =>
+  exec(file, args, { timeout: 10_000, ...options });
 const roots: string[] = [];
-afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })));
+}, 10_000);
 
 async function fixture(): Promise<{ root: string; workspace: Workspace }> {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lnwjing-checkpoint-mode-')));
@@ -24,7 +28,9 @@ async function fixture(): Promise<{ root: string; workspace: Workspace }> {
   return { root, workspace: { id: 'ws', displayName: 'Git fixture', rootPath: root, realRootPath: root, createdAt: new Date(0).toISOString() } };
 }
 
-describe('Git-aware automatic checkpoint policy', () => {
+// Each test launches native Git processes; keep the command deadline bounded,
+// but allow the full fixture and recovery assertions to finish on busy Windows hosts.
+describe('Git-aware automatic checkpoint policy', { timeout: 30_000 }, () => {
   it('only trusts byte-identical committed tracked files; any dirty, untracked or outside path falls back', async () => {
     const { root } = await fixture();
     expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(true);
@@ -79,7 +85,7 @@ describe('Git-aware automatic checkpoint policy', () => {
     expect(await canRecoverEntirelyFromGit(root, ['src/tracked.txt'])).toBe(false);
     await expect(run('git', ['-C', root, 'rev-parse', '--verify',
       'refs/lnwjing/recovery/' + head.trim()])).rejects.toThrow();
-  }, 20_000); // 64 sequential native Git launches on Windows can exceed the 5s default.
+  }, 60_000); // 64 sequential native Git launches can exceed the suite budget under load.
 
   it('defaults to Git-aware when no per-instance provider is configured', async () => {
     const { root, workspace } = await fixture();
