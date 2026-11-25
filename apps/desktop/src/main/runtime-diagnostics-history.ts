@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, constants, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export interface RuntimeDiagnosticsErrorClass {
@@ -85,7 +85,10 @@ const DEFAULT_INTERVAL_MS = 60_000;
 // 1-minute readings in memory. Explicit incident captures persist immediately.
 const PERIODIC_PERSIST_EVERY = 5;
 const DEFAULT_MAX_SAMPLES = 360;
-const HISTORY_FILE = 'runtime-history.json';
+const LEGACY_HISTORY_FILE = 'runtime-history.json';
+const HISTORY_FILE = 'runtime-history.jsonl';
+// Amortize rewrites: at most one hour of extra samples on disk.
+const MAX_APPEND_SAMPLES = 60;
 
 export class RuntimeDiagnosticsHistoryRecorder {
   public readonly filePath: string;
@@ -95,6 +98,10 @@ export class RuntimeDiagnosticsHistoryRecorder {
   private samples: RuntimeDiagnosticsSample[];
   private timer: ReturnType<typeof setInterval> | null = null;
   private unflushedSamples = 0;
+  private appendedSamples = 0;
+  // On every restart, atomically compact the recovered history first.
+  // This also repairs a torn trailing append without losing earlier samples.
+  private needsRewrite = true;
 
   public constructor(
     dataPath: string,
@@ -150,10 +157,30 @@ export class RuntimeDiagnosticsHistoryRecorder {
 
   private persist(): void {
     mkdirSync(path.dirname(this.filePath), { recursive: true });
-    const tempPath = `${this.filePath}.${process.pid}.tmp`;
+    const compact = this.needsRewrite || this.appendedSamples + this.unflushedSamples >= Math.min(MAX_APPEND_SAMPLES, this.maxSamples);
+    if (!compact) {
+      try {
+        const batch = { schemaVersion: 1, intervalMs: this.intervalMs, maxSamples: this.maxSamples,
+          samples: this.samples.slice(-this.unflushedSamples) };
+        // Do not silently create a suffix-only journal if maintenance removed
+        // the existing one. Without O_CREAT, ENOENT goes to full compaction.
+        const fd = openSync(this.filePath, constants.O_WRONLY | constants.O_APPEND);
+        try { appendFileSync(fd, JSON.stringify(batch) + '\n', 'utf8'); }
+        finally { closeSync(fd); }
+        this.appendedSamples += this.unflushedSamples;
+        return;
+      } catch (error) {
+        // An append may have partially succeeded. Never append after that tail.
+        this.needsRewrite = true;
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    const tempPath = this.filePath + '.' + process.pid + '.tmp';
     try {
-      writeFileSync(tempPath, `${JSON.stringify(this.snapshot())}\n`, 'utf8');
+      writeFileSync(tempPath, JSON.stringify(this.snapshot()) + '\n', 'utf8');
       renameSync(tempPath, this.filePath);
+      this.needsRewrite = false;
+      this.appendedSamples = 0;
     } catch (error) {
       rmSync(tempPath, { force: true });
       throw error;
@@ -162,16 +189,29 @@ export class RuntimeDiagnosticsHistoryRecorder {
 }
 
 export function readRuntimeDiagnosticsHistory(dataPath: string): RuntimeDiagnosticsHistory | null {
-  const filePath = path.join(dataPath, 'diagnostics', HISTORY_FILE);
+  const directory = path.join(dataPath, 'diagnostics');
+  // Each complete line is an independent batch. A crash can only tear the
+  // final line; ignore it rather than discarding the previously durable trend.
   try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown;
+    const lines = readFileSync(path.join(directory, HISTORY_FILE), 'utf8').split('\n');
+    lines.pop(); // only newline-terminated records are committed
+    let history: RuntimeDiagnosticsHistory | null = null;
+    let samples: RuntimeDiagnosticsSample[] = [];
+    for (const line of lines) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(line); } catch { break; }
+      if (!isRuntimeDiagnosticsHistory(parsed)) break;
+      const maxSamples = Math.min(DEFAULT_MAX_SAMPLES, Math.max(1, Math.trunc(parsed.maxSamples)));
+      samples = [...samples, ...parsed.samples].slice(-maxSamples);
+      history = { schemaVersion: 1, intervalMs: parsed.intervalMs, maxSamples, samples };
+    }
+    if (history !== null) return history;
+  } catch { /* Fall back to the legacy snapshot during migration. */ }
+  try {
+    const parsed = JSON.parse(readFileSync(path.join(directory, LEGACY_HISTORY_FILE), 'utf8')) as unknown;
     if (!isRuntimeDiagnosticsHistory(parsed)) return null;
     const maxSamples = Math.min(DEFAULT_MAX_SAMPLES, Math.max(1, Math.trunc(parsed.maxSamples)));
-    return {
-      ...parsed,
-      maxSamples,
-      samples: parsed.samples.slice(-maxSamples),
-    };
+    return { ...parsed, maxSamples, samples: parsed.samples.slice(-maxSamples) };
   } catch {
     return null;
   }

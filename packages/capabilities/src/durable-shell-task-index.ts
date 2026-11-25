@@ -8,7 +8,10 @@ export type ActiveTaskInspection = 'active' | 'terminal' | 'missing' | 'unknown'
 
 export type DurableMutationKind = 'opaque' | 'repository_import' | 'opaque_uncontained' | 'opaque_contained_process' | 'workspace_lifecycle';
 
+export type ReservationKind = 'durable_shell' | 'managed_writer';
+
 export interface DurableTaskReservation {
+  readonly reservationKind?: ReservationKind;
   readonly mutationKind?: DurableMutationKind;
   readonly taskId: string;
   readonly requestDigest: string;
@@ -34,6 +37,24 @@ export interface DurableTaskLaunchRecord {
   readonly ownerWorkspaceId?: string;
 }
 
+export interface ReservationDiagnosticRow {
+  readonly taskId: string;
+  readonly kind: ReservationKind | 'unknown';
+  readonly workspaceId?: string;
+  readonly ownerClientId?: string;
+  readonly reservedAt?: string;
+}
+
+export interface ReservationDiagnostics {
+  readonly limit: number;
+  readonly total: number;
+  readonly unreadable: number;
+  readonly shell: number;
+  readonly managed: number;
+  readonly unknown: number;
+  readonly rows: readonly ReservationDiagnosticRow[];
+}
+
 export interface DurableTaskLaunchPage {
   readonly records: readonly DurableTaskLaunchRecord[];
   readonly nextCursor?: string;
@@ -41,8 +62,12 @@ export interface DurableTaskLaunchPage {
 
 export interface DurableShellTaskIndexOptions {
   readonly maxConcurrentTasks: number;
+  readonly capacityScope?: 'all' | 'durable_shell';
+  /** Read inside the shared reservation lock so live settings apply to each admission. */
+  readonly maxConcurrentTasksProvider?: () => number;
   readonly inspectTask: (taskId: string) => Promise<ActiveTaskInspection>;
   readonly loadLaunchRecord?: (taskId: string) => Promise<DurableTaskLaunchRecord | undefined>;
+  readonly inspectBootstrapTask?: (taskId: string) => Promise<{ readonly inspection: ActiveTaskInspection; readonly record?: DurableTaskLaunchRecord }>;
   readonly now?: () => Date;
   readonly removeFile?: typeof rm;
 }
@@ -92,9 +117,12 @@ export class DurableShellTaskIndex {
         await this.ensureJournalUnlocked();
         const markers = await this.readMarkers();
         let activeTasks = 0;
+        let otherReservations = 0;
+        let unresolvedTasks = 0;
         for (const marker of markers) {
           if (marker.record?.taskId === input.taskId) {
             if (marker.record.requestDigest !== input.requestDigest || marker.record.mutationKind !== (input.mutationKind ?? 'opaque')
+              || (marker.record.reservationKind !== undefined && marker.record.reservationKind !== (input.reservationKind ?? 'durable_shell'))
               || marker.record.ownerClientId !== input.ownerClientId
               || marker.record.ownerWorkspaceId !== input.ownerWorkspaceId) {
               return err(appError('CONFLICT', 'Durable task ID is already reserved for another request', true));
@@ -117,7 +145,8 @@ export class DurableShellTaskIndex {
             if (input.mutationKind === 'repository_import') {
               return err(appError('CONFLICT', 'Unverified native process descendants block repository import', true));
             }
-            activeTasks += 1;
+            if (this.options.capacityScope === 'durable_shell') otherReservations += 1;
+            else activeTasks += 1;
             continue;
           }
           const inspection = await this.options.inspectTask(marker.record.taskId).catch(() => 'unknown' as const);
@@ -130,20 +159,32 @@ export class DurableShellTaskIndex {
           if (input.mutationKind === 'repository_import' || marker.record.mutationKind === 'repository_import') {
             return err(appError('CONFLICT', 'Repository import requires exclusive managed writer admission; a live or unresolved task holds it', true));
           }
-          activeTasks += 1;
+          const managedWriter = marker.record.reservationKind === 'managed_writer'
+            || (marker.record.reservationKind === undefined && inspection === 'missing'
+              && !marker.record.legacy && LEGACY_MANAGED_WRITER_ID.test(marker.record.taskId));
+          if (this.options.capacityScope === 'durable_shell' && managedWriter) otherReservations += 1;
+          else {
+            activeTasks += 1;
+            if (inspection !== 'active') unresolvedTasks += 1;
+          }
         }
-        if (activeTasks >= this.maxConcurrentTasks) {
-          return err(appError(
+        const maximum = this.options.maxConcurrentTasksProvider?.() ?? this.maxConcurrentTasks;
+        if (!Number.isSafeInteger(maximum) || maximum < 1) throw new Error('Invalid managed task capacity');
+        if (activeTasks >= maximum) {
+          return err({ ...appError(
             'CONFLICT',
-            `Too many durable background tasks are already running (${activeTasks}/${this.maxConcurrentTasks}); inspect or stop existing tasks before starting another.`,
+            `Durable task capacity exhausted (${activeTasks}/${maximum}; ${unresolvedTasks} unresolved, ${otherReservations} other managed reservations). Wait for completion or inspect an owned task before requesting cancellation.`,
             true,
-          ));
+          ), ...(this.options.capacityScope === 'durable_shell' ? { details: {
+            reason: 'durable_shell_capacity', active: activeTasks, limit: maximum, unresolved: unresolvedTasks, otherReservations,
+          } } : {}) });
         }
         const markerPath = this.markerPath(input.taskId);
         await atomicWriteJson(markerPath, {
           version: 1,
           taskId: input.taskId,
           requestDigest: input.requestDigest,
+          reservationKind: input.reservationKind ?? 'durable_shell',
           mutationKind: input.mutationKind ?? 'opaque',
           ...(input.nativeReceiptPath === undefined ? {} : { nativeReceiptPath: input.nativeReceiptPath }),
           ownerClientId: input.ownerClientId,
@@ -169,9 +210,14 @@ export class DurableShellTaskIndex {
 
   public async release(taskId: string, requestDigest: string | null): Promise<void> {
     if (!isSafeTaskId(taskId) || (requestDigest !== null && !/^[a-f0-9]{64}$/i.test(requestDigest))) return;
+    const markerPath = this.markerPath(taskId);
+    const observed = await readMarker(markerPath);
+    // Terminal reads normally arrive after the worker released its marker.
+    // Avoid creating a lock file for an already released reservation.
+    if (observed?.taskId !== taskId || observed.requestDigest !== requestDigest) return;
     await this.ensureDirectories();
     await this.withLock(async () => {
-      const markerPath = this.markerPath(taskId);
+      // Recheck under the lock; a stale observation must never remove another reservation.
       const marker = await readMarker(markerPath);
       if (marker?.taskId !== taskId || marker.requestDigest !== requestDigest) return;
       await rm(markerPath, { force: true });
@@ -194,6 +240,35 @@ export class DurableShellTaskIndex {
     return markers.flatMap(({ record }) => record === undefined ? [] : [record.taskId]);
   }
 
+  /** Local host diagnostics only: recorded reservations, not proof of process liveness. */
+  public async reservationDiagnostics(): Promise<ReservationDiagnostics> {
+    const maximum = this.options.maxConcurrentTasksProvider?.() ?? this.maxConcurrentTasks;
+    if (!Number.isSafeInteger(maximum) || maximum < 1) throw new Error('Invalid managed task capacity');
+    // Do not bootstrap an entire history or repair metadata merely for a UI sample.
+    if (!(await isReady(this.readyPath))) {
+      // An uninitialized index can still contain legacy active tasks.
+      throw new Error('Reservation index has not been initialized');
+    }
+    const markers = await this.readMarkers();
+    let shell = 0; let managed = 0; let unknown = 0; let unreadable = 0;
+    const rows: ReservationDiagnosticRow[] = [];
+    for (const { record } of markers) {
+      if (record === undefined) { unreadable += 1; continue; }
+      const kind = record.reservationKind ?? (record.legacy === true ? 'durable_shell'
+        : record.mutationKind === 'opaque_contained_process' || record.mutationKind === 'opaque_uncontained'
+          || LEGACY_MANAGED_WRITER_ID.test(record.taskId) ? 'managed_writer' : 'unknown');
+      if (kind === 'durable_shell') shell += 1;
+      else if (kind === 'managed_writer') managed += 1;
+      else unknown += 1;
+      if (rows.length < 128) rows.push({ taskId: record.taskId, kind,
+        ...(record.ownerWorkspaceId === undefined ? {} : { workspaceId: record.ownerWorkspaceId }),
+        ...(record.ownerClientId === undefined ? {} : { ownerClientId: record.ownerClientId }),
+        ...(record.reservedAt === undefined ? {} : { reservedAt: record.reservedAt }),
+      });
+    }
+    return { limit: maximum, total: markers.length, unreadable, shell, managed, unknown, rows };
+  }
+
   public async listLaunches(options: {
     readonly limit: number;
     readonly cursor?: string;
@@ -206,7 +281,7 @@ export class DurableShellTaskIndex {
       await this.ensureDirectories();
       return await this.withLock(async () => {
         await this.initializeUnlocked();
-        await this.ensureJournalUnlocked();
+        await this.ensureJournalUnlocked(true);
         try {
           return ok(await this.readLaunchPage(options));
         } catch (error: unknown) {
@@ -240,9 +315,15 @@ export class DurableShellTaskIndex {
     if (await isReady(this.readyPath)) return;
     await mkdir(this.activeDirectory, { recursive: true });
     const entries = await readdir(this.rootDirectory, { withFileTypes: true });
+    const launchRecords: DurableTaskLaunchRecord[] = [];
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name === '.index') continue;
-      const inspection = await this.options.inspectTask(entry.name).catch(() => 'unknown' as const);
+      const observed = this.options.inspectBootstrapTask === undefined
+        ? { inspection: await this.options.inspectTask(entry.name).catch(() => 'unknown' as const),
+          record: await this.options.loadLaunchRecord?.(entry.name).catch(() => undefined) }
+        : await this.options.inspectBootstrapTask(entry.name).catch(() => ({ inspection: 'unknown' as const, record: undefined }));
+      const { inspection, record } = observed;
+      if (record !== undefined && isLaunchRecord(record)) launchRecords.push(record);
       if (inspection !== 'active' && inspection !== 'unknown') continue;
       const markerPath = this.markerPath(entry.name);
       if (await readMarker(markerPath) !== undefined) continue;
@@ -254,26 +335,35 @@ export class DurableShellTaskIndex {
         legacy: true,
       });
     }
-    await this.rebuildJournalUnlocked(entries.filter((entry) => entry.isDirectory() && entry.name !== '.index').map((entry) => entry.name));
+    await this.writeLaunchJournalUnlocked(launchRecords);
     await rm(this.readyPath, { force: true }).catch(() => undefined);
     await atomicWriteJson(this.readyPath, {
       version: 1,
       readyAt: this.now().toISOString(),
+      journalComplete: this.options.loadLaunchRecord !== undefined || this.options.inspectBootstrapTask !== undefined,
     });
   }
 
-  private async ensureJournalUnlocked(): Promise<void> {
+  private async ensureJournalUnlocked(repairLegacy = false): Promise<void> {
     try {
       if (!(await stat(this.launchesPath)).isFile()) throw new Error('Launch journal is not a file');
     } catch {
       await this.rebuildJournalUnlocked();
+      return;
     }
+    if (!repairLegacy || this.options.loadLaunchRecord === undefined) return;
+    const ready = await readJson(this.readyPath);
+    if (isRecord(ready) && ready.journalComplete === true) return;
+    // A reservation may already have a launch row but no task.json yet.
+    // Defer this optional legacy repair until that launch has settled.
+    if ((await this.readMarkers()).length !== 0) return;
+    await this.rebuildJournalUnlocked();
   }
 
-  private async rebuildJournalUnlocked(taskIds?: readonly string[]): Promise<void> {
+  private async rebuildJournalUnlocked(): Promise<void> {
     const launchRecords: DurableTaskLaunchRecord[] = [];
     if (this.options.loadLaunchRecord !== undefined) {
-      const ids = taskIds ?? (await readdir(this.rootDirectory, { withFileTypes: true }))
+      const ids = (await readdir(this.rootDirectory, { withFileTypes: true }))
         .filter((entry) => entry.isDirectory() && entry.name !== '.index')
         .map((entry) => entry.name);
       for (const taskId of ids) {
@@ -281,6 +371,16 @@ export class DurableShellTaskIndex {
         if (record !== undefined && isLaunchRecord(record)) launchRecords.push(record);
       }
     }
+    await this.writeLaunchJournalUnlocked(launchRecords);
+    if (this.options.loadLaunchRecord !== undefined) {
+      const ready = await readJson(this.readyPath);
+      if (isRecord(ready) && ready.version === 1) {
+        await atomicWriteJson(this.readyPath, { ...ready, journalComplete: true });
+      }
+    }
+  }
+
+  private async writeLaunchJournalUnlocked(launchRecords: DurableTaskLaunchRecord[]): Promise<void> {
     launchRecords.sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.taskId.localeCompare(right.taskId));
     const contents = launchRecords.map((record) => JSON.stringify(record)).join('\n');
     await atomicWriteText(this.launchesPath, contents.length === 0 ? '' : `${contents}\n`);
@@ -302,6 +402,7 @@ export class DurableShellTaskIndex {
         if (boundary[0] !== 0x0a) throw new InvalidCursorError('Durable task list cursor is not on a record boundary');
       }
       const records: DurableTaskLaunchRecord[] = [];
+      let scanned = 0;
       let position = endOffset;
       let carry = Buffer.alloc(0);
       while (position > 0) {
@@ -321,14 +422,13 @@ export class DurableShellTaskIndex {
           if (line.length > 0) {
             const record = parseLaunchRecord(line);
             if (record === undefined) throw new CorruptJournalError();
-            if (options.accept?.(record) !== false) {
-              records.push(record);
-              if (records.length === options.limit) {
-                return {
-                  records,
-                  ...(absoluteLineStart > 0 ? { nextCursor: encodeCursor(absoluteLineStart) } : {}),
-                };
-              }
+            scanned++;
+            if (options.accept?.(record) !== false) records.push(record);
+            if (records.length === options.limit || scanned >= MAX_JOURNAL_RECORDS_PER_PAGE) {
+              return {
+                records,
+                ...(absoluteLineStart > 0 ? { nextCursor: encodeCursor(absoluteLineStart) } : {}),
+              };
             }
           }
           lineEnd = previousNewline < 0 ? 0 : previousNewline;
@@ -430,6 +530,7 @@ interface MarkerRecord {
   readonly version: 1;
   readonly taskId: string;
   readonly requestDigest: string | null;
+  readonly reservationKind?: ReservationKind;
   readonly mutationKind: DurableMutationKind;
   readonly ownerClientId?: string;
   readonly ownerWorkspaceId?: string;
@@ -450,7 +551,11 @@ const LOCK_ACQUIRE_TIMEOUT_MS = 10_000;
 const LOCK_RELEASE_TIMEOUT_MS = 1_000;
 const LOCK_STALE_MS = 30_000;
 const RESERVATION_RECLAIM_GRACE_MS = 30_000;
+// Only host-generated legacy writer IDs, and only when shell metadata is absent.
+const LEGACY_MANAGED_WRITER_ID = /^(?:managed-writer|workspace-writer-probe|workspace-lifecycle)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MAX_PAGE_SIZE = 200;
+// Bound the time spent holding the writer lock even for a client with no matching history.
+const MAX_JOURNAL_RECORDS_PER_PAGE = 4096;
 const JOURNAL_READ_CHUNK_BYTES = 64 * 1024;
 const MAX_JOURNAL_LINE_BYTES = 16 * 1024;
 const CURSOR_PREFIX = 'lnwjing-durable-shell-v1:';
@@ -473,13 +578,15 @@ async function isReady(filename: string): Promise<boolean> {
 
 async function readMarker(filename: string): Promise<MarkerRecord | undefined> {
   const value = await readJson(filename);
-  if (!isRecord(value) || value.version !== 1 || typeof value.taskId !== 'string') return undefined;
+  if (!isRecord(value) || value.version !== 1 || typeof value.taskId !== 'string' || !isSafeTaskId(value.taskId)) return undefined;
   if (value.mutationKind !== undefined && value.mutationKind !== 'opaque' && value.mutationKind !== 'repository_import' && value.mutationKind !== 'opaque_uncontained' && value.mutationKind !== 'opaque_contained_process' && value.mutationKind !== 'workspace_lifecycle') return undefined;
   if (value.requestDigest !== null && (typeof value.requestDigest !== 'string' || !/^[a-f0-9]{64}$/i.test(value.requestDigest))) return undefined;
+  if (value.reservationKind !== undefined && value.reservationKind !== 'durable_shell' && value.reservationKind !== 'managed_writer') return undefined;
   return {
     version: 1,
     taskId: value.taskId,
     requestDigest: value.requestDigest,
+    ...(value.reservationKind === undefined ? {} : { reservationKind: value.reservationKind }),
     mutationKind: value.mutationKind === 'workspace_lifecycle' ? 'workspace_lifecycle' : value.mutationKind === 'repository_import' ? 'repository_import' : value.mutationKind === 'opaque_uncontained' ? 'opaque_uncontained' : value.mutationKind === 'opaque_contained_process' ? 'opaque_contained_process' : 'opaque',
     ...(typeof value.ownerClientId === 'string' ? { ownerClientId: value.ownerClientId } : {}),
     ...(typeof value.ownerWorkspaceId === 'string' ? { ownerWorkspaceId: value.ownerWorkspaceId } : {}),

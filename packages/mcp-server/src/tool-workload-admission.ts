@@ -34,7 +34,11 @@ function indexAdmissionPriority(tool: string, input: unknown): 'interactive' | '
 const MAX_WAITERS_PER_CLASS = 64;
 const MAX_INDEX_INTERACTIVE_GRANTS_BEFORE_BACKGROUND = 4;
 
-function classify(tool: string): WorkloadClass | null {
+function classify(tool: string, input?: unknown): WorkloadClass | null {
+  // Observing or cancelling an existing durable job must not wait behind
+  // launches (especially a long wait occupying all process permits).
+  if ((tool === 'shell' || tool === 'wsl_exec') && input !== null && typeof input === 'object' && 'operation' in input
+    && typeof input.operation === 'string' && ['list', 'status', 'wait', 'logs', 'result', 'cancel'].includes(input.operation)) return null;
   // Status and stop must never queue behind expensive baseline indexing.
   // Starting a watcher performs an initial workspace index, so watch MUST
   // share this permit with explicit workspace_index across all HTTP requests.
@@ -60,7 +64,7 @@ export class ToolWorkloadAdmission {
   }
 
   public async acquire(tool: string, signal: AbortSignal, input?: unknown): Promise<() => void> {
-    const kind = classify(tool);
+    const kind = classify(tool, input);
     if (kind === null) return () => undefined;
     if (signal.aborted) throw new Error('Tool request was cancelled before admission');
     if (this.busy[kind] < this.caps[kind] && this.waiters[kind].length === 0) {

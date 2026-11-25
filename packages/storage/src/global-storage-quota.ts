@@ -48,6 +48,7 @@ export interface GlobalQuotaSnapshot {
 interface QuotaStateRow { revision: number; limit_bytes: number; reserve_bytes: number }
 interface ReservationRow { id: string; token_hash: string; owner_pid: number; bytes: number; owner_started_at: string | null }
 const MAX_RESERVATIONS = 2048;
+const MAX_AUDIT_RESERVATION_BATCH = 16;
 const MAX_IDENTITY_PROBES_PER_ADMISSION = 8;
 let cachedOwnProcessIdentity: Promise<QuotaProcessIdentity> | null = null;
 const MAX_SCAN_ATTEMPTS = 4;
@@ -134,6 +135,12 @@ export class GlobalStorageQuotaReservations {
   /** Advances past verified live owners so later recycled PID leases cannot starve. */
   private identityProbeCursor: { readonly owner_pid: number; readonly owner_started_at: string } | null = null;
   private ownerIdentityPromise: Promise<string | null> | null = null;
+  private readonly pendingAuditReservations: Array<{
+    readonly bytes: number;
+    readonly resolve: (release: () => void) => void;
+    readonly reject: (error: unknown) => void;
+  }> = [];
+  private drainingAuditReservations = false;
 
   public constructor(profileRoot: string, options: GlobalQuotaVolumeOptions = {}) {
     if (!path.isAbsolute(profileRoot)) throw new Error('Global quota profile root must be absolute');
@@ -147,6 +154,14 @@ export class GlobalStorageQuotaReservations {
     }));
     // Never reject legacy or redirected profile paths merely because the
     // optional quota feature has not been enabled. Validate before any ledger I/O.
+  }
+
+  /** Read only the configuration bit; reserve() still verifies full inventory and physical headroom. */
+  public isConfigured(): boolean {
+    if (!existsSync(this.ledgerFilename)) return false;
+    this.assertRoot();
+    const db = new DatabaseSync(this.ledgerFilename, { readOnly: true, timeout: 250 });
+    try { return this.state(db) !== undefined; } finally { db.close(); }
   }
 
   /** Cheap metadata-only status. No profile scan and no file creation while disabled. */
@@ -256,7 +271,15 @@ export class GlobalStorageQuotaReservations {
    * Future production integration requires incremental accounting.
    */
   public async reserve(bytes: number): Promise<GlobalQuotaReservation> {
-    if (!safeBytes(bytes) || bytes === 0) throw new Error('Invalid quota reservation size');
+    return (await this.reserveMany([bytes]))[0]!;
+  }
+
+  private async reserveMany(requests: readonly number[]): Promise<GlobalQuotaReservation[]> {
+    const bytes = requests.reduce((sum, size) => sum + size, 0);
+    if (requests.length === 0 || requests.length > MAX_AUDIT_RESERVATION_BATCH
+      || requests.some(size => !safeBytes(size) || size === 0) || !safeBytes(bytes)) {
+      throw new Error('Invalid quota reservation size');
+    }
     // Probe outside SQLite transactions. Never block the ledger write lock on PowerShell.
     await this.reconcileStaleIdentities();
     const ownerStart = await this.currentOwnerStart();
@@ -310,14 +333,15 @@ export class GlobalStorageQuotaReservations {
         }
         if (removedLogicalBytes > 0) continue;
       }
-      const token = randomUUID() + randomUUID();
-      const id = randomUUID();
+      const reservations = requests.map(size => ({
+        id: randomUUID(), token: randomUUID() + randomUUID(), bytes: size,
+      }));
       const decision = this.transaction((db): 'retry' | 'admitted' => {
         if (this.reapDeadOwners(db)) return 'retry';
         const state = this.state(db);
         if (state?.revision !== initial.revision) return 'retry';
         const rows = db.prepare('SELECT id,token_hash,owner_pid,bytes,owner_started_at FROM quota_reservations').all() as unknown as ReservationRow[];
-        if (rows.length >= MAX_RESERVATIONS) throw new Error('Global quota has too many active reservations');
+        if (rows.length + requests.length > MAX_RESERVATIONS) throw new Error('Global quota has too many active reservations');
         const reserved = rows.reduce((sum, row) => sum + row.bytes, 0);
         const planned = inventory.logicalBytes + reserved + bytes + state.reserve_bytes;
         if (!Number.isSafeInteger(planned) || planned > state.limit_bytes) {
@@ -330,12 +354,14 @@ export class GlobalStorageQuotaReservations {
         if (BigInt(bytes) > volumeHeadroom(freeBytes, reserved, state.reserve_bytes)) {
           throw new Error('Global storage quota has insufficient physical volume headroom');
         }
-        db.prepare('INSERT INTO quota_reservations (id,token_hash,owner_pid,bytes,owner_started_at) VALUES (?,?,?,?,?)')
-          .run(id, hashToken(token), process.pid, bytes, ownerStart);
+        const insert = db.prepare('INSERT INTO quota_reservations (id,token_hash,owner_pid,bytes,owner_started_at) VALUES (?,?,?,?,?)');
+        for (const reservation of reservations) {
+          insert.run(reservation.id, hashToken(reservation.token), process.pid, reservation.bytes, ownerStart);
+        }
         db.prepare('UPDATE quota_state SET revision=revision+1 WHERE id=1').run();
         return 'admitted';
       });
-      if (decision === 'admitted') return { id, token, bytes };
+      if (decision === 'admitted') return reservations;
     }
     throw new Error('Global quota admission changed during inventory; retry when writers are idle');
   }
@@ -345,9 +371,47 @@ export class GlobalStorageQuotaReservations {
    * Admission can reclaim verified old disposable data before a new call starts.
    */
   public async reserveMcpActivityAudit(estimateMetadataBytes: () => number): Promise<(() => void) | null> {
-    if (this.status() === null) return null;
-    const reservation = await this.reserve(2 * estimateMetadataBytes() + 2 * 1024 ** 2);
-    return () => this.release(reservation);
+    // Only check whether the quota is configured here. reserve() performs the
+    // authoritative volume/reservation checks under its admission transaction.
+    if (!this.isConfigured()) return null;
+    const bytes = 2 * estimateMetadataBytes() + 2 * 1024 ** 2;
+    if (!safeBytes(bytes) || bytes === 0) throw new Error('Invalid quota reservation size');
+    return new Promise<() => void>((resolve, reject) => {
+      this.pendingAuditReservations.push({ bytes, resolve, reject });
+      if (!this.drainingAuditReservations) {
+        this.drainingAuditReservations = true;
+        setImmediate(() => { void this.drainAuditReservations(); });
+      }
+    });
+  }
+
+  private async drainAuditReservations(): Promise<void> {
+    try {
+      while (this.pendingAuditReservations.length > 0) {
+        const batch = this.pendingAuditReservations.splice(0, MAX_AUDIT_RESERVATION_BATCH);
+        try {
+          const reservations = await this.reserveMany(batch.map(request => request.bytes));
+          batch.forEach((request, index) => request.resolve(() => this.release(reservations[index]!)));
+        } catch (error) {
+          // If the total cannot fit, smaller requests may still be admissible.
+          // Keep the original independent admission behavior in that case;
+          // an unreadable inventory or other shared failure must fail closed.
+          if (batch.length > 1 && error instanceof Error
+            && /insufficient (?:unreserved space|physical volume headroom)|too many active reservations|Invalid quota reservation size/.test(error.message)) {
+            for (const request of batch) {
+              try {
+                const reservation = await this.reserve(request.bytes);
+                request.resolve(() => this.release(reservation));
+              } catch (cause) { request.reject(cause); }
+            }
+          } else {
+            for (const request of batch) request.reject(error);
+          }
+        }
+      }
+    } finally {
+      this.drainingAuditReservations = false;
+    }
   }
 
   /** Compatibility for older callers that enrolled file mutations only. */
@@ -379,7 +443,7 @@ export class GlobalStorageQuotaReservations {
         if (state === undefined) throw new Error('Global quota not configured');
         return state;
       });
-      const inventory = await this.completeInventory();
+      const inventory = await this.completeInventory(initial.revision);
       const result = this.transaction((db) => {
         if (this.reapDeadOwners(db)) return null;
         const state = this.state(db);
@@ -530,24 +594,33 @@ export class GlobalStorageQuotaReservations {
     this.assertRoot();
     const db = new DatabaseSync(this.ledgerFilename, { timeout: 3000 });
     try {
-      db.exec(`CREATE TABLE IF NOT EXISTS quota_state (
-        id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL,
-        limit_bytes INTEGER NOT NULL, reserve_bytes INTEGER NOT NULL
-      ); CREATE TABLE IF NOT EXISTS quota_reservations (
-        id TEXT PRIMARY KEY NOT NULL, token_hash TEXT NOT NULL,
-        owner_pid INTEGER NOT NULL, bytes INTEGER NOT NULL CHECK(bytes > 0),
-        owner_started_at TEXT
-      );`);
-      // Online additive migration: legacy reservations remain valid and are
-      // reaped only by definitely-dead PID, never guessed from a timestamp.
-      const columns = db.prepare('PRAGMA table_info(quota_reservations)').all() as Array<{ name: string }>;
-      if (!columns.some((column) => column.name === 'owner_started_at')) {
-        try { db.exec('ALTER TABLE quota_reservations ADD COLUMN owner_started_at TEXT'); }
-        catch (error) {
-          // Another process may have performed the same additive upgrade.
-          const after = db.prepare('PRAGMA table_info(quota_reservations)').all() as Array<{ name: string }>;
-          if (!after.some((column) => column.name === 'owner_started_at')) throw error;
+      const schema = db.prepare('PRAGMA user_version').get() as { user_version: number };
+      if (schema.user_version === 0) {
+        db.exec(`CREATE TABLE IF NOT EXISTS quota_state (
+          id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL,
+          limit_bytes INTEGER NOT NULL, reserve_bytes INTEGER NOT NULL
+        ); CREATE TABLE IF NOT EXISTS quota_reservations (
+          id TEXT PRIMARY KEY NOT NULL, token_hash TEXT NOT NULL,
+          owner_pid INTEGER NOT NULL, bytes INTEGER NOT NULL CHECK(bytes > 0),
+          owner_started_at TEXT
+        );`);
+        // Online additive migration: legacy reservations remain valid and are
+        // reaped only by definitely-dead PID, never guessed from a timestamp.
+        const columns = db.prepare('PRAGMA table_info(quota_reservations)').all() as Array<{ name: string }>;
+        if (!columns.some((column) => column.name === 'owner_started_at')) {
+          try { db.exec('ALTER TABLE quota_reservations ADD COLUMN owner_started_at TEXT'); }
+          catch (error) {
+            // Another process may have performed the same additive upgrade.
+            const after = db.prepare('PRAGMA table_info(quota_reservations)').all() as Array<{ name: string }>;
+            if (!after.some((column) => column.name === 'owner_started_at')) throw error;
+          }
         }
+        // This ledger has its own schema version, independent of the app DB.
+        // Publish only after all additive migration steps succeed. Old readers
+        // ignore user_version and can continue to share the same ledger.
+        db.exec('PRAGMA user_version = 1');
+      } else if (schema.user_version !== 1) {
+        throw new Error('Unsupported global quota ledger schema');
       }
       return callback(db);
     } finally { db.close(); }

@@ -34,6 +34,10 @@ export interface Checkpoint {
   readonly files: readonly CheckpointFile[];
 }
 
+export type CheckpointListSummary = Omit<Checkpoint, 'files'> & {
+  readonly files: readonly Omit<CheckpointFile, 'content'>[];
+};
+
 export class CheckpointStorageAdmissionError extends Error {}
 
 export interface CheckpointRepository {
@@ -42,5 +46,7 @@ export interface CheckpointRepository {
   insert(checkpoint: Checkpoint): Promise<void>;
   get(id: string): Promise<Checkpoint | null>;
   list(workspaceId: WorkspaceId, limit?: number): Promise<Checkpoint[]>;
+  /** Optional streaming projection; avoids retaining plaintext file contents for a listing. */
+  listSummaries?(workspaceId: WorkspaceId, limit?: number): Promise<readonly CheckpointListSummary[]>;
   deleteOlderThan(cutoffIso: string): Promise<number>;
 }

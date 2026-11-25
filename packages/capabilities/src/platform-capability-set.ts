@@ -7,6 +7,7 @@ import { LocalCapabilityService, type CapabilityBackend } from './local-capabili
 import { PowerShellWindowsCapabilityBridge } from './windows-bridge.js';
 import { SchedulerCapabilityBackend } from './scheduler-backend.js';
 import { ShellCapabilityBackend } from './shell-backend.js';
+import { createAdaptiveShellCapacity } from './adaptive-shell-capacity.js';
 import { VisionCapabilityBackend, createOcrPackageIdentityProbe, WindowsOcrCapabilityBackend, WindowsOcrProcessBridge } from './windows-ocr-backend.js';
 import { WebFetchCapabilityBackend } from './web-fetch-backend.js';
 import { WindowsNativeCapabilityBackend } from './windows-native-backend.js';
@@ -35,6 +36,8 @@ export interface PlatformCapabilitySetOptions {
   readonly unrestricted?: boolean;
   readonly configuredRootsProvider?: () => readonly string[];
   readonly synchronousWaitSecondsProvider?: () => number;
+  readonly maxConcurrentTasksProvider?: () => number;
+  readonly adaptiveCapacityEnabledProvider?: () => boolean;
   readonly windows?: PlatformWindowsCapabilityOptions;
   /** Electron-main providers whose semantics are shared by Windows/macOS/Linux. */
   readonly shared?: Partial<Record<import('./index.js').CapabilityToolName, CapabilityBackend>>;
@@ -70,6 +73,7 @@ export function createPlatformCapabilitySet(options: PlatformCapabilitySetOption
     allowedRootsProvider: capabilityRootsProvider,
     unrestricted,
     taskStateDirectory: path.join(options.dataPath, 'background-tasks'),
+    maxConcurrentTasksProvider: createAdaptiveShellCapacity(options.maxConcurrentTasksProvider, options.adaptiveCapacityEnabledProvider),
     ...(options.synchronousWaitSecondsProvider === undefined ? {} : { maxSynchronousWaitSecondsProvider: options.synchronousWaitSecondsProvider }),
   });
   const browserProtocol = new NodeBrowserCdpProtocol({ platform, profileDir: path.join(options.dataPath, 'browser-profile') });

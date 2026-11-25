@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Checkpoint } from '@lnwjing/workspace';
 import { AesGcmCheckpointCipher } from './checkpoint-cipher.js';
 import { SqliteCheckpointRepository } from './checkpoint-repository.js';
@@ -61,6 +61,64 @@ describe('SqliteCheckpointRepository', () => {
 
     await expect(repository.get(checkpoint.id)).resolves.toEqual(checkpoint);
     database.close();
+  });
+
+  it('upgrades late-imported plaintext after closing the streaming list cursor', async () => {
+    const db = new SqliteDatabase(':memory:');
+    try {
+      const cipher = new AesGcmCheckpointCipher(Buffer.alloc(32, 17));
+      const repo = new SqliteCheckpointRepository(db, cipher);
+      const first = { ...fixtureCheckpoint('legacy-private'), id: 'legacy', createdAt: new Date(2).toISOString() };
+      const second = { ...fixtureCheckpoint('encrypted-private'), id: 'encrypted', createdAt: new Date(1).toISOString() };
+      await repo.insert(second);
+      db.connection.prepare('INSERT INTO checkpoints (id, workspace_id, created_at, files_json) VALUES (?,?,?,?)')
+        .run(first.id, first.workspaceId, first.createdAt, JSON.stringify(first.files));
+      const listed = await repo.listSummaries(first.workspaceId);
+      expect(listed.map(row => row.id)).toEqual(['legacy', 'encrypted']);
+      expect(JSON.stringify(listed)).not.toContain('legacy-private');
+      const row = db.connection.prepare('SELECT files_json FROM checkpoints WHERE id=?').get(first.id);
+      expect(cipher.isEncrypted(String(row?.files_json))).toBe(true);
+      expect(await repo.get(first.id)).toEqual(first);
+    } finally { db.close(); }
+  });
+
+  it('streams encrypted recovery summaries without materializing all payload rows or returning file content', async () => {
+    const db = new SqliteDatabase(':memory:');
+    try {
+      const cipher = new AesGcmCheckpointCipher(Buffer.alloc(32, 17));
+      const repo = new SqliteCheckpointRepository(db, cipher);
+      const payload = 'private snapshot '.repeat(32768);
+      for (let i = 0; i < 12; i += 1) {
+        await repo.insert({
+          ...fixtureCheckpoint(payload), id: 'snapshot-' + i,
+          createdAt: new Date(i * 1000).toISOString(),
+        });
+      }
+      await repo.insert({ ...fixtureCheckpoint('other'), id: 'other', workspaceId: 'workspace-2' });
+      const expected = (await repo.list('workspace-1', 5)).map(({ id, workspaceId, createdAt, files }) =>
+        ({ id, workspaceId, createdAt, files: files.map(({ path, size, contentSha256 }) => ({ path, size, contentSha256 })) }));
+      const prepare = db.connection.prepare.bind(db.connection);
+      let iterations = 0;
+      const spy = vi.spyOn(db.connection, 'prepare').mockImplementation((sql) => {
+        const statement = prepare(sql);
+        if (sql.includes('SELECT id, workspace_id, created_at, files_json FROM checkpoints WHERE workspace_id')) {
+          const iterate = statement.iterate.bind(statement);
+          vi.spyOn(statement, 'all').mockImplementation(() => { throw new Error('bulk checkpoint materialization'); });
+          vi.spyOn(statement, 'iterate').mockImplementation((...args: Parameters<typeof statement.iterate>) => {
+            iterations++;
+            return iterate(...args);
+          });
+        }
+        return statement;
+      });
+      try {
+        const result = await repo.listSummaries('workspace-1', 5);
+        expect(result).toEqual(expected);
+        expect(iterations).toBe(1);
+        expect(JSON.stringify(result)).not.toContain('private snapshot');
+      } finally { spy.mockRestore(); }
+      expect((await repo.get('snapshot-11'))?.files[0]?.content).toBe(payload);
+    } finally { db.close(); }
   });
 
   it('lists only one workspace newest-first without exposing another workspace', async () => {

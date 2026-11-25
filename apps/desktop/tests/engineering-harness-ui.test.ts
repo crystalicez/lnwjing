@@ -13,6 +13,7 @@ const settings: UserSettings = {
   processTimeoutMs: 3_600_000,
   mcpPollWaitSeconds: 5,
   shellSynchronousWaitSeconds: 60,
+  shellMaxConcurrentTasks: 16, shellAdaptiveCapacityEnabled: false,
   capabilityRoots: [],
   pdfProviderPath: '',
   lspCommands: {},

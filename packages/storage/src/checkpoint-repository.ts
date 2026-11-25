@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { pruneExpiredFileCheckpointsOffMain } from './checkpoint-hard-limit-recovery.js';
 import { inspectSqliteHardLimit, parseSqliteHardLimitMiB, SQLITE_HARD_LIMIT_SETTING_KEY } from './sqlite-hard-limit.js';
 import type { DatabaseSync } from 'node:sqlite';
-import { CheckpointStorageAdmissionError, type Checkpoint, type CheckpointFile, type CheckpointRepository } from '@lnwjing/workspace';
+import { CheckpointStorageAdmissionError, type Checkpoint, type CheckpointFile, type CheckpointListSummary, type CheckpointRepository } from '@lnwjing/workspace';
 import type { SqliteDatabase } from './database.js';
 import type { CheckpointPayloadCipher } from './checkpoint-cipher.js';
 import type { GlobalQuotaReservation, GlobalStorageQuotaReservations } from './global-storage-quota.js';
@@ -284,6 +284,41 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
     return rows.flatMap((row) => {
       const checkpoint = this.toCheckpoint(row);
       return checkpoint === null ? [] : [checkpoint];
+    });
+  }
+
+  /** Only a single encrypted payload and decoded checkpoint are materialized at a time.
+   * Keep the same validation as get/list; do not introduce plaintext at rest
+   * or a second persisted index that could diverge from the recovery payload.
+   */
+  public async listSummaries(workspaceId: string, limit = 100): Promise<CheckpointListSummary[]> {
+    const boundedLimit = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 500) : 100;
+    const rows = this.database.connection.prepare(
+      'SELECT id, workspace_id, created_at, files_json FROM checkpoints WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
+    ).iterate(workspaceId, boundedLimit);
+    const entries: Array<CheckpointListSummary | string> = [];
+    const summarize = (checkpoint: Checkpoint): CheckpointListSummary => ({
+      id: checkpoint.id, workspaceId: checkpoint.workspaceId, createdAt: checkpoint.createdAt,
+      files: checkpoint.files.map(({ path, contentSha256, size }) => ({ path, contentSha256, size })),
+    });
+    for (const row of rows) {
+      if (!this.isCheckpointRow(row)) continue;
+      if (this.cipher !== undefined && !this.cipher.isEncrypted(row.files_json)) {
+        // Late-imported legacy plaintext is upgraded by toCheckpoint().
+        // Defer that rare write until the read cursor has closed: SQLite
+        // does not define visibility of writes during an active iterator.
+        entries.push(row.id);
+        continue;
+      }
+      const checkpoint = this.toCheckpoint(row);
+      if (checkpoint !== null) entries.push(summarize(checkpoint));
+    }
+    return entries.flatMap((entry) => {
+      if (typeof entry !== 'string') return [entry];
+      const checkpoint = this.toCheckpoint(this.database.connection.prepare(
+        'SELECT id, workspace_id, created_at, files_json FROM checkpoints WHERE id = ? AND workspace_id = ?',
+      ).get(entry, workspaceId));
+      return checkpoint === null ? [] : [summarize(checkpoint)];
     });
   }
 

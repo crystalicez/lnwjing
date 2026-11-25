@@ -60,6 +60,9 @@ const MAX_CLIENT_LOG_LINES = 30_000;
 
 export function App(): ReactElement {
   const [screen, setScreen] = useState<Screen>('home');
+  const needsDashboardDetails = screen === 'git' || screen === 'settings';
+  const dashboardDetailsRef = useRef(needsDashboardDetails);
+  dashboardDetailsRef.current = needsDashboardDetails;
   const activeProjectsVisibleRef = useRef(false);
   const activeProjectsRefreshTimer = useRef<number | null>(null);
   const refreshActiveProjectsRef = useRef<() => void>(() => undefined);
@@ -309,7 +312,7 @@ export function App(): ReactElement {
     const mcpStatusRevision = mcpDashboardStateRef.current.captureRevision();
     try {
       const [dashboardResult, workspacesResult] = await Promise.allSettled([
-        window.lnwjing.getDashboard(),
+        window.lnwjing.getDashboard(dashboardDetailsRef.current ? undefined : 'overview'),
         window.lnwjing.listWorkspaces(),
       ]);
       const failures: string[] = [];
@@ -405,7 +408,7 @@ export function App(): ReactElement {
       window.removeEventListener('focus', refreshOnFocus);
       document.removeEventListener('visibilitychange', refreshOnVisibility);
     };
-  }, [refresh, updateStatus?.phase]);
+  }, [refresh, updateStatus?.phase, needsDashboardDetails]);
 
   useEffect(() => {
     if (selectedWorkspaceId === null) {
@@ -1103,7 +1106,10 @@ export function App(): ReactElement {
           onResetAvailability={resetToolAvailability}
         />
       ) : null}
-      {screen === 'git' ? (
+      {needsDashboardDetails && dashboard.detailScope === 'overview' ? (
+        <p role="status" className="hint">{t('app.loading')}</p>
+      ) : null}
+      {screen === 'git' && dashboard.detailScope !== 'overview' ? (
         <GitPage
           key={dashboard.selectedWorkspace?.id ?? 'none'}
           locale={locale}
@@ -1138,7 +1144,7 @@ export function App(): ReactElement {
           onLoadSessionHistory={loadLogSessionHistory}
         />
       ) : null}
-      {screen === 'settings' ? (
+      {screen === 'settings' && dashboard.detailScope !== 'overview' ? (
         <SettingsPage
           locale={locale}
           dashboard={dashboard}

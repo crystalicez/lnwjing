@@ -39,17 +39,26 @@ const ACTIVITY_LOCK_TIMEOUT_MS = 10_000;
 /** SQLite's OS locks release on process exit; every writer must hold one across rotation and append. */
 const MAX_ACTIVITY_BATCH_EVENTS = 128;
 const MAX_ACTIVITY_PENDING_EVENTS = 2_048;
-// Preserve same-process arrival order across multiple activity sinks for one
-// file even when the actual append uses asynchronous filesystem I/O.
-const inProcessLogWrites = new Map<string, Promise<void>>();
+interface PendingActivityLine {
+  readonly line: string;
+  readonly maxBytes: number;
+  readonly resolve: () => void;
+  readonly reject: (reason: unknown) => void;
+}
 
-export function createFileActivitySink(filePath: string, options: { readonly maxBytes?: number } = {}): ActivitySink {
-  const maxBytes = options.maxBytes !== undefined && Number.isSafeInteger(options.maxBytes) && options.maxBytes >= 256
-    ? options.maxBytes : MAX_ACTIVITY_LOG_BYTES;
-  const pending: Array<{ readonly line: string; readonly resolve: () => void; readonly reject: (reason: unknown) => void }> = [];
+// Desktop may create more than one sink for the same profile. One transient
+// queue per file preserves arrival order and shares batching across those sinks.
+// Keep no idle queues or open SQLite connections after the final caller settles.
+const activityQueues = new Map<string, {
+  readonly enqueue: (event: ActivitySinkEvent, maxBytes: number) => Promise<void>;
+}>();
+
+function createActivityQueue(filePath: string): { readonly enqueue: (event: ActivitySinkEvent, maxBytes: number) => Promise<void> } {
+  const pending: PendingActivityLine[] = [];
   const waitingForRoom: Array<() => void> = [];
   let scheduled = false;
   let draining = false;
+  let callers = 0;
 
   const schedule = (): void => {
     if (scheduled || draining) return;
@@ -61,12 +70,13 @@ export function createFileActivitySink(filePath: string, options: { readonly max
     draining = true;
     try {
       while (pending.length > 0) {
-        const batch = pending.splice(0, MAX_ACTIVITY_BATCH_EVENTS);
-        // Admit waiting callers only after a batch moves into durable flushing.
-        // Never discard an audit record to reduce load.
+        const maxBytes = pending[0]!.maxBytes;
+        let count = 1;
+        while (count < pending.length && count < MAX_ACTIVITY_BATCH_EVENTS && pending[count]!.maxBytes === maxBytes) count++;
+        const batch = pending.splice(0, count);
         for (let n = 0; n < batch.length && waitingForRoom.length > 0; n += 1) waitingForRoom.shift()!();
         try {
-          await appendActivityBatch(filePath, maxBytes, batch.map((item) => item.line));
+          await appendActivityBatchUnderLock(filePath, maxBytes, batch.map((item) => item.line));
           for (const item of batch) item.resolve();
         } catch (error: unknown) {
           for (const item of batch) item.reject(error);
@@ -79,29 +89,40 @@ export function createFileActivitySink(filePath: string, options: { readonly max
     }
   };
   return {
-    async record(event: ActivitySinkEvent): Promise<void> {
-      const line = formatActivityLogLine(event);
-      while (pending.length >= MAX_ACTIVITY_PENDING_EVENTS) {
-        await new Promise<void>((resolve) => waitingForRoom.push(resolve));
+    async enqueue(event, maxBytes): Promise<void> {
+      callers++;
+      try {
+        while (pending.length >= MAX_ACTIVITY_PENDING_EVENTS) {
+          await new Promise<void>((resolve) => waitingForRoom.push(resolve));
+        }
+        // Backpressure delays callers, not audit durability.
+        const line = formatActivityLogLine(event);
+        await new Promise<void>((resolve, reject) => {
+          pending.push({ line, maxBytes, resolve, reject });
+          schedule();
+        });
+      } finally {
+        callers--;
+        if (callers === 0) activityQueues.delete(filePath);
       }
-      // Backpressure delays the caller instead of losing audit records.
-      return new Promise<void>((resolve, reject) => {
-        pending.push({ line, resolve, reject });
-        schedule();
-      });
     },
   };
 }
 
-async function appendActivityBatch(filePath: string, maxBytes: number, lines: readonly string[]): Promise<void> {
-  const previous = inProcessLogWrites.get(filePath) ?? Promise.resolve();
-  const operation = previous.catch(() => undefined).then(() => appendActivityBatchUnderLock(filePath, maxBytes, lines));
-  inProcessLogWrites.set(filePath, operation);
-  try {
-    await operation;
-  } finally {
-    if (inProcessLogWrites.get(filePath) === operation) inProcessLogWrites.delete(filePath);
-  }
+export function createFileActivitySink(filePath: string, options: { readonly maxBytes?: number } = {}): ActivitySink {
+  const maxBytes = options.maxBytes !== undefined && Number.isSafeInteger(options.maxBytes) && options.maxBytes >= 256
+    ? options.maxBytes : MAX_ACTIVITY_LOG_BYTES;
+  const resolved = path.resolve(filePath);
+  return {
+    record(event): Promise<void> {
+      let queue = activityQueues.get(resolved);
+      if (queue === undefined) {
+        queue = createActivityQueue(resolved);
+        activityQueues.set(resolved, queue);
+      }
+      return queue.enqueue(event, maxBytes);
+    },
+  };
 }
 
 async function appendActivityBatchUnderLock(filePath: string, maxBytes: number, lines: readonly string[]): Promise<void> {

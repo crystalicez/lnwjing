@@ -50,7 +50,7 @@ describe('desktop performance contract', () => {
   it('refreshes Running Projects from activity-only IPC rather than the full dashboard on MCP log events', () => {
     const app = readFileSync(new URL('../src/renderer/App.tsx', import.meta.url), 'utf8');
     const desktop = readFileSync(new URL('../src/main/desktop-services.ts', import.meta.url), 'utf8');
-    const handler = desktop.slice(desktop.indexOf('    getRunningProjectsActivity: async () => {'), desktop.indexOf('    getDashboard: async (): Promise<DashboardSnapshot> => {'));
+    const handler = desktop.slice(desktop.indexOf('    getRunningProjectsActivity: async () => {'), desktop.indexOf('    getDashboard: async (scope): Promise<DashboardSnapshot> => {'));
     expect(app).toContain('window.lnwjing.getRunningProjectsActivity()');
     expect(app).toContain('refreshActiveProjectsRef.current = (): void => { void refreshRunningProjects(); };');
     expect(app).toContain('runningActivityPendingRef.current = true;');

@@ -1,7 +1,7 @@
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopRuntime } from './test-desktop-runtime.js';
 
 const temporaryRoots: string[] = [];
@@ -32,10 +32,25 @@ describe('Recovery Center selected-workspace authority', () => {
         .resolves.toMatchObject({ ok: true });
 
       await runtime.services.selectWorkspace({ workspaceId: workspaceA.id });
+      const trashReads = vi.spyOn(runtime.mcpServices.file, 'listRecoveryItems');
+      const checkpointReads = vi.spyOn(runtime.mcpServices.checkpoint, 'list');
+      for (let i = 0; i < 3; i += 1) {
+        const overview = await runtime.services.getDashboard('overview');
+        expect(overview).toMatchObject({
+          detailScope: 'overview', selectedWorkspace: { id: workspaceA.id },
+          recovery: { trashItems: [], checkpoints: [] }, backups: [],
+          gitSummary: { message: 'Git details not requested' },
+        });
+      }
+      expect(trashReads).not.toHaveBeenCalled();
+      expect(checkpointReads).not.toHaveBeenCalled();
+      expect(await runtime.services.getLogSnapshot()).toMatchObject({ locale: expect.any(String), hostPlatform: process.platform });
       await expect(runtime.services.getDashboard()).resolves.toMatchObject({
         selectedWorkspace: { id: workspaceA.id },
         recovery: { trashItems: [expect.objectContaining({ workspaceId: workspaceA.id, relativePath: 'a.txt' })] },
       });
+      expect(trashReads).toHaveBeenCalledTimes(1);
+      expect(checkpointReads).toHaveBeenCalledTimes(1);
       expect((await runtime.services.getDashboard()).recovery.trashItems.some((entry) => entry.workspaceId === workspaceB.id)).toBe(false);
 
       await runtime.services.selectWorkspace({ workspaceId: workspaceB.id });

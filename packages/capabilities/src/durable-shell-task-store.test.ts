@@ -1,15 +1,16 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ShellCapabilityBackend } from './shell-backend.js';
+import { SharedManagedWriterAdmission } from './shared-managed-writer-admission.js';
 import { DurableShellTaskStore, parsePosixProcessProbe } from './durable-shell-task-store.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readFile: vi.fn(actual.readFile) };
+  return { ...actual, readFile: vi.fn(actual.readFile), open: vi.fn(actual.open) };
 });
 
 const temporaryRoots: string[] = [];
@@ -24,6 +25,38 @@ afterEach(async () => {
 });
 
 describe('durable shell background tasks', () => {
+  it('removes launch identity sidecars after terminal commit without polling the store', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-terminal-sidecars-'));
+    temporaryRoots.push(root);
+    const state = path.join(root, '.tasks');
+    const store = new DurableShellTaskStore(state);
+    const owner = { clientId: 'sidecar-client', sessionId: 'sidecar-session', workspaceId: 'sidecar-workspace' };
+    const request = {
+      taskId: 'sidecar-job', executable: process.execPath,
+      arguments: ['-e', "setTimeout(() => process.stdout.write('verified'), 1800)"],
+      cwd: root, timeoutSeconds: 30, maxOutputBytes: 1024,
+      includeStdout: true, includeStderr: false, owner,
+    };
+    expect(await store.launch(request)).toMatchObject({ ok: true });
+    const directory = path.join(state, request.taskId);
+    expect(await stat(path.join(directory, 'worker.pid'))).toBeDefined();
+    // Read only the raw durable record: no host-side cleanup or reconciliation.
+    await expect.poll(async () => {
+      try { return JSON.parse(await readFile(path.join(directory, 'task.json'), 'utf8')).state; }
+      catch { return 'unknown'; }
+    }, { timeout: 20000 }).toBe('completed');
+    await expect.poll(async () => {
+      const present = await Promise.all(['worker.pid', 'worker.started'].map(async name =>
+        stat(path.join(directory, name)).then(() => true, () => false)));
+      return present.some(Boolean);
+    }, { timeout: 8000 }).toBe(false);
+    const reopened = new DurableShellTaskStore(state);
+    expect(await reopened.snapshotForGoalEvidence(request.taskId, owner.workspaceId))
+      .toMatchObject({ ok: true, value: { state: 'completed', stdout: 'verified' } });
+    // Reusing the same durable ID must return its existing result, not execute again.
+    expect(await reopened.launch(request)).toMatchObject({ ok: true, value: { state: 'completed', stdout: 'verified' } });
+  }, 40000);
+
   it('isolates repository import child environment without changing ordinary shell behavior', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-env-'));
     temporaryRoots.push(root);
@@ -324,6 +357,73 @@ describe('durable shell background tasks', () => {
       exit_code: 0,
     });
   }, 15_000);
+
+  it('applies a shared live shell limit across stores without terminating existing workers', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-task-limit-'));
+    temporaryRoots.push(root);
+    const directory = path.join(root, '.tasks');
+    let limit = 1;
+    const options = { maxConcurrentTasksProvider: (): number => limit };
+    const first = new DurableShellTaskStore(directory, options);
+    const second = new DurableShellTaskStore(directory, options);
+    const owner = { clientId: 'client', sessionId: 'session', workspaceId: 'workspace' };
+    const request = { executable: process.execPath, arguments: ['-e', 'setTimeout(() => {}, 15000)'],
+      cwd: root, timeoutSeconds: 40, maxOutputBytes: 1024, includeStdout: false, includeStderr: false, owner };
+    try {
+      expect(await first.launch({ ...request, taskId: 'first' })).toMatchObject({ ok: true });
+      expect(await second.launch({ ...request, taskId: 'second' })).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+      limit = 2;
+      expect(await second.launch({ ...request, taskId: 'second' })).toMatchObject({ ok: true });
+      limit = 1;
+      expect(await first.launch({ ...request, taskId: 'third' })).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+      expect(await first.snapshot('first', undefined, owner)).toMatchObject({ ok: true, value: { state: 'running' } });
+      expect(await second.snapshot('second', undefined, owner)).toMatchObject({ ok: true, value: { state: 'running' } });
+      expect(await first.reservationDiagnostics()).toMatchObject({ limit: 1, total: 2, shell: 2, managed: 0, unknown: 0, unreadable: 0,
+        rows: expect.arrayContaining([expect.objectContaining({ taskId: 'first', kind: 'durable_shell', recordedState: 'running', ownerClientId: owner.clientId, ownerSessionId: owner.sessionId, workspaceId: owner.workspaceId })]) });
+    } finally {
+      for (const id of ['first', 'second']) {
+        if (await first.has(id)) await first.wait(id, 25, undefined, owner);
+      }
+    }
+    expect(await second.launch({ ...request, taskId: 'third', arguments: ['-e', 'process.exit(0)'] })).toMatchObject({ ok: true });
+    expect(await second.wait('third', 10, undefined, owner)).toMatchObject({ ok: true, value: { state: 'completed' } });
+  }, 45000);
+
+  it('reconciles a previously uncertain task when a verified native receipt arrives later', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-late-native-receipt-'));
+    temporaryRoots.push(root);
+    const state = path.join(root, '.tasks');
+    const taskId = 'late-receipt';
+    const directory = path.join(state, taskId);
+    await mkdir(directory, { recursive: true });
+    const owner = { clientId: 'client', sessionId: 'session', workspaceId: 'workspace' };
+    const metadata = {
+      version: 1, task_id: taskId, state: 'termination_unverified', containment: 'windows_job_v1',
+      request_digest: 'b'.repeat(64), started_at: new Date(Date.now() - 120000).toISOString(),
+      deadline_at: new Date(Date.now() - 60000).toISOString(), error: 'Native containment termination could not be verified',
+      include_stdout: false, include_stderr: false, max_output_bytes: 1024,
+      owner_client_id: owner.clientId, owner_session_id: owner.sessionId, owner_workspace_id: owner.workspaceId,
+    };
+    await writeFile(path.join(directory, 'task.json'), JSON.stringify(metadata));
+    const store = new DurableShellTaskStore(state, { maxConcurrentTasks: 1 });
+    const receipt = path.join(directory, 'containment.receipt.json');
+    expect(await store.snapshot(taskId, undefined, owner)).toMatchObject({ ok: true, value: { state: 'termination_unverified' } });
+    await writeFile(receipt, JSON.stringify({ kind: 'windows_job_v1', outcome: 'completed', activeProcesses: 1, exitCode: 0 }));
+    expect(await store.snapshot(taskId, undefined, owner)).toMatchObject({ ok: true, value: { state: 'termination_unverified' } });
+    expect(await store.launch({ taskId: 'blocked', executable: process.execPath,
+      arguments: ['-e', 'process.exit(0)'], cwd: root, timeoutSeconds: 30,
+      maxOutputBytes: 1024, includeStdout: false, includeStderr: false, owner }))
+      .toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    await writeFile(receipt, JSON.stringify({ kind: 'windows_job_v1', outcome: 'completed', activeProcesses: 0, exitCode: 0 }));
+    expect(await store.snapshot(taskId, undefined, owner)).toMatchObject({ ok: true, value: { state: 'completed', exit_code: 0 } });
+    expect(JSON.parse(await readFile(path.join(directory, 'task.json'), 'utf8'))).toMatchObject({ state: 'completed', exit_code: 0 });
+    // The recovered terminal task no longer occupies the sole worker slot.
+    const next = await store.launch({ taskId: 'replacement', executable: process.execPath,
+      arguments: ['-e', "process.stdout.write('ok')"], cwd: root, timeoutSeconds: 30,
+      maxOutputBytes: 1024, includeStdout: true, includeStderr: false, owner });
+    expect(next.ok).toBe(true);
+    expect(await store.wait('replacement', 5, undefined, owner)).toMatchObject({ ok: true, value: { state: 'completed', stdout: 'ok' } });
+  }, 20000);
 
   it('does not overwrite a very fast durable completion back to running', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-shell-'));
@@ -629,6 +729,45 @@ describe('durable shell background tasks', () => {
     if (second.ok) await replacementStore.wait('second-running', 5, undefined, owner);
   }, 20_000);
 
+  it.each([false, true])('preserves legacy launch history when writer admission initialized first (old ready=%s)', async (oldReady) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-writer-bootstrap-history-'));
+    temporaryRoots.push(root);
+    const state = path.join(root, '.tasks');
+    const owner = { clientId: 'history-client', sessionId: 'history-session', workspaceId: 'history-workspace' };
+    for (let i = 0; i < 12; i++) {
+      const id = 'legacy-' + i;
+      const directory = path.join(state, id);
+      await mkdir(directory, { recursive: true });
+      await writeFile(path.join(directory, 'task.json'), JSON.stringify({
+        version: 1, task_id: id, state: 'completed', exit_code: 0,
+        started_at: new Date(i * 1000).toISOString(), finished_at: new Date(i * 1000 + 1).toISOString(),
+        deadline_at: new Date(60000).toISOString(), include_stdout: false, include_stderr: false, max_output_bytes: 1024,
+        owner_client_id: owner.clientId, owner_session_id: owner.sessionId, owner_workspace_id: owner.workspaceId,
+      }));
+    }
+    if (oldReady) {
+      const index = path.join(state, '.index', 'v1');
+      await mkdir(path.join(index, 'active'), { recursive: true });
+      await writeFile(path.join(index, 'ready.json'), JSON.stringify({ version: 1, readyAt: new Date().toISOString() }));
+      await writeFile(path.join(index, 'launches.jsonl'), '');
+    }
+    vi.mocked(readFile).mockClear();
+    const admission = new SharedManagedWriterAdmission(state);
+    const lease = await admission.enter({ actorClientId: owner.clientId, workspaceId: owner.workspaceId, kind: 'synchronous_mutation' });
+    expect(lease.ok).toBe(true);
+    if (lease.ok) await lease.value.releaseAfterVerifiedTermination();
+    const reads = () => vi.mocked(readFile).mock.calls.filter(([filename]) => String(filename).endsWith(path.sep + 'task.json')).length;
+    expect(reads()).toBe(oldReady ? 0 : 12);
+    vi.mocked(readFile).mockClear();
+    const store = new DurableShellTaskStore(state);
+    const page = await store.listPage(owner, 12);
+    expect(page).toMatchObject({ ok: true, value: { tasks: Array.from({ length: 12 }, (_, i) => ({ task_id: 'legacy-' + (11 - i) })) } });
+    expect(reads()).toBe(oldReady ? 24 : 12);
+    vi.mocked(readFile).mockClear();
+    expect(await store.listPage(owner, 2)).toMatchObject({ ok: true, value: { tasks: [{ task_id: 'legacy-11' }, { task_id: 'legacy-10' }] } });
+    expect(reads()).toBe(2);
+  });
+
   it('hydrates only one owner-scoped journal page instead of all durable histories', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-page-'));
     temporaryRoots.push(root);
@@ -676,6 +815,97 @@ describe('durable shell background tasks', () => {
       ([filename]) => String(filename).endsWith(`${path.sep}task.json`),
     );
     expect(metadataReads).toHaveLength(3);
+  });
+
+  it('does not persist disabled output or create empty stream files', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-output-files-'));
+    temporaryRoots.push(root);
+    const state = path.join(root, '.tasks');
+    const store = new DurableShellTaskStore(state);
+    const owner = { clientId: 'capture-owner', sessionId: 'capture-session', workspaceId: 'capture-workspace' };
+    for (const [taskId, includeStdout, code] of [
+      ['disabled', false, "process.stdout.write('x'.repeat(262144)); process.stderr.write('ignored')"],
+      ['empty', true, 'process.exit(0)'],
+      ['ordered', true, "process.stdout.write('a'.repeat(65536)); process.stdout.write('b'.repeat(65536))"],
+    ] as const) {
+      expect(await store.launch({
+        taskId, executable: process.execPath, arguments: ['-e', code], cwd: root,
+        timeoutSeconds: 30, maxOutputBytes: 256 * 1024, includeStdout, includeStderr: false, owner,
+      })).toMatchObject({ ok: true });
+      const result = await store.wait(taskId, 15, undefined, owner);
+      expect(result).toMatchObject({ ok: true, value: { state: 'completed', exit_code: 0, truncated: false } });
+      await expect(stat(path.join(state, taskId, 'stderr.log'))).rejects.toMatchObject({ code: 'ENOENT' });
+      if (taskId === 'ordered') {
+        expect(result).toMatchObject({ ok: true, value: { stdout: 'a'.repeat(65536) + 'b'.repeat(65536) } });
+        expect((await stat(path.join(state, taskId, 'stdout.log'))).size).toBe(131072);
+      } else {
+        await expect(stat(path.join(state, taskId, 'stdout.log'))).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+    }
+  }, 60_000);
+
+  it('wait reads actual output only once despite repeated metadata polling', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-wait-io-'));
+    temporaryRoots.push(root);
+    const state = path.join(root, '.tasks');
+    const store = new DurableShellTaskStore(state);
+    const owner = { clientId: 'wait-owner', sessionId: 'wait-session', workspaceId: 'wait-workspace' };
+    const taskId = 'wait-output';
+    const launched = await store.launch({
+      taskId, executable: process.execPath,
+      arguments: ['-e', "process.stdout.write('a'.repeat(65536)); setTimeout(() => process.stdout.write('done'), 2500)"],
+      cwd: root, timeoutSeconds: 30, maxOutputBytes: 128 * 1024,
+      includeStdout: true, includeStderr: true, owner,
+    });
+    expect(launched.ok).toBe(true);
+    vi.mocked(open).mockClear();
+    vi.mocked(readFile).mockClear();
+    const result = await store.wait(taskId, 15, undefined, owner);
+    expect(result).toMatchObject({ ok: true, value: { state: 'completed', exit_code: 0, stdout: 'a'.repeat(65536) + 'done' } });
+    const outputOpens = vi.mocked(open).mock.calls.filter(([filename]) =>
+      String(filename) === path.join(state, taskId, 'stdout.log') ||
+      String(filename) === path.join(state, taskId, 'stderr.log'));
+    expect(outputOpens).toHaveLength(2);
+    expect(vi.mocked(readFile).mock.calls.filter(([filename]) => String(filename) === path.join(state, taskId, 'task.json')).length).toBeGreaterThan(1);
+    vi.mocked(open).mockClear();
+    expect(await store.wait(taskId, 0, undefined, { ...owner, clientId: 'foreign' })).toMatchObject({ ok: false, error: { code: 'PERMISSION_DENIED' } });
+    expect(vi.mocked(open).mock.calls.filter(([filename]) => String(filename).endsWith('.log'))).toHaveLength(0);
+  }, 35_000);
+
+  it('defaults shell history to a 50-record page and reads only requested metadata after bootstrap', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-shell-page-default-'));
+    temporaryRoots.push(root);
+    const state = path.join(root, '.tasks');
+    for (let i = 0; i < 65; i++) {
+      const id = 'historical-' + String(i).padStart(3, '0');
+      const directory = path.join(state, id);
+      await mkdir(directory, { recursive: true });
+      const at = new Date(1700000000000 + i * 1000).toISOString();
+      await writeFile(path.join(directory, 'task.json'), JSON.stringify({
+        version: 1, task_id: id, state: 'completed', exit_code: 0,
+        started_at: at, finished_at: at, deadline_at: at,
+        include_stdout: true, include_stderr: true, max_output_bytes: 1024,
+      }));
+    }
+    const backend = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory: state });
+    const warmup = await backend.execute({ operation: 'list', limit: 1 });
+    expect(warmup).toMatchObject({ ok: true });
+    vi.mocked(readFile).mockClear();
+    const first = await backend.execute({ operation: 'list' });
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error('list failed');
+    const page = first.value as { tasks: Record<string, unknown>[]; next_cursor: string };
+    expect(page.tasks).toHaveLength(50);
+    expect(page.tasks[0]?.task_id).toBe('historical-064');
+    expect(page.next_cursor).toEqual(expect.any(String));
+    expect(vi.mocked(readFile).mock.calls.filter(([filename]) => String(filename).endsWith(path.sep + 'task.json'))).toHaveLength(50);
+    const second = await backend.execute({ operation: 'list', cursor: page.next_cursor });
+    expect(second).toMatchObject({ ok: true, value: { tasks: expect.any(Array) } });
+    if (!second.ok) throw new Error('second list failed');
+    const remaining = second.value as { tasks: Record<string, unknown>[]; next_cursor?: string };
+    expect(remaining.tasks).toHaveLength(15);
+    expect(remaining.tasks[0]?.task_id).toBe('historical-014');
+    expect(remaining.next_cursor).toBeUndefined();
   });
 
   it('lists durable task metadata without hydrating historical output', async () => {

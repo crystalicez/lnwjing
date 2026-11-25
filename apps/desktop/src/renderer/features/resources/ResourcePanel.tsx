@@ -203,6 +203,27 @@ export function ResourcePanel(props: { readonly locale: UiLocale; readonly works
         </dl>
         <p className="hint">{copy.desktopMainNote}</p>
       </div> : null}
+      {snapshot.shellReservations ? <div className="diagnostics-context-counters">
+        <strong>{props.locale === 'th' ? 'Shell reservations ทั้งโปรแกรม' : 'Host-wide shell reservations'}</strong>
+        <dl className="diagnostics-resource-summary">
+          <div><dt>Shell / Limit</dt><dd>{snapshot.shellReservations.shell} / {snapshot.shellReservations.limit}</dd></div>
+          <div><dt>{props.locale === 'th' ? 'Managed writers' : 'Managed writers'}</dt><dd>{snapshot.shellReservations.managed}</dd></div>
+          <div><dt>{props.locale === 'th' ? 'ยังจำแนกไม่ได้ / อ่านไม่ได้' : 'Unclassified / unreadable'}</dt><dd>{snapshot.shellReservations.unknown} / {snapshot.shellReservations.unreadable}</dd></div>
+          <div><dt>{props.locale === 'th' ? 'รวมทั้งหมด' : 'Total'}</dt><dd>{snapshot.shellReservations.total}</dd></div>
+        </dl>
+        <p className="hint">{props.locale === 'th' ? 'สถานะจาก reservation ที่บันทึกไว้ ไม่ใช่การยืนยันว่า process ยังทำงานอยู่ งานที่ไม่ทราบเจ้าของจะไม่ถูกยกเลิกอัตโนมัติ' : 'Recorded reservations, not verified live process counts. Unverified owners are never cancelled automatically.'}</p>
+        {snapshot.shellReservations.rows.length > 0 ? <div className="diagnostics-history-scroll">
+          <table className="diagnostics-data-table"><thead><tr><th>{copy.task}</th><th>{copy.provider}</th><th>{copy.owner}</th><th>Workspace</th><th>{props.locale === 'th' ? 'สถานะที่บันทึก' : 'Recorded state'}</th></tr></thead>
+          <tbody>{snapshot.shellReservations.rows.map(row => <tr key={row.taskId}>
+            <td className="diagnostics-identifier" title={row.taskId}>{row.taskId}</td>
+            <td>{row.kind}</td>
+            <td className="diagnostics-identifier" title={[row.ownerClientId, row.ownerSessionId].filter(Boolean).join(' / ')}>{row.ownerClientId ?? '—'}{row.ownerSessionId ? ' / ' + row.ownerSessionId : ''}</td>
+            <td className="diagnostics-identifier" title={row.workspaceId ?? ''}>{row.workspaceId ?? '—'}</td>
+            <td>{row.recordedState ?? 'reserved'}</td>
+          </tr>)}</tbody></table>
+        </div> : null}
+        {snapshot.shellReservations.rows.length < snapshot.shellReservations.total ? <p className="hint">{props.locale === 'th' ? 'แสดงเฉพาะ reservation ที่อ่านได้สูงสุด 128 รายการ' : 'Showing up to 128 readable reservations.'}</p> : null}
+      </div> : null}
       <dl className="diagnostics-resource-summary">
         <div><dt>{copy.measuredTasks}</dt><dd>{measuredRows.length.toLocaleString(copy.dateLocale)}</dd></div>
         <div><dt>{copy.trackedTasks}</dt><dd>{visibleRows.length.toLocaleString(copy.dateLocale)}</dd></div>

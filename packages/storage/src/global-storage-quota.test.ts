@@ -4,7 +4,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
 import { GlobalStorageQuotaReservations } from './global-storage-quota.js';
 import { inspectProfileStorageOffMain } from './profile-storage-inventory.js';
 
@@ -47,6 +48,131 @@ function departedOwner(ledger: string, bytes: number): Promise<void> {
 }
 
 describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
+  it('admits simultaneous MCP calls with one inventory scan and independent release proofs', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      let scans = 0;
+      const quota = new GlobalStorageQuotaReservations(root, {
+        availableVolumeBytes: () => BigInt(512 * MIB),
+        scanProfileInventory: async () => { scans++; return inspectProfileStorageOffMain(root); },
+      });
+      quota.configure({ limitBytes: 64 * MIB, criticalReserveBytes: MIB });
+      const releases = await Promise.all(Array.from({ length: 8 }, () => quota.reserveMcpActivityAudit(() => 1024)));
+      const bytesPerCall = 2 * MIB + 2048;
+      expect(scans).toBe(1);
+      expect(quota.status()).toMatchObject({ activeReservations: 8, reservedBytes: 8 * bytesPerCall });
+      releases[0]!();
+      expect(quota.status()).toMatchObject({ activeReservations: 7, reservedBytes: 7 * bytesPerCall });
+      expect(() => releases[0]!()).toThrow(/missing or has invalid ownership/);
+      for (const release of releases.slice(1)) release!();
+      expect(quota.status()).toMatchObject({ activeReservations: 0, reservedBytes: 0 });
+      await writeFile(path.join(root, 'new-data.bin'), Buffer.alloc(128 * 1024));
+      const next = await quota.reserveMcpActivityAudit(() => 1024);
+      expect(scans).toBe(2);
+      next!();
+    } finally { await dispose(); }
+  });
+
+  it('falls back to independent admission when the combined MCP request is too large', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: () => BigInt(512 * MIB) });
+      quota.configure({ limitBytes: 8 * MIB, criticalReserveBytes: MIB });
+      const results = await Promise.allSettled([
+        quota.reserveMcpActivityAudit(() => 6 * MIB),
+        quota.reserveMcpActivityAudit(() => 1024),
+      ]);
+      expect(results[0]?.status).toBe('rejected');
+      expect(results[1]?.status).toBe('fulfilled');
+      expect(quota.status()).toMatchObject({ activeReservations: 1, reservedBytes: 2 * MIB + 2048 });
+      if (results[1]?.status === 'fulfilled') results[1].value!();
+      expect(quota.status()).toMatchObject({ activeReservations: 0 });
+    } finally { await dispose(); }
+  });
+
+
+  it('does not re-run schema DDL or table introspection on each reservation and release', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: () => BigInt(512 * MIB) });
+      quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });
+      const ledger = new DatabaseSync(path.join(root, 'global-quota-reservations-v2.sqlite'));
+      try {
+        expect(ledger.prepare('PRAGMA user_version').get()).toEqual({ user_version: 1 });
+      } finally { ledger.close(); }
+      const exec = vi.spyOn(DatabaseSync.prototype, 'exec');
+      const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare');
+      try {
+        for (let i = 0; i < 3; i++) {
+          const proof = await quota.reserve(4096);
+          quota.release(proof);
+        }
+        expect(exec.mock.calls.filter(([sql]) => /CREATE TABLE|ALTER TABLE|user_version\s*=/i.test(sql))).toHaveLength(0);
+        expect(prepare.mock.calls.filter(([sql]) => /PRAGMA table_info/i.test(sql))).toHaveLength(0);
+        expect(quota.status()?.activeReservations).toBe(0);
+      } finally { exec.mockRestore(); prepare.mockRestore(); }
+    } finally { await dispose(); }
+  });
+
+  it('queries quota configuration without probing the physical volume', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      let probes = 0;
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: () => { probes++; return BigInt(512 * MIB); } });
+      expect(quota.isConfigured()).toBe(false);
+      expect(existsSync(path.join(root, 'global-quota-reservations-v2.sqlite'))).toBe(false);
+      quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });
+      for (let i = 0; i < 20; i++) expect(quota.isConfigured()).toBe(true);
+      expect(probes).toBe(0);
+      expect(quota.status()?.activeReservations).toBe(0);
+      expect(probes).toBe(1);
+      quota.disable();
+      expect(quota.isConfigured()).toBe(false);
+    } finally { await dispose(); }
+  });
+
+
+  it('shares simultaneous inspection scans but never reuses a settled inventory', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      let scans = 0;
+      const quota = new GlobalStorageQuotaReservations(root, {
+        availableVolumeBytes: () => BigInt(512 * MIB),
+        scanProfileInventory: async () => { scans++; return inspectProfileStorageOffMain(root); },
+      });
+      quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });
+      const [a, b] = await Promise.all([quota.inspect(), quota.inspect()]);
+      expect(scans).toBe(1);
+      expect(a.logicalUsedBytes).toBe(b.logicalUsedBytes);
+      await writeFile(path.join(root, 'new.bin'), Buffer.alloc(128 * 1024));
+      const next = await quota.inspect();
+      expect(scans).toBe(2);
+      expect(next.logicalUsedBytes).toBeGreaterThanOrEqual(a.logicalUsedBytes + 128 * 1024);
+    } finally { await dispose(); }
+  });
+
+  it('checks actual volume only during authoritative audit reservation admission', async () => {
+    const { root, dispose } = await fixture();
+    try {
+      let volumeChecks = 0;
+      let estimates = 0;
+      const quota = new GlobalStorageQuotaReservations(root, {
+        availableVolumeBytes: () => { volumeChecks++; return BigInt(512 * MIB); },
+      });
+      const estimate = () => { estimates++; return 1024; };
+      expect(await quota.reserveMcpActivityAudit(estimate)).toBeNull();
+      expect([volumeChecks, estimates]).toEqual([0, 0]);
+      quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });
+      const release = await quota.reserveMcpActivityAudit(estimate);
+      expect(release).toBeTypeOf('function');
+      expect(estimates).toBe(1);
+      expect(volumeChecks).toBe(2);
+      expect(quota.status()?.activeReservations).toBe(1);
+      release?.();
+      expect(quota.status()?.activeReservations).toBe(0);
+    } finally { await dispose(); }
+  });
+
   it('rejects an impossible reservation before inventory or disposable reclaim', async () => {
     const { root, dispose } = await fixture();
     try {

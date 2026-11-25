@@ -86,6 +86,14 @@ export interface ResourceSnapshot {
   readonly contextScope: 'workspace' | 'transport' | 'unavailable';
   /** Only the lnwjing Desktop main process, not Electron child processes or any Goal. */
   readonly desktopMain?: { readonly rssBytes: number; readonly cpuAveragePercent: number | null };
+  /** Host-wide on-disk reservations; not live process verification. */
+  readonly shellReservations?: {
+    readonly limit: number; readonly total: number; readonly unreadable: number;
+    readonly shell: number; readonly managed: number; readonly unknown: number;
+    readonly rows: readonly { readonly taskId: string; readonly kind: 'durable_shell' | 'managed_writer' | 'unknown';
+      readonly workspaceId?: string; readonly ownerClientId?: string; readonly ownerSessionId?: string;
+      readonly reservedAt?: string; readonly recordedState?: string }[];
+  };
   readonly resources: readonly { readonly taskId?: string; readonly provider: string; readonly goalId?: string; readonly role: string; readonly ownership: 'owned' | 'shared' | 'foreign' | 'unknown'; readonly workingSetBytes?: number; readonly cpuPercent?: number; readonly canCancel: boolean }[];
   readonly context: { readonly rawContextBytes: number | null; readonly contextSentBytes: number | null; readonly previouslySeenBytesAvoided: number | null; readonly ledgerHits: number | null };
 }

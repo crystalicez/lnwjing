@@ -367,6 +367,8 @@ export interface UserSettings {
   readonly processTimeoutMs: number;
   readonly mcpPollWaitSeconds: number;
   readonly shellSynchronousWaitSeconds: number;
+  readonly shellMaxConcurrentTasks: number;
+  readonly shellAdaptiveCapacityEnabled: boolean;
   readonly capabilityRoots: readonly string[];
   readonly pdfProviderPath: string;
   readonly lspCommands: Readonly<Record<string, string>>;
@@ -672,6 +674,8 @@ export type LogCorrelation =
   | { readonly kind: 'tunnel'; readonly lifecycle?: TunnelLifecycleCategory; readonly instanceId?: string; readonly requestId?: string; readonly pid?: number };
 
 export interface LogSnapshot {
+  readonly locale?: UiLocale;
+  readonly hostPlatform?: DashboardSnapshot['hostPlatform'];
   readonly lines: readonly LogLine[];
   readonly tunnelLogPath: string | null;
   readonly tunnelLogExists: boolean;
@@ -916,6 +920,8 @@ export type RunningProjectsActivitySnapshot =
       readonly runningJobs?: readonly { readonly workspaceId: string; readonly startedAt: string }[] };
 
 export interface DashboardSnapshot {
+  /** Overview omits page-specific Git, recovery, and engineering details. */
+  readonly detailScope?: 'overview';
   /** Primary workspace used when a tool call omits workspaceId. */
   readonly selectedWorkspace: WorkspaceSummary | null;
   /** Host-authorized project set. Parallel chats may safely target different active workspaceIds. */
@@ -1225,7 +1231,7 @@ export interface IpcRequestMap {
   readonly [ipcChannels.setWorkspaceActive]: SetWorkspaceActiveRequest;
   readonly [ipcChannels.setWorkspaceArchived]: SetWorkspaceArchivedRequest;
   readonly [ipcChannels.deleteWorkspace]: DeleteWorkspaceRequest;
-  readonly [ipcChannels.getDashboard]: undefined;
+  readonly [ipcChannels.getDashboard]: 'overview' | undefined;
   readonly [ipcChannels.getRunningProjectsActivity]: undefined;
   readonly [ipcChannels.setPermissionProfile]: SetPermissionProfileRequest;
   readonly [ipcChannels.setUnrestrictedMode]: SetUnrestrictedModeRequest;
@@ -1422,7 +1428,7 @@ export interface LnwjingApi {
   setWorkspaceActive(request: SetWorkspaceActiveRequest): Promise<IpcResponseMap[typeof ipcChannels.setWorkspaceActive]>;
   setWorkspaceArchived(request: SetWorkspaceArchivedRequest): Promise<IpcResponseMap[typeof ipcChannels.setWorkspaceArchived]>;
   deleteWorkspace(request: DeleteWorkspaceRequest): Promise<IpcResponseMap[typeof ipcChannels.deleteWorkspace]>;
-  getDashboard(): Promise<IpcResponseMap[typeof ipcChannels.getDashboard]>;
+  getDashboard(scope?: 'overview'): Promise<IpcResponseMap[typeof ipcChannels.getDashboard]>;
   getRunningProjectsActivity(): Promise<RunningProjectsActivitySnapshot>;
   setPermissionProfile(request: SetPermissionProfileRequest): Promise<IpcResponseMap[typeof ipcChannels.setPermissionProfile]>;
   setUnrestrictedMode(request: SetUnrestrictedModeRequest): Promise<IpcResponseMap[typeof ipcChannels.setUnrestrictedMode]>;

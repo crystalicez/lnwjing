@@ -9,6 +9,8 @@ export const USER_SETTING_KEYS = Object.freeze({
   processTimeoutMs: 'process_timeout_ms',
   mcpPollWaitSeconds: 'mcp_poll_wait_seconds',
   shellSynchronousWaitSeconds: 'shell_synchronous_wait_seconds',
+  shellMaxConcurrentTasks: 'shell_max_concurrent_tasks',
+  shellAdaptiveCapacityEnabled: 'shell_adaptive_capacity_enabled',
   capabilityRoots: 'capability_roots',
   pdfProviderPath: 'pdf_provider_path',
   lspCommands: 'lsp_commands',
@@ -41,6 +43,12 @@ export const DEFAULT_MCP_IDLE_TIMEOUT_MS = 5 * 60_000;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 60 * 60_000;
 export const DEFAULT_MCP_POLL_WAIT_SECONDS = 5;
 export const DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS = 60;
+export const DEFAULT_SHELL_MAX_CONCURRENT_TASKS = 16;
+export const MAX_SHELL_CONCURRENT_TASKS = 128;
+
+export function parseShellTaskLimit(value: string | null | undefined): number {
+  return parseIntegerSetting(value, DEFAULT_SHELL_MAX_CONCURRENT_TASKS, 1, MAX_SHELL_CONCURRENT_TASKS);
+}
 export const MIN_CONFIGURABLE_WAIT_SECONDS = 5;
 export const MAX_CONFIGURABLE_WAIT_SECONDS = 60;
 export const DEFAULT_CODEX_TOOLS_ENABLED = false;

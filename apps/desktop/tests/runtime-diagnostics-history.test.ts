@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -86,6 +86,54 @@ describe('RuntimeDiagnosticsHistoryRecorder', () => {
     expect(history?.samples.at(-1)?.activeResources).toEqual({ Timeout: 2, TCPSocketWrap: 1 });
     expect(history?.samples.at(-1)?.logs.totalRetainedBytes).toBe(300);
     expect(history?.samples.at(-1)?.search?.started).toBe(4);
+  });
+
+  it('appends only new samples, bounds journal growth, and recovers a torn append', () => {
+    const root = tempRoot();
+    let sequence = 0;
+    const recorder = new RuntimeDiagnosticsHistoryRecorder(root, () => sample(++sequence));
+    for (let i = 0; i < 361; i += 1) expect(recorder.captureNow()).toBe(true);
+    const before = statSync(recorder.filePath).size;
+    expect(recorder.captureNow()).toBe(true);
+    const growth = statSync(recorder.filePath).size - before;
+    // One new sample, not a second serialization of the whole history.
+    expect(growth).toBeGreaterThan(0);
+    expect(growth).toBeLessThan(4096);
+    for (let i = 0; i < 119; i += 1) expect(recorder.captureNow()).toBe(true);
+    expect(statSync(recorder.filePath).size).toBeLessThan(1024 * 1024);
+    expect(readRuntimeDiagnosticsHistory(root)?.samples.map(s => s.uptimeSeconds))
+      .toEqual(Array.from({ length: 360 }, (_, i) => 122 + i));
+    appendFileSync(recorder.filePath, '{"schemaVersion":1,"samples":[');
+    expect(readRuntimeDiagnosticsHistory(root)?.samples.at(-1)?.uptimeSeconds).toBe(481);
+    const restarted = new RuntimeDiagnosticsHistoryRecorder(root, () => sample(++sequence));
+    expect(restarted.captureNow()).toBe(true);
+    expect(readRuntimeDiagnosticsHistory(root)?.samples.at(-1)?.uptimeSeconds).toBe(482);
+    expect(readFileSync(restarted.filePath, 'utf8').trim().split('\n')).toHaveLength(1);
+  });
+
+  it('recreates a reclaimed journal with the entire retained trend instead of a suffix', () => {
+    const root = tempRoot();
+    let sequence = 0;
+    const recorder = new RuntimeDiagnosticsHistoryRecorder(root, () => sample(++sequence));
+    for (let i = 0; i < 10; i++) expect(recorder.captureNow()).toBe(true);
+    rmSync(recorder.filePath);
+    expect(recorder.captureNow()).toBe(true);
+    expect(readRuntimeDiagnosticsHistory(root)?.samples.map(s => s.uptimeSeconds))
+      .toEqual(Array.from({ length: 11 }, (_, i) => i + 1));
+    expect(readFileSync(recorder.filePath, 'utf8').trim().split('\n')).toHaveLength(1);
+  });
+
+  it('loads legacy snapshot history without losing samples on first write', () => {
+    const root = tempRoot();
+    const directory = path.join(root, 'diagnostics');
+    mkdirSync(directory);
+    writeFileSync(path.join(directory, 'runtime-history.json'), JSON.stringify({
+      schemaVersion: 1, intervalMs: 60000, maxSamples: 360,
+      samples: [{ schemaVersion: 1, capturedAt: '2026-09-18T00:00:00.000Z', ...sample(1) }],
+    }));
+    const recorder = new RuntimeDiagnosticsHistoryRecorder(root, () => sample(2));
+    expect(recorder.captureNow()).toBe(true);
+    expect(readRuntimeDiagnosticsHistory(root)?.samples.map(s => s.uptimeSeconds)).toEqual([1, 2]);
   });
 
   it('batches periodic disk writes but retains each sample and flushes on stop', () => {

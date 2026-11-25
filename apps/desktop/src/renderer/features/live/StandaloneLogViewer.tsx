@@ -59,14 +59,11 @@ export function StandaloneLogViewer(): ReactElement {
       setTunnelLogPath(snapshot.tunnelLogPath);
       setTunnelLogExists(snapshot.tunnelLogExists);
       setTunnelAuth(snapshot.tunnelAuth);
+      if (snapshot.locale !== undefined) setLocale(snapshot.locale);
+      if (snapshot.hostPlatform !== undefined) setHostPlatform(snapshot.hostPlatform);
     }).catch(() => undefined);
     void window.lnwjing.listWorkspaces().then((nextWorkspaces) => {
       if (!disposed) setWorkspaces(nextWorkspaces);
-    }).catch(() => undefined);
-    void window.lnwjing.getDashboard().then((dashboard) => {
-      if (disposed) return;
-      setLocale(dashboard.locale);
-      setHostPlatform(dashboard.hostPlatform);
     }).catch(() => undefined);
     const unsubscribe = window.lnwjing.onLogEvent((line) => {
       appendLine(line);

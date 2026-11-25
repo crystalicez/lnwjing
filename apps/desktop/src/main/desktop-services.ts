@@ -84,6 +84,7 @@ import {
   DEFAULT_PROCESS_TIMEOUT_MS,
   DEFAULT_MCP_POLL_WAIT_SECONDS,
   DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS,
+  parseShellTaskLimit,
   MIN_CONFIGURABLE_WAIT_SECONDS,
   MAX_CONFIGURABLE_WAIT_SECONDS,
   DEFAULT_CODEX_TOOLS_ENABLED,
@@ -482,7 +483,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
   const workspaceIndex = new WorkspaceIndexService(workspaceRepository,
     process.env.LNWJING_INDEX_SQLITE_PREVIEW === '1'
       ? new SqliteWorkspaceIndexStore(indexDirectory)
-      : new JsonWorkspaceIndexStore(indexDirectory, () => globalQuota.status() === null ? null : globalQuota));
+      : new JsonWorkspaceIndexStore(indexDirectory, () => globalQuota.isConfigured() ? globalQuota : null));
   const settingsRepository = new SqliteSettingsRepository(database);
   let watcherAccessToken = '';
   let watcherAccessTokenOperation: Promise<string> | null = null;
@@ -549,10 +550,10 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     throw new Error('Desktop runtime requires a checkpoint encryption key resolved by the Electron composition root');
   }
   const checkpointRepository = new SqliteCheckpointRepository(database, checkpointCipher,
-    () => globalQuota.status() === null ? null : globalQuota);
+    () => globalQuota.isConfigured() ? globalQuota : null);
   const backupService = new SqliteBackupService(database, {
     backupDirectory, databaseFilename, platform: process.platform, arch: process.arch,
-    globalQuota: (): GlobalStorageQuotaReservations | null => globalQuota.status() === null ? null : globalQuota,
+    globalQuota: (): GlobalStorageQuotaReservations | null => globalQuota.isConfigured() ? globalQuota : null,
   });
   const startupBackup = (readUserSettings(settingsRepository, process.env).autoBackupEnabled === true
     ? backupService.ensureRecent() : Promise.resolve(null)).catch((error: unknown) => {
@@ -693,7 +694,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
     (await workspaceRepository.list())
       .filter((workspace) => !isMachineRootPath(workspace.realRootPath) && !isMachineRootPath(workspace.rootPath))
       .map((workspace) => workspace.realRootPath)
-  ), unrestricted, () => readSettings().capabilityRoots, () => readSettings().shellSynchronousWaitSeconds, options.nativeCapabilityApi);
+  ), unrestricted, () => readSettings().capabilityRoots, () => readSettings().shellSynchronousWaitSeconds, options.nativeCapabilityApi, () => parseShellTaskLimit(settingsRepository.get(USER_SETTING_KEYS.shellMaxConcurrentTasks)),
+  () => parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.shellAdaptiveCapacityEnabled), false));
   const taskCancellation = new GoalTaskCancellationService([
     { provider: 'process', cancelForGoal: processService.cancelForGoal.bind(processService) },
     { provider: 'codex', cancelForGoal: codexService.cancelForGoal.bind(codexService) },
@@ -2203,7 +2205,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         runningJobs: [...processService.listRunningWorkspaceJobs(), ...await runningJobsCache.get(() => capabilityRuntime.shell.listRunningWorkspaceJobs())],
       };
     },
-    getDashboard: async (): Promise<DashboardSnapshot> => {
+    getDashboard: async (scope): Promise<DashboardSnapshot> => {
+      const overview = scope === 'overview';
       // Project deletion can occur while this asynchronous read is awaiting
       // Git, recovery, or tunnel state. Retry once with a fresh selection
       // rather than rejecting the entire dashboard with a stale workspace ID.
@@ -2218,25 +2221,25 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         gitSummaryWorkspaceId = selectedWorkspaceId;
         gitSummaryCache.clear();
       }
-      const gitSummary = selectedWorkspace === null
-        ? { branch: null, changedFiles: 0, stagedFiles: 0, message: 'No workspace selected' }
+      const gitSummary = overview || selectedWorkspace === null
+        ? { branch: null, changedFiles: 0, stagedFiles: 0, message: overview ? 'Git details not requested' : 'No workspace selected' }
         : await gitSummaryCache.get(() => buildGitSummary(selectedWorkspace, gitService, actor));
       const codexToolsEnabled = readSettings().codexToolsEnabled;
-      const codex = codexToolsEnabled
+      const codex = overview ? { installed: false, version: null } : codexToolsEnabled
         ? await codexSummaryCache.get(() => buildCodexSummary(codexDiscovery))
         : { installed: await codexPresenceCache.get(async () => (await executableResolver.resolve('codex')).ok), version: null };
-      const recentAuditEvents = await buildAuditSummary(auditRepository, settingsRepository);
+      const recentAuditEvents = overview ? [] : await buildAuditSummary(auditRepository, settingsRepository);
       const processSummaries = await listTrackedProcesses(processService, trackedProcesses);
-      const capabilities = await capabilitySummaryCache.get(() => buildCapabilitySummary(capabilityRuntime.health));
+      const capabilities = overview ? [] : await capabilitySummaryCache.get(() => buildCapabilitySummary(capabilityRuntime.health));
       const mcp = mcpLifecycle.status();
       const workLog = await buildWorkLog(auditRepository, workLogViewState);
       const workLogSessions = await activitySessionCatalog.list();
       const inFlight = activityTracker.listInFlight().map((entry) => toInFlightItem(entry, logSessionId));
       const tunnel = await observedTunnelStatus();
       const remoteMcp = await remoteMcpController.status();
-      const backups = await backupService.list();
+      const backups = overview ? [] : await backupService.list();
       let recovery: DashboardSnapshot['recovery'];
-      if (selectedWorkspace === null) {
+      if (overview || selectedWorkspace === null) {
         recovery = { trashRoot: recoveryTrashRoot, trashItems: [], checkpoints: [] };
       } else {
         const trash = unwrap(await fileService.listRecoveryItems(selectedWorkspace.id), 'Recovery Trash could not be listed');
@@ -2246,7 +2249,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
           checkpoints: unwrap(await checkpointService.list(selectedWorkspace.id), 'Checkpoints could not be listed'),
         };
       }
-      const engineeringHarnessStatus = await buildEngineeringHarnessStatus(selectedWorkspace);
+      const engineeringHarnessStatus = await buildEngineeringHarnessStatus(overview ? null : selectedWorkspace);
       logHub.syncWorkLog(workLog, inFlight.map((item) => ({ callId: item.callId, toolName: item.toolName, targetSummary: item.targetSummary, targetDetail: item.targetDetail, startedAt: item.startedAt, workspaceId: item.workspaceId, sessionId: item.sessionId })));
       logHub.syncProcesses(processSummaries.map((summary) => ({
         id: summary.id,
@@ -2258,6 +2261,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
         logSummary: summary.logSummary,
       })));
       return {
+        ...(overview ? { detailScope: 'overview' as const } : {}),
         selectedWorkspace: selectedWorkspace === null ? null : toWorkspaceSummary(selectedWorkspace),
         activeWorkspaces: activeWorkspaces.map(toWorkspaceSummary),
         gitSummary,
@@ -2750,7 +2754,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       const avg = upSeconds >= 1 && logicalCpus > 0
         ? Number(((cpu.user + cpu.system) / 1_000_000 / upSeconds / logicalCpus * 100).toFixed(1))
         : null;
-      return { ...resourceSnapshot, desktopMain: {
+      const shellReservations = await capabilityRuntime.shell.reservationDiagnostics();
+      return { ...resourceSnapshot, ...(shellReservations === null ? {} : { shellReservations }), desktopMain: {
         rssBytes: process.memoryUsage().rss,
         cpuAveragePercent: avg,
       } };
@@ -2775,7 +2780,8 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       })));
       const snapshot = logHub.snapshot();
       const sessions = await activitySessionCatalog.list();
-      return { ...snapshot, sessions, tunnelAuth: await tunnelController.authStatus() };
+      return { ...snapshot, sessions, tunnelAuth: await tunnelController.authStatus(),
+        locale: readLocale(settingsRepository), hostPlatform: supportedHostPlatform(process.platform) };
     },
     listLogSessions: (request: { readonly offset: number; readonly limit?: number }): Promise<{ readonly sessions: readonly LogSessionSummary[]; readonly hasMore: boolean }> => activitySessionCatalog.page(request.offset, request.limit),
     loadLogSessionHistory: async (request: LoadLogSessionHistoryRequest): Promise<LoadLogSessionHistoryResult> => {
@@ -3157,11 +3163,12 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (existsSync(root) && lstatSync(root).isSymbolicLink()) throw new Error('Cannot clean redirected native artifacts');
       await requireNativeAdministrativeApproval({
         toolName: 'native_artifact_cleanup', mutationKind: 'delete',
-        reason: 'Manually removing verified one-use native launcher sources',
+        reason: 'Manually removing verified disposable native artifacts and obsolete terminal task sidecars',
         summary: `Clean up to ${options.maxDirectories ?? 32} verified ${options.category} native launcher directories`,
       });
       const result = await pruneVerifiedWindowsContainmentRoot(root, {
         userConfirmed: true,
+        pruneShellSidecars: options.category === 'tasks',
         ...(options.maxDirectories === undefined ? {} : { maxDirectories: options.maxDirectories }),
         ...(options.afterName === undefined ? {} : { afterName: options.afterName }),
       });
@@ -3850,6 +3857,8 @@ function readUserSettings(settingsRepository: SqliteSettingsRepository, env: Nod
     processTimeoutMs: parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.processTimeoutMs), DEFAULT_PROCESS_TIMEOUT_MS, 1_000, 4 * 60 * 60_000),
     mcpPollWaitSeconds: parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.mcpPollWaitSeconds), DEFAULT_MCP_POLL_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS),
     shellSynchronousWaitSeconds: parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.shellSynchronousWaitSeconds), DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS),
+    shellMaxConcurrentTasks: parseShellTaskLimit(settingsRepository.get(USER_SETTING_KEYS.shellMaxConcurrentTasks)),
+    shellAdaptiveCapacityEnabled: parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.shellAdaptiveCapacityEnabled), false),
     capabilityRoots: parsePathList(settingsRepository.get(USER_SETTING_KEYS.capabilityRoots)),
     pdfProviderPath: settingsRepository.get(USER_SETTING_KEYS.pdfProviderPath)?.trim() ?? '',
     lspCommands: parseStringRecordSetting(settingsRepository.get(USER_SETTING_KEYS.lspCommands)),
@@ -3887,6 +3896,8 @@ function persistUserSettings(settingsRepository: SqliteSettingsRepository, setti
   set(USER_SETTING_KEYS.processTimeoutMs, String(settings.processTimeoutMs));
   set(USER_SETTING_KEYS.mcpPollWaitSeconds, String(settings.mcpPollWaitSeconds));
   set(USER_SETTING_KEYS.shellSynchronousWaitSeconds, String(settings.shellSynchronousWaitSeconds));
+  set(USER_SETTING_KEYS.shellMaxConcurrentTasks, String(parseShellTaskLimit(String(settings.shellMaxConcurrentTasks))));
+  set(USER_SETTING_KEYS.shellAdaptiveCapacityEnabled, String(settings.shellAdaptiveCapacityEnabled === true));
   set(USER_SETTING_KEYS.capabilityRoots, serializePathList(settings.capabilityRoots));
   set(USER_SETTING_KEYS.pdfProviderPath, settings.pdfProviderPath.trim());
   set(USER_SETTING_KEYS.lspCommands, serializeStringRecordSetting(settings.lspCommands));

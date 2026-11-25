@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +17,24 @@ afterEach(async () => {
 });
 
 describe('DurableShellTaskIndex', () => {
+  it('does not acquire or write an index lock for repeated terminal releases', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-terminal-release-'));
+    temporaryRoots.push(root);
+    const removeFile = vi.fn(rm);
+    const index = new DurableShellTaskIndex(root, {
+      maxConcurrentTasks: 10, inspectTask: async (): Promise<'active'> => 'active', removeFile,
+    });
+    const reservation = { taskId: 'finished', requestDigest: 'a'.repeat(64), ownerClientId: 'owner' };
+    expect(await index.reserve(reservation)).toMatchObject({ ok: true });
+    await index.release(reservation.taskId, 'b'.repeat(64));
+    expect(await index.hasReservation(reservation.taskId, reservation.requestDigest)).toBe(true);
+    await index.release(reservation.taskId, reservation.requestDigest);
+    expect(await index.hasReservation(reservation.taskId, reservation.requestDigest)).toBe(false);
+    removeFile.mockClear();
+    for (let i = 0; i < 100; i++) await index.release(reservation.taskId, reservation.requestDigest);
+    expect(removeFile).not.toHaveBeenCalled();
+  });
+
   it('does not allow a different client or workspace to attach to another import reservation', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-import-owner-'));
     temporaryRoots.push(root);
@@ -177,6 +195,39 @@ describe('DurableShellTaskIndex', () => {
     await first.release(successfulTaskId, successfulDigest);
   });
 
+  it('keeps managed writer reservations separate from the shell worker limit but preserves exclusive fences', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-split-capacity-'));
+    temporaryRoots.push(root);
+    const inspectTask = async (id: string): Promise<'active' | 'missing'> => id.startsWith('managed-writer-') ? 'missing' : 'active';
+    const writers = new DurableShellTaskIndex(root, { maxConcurrentTasks: 10000, inspectTask });
+    const shell = new DurableShellTaskIndex(root, { maxConcurrentTasks: 16, capacityScope: 'durable_shell', inspectTask });
+    await writers.initialize();
+    const owner = { requestDigest: 'a'.repeat(64), ownerClientId: 'client', ownerWorkspaceId: 'workspace-a' };
+    for (let i = 0; i < 19; i++) {
+      const taskId = 'managed-writer-00000000-0000-4000-8000-' + String(i).padStart(12, '0');
+      expect(await writers.reserve({ ...owner, taskId, reservationKind: 'managed_writer', mutationKind: 'opaque_uncontained' })).toMatchObject({ ok: true });
+    }
+    // Existing v1 reservations have no class field.
+    const legacyId = 'managed-writer-00000000-0000-4000-8000-000000000000';
+    const legacyPath = path.join(root, '.index', 'v1', 'active', createHash('sha256').update(legacyId).digest('hex') + '.json');
+    const legacy = JSON.parse(await readFile(legacyPath, 'utf8'));
+    delete legacy.reservationKind;
+    await writeFile(legacyPath, JSON.stringify(legacy));
+    for (let i = 0; i < 16; i++) {
+      expect(await shell.reserve({ ...owner, taskId: 'shell-' + i })).toMatchObject({ ok: true, value: { activeTasks: i + 1 } });
+    }
+    expect(await shell.reserve({ ...owner, taskId: 'shell-overflow' })).toMatchObject({
+      ok: false, error: { code: 'CONFLICT', message: expect.stringContaining('16/16') },
+    });
+    expect(await shell.listActiveTaskIds()).toHaveLength(35);
+    expect(await shell.reservationDiagnostics()).toMatchObject({ limit: 16, total: 35, shell: 16, managed: 19, unknown: 0, unreadable: 0 });
+    expect(await writers.reserve({ ...owner, taskId: 'import', mutationKind: 'repository_import' })).toMatchObject({ ok: false });
+    expect(await writers.reserve({ ...owner, taskId: 'lifecycle', mutationKind: 'workspace_lifecycle' })).toMatchObject({ ok: false });
+    await shell.release('shell-0', owner.requestDigest);
+    expect(await shell.reserve({ ...owner, taskId: 'shell-replacement' })).toMatchObject({ ok: true });
+    expect(await shell.listActiveTaskIds()).toHaveLength(35);
+  });
+
   it('counts an unreadable active marker as active instead of freeing capacity', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-unknown-'));
     temporaryRoots.push(root);
@@ -315,6 +366,50 @@ describe('DurableShellTaskIndex', () => {
       ok: false,
       error: { code: 'INVALID_INPUT' },
     });
+  });
+
+  it('bounds foreign-history scanning and resumes at the exact cursor without leaking records', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-history-page-budget-'));
+    temporaryRoots.push(root);
+    const index = new DurableShellTaskIndex(root, {
+      maxConcurrentTasks: 1, inspectTask: async () => 'terminal' as const,
+    });
+    await index.initialize();
+    const journalPath = path.join(root, '.index', 'v1', 'launches.jsonl');
+    const rows = Array.from({ length: 4097 }, (_, i) => JSON.stringify({
+      version: 1, taskId: 'record-' + i, startedAt: new Date(i * 1000).toISOString(),
+      ownerClientId: i === 0 ? 'mine' : 'other', ownerSessionId: 'session', ownerWorkspaceId: 'workspace',
+    }));
+    await writeFile(journalPath, rows.join('\n') + '\n');
+    const accept = vi.fn((record: { ownerClientId: string }) => record.ownerClientId === 'mine');
+    const first = await index.listLaunches({ limit: 50, accept });
+    expect(first).toMatchObject({ ok: true, value: { records: [], nextCursor: expect.any(String) } });
+    expect(accept).toHaveBeenCalledTimes(4096);
+    if (!first.ok || first.value.nextCursor === undefined) throw new Error('Missing continuation');
+    const second = await index.listLaunches({ limit: 50, cursor: first.value.nextCursor, accept });
+    expect(second).toEqual({ ok: true, value: { records: [JSON.parse(rows[0]!)] } });
+    expect(accept).toHaveBeenCalledTimes(4097);
+  });
+
+  it('defers legacy repair while a launch has a reservation but has not published metadata', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-journal-pending-launch-'));
+    temporaryRoots.push(root);
+    const record = { version: 1 as const, taskId: 'pending', startedAt: new Date().toISOString(),
+      ownerClientId: 'owner', ownerSessionId: 'session', ownerWorkspaceId: 'workspace' };
+    const loadLaunchRecord = vi.fn(async () => record);
+    const index = new DurableShellTaskIndex(root, { maxConcurrentTasks: 2, inspectTask: async () => 'active' as const, loadLaunchRecord });
+    await index.initialize();
+    const indexRoot = path.join(root, '.index', 'v1');
+    await writeFile(path.join(indexRoot, 'ready.json'), JSON.stringify({ version: 1, readyAt: new Date().toISOString() }));
+    const digest = 'c'.repeat(64);
+    expect(await index.reserve({ taskId: record.taskId, requestDigest: digest,
+      ownerClientId: record.ownerClientId, ownerWorkspaceId: record.ownerWorkspaceId, launchRecord: record })).toMatchObject({ ok: true });
+    expect(await index.listLaunches({ limit: 10 })).toMatchObject({ ok: true, value: { records: [record] } });
+    expect(loadLaunchRecord).not.toHaveBeenCalled();
+    await mkdir(path.join(root, record.taskId));
+    await index.release(record.taskId, digest);
+    expect(await index.listLaunches({ limit: 10 })).toMatchObject({ ok: true, value: { records: [record] } });
+    expect(loadLaunchRecord).toHaveBeenCalledTimes(1);
   });
 
   it('rebuilds a missing or corrupt launch journal under the index lock', async () => {

@@ -37,7 +37,7 @@ const dashboard: DashboardSnapshot = {
   tunnel: EMPTY_TUNNEL_STATUS,
   settings: {
     customPermission: { read: 'ALLOW', write: 'ASK', execute: 'ASK', dangerous: 'DENY', allowedExecutables: [] },
-    mcpCallTimeoutMs: 60_000, mcpIdleTimeoutMs: 300_000, processTimeoutMs: 3_600_000, mcpPollWaitSeconds: 5, shellSynchronousWaitSeconds: 60,
+    mcpCallTimeoutMs: 60_000, mcpIdleTimeoutMs: 300_000, processTimeoutMs: 3_600_000, mcpPollWaitSeconds: 5, shellSynchronousWaitSeconds: 60, shellMaxConcurrentTasks: 16, shellAdaptiveCapacityEnabled: false,
     capabilityRoots: [], pdfProviderPath: '', lspCommands: {}, mcpHttpPort: 18_765, mcpAllowedHostnames: [], codexToolsEnabled: false, eccEnabled: false, ponytailMode: 'off',
     updateAutoCheck: true, updateCheckOnStartup: true, updateIntervalMinutes: 30, updateAutoDownload: true,
     closeBehavior: 'tray', launchAtStartup: false, startMinimized: false, tunnelAutoReconnect: true, tunnelMaxAutoRestarts: 5, recoveryRetentionDays: 0,

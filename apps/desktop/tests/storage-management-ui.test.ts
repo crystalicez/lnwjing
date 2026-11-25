@@ -40,7 +40,7 @@ describe('Storage Management UI', () => {
     expect(markup).toContain('Storage Management');
     expect(markup).toContain('SQLite Database');
     expect(markup).toContain('Preview cleanup');
-    expect(markup).toContain('Verified native launcher cleanup');
+    expect(markup).toContain('Verified native artifact cleanup');
     expect(markup).toContain('Profile storage inventory');
     expect(markup).toContain('Scan entire profile');
     expect(markup).toContain('data-testid="preserve-settings-reset"');

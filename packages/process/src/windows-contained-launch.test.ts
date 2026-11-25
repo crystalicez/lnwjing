@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -65,6 +65,10 @@ describe.skipIf(process.platform !== 'win32')('contained launch receipt', () => 
       if (outcome === 'cancelled') await writeFile(invocation.cancelPath, 'cancel');
       await closed;
       expect(await readWindowsContainmentReceipt(invocation.receiptPath)).toMatchObject({ kind: 'windows_job_v1', outcome, activeProcesses: 0 });
+      // No host-side cleanup or shell status call has run.
+      for (const name of ['containment.cs', 'containment.json', 'containment.ps1']) {
+        await expect(stat(path.join(root, name))).rejects.toMatchObject({ code: 'ENOENT' });
+      }
       if (outcome === 'completed') expect(stdout).toContain('CHILD_OUTPUT');
     } finally { await rm(root, { recursive: true, force: true }); }
   }, 20000);
@@ -108,6 +112,82 @@ describe('verified one-use native input cleanup', () => {
 });
 
 describe('bounded native launch cleanup', () => {
+  it('prunes old terminal shell sidecars only, preserving requested evidence and uncertain tasks', async () => {
+    const rawRoot = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-shell-sidecar-cleanup-'));
+    const root = await realpath(rawRoot);
+    const old = new Date(Date.now() - 10 * 86400 * 1000);
+    const ids = [1, 2, 3, 4].map(n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0'));
+    try {
+      for (const [index, id] of ids.entries()) {
+        const directory = path.join(root, id);
+        await mkdir(directory);
+        await writeFile(path.join(directory, 'task.json'), JSON.stringify({
+          version: 1, task_id: id, containment: 'windows_job_v1',
+          state: index === 1 ? 'running' : 'completed',
+          exit_code: index === 3 ? 1 : 0,
+          finished_at: index === 2 ? new Date().toISOString() : old.toISOString(),
+          include_stdout: true, include_stderr: false,
+        }));
+        await writeFile(path.join(directory, 'containment.receipt.json'), JSON.stringify({
+          kind: 'windows_job_v1', outcome: 'completed', exitCode: 0, activeProcesses: 0,
+        }));
+        for (const [name, data] of [['worker.pid', '123'], ['worker.started', old.toISOString()],
+          ['stdout.log', 'required evidence'], ['stderr.log', 'disabled output']] as const) {
+          const file = path.join(directory, name);
+          await writeFile(file, data);
+          await utimes(file, old, old);
+        }
+      }
+      expect(await pruneVerifiedWindowsContainmentRoot(root, { userConfirmed: true }))
+        .toMatchObject({ removedFiles: 0 });
+      expect(await pruneVerifiedWindowsContainmentRoot(root, { userConfirmed: true, pruneShellSidecars: true }))
+        .toMatchObject({ inspected: 4, removedFiles: 3, nextCursor: null });
+      const first = path.join(root, ids[0]!);
+      for (const name of ['worker.pid', 'worker.started', 'stderr.log']) {
+        await expect(stat(path.join(first, name))).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+      expect(await readFile(path.join(first, 'stdout.log'), 'utf8')).toBe('required evidence');
+      expect(await readWindowsContainmentReceipt(path.join(first, 'containment.receipt.json'))).toBeDefined();
+      expect(await readFile(path.join(first, 'task.json'), 'utf8')).toContain('completed');
+      for (const id of ids.slice(1)) {
+        expect(await readFile(path.join(root, id, 'worker.pid'), 'utf8')).toBe('123');
+        expect(await readFile(path.join(root, id, 'stderr.log'), 'utf8')).toBe('disabled output');
+      }
+      expect(await pruneVerifiedWindowsContainmentRoot(root, { userConfirmed: true, pruneShellSidecars: true }))
+        .toMatchObject({ removedFiles: 0 });
+    } finally { await rm(rawRoot, { recursive: true, force: true }); }
+  });
+
+  it('never removes native launcher inputs through a redirected directory or receipt', async () => {
+    const raw = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-native-link-'));
+    const root = await realpath(raw);
+    try {
+      const outside = path.join(root, 'outside');
+      const profile = path.join(root, 'profile');
+      await mkdir(outside);
+      await mkdir(profile);
+      const receipt = JSON.stringify({ kind: 'windows_job_v1', outcome: 'completed', activeProcesses: 0, exitCode: 0 });
+      await writeFile(path.join(outside, 'containment.cs'), 'outside canary');
+      await writeFile(path.join(outside, 'containment.receipt.json'), receipt);
+      const junction = path.join(profile, '00000000-0000-4000-8000-000000000001');
+      await symlink(outside, junction, process.platform === 'win32' ? 'junction' : 'dir');
+      expect(await pruneVerifiedWindowsContainmentInputs(path.join(junction, 'containment.receipt.json'))).toBe(0);
+      expect(await readFile(path.join(outside, 'containment.cs'), 'utf8')).toBe('outside canary');
+      const safe = path.join(profile, '00000000-0000-4000-8000-000000000002');
+      await mkdir(safe);
+      await writeFile(path.join(safe, 'containment.cs'), 'local canary');
+      await link(path.join(outside, 'containment.receipt.json'), path.join(safe, 'containment.receipt.json'));
+      expect(await pruneVerifiedWindowsContainmentInputs(path.join(safe, 'containment.receipt.json'))).toBe(0);
+      expect(await readFile(path.join(safe, 'containment.cs'), 'utf8')).toBe('local canary');
+      await rm(path.join(safe, 'containment.receipt.json'));
+      await writeFile(path.join(safe, 'containment.receipt.json'), receipt);
+      await link(path.join(outside, 'containment.cs'), path.join(safe, 'containment.ps1'));
+      expect(await pruneVerifiedWindowsContainmentInputs(path.join(safe, 'containment.receipt.json'))).toBe(1);
+      expect(await readFile(path.join(safe, 'containment.ps1'), 'utf8')).toBe('outside canary');
+      expect(await readFile(path.join(outside, 'containment.cs'), 'utf8')).toBe('outside canary');
+    } finally { await rm(raw, { recursive: true, force: true }); }
+  });
+
   it('requires confirmation and cursors safely across multiple UUID subdirectories', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-native-batch-'));
     const ids = [1, 2, 3].map((n) => `00000000-0000-4000-8000-${n.toString().padStart(12, '0')}`);

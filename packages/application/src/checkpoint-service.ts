@@ -3,7 +3,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import { appError, err, isApplicationAuthorized, ok, type InvocationAuthorization, type Result } from '@lnwjing/domain';
 import { AtomicFileWriter, MAX_FILE_WRITE_BYTES } from '@lnwjing/filesystem';
 import { DefaultPermissionEngine, permissionProfiles, type PermissionEngine, type PermissionProfile } from '@lnwjing/permissions';
-import { CheckpointStorageAdmissionError, WorkspacePathGuard, type Checkpoint, type CheckpointFile, type CheckpointRepository, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
+import { CheckpointStorageAdmissionError, WorkspacePathGuard, type Checkpoint, type CheckpointFile, type CheckpointListSummary, type CheckpointRepository, type Workspace, type WorkspaceRepository } from '@lnwjing/workspace';
 import type { FileActor } from './file-service.js';
 import { createGuardedWriteValidator } from './guarded-write.js';
 import { runMutationTransaction } from './mutation-transaction.js';
@@ -25,16 +25,7 @@ export interface RestoreResult {
   readonly rollbackCheckpointId?: string;
 }
 
-export interface CheckpointSummary {
-  readonly id: string;
-  readonly workspaceId: string;
-  readonly createdAt: string;
-  readonly files: readonly {
-    readonly path: string;
-    readonly contentSha256: string;
-    readonly size: number;
-  }[];
-}
+export type CheckpointSummary = CheckpointListSummary;
 
 /** Do not expose the cached objects to consumers that may mutate IPC results. */
 function copyCheckpointSummaries(summaries: readonly CheckpointSummary[]): CheckpointSummary[] {
@@ -122,8 +113,9 @@ export class CheckpointService implements CheckpointServicePort {
       && cached.connectionIdentity === before.connectionIdentity) {
       return ok(copyCheckpointSummaries(cached.summaries));
     }
-    const checkpoints = await this.repository.list(workspaceId, boundedLimit);
-    const summaries = checkpoints.map((checkpoint) => ({
+    const summaries = this.repository.listSummaries !== undefined
+      ? await this.repository.listSummaries(workspaceId, boundedLimit)
+      : (await this.repository.list(workspaceId, boundedLimit)).map((checkpoint) => ({
       id: checkpoint.id,
       workspaceId: checkpoint.workspaceId,
       createdAt: checkpoint.createdAt,

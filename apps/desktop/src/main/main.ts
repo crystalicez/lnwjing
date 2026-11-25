@@ -111,7 +111,7 @@ import {
 } from '@lnwjing/ipc-contracts';
 import { ripgrepAdmissionSnapshot } from '@lnwjing/search';
 import { readSharedActivitySnapshot, startMcpStdio, inspectWorkflowFile, inspectWorkflowProjectVersion, inspectWorkflowGitBranches, generateWorkflowReportMapping, type EccRuntimeOptions, type HostMutationApprovalRequest } from '@lnwjing/mcp-server';
-import { createExplicitKeySecretProtector, DEFAULT_DISPLAY_TIME_ZONE, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, formatDisplayDateTime, formatOffsetIsoTimestamp, normalizeMcpAllowedHostname, resolveLnwjingDataPath, type SecretProtector } from '@lnwjing/shared';
+import { createExplicitKeySecretProtector, DEFAULT_DISPLAY_TIME_ZONE, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, DEFAULT_SHELL_MAX_CONCURRENT_TASKS, MAX_SHELL_CONCURRENT_TASKS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, formatDisplayDateTime, formatOffsetIsoTimestamp, normalizeMcpAllowedHostname, resolveLnwjingDataPath, type SecretProtector } from '@lnwjing/shared';
 import { applyPendingSqliteRestoreSync, assertNoPendingProfileResetSync, CheckpointKeyStore, type CheckpointPayloadCipher } from '@lnwjing/storage';
 import { createDesktopRuntime, formatCompleteTargetDetail, formatIncompleteLegacyHistory, writeSerializedLogRows, type DesktopRuntime } from './desktop-services.js';
 import { parseSetStoragePolicyRequest, parseCheckpointCleanupPreview, parseApplyCheckpointCleanup, parseNativeStorageCleanup } from './storage-ipc-parser.js';
@@ -189,7 +189,7 @@ export interface DesktopIpcServices {
   setWorkspaceActive(request: SetWorkspaceActiveRequest): Promise<{ readonly workspace: WorkspaceSummary; readonly active: boolean }>;
   setWorkspaceArchived(request: SetWorkspaceArchivedRequest): Promise<WorkspaceSummary>;
   deleteWorkspace(request: DeleteWorkspaceRequest): Promise<{ readonly deleted: boolean; readonly workspaceId: string; readonly rootPath: string }>;
-  getDashboard(): Promise<DashboardSnapshot>;
+  getDashboard(scope?: 'overview'): Promise<DashboardSnapshot>;
   getRunningProjectsActivity(): Promise<RunningProjectsActivitySnapshot>;
   setPermissionProfile(request: SetPermissionProfileRequest): Promise<{ readonly profile: PermissionProfileName }>;
   setUnrestrictedMode(request: SetUnrestrictedModeRequest): Promise<{ readonly unrestricted: boolean; readonly restartRequired: boolean }>;
@@ -289,6 +289,8 @@ const defaultUserSettings: UserSettings = {
   processTimeoutMs: 60 * 60_000,
   mcpPollWaitSeconds: DEFAULT_MCP_POLL_WAIT_SECONDS,
   shellSynchronousWaitSeconds: DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS,
+  shellMaxConcurrentTasks: DEFAULT_SHELL_MAX_CONCURRENT_TASKS,
+  shellAdaptiveCapacityEnabled: false,
   capabilityRoots: [],
   pdfProviderPath: '',
   lspCommands: {},
@@ -573,6 +575,7 @@ export function registerIpcHandlers(
   });
   registerHandler(ipcChannels.getDashboard, async (event, payload: unknown) => {
     assertTrustedSender(event, getMainWindow());
+    if (payload === 'overview') return services.getDashboard('overview');
     assertNoPayload(payload);
     return services.getDashboard();
   });
@@ -1524,6 +1527,8 @@ function parseUserSettings(record: Record<string, unknown>): UserSettings {
     processTimeoutMs: boundedInteger(record.processTimeoutMs, 'processTimeoutMs', 1_000, 4 * 60 * 60_000),
     mcpPollWaitSeconds: boundedInteger(record.mcpPollWaitSeconds, 'mcpPollWaitSeconds', MIN_CONFIGURABLE_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS),
     shellSynchronousWaitSeconds: boundedInteger(record.shellSynchronousWaitSeconds, 'shellSynchronousWaitSeconds', MIN_CONFIGURABLE_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS),
+    shellMaxConcurrentTasks: record.shellMaxConcurrentTasks === undefined ? DEFAULT_SHELL_MAX_CONCURRENT_TASKS : boundedInteger(record.shellMaxConcurrentTasks, 'shellMaxConcurrentTasks', 1, MAX_SHELL_CONCURRENT_TASKS),
+    shellAdaptiveCapacityEnabled: record.shellAdaptiveCapacityEnabled === undefined ? false : booleanField(record.shellAdaptiveCapacityEnabled, 'shellAdaptiveCapacityEnabled'),
     capabilityRoots: stringArray(record.capabilityRoots, 'capabilityRoots', 128),
     pdfProviderPath: typeof record.pdfProviderPath === 'string' ? record.pdfProviderPath.trim() : invalidField('pdfProviderPath'),
     lspCommands: stringRecord(record.lspCommands, 'lspCommands', 32),

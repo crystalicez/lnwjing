@@ -395,6 +395,8 @@ function userSettings(value: unknown): UserSettings {
     processTimeoutMs: integerField(value, 'processTimeoutMs'),
     mcpPollWaitSeconds: integerField(value, 'mcpPollWaitSeconds'),
     shellSynchronousWaitSeconds: integerField(value, 'shellSynchronousWaitSeconds'),
+    shellMaxConcurrentTasks: value.shellMaxConcurrentTasks === undefined ? 16 : integerField(value, 'shellMaxConcurrentTasks'),
+    shellAdaptiveCapacityEnabled: value.shellAdaptiveCapacityEnabled === undefined ? false : booleanField(value, 'shellAdaptiveCapacityEnabled'),
     capabilityRoots: stringList(value.capabilityRoots),
     pdfProviderPath: stringField(value, 'pdfProviderPath'),
     lspCommands: stringRecordResponse(value.lspCommands),
@@ -590,6 +592,7 @@ function dashboard(value: unknown): DashboardSnapshot {
   if ((hostPlatform !== 'win32' && hostPlatform !== 'darwin' && hostPlatform !== 'linux')
     || (hostArch !== 'x64' && hostArch !== 'arm64')) throw new Error('Invalid IPC response');
   return {
+    ...(value.detailScope === 'overview' ? { detailScope: 'overview' as const } : {}),
     selectedWorkspace,
     activeWorkspaces: workspaceList(value.activeWorkspaces),
     gitSummary: {
@@ -1717,6 +1720,9 @@ function logSnapshot(value: unknown): LogSnapshot {
   if (!isRecord(value) || !Array.isArray(value.lines)) throw new Error('Invalid IPC response');
   return {
     lines: value.lines.map(logLine),
+    ...(value.locale === undefined ? {} : { locale: uiLocale(value.locale) }),
+    ...(value.hostPlatform === 'win32' || value.hostPlatform === 'darwin' || value.hostPlatform === 'linux'
+      ? { hostPlatform: value.hostPlatform } : {}),
     tunnelLogPath: nullableString(value.tunnelLogPath),
     tunnelLogExists: booleanField(value, 'tunnelLogExists'),
     ...(value.sessions === undefined ? {} : { sessions: logSessionSummaries(value.sessions) }),
@@ -1940,6 +1946,19 @@ function boundedWorkflowReply(value: unknown, kind: 'templates' | 'draft' | 'cal
     || value.resources.length > 200 || !isRecord(value.context) || typeof value.sampledAt !== 'string')) {
     throw new Error('Invalid resource response');
   }
+  if (kind === 'resources' && value.shellReservations !== undefined) {
+    const reservations = value.shellReservations;
+    if (!isRecord(reservations) || !Array.isArray(reservations.rows) || reservations.rows.length > 128
+      || ['limit', 'total', 'unreadable', 'shell', 'managed', 'unknown'].some(key =>
+        !Number.isSafeInteger(reservations[key]) || Number(reservations[key]) < 0)
+      || Number(reservations.limit) < 1 || Number(reservations.limit) > 128
+      || reservations.rows.some((row: unknown) => !isRecord(row) || typeof row.taskId !== 'string'
+        || row.taskId.length > 256 || !['durable_shell', 'managed_writer', 'unknown'].includes(String(row.kind))
+        || ['workspaceId', 'ownerClientId', 'ownerSessionId', 'reservedAt', 'recordedState'].some(key =>
+          row[key] !== undefined && (typeof row[key] !== 'string' || String(row[key]).length > 1024)))) {
+      throw new Error('Invalid shell reservation diagnostics');
+    }
+  }
   return value;
 }
 
@@ -1953,7 +1972,7 @@ const api: LnwjingApi = {
   setWorkspaceActive,
   setWorkspaceArchived,
   deleteWorkspace,
-  getDashboard: () => invoke(ipcChannels.getDashboard).then(dashboard),
+  getDashboard: (scope) => invoke(ipcChannels.getDashboard, scope).then(dashboard),
   getRunningProjectsActivity: () => invoke(ipcChannels.getRunningProjectsActivity).then(runningProjectsActivity),
   setPermissionProfile,
   setUnrestrictedMode,

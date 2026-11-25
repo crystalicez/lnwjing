@@ -1153,6 +1153,8 @@ describe('DesktopRuntime persistence', () => {
         processTimeoutMs: 90 * 60_000,
         mcpPollWaitSeconds: 25,
         shellSynchronousWaitSeconds: 45,
+        shellMaxConcurrentTasks: 24,
+        shellAdaptiveCapacityEnabled: true,
         capabilityRoots: ['D:\\Projects', 'E:\\Work'],
         pdfProviderPath: 'C:\\Tools\\pdftotext.exe',
         lspCommands: { typescript: '["typescript-language-server","--stdio"]', python: '["pyright-langserver","--stdio"]' },
@@ -1208,6 +1210,8 @@ describe('DesktopRuntime persistence', () => {
           processTimeoutMs: 90 * 60_000,
           mcpPollWaitSeconds: 25,
           shellSynchronousWaitSeconds: 45,
+          shellMaxConcurrentTasks: 24,
+          shellAdaptiveCapacityEnabled: true,
           capabilityRoots: ['D:\\Projects', 'E:\\Work'],
           pdfProviderPath: 'C:\\Tools\\pdftotext.exe',
           lspCommands: { typescript: '["typescript-language-server","--stdio"]', python: '["pyright-langserver","--stdio"]' },
@@ -1275,13 +1279,13 @@ describe('DesktopRuntime persistence', () => {
     const runtime = createDesktopRuntime(dataRoot);
     try {
       const initial = runtime.getUserSettings();
-      expect(initial).toMatchObject({ mcpPollWaitSeconds: 5, shellSynchronousWaitSeconds: 60 });
-      const next = { ...initial, mcpPollWaitSeconds: 20, shellSynchronousWaitSeconds: 40 };
+      expect(initial).toMatchObject({ mcpPollWaitSeconds: 5, shellSynchronousWaitSeconds: 60, shellMaxConcurrentTasks: 16, shellAdaptiveCapacityEnabled: false });
+      const next = { ...initial, mcpPollWaitSeconds: 20, shellSynchronousWaitSeconds: 40, shellMaxConcurrentTasks: 32, shellAdaptiveCapacityEnabled: true };
       await expect(runtime.services.setUserSettings({ settings: next })).resolves.toMatchObject({
         restartRequired: false,
-        settings: { mcpPollWaitSeconds: 20, shellSynchronousWaitSeconds: 40 },
+        settings: { mcpPollWaitSeconds: 20, shellSynchronousWaitSeconds: 40, shellMaxConcurrentTasks: 32, shellAdaptiveCapacityEnabled: true },
       });
-      expect(runtime.getUserSettings()).toMatchObject({ mcpPollWaitSeconds: 20, shellSynchronousWaitSeconds: 40 });
+      expect(runtime.getUserSettings()).toMatchObject({ mcpPollWaitSeconds: 20, shellSynchronousWaitSeconds: 40, shellMaxConcurrentTasks: 32, shellAdaptiveCapacityEnabled: true });
     } finally {
       await runtime.close();
     }

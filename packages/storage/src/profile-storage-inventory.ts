@@ -85,7 +85,7 @@ function run() {
   };
   let logicalBytes=0, allocatedBytes=0, allocatedSupported=process.platform!=='win32', stoppedFor=null;
   const deadline=Date.now() + workerData.maxDurationMs;
-  const pending=[{directory:root,top:null}];
+  const pending=[{directory:root,category:null}];
   while (pending.length && stoppedFor === null) {
     if (Date.now() >= deadline) { stoppedFor='time-limit'; break; }
     const dir = pending.pop();
@@ -97,7 +97,6 @@ function run() {
     }
     try {
       while (true) {
-        if (visitedEntries >= workerData.maxEntries) { stoppedFor='entry-limit'; break; }
         if ((visitedEntries & 127) === 0 && Date.now() >= deadline) { stoppedFor='time-limit'; break; }
         let entry;
         try { entry=handle.readSync(); }
@@ -106,9 +105,10 @@ function run() {
           throw error;
         }
         if (entry === null) break;
+        if (visitedEntries >= workerData.maxEntries) { stoppedFor='entry-limit'; break; }
         visitedEntries++;
-        const top = dir.top === null ? entry.name : dir.top;
-        const group = getCategory(classify(top));
+        const category = dir.category === null ? classify(entry.name) : dir.category;
+        const group = getCategory(category);
         let s;
         const name=path.join(dir.directory,entry.name);
         try { s=fs.lstatSync(name,{bigint:true}); }
@@ -121,13 +121,13 @@ function run() {
         }
         if (s.isDirectory()) {
           directories++; group.directories++;
-          pending.push({directory:name,top});
+          pending.push({directory:name,category});
         } else if (s.isFile()) {
           const bytes=Number(s.size);
           if (!Number.isSafeInteger(bytes) || bytes < 0 || !Number.isSafeInteger(logicalBytes+bytes))
             throw new Error('Profile size is outside safe integer range');
           files++; group.files++; group.logicalBytes+=bytes; logicalBytes+=bytes;
-          if (typeof s.blocks === 'bigint' && s.blocks >= 0n) {
+          if (allocatedSupported && typeof s.blocks === 'bigint' && s.blocks >= 0n) {
             const allocated=Number(s.blocks*512n);
             if (!Number.isSafeInteger(allocated) || !Number.isSafeInteger(allocatedBytes+allocated))
               allocatedSupported=false;
@@ -164,7 +164,11 @@ export async function inspectProfileStorageWithPhysicalOffMain(
   profileRoot: string,
   options: { readonly maxEntries?: number; readonly maxDurationMs?: number } = {},
 ): Promise<ProfileStorageInventory> {
-  const inventory = await inspectProfileStorageOffMain(profileRoot, options);
+  // Explicit user-triggered scan: profiles with tens of thousands of task
+  // artifacts must not hit the smaller background diagnostic default.
+  const inventory = await inspectProfileStorageOffMain(profileRoot, {
+    maxEntries: MAX_ENTRY_LIMIT, maxDurationMs: MAX_SCAN_TIME_MS, ...options,
+  });
   if (inventory.incomplete || process.platform !== 'win32') return inventory;
   const allocatedBytes = await inspectWindowsProfileAllocatedBytes(profileRoot, {
     files: inventory.files,

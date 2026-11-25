@@ -340,7 +340,11 @@ function inspectGit(value: Readonly<Record<string, unknown>>): MutationPolicyDec
 function inspectTaskExecution(value: Readonly<Record<string, unknown>>, toolName: string): MutationPolicyDecision {
   const operation = normalized(value.operation ?? 'run');
   if (READ_ONLY_TASK_OPERATIONS.has(operation)) return read(`${toolName} ${operation} only observes task state`);
-  if (value.dry_run === true) return read(`${toolName} dry run does not start the command`);
+  if (operation === 'run' && value.dry_run === true) return read(`${toolName} dry run does not start the command`);
+  // Shell cancel targets only a durable handle whose client/session/workspace
+  // ownership the backend verifies. Apply the execute profile, like process_stop.
+  // A dry_run flag on a cancel must never downgrade its permission to READ.
+  if (toolName === 'shell' && operation === 'cancel') return execute('shell cancel interrupts only an exact task owned by the current client/session/workspace');
   if (operation !== 'run') return opaque(`${toolName} ${operation} changes task state`);
   return inspectCommandRisk(value.executable, value.arguments, toolName);
 }

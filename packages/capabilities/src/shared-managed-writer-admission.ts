@@ -25,6 +25,8 @@ export class SharedManagedWriterAdmission {
       maxConcurrentTasks: 10000,
       inspectTask: (taskId): ReturnType<DurableShellTaskStore['inspectForWriterAdmission']> =>
         store.inspectForWriterAdmission(taskId),
+      loadLaunchRecord: (taskId): ReturnType<DurableShellTaskStore['loadLaunchRecord']> => store.loadLaunchRecord(taskId),
+      inspectBootstrapTask: (taskId): ReturnType<DurableShellTaskStore['inspectForIndexBootstrap']> => store.inspectForIndexBootstrap(taskId),
     });
   }
 
@@ -40,6 +42,7 @@ export class SharedManagedWriterAdmission {
     const requestDigest = createHash('sha256').update(id + ':' + workspaceId).digest('hex');
     const reserved = await this.index.reserve({
       taskId: id,
+      reservationKind: 'managed_writer',
       requestDigest,
       mutationKind: 'repository_import',
       ownerClientId: 'lnwjing-workspace-writer-fence',
@@ -57,7 +60,7 @@ export class SharedManagedWriterAdmission {
     if (!workspaceId) return err(appError('INVALID_INPUT', 'Workspace ID required'));
     const id = 'workspace-lifecycle-' + randomUUID();
     const requestDigest = createHash('sha256').update(id + ':' + workspaceId).digest('hex');
-    const reserved = await this.index.reserve({ taskId: id, requestDigest, mutationKind: 'workspace_lifecycle',
+    const reserved = await this.index.reserve({ taskId: id, requestDigest, reservationKind: 'managed_writer', mutationKind: 'workspace_lifecycle',
       ownerClientId: 'lnwjing-workspace-lifecycle', ownerWorkspaceId: workspaceId });
     if (!reserved.ok) return reserved;
     return ok({ id, releaseAfterVerifiedTermination: (): Promise<void> => this.index.release(id, requestDigest) });
@@ -77,6 +80,7 @@ export class SharedManagedWriterAdmission {
     const digest = createHash('sha256').update(id + ':' + input.actorClientId + ':' + input.workspaceId).digest('hex');
     const reserved = await this.index.reserve({
       taskId: id,
+      reservationKind: 'managed_writer',
       requestDigest: digest,
       mutationKind: input.kind === 'uncontained_process' ? 'opaque_uncontained' : input.kind === 'contained_process' ? 'opaque_contained_process' : 'opaque',
       ...(input.nativeReceiptPath === undefined ? {} : { nativeReceiptPath: input.nativeReceiptPath }),

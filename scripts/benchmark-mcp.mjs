@@ -1,6 +1,7 @@
 /* global AbortController, Buffer, clearTimeout, fetch, process, setTimeout */
 
 import { execFile } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -109,7 +110,8 @@ async function runBenchmark(options) {
     database.close();
     if (!added.ok) throw new Error(`Could not register benchmark fixture: ${added.error.message}`);
 
-    runtime = createStdioMcpRuntime(fixture.dataPath, added.value, true);
+    runtime = createStdioMcpRuntime(fixture.dataPath, added.value, true, { checkpointEncryptionKey: randomBytes(32) });
+    await runtime.activityReady;
     server = await startMcpHttp({
       port: 0,
       services: runtime.services,

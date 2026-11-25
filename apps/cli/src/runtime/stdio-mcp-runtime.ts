@@ -45,7 +45,7 @@ import {
   WINDOWS_CAPABILITY_BRIDGE_SHA256,
   WINDOWS_CAPABILITY_BRIDGE_SIZE_BYTES,
 } from '@lnwjing/capabilities';
-import { ALLOW_AI_DELETE_SETTING_KEY, DESTRUCTIVE_AUTO_APPROVAL_SETTING_KEY, DEFAULT_CODEX_TOOLS_ENABLED, DEFAULT_MCP_CALL_TIMEOUT_MS, DEFAULT_MCP_IDLE_TIMEOUT_MS, DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_PONYTAIL_MODE, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, STDIO_ALLOWED_ROOTS_SETTING_KEY, STDIO_PERMISSION_PROFILE_SETTING_KEY, STDIO_STRICT_ROOTS_SETTING_KEY, UNRESTRICTED_SETTING_KEY, USER_SETTING_KEYS, isUnrestricted, parseAllowedRoots, parseBooleanSetting, parseCustomPermissionSettings, parseDestructiveAutoApprovalPolicy, parseIntegerSetting, parsePathList, parsePonytailMode, parseEngineeringHarnessSettings, parseEngineeringHarnessWorkspaceOverrides, parseStdioPermissionProfile, parseStringRecordSetting, type DestructiveAutoApprovalPolicy, type EngineeringHarnessSettings, type EngineeringHarnessWorkspaceOverride, type ParsedEngineeringHarnessSettings, type PonytailMode } from '@lnwjing/shared';
+import { ALLOW_AI_DELETE_SETTING_KEY, DESTRUCTIVE_AUTO_APPROVAL_SETTING_KEY, DEFAULT_CODEX_TOOLS_ENABLED, DEFAULT_MCP_CALL_TIMEOUT_MS, DEFAULT_MCP_IDLE_TIMEOUT_MS, DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MCP_POLL_WAIT_SECONDS, DEFAULT_PONYTAIL_MODE, DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, parseShellTaskLimit, MAX_CONFIGURABLE_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, STDIO_ALLOWED_ROOTS_SETTING_KEY, STDIO_PERMISSION_PROFILE_SETTING_KEY, STDIO_STRICT_ROOTS_SETTING_KEY, UNRESTRICTED_SETTING_KEY, USER_SETTING_KEYS, isUnrestricted, parseAllowedRoots, parseBooleanSetting, parseCustomPermissionSettings, parseDestructiveAutoApprovalPolicy, parseIntegerSetting, parsePathList, parsePonytailMode, parseEngineeringHarnessSettings, parseEngineeringHarnessWorkspaceOverrides, parseStdioPermissionProfile, parseStringRecordSetting, type DestructiveAutoApprovalPolicy, type EngineeringHarnessSettings, type EngineeringHarnessWorkspaceOverride, type ParsedEngineeringHarnessSettings, type PonytailMode } from '@lnwjing/shared';
 import {
   EXTENSIONS_SETTINGS_KEY,
   createLocalExtensionsService,
@@ -137,7 +137,7 @@ export function createStdioMcpRuntime(
   const workspaceIndex = new WorkspaceIndexService(workspaceRepository,
     process.env.LNWJING_INDEX_SQLITE_PREVIEW === '1'
       ? new SqliteWorkspaceIndexStore(indexDirectory)
-      : new JsonWorkspaceIndexStore(indexDirectory, () => globalQuota.status() === null ? null : globalQuota));
+      : new JsonWorkspaceIndexStore(indexDirectory, () => globalQuota.isConfigured() ? globalQuota : null));
   const settingsRepository = new SqliteSettingsRepository(database);
   const toolAvailabilityService = new ToolAvailabilityService(settingsRepository);
   const stopToolAvailabilityWatch = toolAvailabilityService.watch(250);
@@ -145,7 +145,7 @@ export function createStdioMcpRuntime(
   const auditService = new AuditService(auditRepository);
   const checkpointRepository = new SqliteCheckpointRepository(database,
     new AesGcmCheckpointCipher(checkpointKey, { compressionEnabled: false }),
-    () => globalQuota.status() === null ? null : globalQuota);
+    () => globalQuota.isConfigured() ? globalQuota : null);
   const workspaceService = new WorkspaceService(workspaceRepository);
   const persistedSecurityPolicyProvider = (): PersistedStdioSecurityPolicy => {
     const persistedProfile = parseStdioPermissionProfile(settingsRepository.get(STDIO_PERMISSION_PROFILE_SETTING_KEY), 'full');
@@ -227,7 +227,9 @@ export function createStdioMcpRuntime(
     if (roots.length === 0) return [workspace.realRootPath];
     return roots;
   }, effectiveUnrestricted, options.strictAllowedRoots, () => parsePathList(settingsRepository.get(USER_SETTING_KEYS.capabilityRoots)),
-  () => parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.shellSynchronousWaitSeconds), DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS));
+  () => parseIntegerSetting(settingsRepository.get(USER_SETTING_KEYS.shellSynchronousWaitSeconds), DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS, MIN_CONFIGURABLE_WAIT_SECONDS, MAX_CONFIGURABLE_WAIT_SECONDS),
+  () => parseShellTaskLimit(settingsRepository.get(USER_SETTING_KEYS.shellMaxConcurrentTasks)),
+  () => parseBooleanSetting(settingsRepository.get(USER_SETTING_KEYS.shellAdaptiveCapacityEnabled), false));
   const taskCancellation = new GoalTaskCancellationService([
     { provider: 'process', cancelForGoal: processService.cancelForGoal.bind(processService) },
     { provider: 'codex', cancelForGoal: codexService.cancelForGoal.bind(codexService) },
@@ -553,6 +555,8 @@ function createStdioCapabilityService(
   strictAllowedRoots?: readonly string[],
   configuredRootsProvider: () => readonly string[] = () => [],
   synchronousWaitSecondsProvider: () => number = () => DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS,
+  maxConcurrentTasksProvider?: () => number,
+  adaptiveCapacityEnabledProvider?: () => boolean,
 ): StdioCapabilityRuntime {
   const bridgeSizeBytes = capabilityBridgeExpectedSizeBytes();
   const ocrPath = windowsOcrHelperPath();
@@ -571,6 +575,8 @@ function createStdioCapabilityService(
     unrestricted,
     configuredRootsProvider: () => strictAllowedRoots ?? [...readCapabilityRoots(process.env.LNWJING_CAPABILITY_ROOTS), ...configuredRootsProvider(), restrictedRoot],
     synchronousWaitSecondsProvider,
+    ...(maxConcurrentTasksProvider === undefined ? {} : { maxConcurrentTasksProvider }),
+    ...(adaptiveCapacityEnabledProvider === undefined ? {} : { adaptiveCapacityEnabledProvider }),
     ...(windows === undefined ? {} : { windows }),
   });
   return { service: runtime.service, shell: runtime.shell };

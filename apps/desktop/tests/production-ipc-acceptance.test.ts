@@ -256,6 +256,21 @@ describe('production desktop IPC acceptance', () => {
     });
   });
 
+  it('validates dashboard overview requests while preserving full snapshot callers', async () => {
+    const services = desktopServices();
+    registerIpcHandlers(() => ({}) as never, services);
+    const trusted = { senderFrame: { url: pathToFileURL(getRendererEntryPath()).href } };
+    const untrusted = { senderFrame: { url: 'https://example.invalid/' } };
+    const handler = requiredHandler(ipcChannels.getDashboard);
+    await expect(handler(trusted, 'overview')).rejects.toThrow('unused');
+    expect(services.getDashboard).toHaveBeenCalledWith('overview');
+    await expect(handler(trusted)).rejects.toThrow('unused');
+    expect(services.getDashboard).toHaveBeenLastCalledWith();
+    await expect(handler(trusted, 'anything')).rejects.toThrow();
+    await expect(handler(untrusted, 'overview')).rejects.toThrow('IPC sender rejected');
+    expect(services.getDashboard).toHaveBeenCalledTimes(2);
+  });
+
   it('routes and validates scoped work-log, live-log, and export requests', async () => {
     const services = desktopServices();
     registerIpcHandlers(() => ({}) as never, services);

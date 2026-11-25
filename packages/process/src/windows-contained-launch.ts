@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Dirent } from 'node:fs';
 import { windowsContainedProcessSource } from './windows-contained-process.js';
@@ -65,16 +65,95 @@ export async function readWindowsContainmentReceipt(filename: string): Promise<W
  */
 export async function pruneVerifiedWindowsContainmentInputs(receiptPath: string): Promise<number> {
   if (path.basename(receiptPath) !== 'containment.receipt.json') return 0;
-  if (await readWindowsContainmentReceipt(receiptPath) === undefined) return 0;
   const directory = path.dirname(receiptPath);
+  const parent = await lstat(directory).catch(() => null);
+  if (parent === null || !parent.isDirectory() || parent.isSymbolicLink()) return 0;
+  const canonical = await realpath(directory).catch(() => '');
+  if (process.platform === 'win32' ? canonical.toLowerCase() !== path.resolve(directory).toLowerCase()
+    : canonical !== path.resolve(directory)) return 0;
+  // Fast path for new workers: they already remove their launcher inputs.
+  const names = ['containment.cs', 'containment.ps1', 'containment.json'];
+  const entries = await readdir(directory).catch(() => [] as string[]);
+  const candidates = names.filter(name => entries.includes(name));
+  if (candidates.length === 0) return 0;
+  const proof = await lstat(receiptPath).catch(() => null);
+  if (proof === null || !proof.isFile() || proof.isSymbolicLink() || proof.nlink !== 1
+    || proof.dev !== parent.dev || proof.size > 4096
+    || await readWindowsContainmentReceipt(receiptPath) === undefined) return 0;
   let removed = 0;
-  for (const name of ['containment.cs', 'containment.ps1', 'containment.json']) {
-    try {
-      await unlink(path.join(directory, name));
-      removed += 1;
-    } catch {
-      // A terminal receipt is authoritative; cleanup is best effort.
-    }
+  for (const name of candidates) {
+    const filename = path.join(directory, name);
+    const candidate = await lstat(filename).catch(() => null);
+    if (candidate === null || !candidate.isFile() || candidate.isSymbolicLink()
+      || candidate.nlink !== 1 || candidate.dev !== parent.dev) continue;
+    const currentParent = await lstat(directory).catch(() => null);
+    const currentProof = await lstat(receiptPath).catch(() => null);
+    const current = await lstat(filename).catch(() => null);
+    if (currentParent === null || !currentParent.isDirectory() || currentParent.isSymbolicLink()
+      || currentParent.ino !== parent.ino || currentParent.dev !== parent.dev
+      || currentProof === null || !currentProof.isFile() || currentProof.isSymbolicLink()
+      || currentProof.nlink !== 1 || currentProof.dev !== proof.dev || currentProof.ino !== proof.ino
+      || currentProof.mtimeMs !== proof.mtimeMs || currentProof.size !== proof.size
+      || current === null || !current.isFile() || current.isSymbolicLink() || current.nlink !== 1
+      || current.ino !== candidate.ino || current.dev !== candidate.dev || current.size !== candidate.size
+      || current.mtimeMs !== candidate.mtimeMs) continue;
+    try { await unlink(filename); removed++; } catch { /* best effort */ }
+  }
+  return removed;
+}
+
+/** Old terminal shell sidecars are not durable evidence. Retain task.json,
+ * receipt, and every requested nonempty stream. Never touch active/uncertain
+ * tasks or redirected/hard-linked entries. Only explicit maintenance uses this.
+ */
+async function pruneOldTerminalShellSidecars(directory: string, taskId: string): Promise<number> {
+  const parent = await lstat(directory).catch(() => null);
+  if (parent === null || !parent.isDirectory() || parent.isSymbolicLink()) return 0;
+  const canonical = await realpath(directory).catch(() => '');
+  if (process.platform === 'win32' ? canonical.toLowerCase() !== path.resolve(directory).toLowerCase()
+    : canonical !== path.resolve(directory)) return 0;
+  const metadataPath = path.join(directory, 'task.json');
+  const receiptPath = path.join(directory, 'containment.receipt.json');
+  const metadataStat = await lstat(metadataPath).catch(() => null);
+  const receiptStat = await lstat(receiptPath).catch(() => null);
+  if (metadataStat === null || receiptStat === null || !metadataStat.isFile() || !receiptStat.isFile()
+    || metadataStat.isSymbolicLink() || receiptStat.isSymbolicLink() || metadataStat.nlink !== 1 || receiptStat.nlink !== 1
+    || metadataStat.size > 65536 || receiptStat.size > 4096) return 0;
+  const receipt = await readWindowsContainmentReceipt(receiptPath);
+  if (receipt === undefined) return 0;
+  let metadata: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(await readFile(metadataPath, 'utf8'));
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return 0;
+    metadata = parsed as Record<string, unknown>;
+  } catch { return 0; }
+  const cutoff = Date.now() - 7 * 86400 * 1000;
+  const finished = typeof metadata.finished_at === 'string' ? Date.parse(metadata.finished_at) : NaN;
+  const expectedState = receipt.outcome === 'completed' ? (receipt.exitCode === 0 ? 'completed' : 'failed') : receipt.outcome;
+  if (metadata.version !== 1 || metadata.task_id !== taskId || metadata.containment !== 'windows_job_v1'
+    || metadata.state !== expectedState || metadata.exit_code !== receipt.exitCode
+    || !Number.isFinite(finished) || finished >= cutoff
+    || typeof metadata.include_stdout !== 'boolean' || typeof metadata.include_stderr !== 'boolean') return 0;
+  let removed = 0;
+  for (const name of ['worker.pid', 'worker.started', 'stdout.log', 'stderr.log']) {
+    const filename = path.join(directory, name);
+    const candidate = await lstat(filename).catch(() => null);
+    if (candidate === null || !candidate.isFile() || candidate.isSymbolicLink() || candidate.nlink !== 1
+      || candidate.dev !== parent.dev || candidate.mtimeMs >= cutoff) continue;
+    if (name === 'stdout.log' && metadata.include_stdout && candidate.size > 0) continue;
+    if (name === 'stderr.log' && metadata.include_stderr && candidate.size > 0) continue;
+    const currentParent = await lstat(directory).catch(() => null);
+    const currentMetadata = await lstat(metadataPath).catch(() => null);
+    const currentReceipt = await lstat(receiptPath).catch(() => null);
+    const current = await lstat(filename).catch(() => null);
+    if (currentParent === null || !currentParent.isDirectory() || currentParent.isSymbolicLink()
+      || currentParent.dev !== parent.dev || currentParent.ino !== parent.ino
+      || currentMetadata === null || currentMetadata.ino !== metadataStat.ino || currentMetadata.mtimeMs !== metadataStat.mtimeMs
+      || currentReceipt === null || currentReceipt.ino !== receiptStat.ino || currentReceipt.mtimeMs !== receiptStat.mtimeMs
+      || current === null || !current.isFile() || current.isSymbolicLink() || current.nlink !== 1
+      || current.ino !== candidate.ino || current.dev !== candidate.dev || current.size !== candidate.size
+      || current.mtimeMs !== candidate.mtimeMs) continue;
+    try { await unlink(filename); removed++; } catch { /* best effort */ }
   }
   return removed;
 }
@@ -93,7 +172,7 @@ const CONTAINMENT_TASK_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a
  */
 export async function pruneVerifiedWindowsContainmentRoot(
   rootDirectory: string,
-  options: { readonly userConfirmed: boolean; readonly maxDirectories?: number; readonly afterName?: string },
+  options: { readonly userConfirmed: boolean; readonly maxDirectories?: number; readonly afterName?: string; readonly pruneShellSidecars?: boolean },
 ): Promise<{ readonly inspected: number; readonly removedFiles: number; readonly nextCursor: string | null }> {
   if (options.userConfirmed !== true) throw new Error('Native retention cleanup requires explicit confirmation');
   const limit = options.maxDirectories ?? 32;
@@ -124,13 +203,25 @@ export async function pruneVerifiedWindowsContainmentRoot(
     if (cleanupDirectoryCache.size >= 3) cleanupDirectoryCache.clear();
     cleanupDirectoryCache.set(cacheKey, { names, sampledAt: now });
   }
-  const remaining = names.filter((name) => options.afterName === undefined || name > options.afterName);
-  const batch = remaining.slice(0, limit);
+  let start = 0;
+  let end = names.length;
+  const after = options.afterName;
+  if (after !== undefined) {
+    // Upper bound in the sorted snapshot; avoid an O(n) filter per page.
+    while (start < end) {
+      const middle = start + Math.floor((end - start) / 2);
+      if (names[middle]! <= after) start = middle + 1;
+      else end = middle;
+    }
+  }
+  const batch = names.slice(start, start + limit);
   let removedFiles = 0;
   for (const name of batch) {
-    removedFiles += await pruneVerifiedWindowsContainmentInputs(path.join(rootDirectory, name, 'containment.receipt.json'));
+    const directory = path.join(rootDirectory, name);
+    removedFiles += await pruneVerifiedWindowsContainmentInputs(path.join(directory, 'containment.receipt.json'));
+    if (options.pruneShellSidecars === true) removedFiles += await pruneOldTerminalShellSidecars(directory, name);
   }
-  const nextCursor = remaining.length > batch.length ? batch.at(-1) ?? null : null;
+  const nextCursor = start + batch.length < names.length ? batch.at(-1) ?? null : null;
   if (nextCursor === null) cleanupDirectoryCache.delete(cacheKey);
   return { inspected: batch.length, removedFiles, nextCursor };
 }
@@ -173,6 +264,12 @@ try {
  $temporary=Join-Path $Directory 'containment.receipt.tmp'
  [IO.File]::WriteAllText($temporary,$receipt,(New-Object Text.UTF8Encoding($false)))
  [IO.File]::Move($temporary,(Join-Path $Directory 'containment.receipt.json'))
+ # The source and launch spec are single-use. Once zero-active proof is durable,
+ # remove them even if the caller never polls the completed task. A sharing
+ # violation is harmless: host-side verified cleanup remains the fallback.
+ foreach($name in @('containment.cs','containment.json','containment.ps1')) {
+  try {[IO.File]::Delete((Join-Path $Directory $name))} catch {}
+ }
  exit $exitCode
 } catch {
  [Console]::Error.WriteLine('CONTAINMENT_UNRESOLVED')

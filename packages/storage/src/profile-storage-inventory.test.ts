@@ -39,6 +39,24 @@ describe('read-only global quota inventory groundwork', () => {
     }
   });
 
+  it('reports a complete inventory when the budget exactly equals the number of entries', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-inventory-exact-'));
+    try {
+      await mkdir(path.join(root, 'background-tasks', 'job'), { recursive: true });
+      await writeFile(path.join(root, 'background-tasks', 'job', 'task.json'), 'terminal');
+      await writeFile(path.join(root, 'lnwjing.sqlite'), 'db');
+      const result = await inspectProfileStorageOffMain(root, { maxEntries: 4 });
+      expect(result).toMatchObject({ incomplete: false, reason: 'complete', visitedEntries: 4,
+        directories: 2, files: 2, logicalBytes: 10 });
+      expect(result.categories).toEqual(expect.arrayContaining([
+        { id: 'background-tasks', retention: 'managed', logicalBytes: 8, files: 1, directories: 2 },
+        { id: 'database', retention: 'protected', logicalBytes: 2, files: 1, directories: 0 },
+      ]));
+      expect(await inspectProfileStorageOffMain(root, { maxEntries: 3 }))
+        .toMatchObject({ incomplete: true, reason: 'entry-limit', visitedEntries: 3 });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it('gives explicitly incomplete results when the scanning budget is exhausted', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-inventory-budget-'));
     try {

@@ -10,7 +10,10 @@ import {
   type ActiveTaskInspection,
   type DurableMutationKind,
   type DurableTaskLaunchRecord,
+  type ReservationDiagnostics,
+  type ReservationDiagnosticRow,
 } from './durable-shell-task-index.js';
+import { DEFAULT_SHELL_MAX_CONCURRENT_TASKS, MAX_SHELL_CONCURRENT_TASKS } from '@lnwjing/shared';
 import { capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
 
 export type DurableShellTaskState = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled' | 'termination_unverified';
@@ -109,10 +112,11 @@ function repositoryImportBootstrapEnvironment(): NodeJS.ProcessEnv {
 
 export interface DurableShellTaskStoreOptions {
   readonly maxConcurrentTasks?: number;
+  readonly maxConcurrentTasksProvider?: () => number;
   readonly platform?: NodeJS.Platform;
 }
 
-export const DEFAULT_MAX_CONCURRENT_DURABLE_TASKS = 16;
+export const DEFAULT_MAX_CONCURRENT_DURABLE_TASKS = DEFAULT_SHELL_MAX_CONCURRENT_TASKS;
 
 export class DurableShellTaskStore {
   private readonly maxConcurrentTasks: number;
@@ -125,8 +129,11 @@ export class DurableShellTaskStore {
     this.platform = options.platform ?? process.platform;
     this.activeIndex = new DurableShellTaskIndex(rootDirectory, {
       maxConcurrentTasks: this.maxConcurrentTasks,
+      capacityScope: 'durable_shell',
+      ...(options.maxConcurrentTasksProvider === undefined ? {} : { maxConcurrentTasksProvider: (): number => normalizeMaxConcurrentTasks(options.maxConcurrentTasksProvider!()) }),
       inspectTask: async (taskId): Promise<ActiveTaskInspection> => this.inspectTaskForIndex(taskId),
-      loadLaunchRecord: async (taskId): Promise<DurableTaskLaunchRecord | undefined> => this.loadLaunchRecord(taskId),
+      loadLaunchRecord: (taskId): ReturnType<DurableShellTaskStore['loadLaunchRecord']> => this.loadLaunchRecord(taskId),
+      inspectBootstrapTask: (taskId): ReturnType<DurableShellTaskStore['inspectForIndexBootstrap']> => this.inspectForIndexBootstrap(taskId),
     });
   }
 
@@ -263,13 +270,13 @@ export class DurableShellTaskStore {
       // separately when the bounded host probe completes.
       void probeProcessIdentity(worker.pid, this.platform).then(async (workerIdentity) => {
         if (workerIdentity.state === 'live') {
-          await writeFile(path.join(taskDirectory, WORKER_STARTED_FILENAME), workerIdentity.processStartedAt, 'utf8').catch(() => undefined);
+          await this.publishWorkerSidecar(request.taskId, requestDigest, WORKER_STARTED_FILENAME, workerIdentity.processStartedAt);
         }
       }).catch(() => undefined);
       // Publish the worker identity on its own file before returning the task handle.
       // The worker owns task.json; keeping launcher identity separate avoids a race
       // where a very fast completion can be overwritten back to running.
-      await writeFile(path.join(taskDirectory, WORKER_PID_FILENAME), String(worker.pid), 'utf8').catch(() => undefined);
+      await this.publishWorkerSidecar(request.taskId, requestDigest, WORKER_PID_FILENAME, String(worker.pid));
       worker.unref();
       return ok(await this.snapshotFromMetadata(metadata));
     } catch (error: unknown) {
@@ -282,6 +289,20 @@ export class DurableShellTaskStore {
       if (!workerOwnsReservation) await this.activeIndex.release(request.taskId, requestDigest);
       return err(appError('INTERNAL_ERROR', 'Durable task could not start', true));
     }
+  }
+
+  public async reservationDiagnostics(): Promise<Omit<ReservationDiagnostics, 'rows'> & {
+    readonly rows: readonly (ReservationDiagnosticRow & { readonly recordedState?: DurableShellTaskState; readonly ownerSessionId?: string })[];
+  }> {
+    const summary = await this.activeIndex.reservationDiagnostics();
+    const rows = await mapWithConcurrency(summary.rows, 4, async (row) => {
+      if (row.kind === 'managed_writer') return row;
+      const metadata = await this.readMetadata(row.taskId, false, 1);
+      if (!metadata.ok) return row;
+      return { ...row, kind: 'durable_shell' as const, recordedState: metadata.value.state, ownerSessionId: metadataOwner(metadata.value).sessionId };
+    });
+    const classified = rows.filter((row, index) => summary.rows[index]?.kind === 'unknown' && row.kind === 'durable_shell').length;
+    return { ...summary, shell: summary.shell + classified, unknown: summary.unknown - classified, rows };
   }
 
   /** Host UI needs only active workspace identities, not command output or history. */
@@ -450,22 +471,39 @@ export class DurableShellTaskStore {
 
   public async wait(taskId: string, seconds: number, tailLines?: number, owner?: CapabilityTaskOwner, refreshTerminalAfterDeadline = true): Promise<Result<Record<string, unknown>>> {
     const deadline = Date.now() + Math.max(0, seconds) * 1000;
-    let snapshot = await this.snapshot(taskId, tailLines, owner);
-    while (snapshot.ok && snapshot.value.state === 'running' && Date.now() < deadline) {
-      await delay(Math.min(100, Math.max(10, deadline - Date.now())));
-      snapshot = await this.snapshot(taskId, tailLines, owner);
+    const initial = await this.readMetadata(taskId);
+    if (!initial.ok) return initial;
+    if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(initial.value), owner)) {
+      return err(appError('PERMISSION_DENIED', 'Task is not owned by this client session and workspace'));
     }
-    if (!snapshot.ok || snapshot.value.state !== 'running' || !refreshTerminalAfterDeadline) return snapshot;
-
-    // A slow host liveness probe can consume the wait budget after reading a
-    // running snapshot while the worker persists its terminal state. Refresh
-    // task.json once without another process probe so wait returns the latest
-    // durable result instead of a stale running state.
-    const latest = await this.readMetadata(taskId);
-    if (!latest.ok || !isTerminal(latest.value.state)) return snapshot;
-    if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(latest.value), owner)) return snapshot;
-    await this.releaseTerminalReservation(latest.value);
-    return ok(await this.snapshotFromMetadata(latest.value, tailLines));
+    let current = await this.reconcile(initial.value);
+    let nextProbeAt = Date.now() + 1_000;
+    while (current.state === 'running' && Date.now() < deadline) {
+      await delay(Math.min(100, Math.max(10, deadline - Date.now())));
+      // Poll the atomically published metadata, not output or process identity.
+      // Reconcile periodically and at the deadline to detect worker failure.
+      const probeDue = Date.now() >= nextProbeAt || Date.now() >= deadline;
+      const latest = await this.readMetadata(taskId, probeDue);
+      if (!latest.ok) return latest;
+      if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(latest.value), owner)) {
+        return err(appError('PERMISSION_DENIED', 'Task is not owned by this client session and workspace'));
+      }
+      current = latest.value;
+      if (!isTerminal(current.state) && (probeDue || current.state !== 'running')) {
+        current = await this.reconcile(current);
+        nextProbeAt = Date.now() + 1_000;
+      }
+    }
+    if (current.state === 'running' && refreshTerminalAfterDeadline) {
+      const latest = await this.readMetadata(taskId, false);
+      if (latest.ok && isTerminal(latest.value.state)
+        && (owner === undefined || capabilityTaskOwnerMatches(metadataOwner(latest.value), owner))) {
+        current = latest.value;
+      }
+    }
+    await this.releaseTerminalReservation(current);
+    // Read output only once, for the response actually returned.
+    return ok(await this.snapshotFromMetadata(current, tailLines));
   }
 
   public async cancel(taskId: string, owner?: CapabilityTaskOwner): Promise<Result<Record<string, unknown>>> {
@@ -544,23 +582,28 @@ export class DurableShellTaskStore {
   }
 
   private async inspectTaskForIndex(taskId: string): Promise<ActiveTaskInspection> {
+    return (await this.inspectForIndexBootstrap(taskId)).inspection;
+  }
+
+  /** One metadata read for legacy history bootstrap and writer safety. */
+  public async inspectForIndexBootstrap(taskId: string): Promise<{ readonly inspection: ActiveTaskInspection; readonly record?: DurableTaskLaunchRecord }> {
     const metadata = await this.readMetadata(taskId, false, 1);
     if (!metadata.ok) {
       try {
         const handle = await open(path.join(this.taskDirectory(taskId), METADATA_FILENAME), 'r');
         await handle.close();
-        return 'unknown';
+        return { inspection: 'unknown' };
       } catch (error: unknown) {
-        return isFileNotFound(error) ? 'missing' : 'unknown';
+        return { inspection: isFileNotFound(error) ? 'missing' : 'unknown' };
       }
     }
-    if (isTerminal(metadata.value.state)) return 'terminal';
+    const record = this.launchRecord(metadata.value);
+    if (isTerminal(metadata.value.state)) return { inspection: 'terminal', record };
     const reconciled = await this.reconcile(metadata.value);
-    if (isTerminal(reconciled.state)) return 'terminal';
-    return reconciled.state === 'running' ? 'active' : 'unknown';
+    return { inspection: isTerminal(reconciled.state) ? 'terminal' : reconciled.state === 'running' ? 'active' : 'unknown', record };
   }
 
-  private async loadLaunchRecord(taskId: string): Promise<DurableTaskLaunchRecord | undefined> {
+  public async loadLaunchRecord(taskId: string): Promise<DurableTaskLaunchRecord | undefined> {
     const metadata = await this.readMetadata(taskId, false, 1);
     return metadata.ok ? this.launchRecord(metadata.value) : undefined;
   }
@@ -650,7 +693,12 @@ export class DurableShellTaskStore {
         return current;
       }
     }
-    if (current.state === 'termination_unverified') return current;
+    const receiptPath = path.join(this.taskDirectory(current.task_id), 'containment.receipt.json');
+    // Uncertain tasks must remain reserved without proof, but a receipt that
+    // arrives later must allow reconciliation. Avoid a full grace wait for
+    // every unresolved reservation on every new launch.
+    if (current.state === 'termination_unverified' && (current.containment !== 'windows_job_v1'
+      || await readWindowsContainmentReceipt(receiptPath) === undefined)) return current;
 
     // Once both tracked processes are gone, the worker may still be completing its
     // final atomic metadata rename. This window is observable on busy Windows CI:
@@ -659,7 +707,8 @@ export class DurableShellTaskStore {
     if (finalized !== undefined) return finalized;
 
     if (current.containment === 'windows_job_v1') {
-      const receipt = await readWindowsContainmentReceipt(path.join(this.taskDirectory(current.task_id), 'containment.receipt.json'));
+      const receipt = await readWindowsContainmentReceipt(receiptPath);
+      if (receipt === undefined && current.state === 'termination_unverified') return current;
       current.state = receipt === undefined ? 'termination_unverified' : receipt.outcome === 'completed' ? (receipt.exitCode === 0 ? 'completed' : 'failed') : receipt.outcome;
       if (receipt === undefined) {
         current.error = 'Native containment termination could not be verified';
@@ -741,6 +790,20 @@ export class DurableShellTaskStore {
       await delay(15);
     }
     return err(appError('PROCESS_NOT_FOUND', 'Task was not found'));
+  }
+
+  private async publishWorkerSidecar(taskId: string, digest: string, filename: string, value: string): Promise<void> {
+    const target = path.join(this.taskDirectory(taskId), filename);
+    try {
+      await writeFile(target, value, 'utf8');
+      // The worker removes these launch-only files after terminal metadata is
+      // committed. If this host publication races that cleanup, remove the
+      // late sidecar here too, but never discard a live or uncertain identity.
+      const latest = await this.readMetadata(taskId, false, 1);
+      if (latest.ok && latest.value.request_digest === digest && isTerminal(latest.value.state)) {
+        await rm(target, { force: true });
+      }
+    } catch { /* Missing identity remains subject to fail-closed reconciliation. */ }
   }
 
   private async writeMetadata(metadata: DurableTaskMetadata): Promise<void> {
@@ -1127,6 +1190,7 @@ function delay(milliseconds: number): Promise<void> {
 const DURABLE_WORKER_SOURCE = String.raw`import { execFile, spawn } from 'node:child_process';
 import { readFile, writeFile, open, rename, unlink } from 'node:fs/promises';
 import { promisify } from 'node:util';
+import path from 'node:path';
 
 const execFileAsync = promisify(execFile);
 const METADATA_IO_RETRY_ATTEMPTS = 6;
@@ -1139,31 +1203,39 @@ await unlink(specPath).catch(() => undefined);
 let metadata = JSON.parse(await readFile(spec.metadataPath, 'utf8'));
 metadata.worker_pid = process.pid;
 await persist();
-let stdoutBytes = 0;
-let stderrBytes = 0;
-const stdoutHandle = await open(spec.stdoutPath, 'a');
-const stderrHandle = await open(spec.stderrPath, 'a');
+const streams = {
+  stdout: { enabled: spec.includeStdout, path: spec.stdoutPath, bytes: 0, handle: undefined, tail: Promise.resolve() },
+  stderr: { enabled: spec.includeStderr, path: spec.stderrPath, bytes: 0, handle: undefined, tail: Promise.resolve() },
+};
 let settled = false;
 let timer;
 let child;
 let stopTarget;
-const pendingWrites = new Set();
 
-function appendBounded(handle, chunk, stream) {
+function appendBounded(chunk, stream) {
+  const output = streams[stream];
+  if (settled || !output.enabled) return;
   const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8');
-  const used = stream === 'stdout' ? stdoutBytes : stderrBytes;
-  const remaining = Math.max(0, spec.maxOutputBytes - used);
+  if (buffer.byteLength === 0) return;
+  const remaining = Math.max(0, spec.maxOutputBytes - output.bytes);
   if (remaining <= 0) {
     metadata[stream + '_truncated'] = true;
     return;
   }
   const slice = buffer.subarray(0, remaining);
-  if (stream === 'stdout') stdoutBytes += slice.byteLength;
-  else stderrBytes += slice.byteLength;
+  output.bytes += slice.byteLength;
   if (buffer.byteLength > remaining) metadata[stream + '_truncated'] = true;
-  const pending = handle.write(slice);
-  pendingWrites.add(pending);
-  void pending.then(() => pendingWrites.delete(pending), () => pendingWrites.delete(pending));
+  // Drain disabled streams without writing them, and never create empty logs.
+  // Serialize actual writes to preserve output order and surface partial I/O.
+  output.tail = output.tail.then(async () => {
+    output.handle ??= await open(output.path, 'a');
+    let offset = 0;
+    while (offset < slice.byteLength) {
+      const { bytesWritten } = await output.handle.write(slice, offset, slice.byteLength - offset);
+      if (bytesWritten <= 0) throw new Error('Output write made no progress');
+      offset += bytesWritten;
+    }
+  }).catch(() => { metadata[stream + '_truncated'] = true; });
 }
 
 function isTransientMetadataIoError(error) {
@@ -1293,10 +1365,16 @@ async function finish(state, exitCode, error) {
   else delete metadata.error;
   if (state === 'termination_unverified') delete metadata.finished_at;
   else metadata.finished_at = new Date().toISOString();
-  await Promise.allSettled([...pendingWrites]);
-  await Promise.allSettled([stdoutHandle.close(), stderrHandle.close()]);
+  await Promise.all([streams.stdout.tail, streams.stderr.tail]);
+  await Promise.allSettled(Object.values(streams).map(async (output) => { await output.handle?.close(); }));
   const persisted = await persist().then(() => true, () => false);
-  if (persisted && state !== 'termination_unverified') await releaseReservation();
+  if (persisted && state !== 'termination_unverified') {
+    // task.json is now authoritative. Launch-only sidecars are no longer
+    // needed for liveness. Keep terminal output and containment proof intact.
+    const directory = path.dirname(spec.metadataPath);
+    await Promise.allSettled(['worker.pid', 'worker.started'].map(name => unlink(path.join(directory, name))));
+    await releaseReservation();
+  }
 }
 
 try {
@@ -1311,8 +1389,8 @@ try {
     ...(spec.windowsVerbatimArguments === undefined ? {} : { windowsVerbatimArguments: spec.windowsVerbatimArguments }),
   });
   metadata.child_pid = child.pid;
-  child.stdout?.on('data', (chunk) => { appendBounded(stdoutHandle, chunk, 'stdout'); });
-  child.stderr?.on('data', (chunk) => { appendBounded(stderrHandle, chunk, 'stderr'); });
+  child.stdout?.on('data', (chunk) => { appendBounded(chunk, 'stdout'); });
+  child.stderr?.on('data', (chunk) => { appendBounded(chunk, 'stderr'); });
   child.once('error', (error) => { void finish('failed', -1, 'Local task failed to start: ' + error.message); });
   child.once('exit', (code) => {
     if (stopTarget || settled) return;
@@ -1377,7 +1455,7 @@ export function durableShellRequestDigest(request: DurableShellLaunchRequest): s
 
 function normalizeMaxConcurrentTasks(value: number | undefined): number {
   if (value === undefined) return DEFAULT_MAX_CONCURRENT_DURABLE_TASKS;
-  if (!Number.isInteger(value) || value < 1 || value > 128) throw new Error('maxConcurrentTasks must be between 1 and 128');
+  if (!Number.isInteger(value) || value < 1 || value > MAX_SHELL_CONCURRENT_TASKS) throw new Error(`maxConcurrentTasks must be between 1 and ${MAX_SHELL_CONCURRENT_TASKS}`);
   return value;
 }
 

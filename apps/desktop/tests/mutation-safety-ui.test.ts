@@ -41,7 +41,7 @@ const dashboard: DashboardSnapshot = {
     customPermission: { read: 'ALLOW', write: 'ASK', execute: 'ASK', dangerous: 'DENY', allowedExecutables: [] },
     desktopFullBypassAll: false,
     stdioFullBypassAll: false,
-    mcpCallTimeoutMs: 60_000, mcpIdleTimeoutMs: 300_000, processTimeoutMs: 3_600_000, mcpPollWaitSeconds: 5, shellSynchronousWaitSeconds: 60,
+    mcpCallTimeoutMs: 60_000, mcpIdleTimeoutMs: 300_000, processTimeoutMs: 3_600_000, mcpPollWaitSeconds: 5, shellSynchronousWaitSeconds: 60, shellMaxConcurrentTasks: 16, shellAdaptiveCapacityEnabled: false,
     capabilityRoots: [], pdfProviderPath: '', lspCommands: {}, mcpHttpPort: 18_765, mcpAllowedHostnames: [], codexToolsEnabled: false, ponytailMode: 'off',
     updateAutoCheck: true, updateCheckOnStartup: true, updateIntervalMinutes: 30, updateAutoDownload: true,
     closeBehavior: 'tray', launchAtStartup: false, startMinimized: false, tunnelAutoReconnect: true, tunnelMaxAutoRestarts: 5, recoveryRetentionDays: 0,
@@ -52,7 +52,7 @@ const dashboard: DashboardSnapshot = {
   appVersion: APP_VERSION,
 };
 
-function settingsMarkup(locale: 'th' | 'en', overrides: Partial<DashboardSnapshot> = {}, section: 'general' | 'security' | 'mcp' | 'tunnel' = 'security'): string {
+function settingsMarkup(locale: 'th' | 'en', overrides: Partial<DashboardSnapshot> = {}, section: 'general' | 'security' | 'tools' | 'mcp' | 'tunnel' = 'security'): string {
   return renderToStaticMarkup(createElement(SettingsPage, {
     locale,
     initialSection: section,
@@ -111,6 +111,17 @@ function recoveryMarkup(locale: 'th' | 'en'): string {
 }
 
 describe('mutation safety UI contract', () => {
+  it('exposes the shared shell task limit and opt-in adaptive capacity in both locales', () => {
+    const settings = { ...dashboard.settings, shellMaxConcurrentTasks: 27, shellAdaptiveCapacityEnabled: true };
+    const english = settingsMarkup('en', { settings }, 'tools');
+    expect(english).toContain('Maximum concurrent shell tasks');
+    expect(english).toContain('Adaptive shell capacity');
+    expect(english).toMatch(/<input[^>]*max="128"[^>]*value="27"/);
+    expect(english).toContain('never stops existing jobs');
+    const thai = settingsMarkup('th', { settings }, 'tools');
+    expect(thai).toContain('จำนวน Shell tasks พร้อมกันสูงสุด');
+    expect(thai).toContain('ปรับเพดาน Shell ตามทรัพยากรเครื่อง');
+  });
   it('disables persistent Tunnel actions in Settings while a runtime is starting', () => {
     const markup = settingsMarkup('en', {
       tunnel: {

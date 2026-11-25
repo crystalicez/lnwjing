@@ -64,6 +64,7 @@ import { workspaceIndexTools } from './tools/workspace-index-tools.js';
 import { upgradeTools } from './tools/upgrade-tools.js';
 import { ToolSchemaRegistry } from './tool-schema-registry.js';
 import { ToolWorkloadAdmission } from './tool-workload-admission.js';
+import { isShellCapacityRejection, shellCapacityRetryQueueFor } from './shell-capacity-retry.js';
 import { isAdvertisedDeliveryState } from './tool-delivery-contract.js';
 import { upgradeCatalogEntry } from './upgrade-catalog.js';
 import { OFFICE_SEMANTIC_TOOL_NAMES } from './office-tool-contracts.js';
@@ -429,8 +430,17 @@ export class ToolRegistry {
     }).effectiveExposed;
   }
 
-  public invoke(name: string, input: unknown, traceContext?: TraceContext, parentSignal?: AbortSignal): Promise<McpToolResponse> {
-    return this.invokeInternal(name, input, traceContext, parentSignal);
+  public async invoke(name: string, input: unknown, traceContext?: TraceContext, parentSignal?: AbortSignal): Promise<McpToolResponse> {
+    const response = await this.invokeInternal(name, input, traceContext, parentSignal);
+    if (name !== 'shell' || !isShellCapacityRejection(response)) return response;
+    // Retry only a definite pre-launch rejection. No host approval is silently
+    // reused: preview avoids repeated approval prompts, and invokeInternal
+    // revalidates the current profile, active scope, lease, quota and audit.
+    return shellCapacityRetryQueueFor(this.workloadAdmission).retry(response, async (waitSignal) => {
+      const preview = await this.previewPermission(name, input);
+      if (waitSignal.aborted || preview.decision !== 'allow' || preview.hostApprovalRequired) return response;
+      return this.invokeInternal(name, input, traceContext, parentSignal);
+    }, parentSignal);
   }
 
   /** Internal-only deterministic shell entrypoint; the reserved context never enters the public schema. */

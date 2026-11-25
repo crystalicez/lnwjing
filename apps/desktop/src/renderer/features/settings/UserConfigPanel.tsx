@@ -43,6 +43,8 @@ const DEFAULT_USER_SETTINGS: UserSettings = {
   processTimeoutMs: 60 * 60_000,
   mcpPollWaitSeconds: 5,
   shellSynchronousWaitSeconds: 60,
+  shellMaxConcurrentTasks: 16,
+  shellAdaptiveCapacityEnabled: false,
   capabilityRoots: [],
   pdfProviderPath: '',
   lspCommands: {},
@@ -473,8 +475,11 @@ export function UserConfigPanel({ locale, hostPlatform, hostArch, permissionProf
               <NumberField label={t('userConfig.processTimeout')} value={Math.round(draft.processTimeoutMs / 60_000)} min={1} max={240} onChange={(value) => patch({ processTimeoutMs: value * 60_000 })} />
               <NumberField label={t('userConfig.mcpPollWait')} value={draft.mcpPollWaitSeconds} min={5} max={60} onChange={(value) => patch({ mcpPollWaitSeconds: value })} />
               <NumberField label={t('userConfig.shellWait')} value={draft.shellSynchronousWaitSeconds} min={5} max={60} onChange={(value) => patch({ shellSynchronousWaitSeconds: value })} />
+              <NumberField label={t('userConfig.shellTaskLimit')} value={draft.shellMaxConcurrentTasks} min={1} max={128} onChange={(value) => patch({ shellMaxConcurrentTasks: value })} />
               <NumberField label={t('userConfig.localMcpHttpPort')} value={draft.mcpHttpPort} min={0} max={65535} onChange={(value) => patch({ mcpHttpPort: value })} />
             </div>
+            <p className="hint">{t('userConfig.shellTaskLimitHint')}</p>
+            <SettingSwitch checked={draft.shellAdaptiveCapacityEnabled} label={t('userConfig.shellAdaptiveCapacity')} description={t('userConfig.shellAdaptiveCapacityHint')} onChange={(value) => patch({ shellAdaptiveCapacityEnabled: value })} />
             <p className="hint">{t('userConfig.localMcpHttpPortHint')}</p>
             <TextList
               id="mcp-allowed-hostnames"

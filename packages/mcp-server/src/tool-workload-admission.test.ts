@@ -166,6 +166,20 @@ describe('ToolWorkloadAdmission', () => {
     expect(admission.snapshot().active.index).toBe(0);
   });
 
+  it('does not block shell task observations and cancellation behind saturated process admission', async () => {
+    const admission = new ToolWorkloadAdmission({ process: 1 });
+    const controller = new AbortController();
+    const release = await admission.acquire('shell', controller.signal, { operation: 'run' });
+    try {
+      for (const operation of ['status', 'wait', 'list', 'logs', 'result', 'cancel']) {
+        const observation = await admission.acquire('shell', controller.signal, { operation });
+        observation();
+      }
+      expect(admission.snapshot().active.process).toBe(1);
+      expect(admission.snapshot().queued.process).toBe(0);
+    } finally { release(); }
+  });
+
   it('throttles expensive scans and builds while allowing light file commands', async () => {
     const admission = new ToolWorkloadAdmission({ index: 1, process: 1 });
     const search = await admission.acquire('workspace_full_scan', new AbortController().signal);

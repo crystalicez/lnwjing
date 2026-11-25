@@ -81,6 +81,7 @@ export interface ShellCapabilityOptions {
   readonly defaultTimeoutSeconds?: number;
   readonly defaultBackgroundTimeoutSeconds?: number;
   readonly taskStateDirectory?: string;
+  readonly maxConcurrentTasksProvider?: () => number;
   readonly autoWaitSeconds?: number;
   readonly maxSynchronousWaitSeconds?: number;
   readonly maxSynchronousWaitSecondsProvider?: () => number;
@@ -149,7 +150,9 @@ export class ShellCapabilityBackend implements CapabilityBackend {
     this.terminator = options.terminator ?? createProcessTreeTerminator();
     this.defaultTimeoutSeconds = clampNumber(options.defaultTimeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS, 0.1, MAX_TIMEOUT_SECONDS);
     this.defaultBackgroundTimeoutSeconds = clampNumber(options.defaultBackgroundTimeoutSeconds ?? DEFAULT_BACKGROUND_TIMEOUT_SECONDS, 0.1, MAX_TIMEOUT_SECONDS);
-    this.durableStore = options.taskStateDirectory === undefined ? undefined : new DurableShellTaskStore(path.resolve(options.taskStateDirectory));
+    this.durableStore = options.taskStateDirectory === undefined ? undefined : new DurableShellTaskStore(path.resolve(options.taskStateDirectory), {
+      ...(options.maxConcurrentTasksProvider === undefined ? {} : { maxConcurrentTasksProvider: options.maxConcurrentTasksProvider }),
+    });
     this.autoWaitSeconds = clampNumber(options.autoWaitSeconds ?? DEFAULT_AUTO_WAIT_SECONDS, 0, DEFAULT_TIMEOUT_SECONDS);
     this.maxSynchronousWaitSeconds = clampNumber(options.maxSynchronousWaitSeconds ?? DEFAULT_MAX_SYNCHRONOUS_WAIT_SECONDS, 0.01, 90);
     this.maxSynchronousWaitSecondsProvider = options.maxSynchronousWaitSecondsProvider;
@@ -164,7 +167,7 @@ export class ShellCapabilityBackend implements CapabilityBackend {
 
     switch (parsed.value.operation) {
       case 'run': return this.run(parsed.value, signal, authorization);
-      case 'list': return this.listTasks(parsed.value.owner, parsed.value.limit, parsed.value.cursor);
+      case 'list': return this.listTasks(parsed.value.owner, parsed.value.limit ?? 50, parsed.value.cursor);
       case 'status': return this.taskSnapshot(parsed.value.taskId, parsed.value.tailLines, parsed.value.owner);
       case 'wait': return this.wait(parsed.value);
       case 'logs': return this.taskSnapshot(parsed.value.taskId, parsed.value.tailLines, parsed.value.owner);
@@ -177,6 +180,10 @@ export class ShellCapabilityBackend implements CapabilityBackend {
       case 'deny':
         return err(appError('INVALID_INPUT', `${parsed.value.operation} is not required by the local task runner`));
     }
+  }
+
+  public async reservationDiagnostics(): Promise<Awaited<ReturnType<DurableShellTaskStore['reservationDiagnostics']>> | null> {
+    return this.durableStore?.reservationDiagnostics().catch(() => null) ?? null;
   }
 
   /** Trusted host-only summary, not an MCP session's task-list permission. */
@@ -545,39 +552,32 @@ export class ShellCapabilityBackend implements CapabilityBackend {
     return this.durableStore.wait(taskId, Math.min(this.autoWaitSeconds, this.currentMaxSynchronousWaitSeconds()), undefined, request.owner, false);
   }
 
-  private async listTasks(owner: CapabilityTaskOwner, limit?: number, cursor?: string): Promise<Result<unknown>> {
+  private async listTasks(owner: CapabilityTaskOwner, limit: number, cursor?: string): Promise<Result<unknown>> {
     const inMemory = [...this.tasks.values()]
       .filter((record) => capabilityTaskOwnerMatches(record.owner, owner))
       .map((record) => this.snapshot(record));
-    if (limit !== undefined) {
-      const memoryOffset: Result<number | undefined> = cursor === undefined ? ok(undefined) : decodeMemoryCursor(cursor);
-      if (memoryOffset.ok && memoryOffset.value !== undefined) {
-        return ok(memoryTaskPage(inMemory, limit, memoryOffset.value));
-      }
-      if (this.durableStore === undefined) {
-        if (!memoryOffset.ok) return memoryOffset;
-        if (cursor !== undefined && memoryOffset.value === undefined) return err(appError('INVALID_INPUT', 'Task list cursor is invalid'));
-        return ok(memoryTaskPage(inMemory, limit, 0));
-      }
-      const durable = await this.durableStore.listPage(owner, limit, cursor);
-      if (!durable.ok) return durable;
-      const durableIds = new Set(durable.value.tasks.map((task) => task.task_id).filter((value): value is string => typeof value === 'string'));
-      const remainingMemory = inMemory.filter((task) => !durableIds.has(String(task.task_id ?? '')));
-      if (durable.value.nextCursor !== undefined) {
-        return ok({ tasks: durable.value.tasks, next_cursor: durable.value.nextCursor });
-      }
-      const room = Math.max(0, limit - durable.value.tasks.length);
-      const memoryTasks = remainingMemory.slice(0, room);
-      const tasks = [...durable.value.tasks, ...memoryTasks];
-      return ok({
-        tasks,
-        ...(memoryTasks.length < remainingMemory.length ? { next_cursor: encodeMemoryCursor(memoryTasks.length) } : {}),
-      });
+    const memoryOffset: Result<number | undefined> = cursor === undefined ? ok(undefined) : decodeMemoryCursor(cursor);
+    if (memoryOffset.ok && memoryOffset.value !== undefined) {
+      return ok(memoryTaskPage(inMemory, limit, memoryOffset.value));
     }
-    if (this.durableStore === undefined) return ok({ tasks: inMemory });
-    const durable = await this.durableStore.list(owner);
-    const durableIds = new Set(durable.map((task) => task.task_id).filter((value): value is string => typeof value === 'string'));
-    return ok({ tasks: [...durable, ...inMemory.filter((task) => !durableIds.has(String(task.task_id ?? '')))] });
+    if (this.durableStore === undefined) {
+      if (!memoryOffset.ok) return memoryOffset;
+      if (cursor !== undefined && memoryOffset.value === undefined) return err(appError('INVALID_INPUT', 'Task list cursor is invalid'));
+      return ok(memoryTaskPage(inMemory, limit, 0));
+    }
+    const durable = await this.durableStore.listPage(owner, limit, cursor);
+    if (!durable.ok) return durable;
+    const durableIds = new Set(durable.value.tasks.map((task) => task.task_id).filter((value): value is string => typeof value === 'string'));
+    const remainingMemory = inMemory.filter((task) => !durableIds.has(String(task.task_id ?? '')));
+    if (durable.value.nextCursor !== undefined) {
+      return ok({ tasks: durable.value.tasks, next_cursor: durable.value.nextCursor });
+    }
+    const room = Math.max(0, limit - durable.value.tasks.length);
+    const memoryTasks = remainingMemory.slice(0, room);
+    return ok({
+      tasks: [...durable.value.tasks, ...memoryTasks],
+      ...(memoryTasks.length < remainingMemory.length ? { next_cursor: encodeMemoryCursor(memoryTasks.length) } : {}),
+    });
   }
 
   private authorizeTaskOwner(stored: CapabilityTaskOwner, requester: CapabilityTaskOwner): Result<void> {

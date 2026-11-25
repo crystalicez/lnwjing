@@ -34,6 +34,8 @@ export function createLocalCapabilityRuntime(
   configuredRootsProvider: () => readonly string[] = () => [],
   synchronousWaitSecondsProvider: () => number = () => DEFAULT_SHELL_SYNCHRONOUS_WAIT_SECONDS,
   nativeApi?: ElectronNativeCapabilityApi,
+  maxConcurrentTasksProvider?: () => number,
+  adaptiveCapacityEnabledProvider?: () => boolean,
 ): LocalCapabilityRuntime {
   const bridgeSizeBytes = capabilityBridgeExpectedSizeBytes();
   const ocrPath = windowsOcrHelperPath();
@@ -53,6 +55,8 @@ export function createLocalCapabilityRuntime(
     unrestricted,
     configuredRootsProvider: () => [...readCapabilityRoots(process.env.LNWJING_CAPABILITY_ROOTS), ...configuredRootsProvider()],
     synchronousWaitSecondsProvider,
+    ...(maxConcurrentTasksProvider === undefined ? {} : { maxConcurrentTasksProvider }),
+    ...(adaptiveCapacityEnabledProvider === undefined ? {} : { adaptiveCapacityEnabledProvider }),
     ...(nativeApi === undefined ? {} : { shared: createElectronNativeCapabilityBackends({ platform: process.platform, api: nativeApi, allowedRootsProvider: workspaceRootsProvider }) }),
     ...(windows === undefined ? {} : { windows }),
     ...(nativeHost === undefined ? {} : { nativeHost }),

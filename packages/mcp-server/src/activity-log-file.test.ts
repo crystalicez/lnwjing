@@ -1,10 +1,15 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityTracker, type ActivitySinkEvent } from './activity-tracker.js';
 import { composeActivitySinks, createFileActivitySink, formatActivityLogLine, mcpActivityLogPath } from './activity-log-file.js';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, appendFile: vi.fn(actual.appendFile) };
+});
 
 const temporaryRoots: string[] = [];
 
@@ -41,6 +46,46 @@ describe('mcp activity log file', () => {
       timestamp: '2026-01-01T00:00:00.000Z',
       resultMessage: 'missing',
     })).toContain('"toolName":"write_file"');
+  });
+
+  it('shares a single ordered write batch across same-file sink instances', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-shared-log-batch-'));
+    temporaryRoots.push(root);
+    const filePath = mcpActivityLogPath(root);
+    const first = createFileActivitySink(filePath);
+    const second = createFileActivitySink(path.join(root, '.', 'mcp-activity.log'));
+    vi.mocked(appendFile).mockClear();
+    await Promise.all(Array.from({ length: 128 }, (_, i) => (i % 2 === 0 ? first : second).record({
+      callId: 'shared-' + i, toolName: 'read_file', phase: 'completed',
+      resultCode: 'SUCCESS', durationMs: 0, timestamp: '2026-11-25T00:00:00.000Z',
+    })));
+    const writes = vi.mocked(appendFile).mock.calls.filter(([filename]) => filename === filePath);
+    expect(writes).toHaveLength(1);
+    const ids = (await readFile(filePath, 'utf8')).trim().split('\n')
+      .map((line) => (JSON.parse(line) as { callId: string }).callId);
+    expect(ids).toEqual(Array.from({ length: 128 }, (_, i) => 'shared-' + i));
+    await second.record({ callId: 'later', toolName: 'read_file', phase: 'completed',
+      resultCode: 'SUCCESS', durationMs: 0, timestamp: '2026-11-25T00:00:00.000Z' });
+    expect((await readFile(filePath, 'utf8')).trim().split('\n')).toHaveLength(129);
+  });
+
+  it('preserves all ordered events across the shared queue backpressure limit', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-log-backpressure-'));
+    temporaryRoots.push(root);
+    const filePath = mcpActivityLogPath(root);
+    const first = createFileActivitySink(filePath);
+    const second = createFileActivitySink(filePath);
+    const count = 2305;
+    vi.mocked(appendFile).mockClear();
+    await Promise.all(Array.from({ length: count }, (_, i) => (i % 2 ? first : second).record({
+      callId: 'pressure-' + i, toolName: 'read_file', phase: 'completed',
+      resultCode: 'SUCCESS', durationMs: 0, timestamp: '2026-11-25T00:00:00.000Z',
+    })));
+    const ids = (await readFile(filePath, 'utf8')).trim().split('\n')
+      .map(line => (JSON.parse(line) as { callId: string }).callId);
+    expect(ids).toEqual(Array.from({ length: count }, (_, i) => 'pressure-' + i));
+    expect(vi.mocked(appendFile).mock.calls.filter(([filename]) => filename === filePath))
+      .toHaveLength(Math.ceil(count / 128));
   });
 
   it('flushes a large burst in order with no lost events across batch boundaries', async () => {
