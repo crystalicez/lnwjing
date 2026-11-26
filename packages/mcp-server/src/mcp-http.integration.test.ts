@@ -15,10 +15,12 @@ describe('MCP localhost HTTP transport', () => {
   let workspaceListCalls: number;
   let workspaceListImpl: () => Promise<ReturnType<typeof ok<readonly { id: string; kind: string }[]>>>;
   let activityTracker: ActivityTracker;
+  let diagnostics: Array<{ name: string; message: string }>;
 
   beforeEach(async () => {
     workspaceListCalls = 0;
     activityTracker = new ActivityTracker();
+    diagnostics = [];
     workspaceListImpl = async (): Promise<ReturnType<typeof ok<readonly { id: string; kind: string }[]>>> => ok([{ id: 'workspace-1', kind: 'project' }]);
     handle = await startMcpHttp({
       port: 0,
@@ -33,6 +35,7 @@ describe('MCP localhost HTTP transport', () => {
       },
       actor: { clientId: 'http-test', clientName: 'http-test' },
       activityTracker,
+      diagnostic: (event): void => { diagnostics.push(event); },
     });
   });
 
@@ -439,6 +442,41 @@ describe('MCP localhost HTTP transport', () => {
     }
   });
 
+  it('delivers a large Unicode JSON-RPC result over actual legacy SSE without corrupting frames', async () => {
+    const client = new Client({ name: 'sse-unicode-client', version: '0.1.0' });
+    const transport = new StreamableHTTPClientTransport(handle.endpoint);
+    const large = 'ภาษาไทย 😀 "quoted" \n'.repeat(5000);
+    workspaceListImpl = async (): Promise<ReturnType<typeof ok<readonly { id: string; kind: string }[]>>> => ok([{ id: large, kind: 'project' }]);
+    try {
+      await client.connect(transport);
+      const response = await fetch(handle.endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          'mcp-session-id': transport.sessionId!,
+          ...(transport.protocolVersion === undefined ? {} : { 'mcp-protocol-version': transport.protocolVersion }),
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 9001, method: 'tools/call', params: { name: 'workspace_list', arguments: {} } }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+      const body = await response.text();
+      const messages = body.split(/\r?\n\r?\n/).flatMap((frame) => {
+        const data = frame.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n');
+        return data.length === 0 ? [] : [JSON.parse(data) as unknown];
+      });
+      expect(messages).toContainEqual(expect.objectContaining({
+        jsonrpc: '2.0', id: 9001, result: expect.objectContaining({ structuredContent: expect.any(Object) }),
+      }));
+      expect(JSON.stringify(messages)).toContain(JSON.stringify(large).slice(1, -1));
+      expect(workspaceListCalls).toBe(1);
+    } finally {
+      await client.close();
+    }
+  }, 15_000);
+
   it('keeps a legacy session usable after the client transport disconnects and reconnects', async () => {
     const firstClient = new Client({ name: 'disconnecting-client', version: '0.1.0' });
     const firstTransport = new StreamableHTTPClientTransport(handle.endpoint);
@@ -533,6 +571,7 @@ describe('MCP localhost HTTP transport', () => {
         'mcp-protocol-version': '2026-07-28',
         'mcp-method': 'tools/call',
         'mcp-name': 'workspace_list',
+        traceparent: '00-12345678901234567890123456789012-1234567890123456-01',
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -561,6 +600,9 @@ describe('MCP localhost HTTP transport', () => {
         const state = activityTracker.telemetrySnapshot();
         expect(state.active).toBe(0);
         expect(state.byTool.workspace_list?.cancellations).toBe(1);
+        expect(diagnostics.filter((event) => event.name === 'McpTransportInterrupted')).toEqual([
+          { name: 'McpTransportInterrupted', message: expect.stringMatching(/reason=(?:response_closed|socket_closed|request_aborted).*traceparent=00-12345678901234567890123456789012-1234567890123456-01/) },
+        ]);
       }, { timeout: 3_000 });
     } finally {
       controller.abort();

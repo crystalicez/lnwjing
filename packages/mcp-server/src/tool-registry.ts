@@ -1274,12 +1274,20 @@ export class ToolRegistry {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let settled = false;
     let deadlineExceeded = false;
+    let dispatched = false;
     let onParentAbort: (() => void) | undefined;
     let operation: Promise<McpToolResponse> | undefined;
     let registrationReleased = false;
     let recipeCancellationSnapshot: (() => unknown) | undefined;
-    const cancellationResponse = (message: string): McpToolResponse => recipeCancellationSnapshot === undefined
-      ? mapError(appError('PROCESS_TIMEOUT', message, true))
+    const cancellationResponse = (code: 'PROCESS_TIMEOUT' | 'REQUEST_CANCELLED', message: string): McpToolResponse => recipeCancellationSnapshot === undefined
+      ? mapError({ ...appError(code, message, true), details: {
+          dispatchState: dispatched ? 'dispatched' : 'not_dispatched',
+          outcome: dispatched ? 'unknown' : 'not_started',
+          retry: 'inspect_before_retry',
+          ...(callId === undefined ? {} : { callId }),
+          ...(tool.name === 'shell' && isRecord(input) && typeof input.request_id === 'string' ? { requestId: input.request_id } : {}),
+          ...(tool.name === 'shell' && isRecord(input) && typeof input.task_id === 'string' ? { taskId: input.task_id } : {}),
+        } })
       : mapResult(ok(recipeCancellationSnapshot()));
     const releaseRegistration = (): void => {
       if (registrationReleased) return;
@@ -1296,7 +1304,7 @@ export class ToolRegistry {
         onParentAbort = (): void => {
           deadlineExceeded = true;
           controller.abort();
-          finish(cancellationResponse(`MCP tool ${tool.name} was cancelled because its parent request ended; cancellation was requested, but an underlying operation may still be finishing. Check task/process status before retrying.`));
+          finish(cancellationResponse('REQUEST_CANCELLED', `MCP tool ${tool.name} was cancelled because its parent request ended; cancellation was requested, but an underlying operation may still be finishing. Check task/process status before retrying.`));
         };
         if (parentSignal?.aborted) {
           onParentAbort();
@@ -1313,7 +1321,7 @@ export class ToolRegistry {
           timer = setTimeout(() => {
             deadlineExceeded = true;
             controller.abort();
-            finish(cancellationResponse(`MCP tool ${tool.name} exceeded the ${Math.ceil(responseBudgetMs / 1000)}s response budget; cancellation was requested, but an underlying operation may still be finishing. Check task/process status before retrying.`));
+            finish(cancellationResponse('PROCESS_TIMEOUT', `MCP tool ${tool.name} exceeded the ${Math.ceil(responseBudgetMs / 1000)}s response budget; cancellation was requested, but an underlying operation may still be finishing. Check task/process status before retrying.`));
           }, responseBudgetMs);
         }
         try {
@@ -1321,6 +1329,7 @@ export class ToolRegistry {
             const release = await this.workloadAdmission.acquire(tool.name, controller.signal, input);
             try {
               if (controller.signal.aborted) throw new Error('Tool request cancelled before dispatch');
+              dispatched = true;
               const result = await tool.execute(input, controller.signal, authorization, tool.name === 'recipe_run'
                 ? { ...internal, recipeCancellation: { register(snapshot): void { recipeCancellationSnapshot = snapshot; } } }
                 : internal);

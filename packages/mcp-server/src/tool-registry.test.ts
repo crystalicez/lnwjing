@@ -1140,6 +1140,35 @@ describe('MCP tool registry', () => {
     expect(backendSettled).toBe(true);
   });
 
+  it('distinguishes parent cancellation from the response budget and reports dispatch uncertainty', async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const services: McpApplicationServices = { search: {
+      async searchText() {
+        entered.resolve();
+        await release.promise;
+        return ok({ matches: [], truncated: false });
+      },
+      async searchFiles() { return ok({ paths: [], truncated: false }); },
+    } };
+    const registry = new ToolRegistry(services, actor);
+    const controller = new AbortController();
+    const pending = registry.invoke('search_text', { workspaceId: 'workspace-1', query: 'cancel' }, undefined, controller.signal);
+    await entered.promise;
+    try {
+      controller.abort();
+      await expect(pending).resolves.toMatchObject({
+        isError: true, structuredContent: { error: { code: 'REQUEST_CANCELLED', details: {
+          dispatchState: 'dispatched', outcome: 'unknown', retry: 'inspect_before_retry',
+        } } },
+      });
+    } finally {
+      release.resolve();
+    }
+    const followUp = await registry.invoke('search_text', { workspaceId: 'workspace-1', query: 'after' });
+    expect(followUp.isError).not.toBe(true);
+  });
+
   it('aborts a timed-out invocation before allowing the next MCP call to succeed', async () => {
     let firstInvocationAborted = false;
     const services: McpApplicationServices = { search: {

@@ -63,6 +63,24 @@ describe('agent command policy', () => {
     expect(riskyAgentCommandReason(executable, args)).toBeUndefined();
   });
 
+  it('allows the Android inspection output projection without misclassifying string concatenation', () => {
+    const command = "adb -s test-device shell uiautomator dump /sdcard/test-ui.xml|Out-Null; [xml]$x=adb -s test-device shell cat /sdcard/test-ui.xml; $x.SelectNodes('//node')|Where-Object {$_.text -eq 'test.txt' -or ($_.package -eq 'app.test' -and $_.'content-desc')}|ForEach-Object { $_.text+' '+$_.'content-desc'+' '+$_.bounds }";
+    expect(riskyAgentCommandReason('powershell.exe', ['-NoProfile', '-Command', command])).toBeUndefined();
+  });
+
+  it.each([
+    "& ('Remove'+'-Item') target | ForEach-Object { $_.text+' '+$_.bounds }",
+    "Remove-Item target | ForEach-Object { $_.text+' '+$_.bounds }",
+    "Get-Item target | ForEach-Object { $_.text+' '+$_.bounds; & ('Remove'+'-Item') target }",
+    "Get-Item target | ForEach-Object { $_.text+' '+$_.bounds } ; & ('Remove'+'-Item') target",
+    "Get-Item target | ForEach-Object { $_.text+' '+$_.bounds } | Invoke-Expression",
+    "$cmd='Remove'+'-Item'; & $cmd target | ForEach-Object { $_.text+' '+$_.bounds }",
+    "Unknown-Command | ForEach-Object { $_.'text'+' '+$_.bounds }",
+    "adb -s test-device shell uiautomator dump /sdcard/../test.xml|Out-Null; [xml]$x=adb -s test-device shell cat /sdcard/../test.xml; $x.SelectNodes('//node')|Where-Object {$_.text -eq 'test.txt' -or ($_.package -eq 'app.test' -and $_.'content-desc')}|ForEach-Object { $_.text+' '+$_.'content-desc'+' '+$_.bounds }",
+  ])('retains confirmation for dynamic or destructive execution: %s', (command) => {
+    expect(riskyAgentCommandReason('powershell.exe', ['-Command', command])).toBeDefined();
+  });
+
   it('treats dynamically constructed PowerShell as risky', () => {
     expect(riskyAgentCommandReason('powershell.exe', ['-Command', "& ('Remove'+'-Item') x"])).toBeDefined();
   });

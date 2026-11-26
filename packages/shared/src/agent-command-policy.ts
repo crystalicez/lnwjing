@@ -107,7 +107,22 @@ function riskyGitCommandReason(args: readonly string[]): string | undefined {
 }
 
 function looksDynamicallyConstructedCommand(value: string): boolean {
-  return /&\s*\(/.test(value) || /['"][^'"]*['"]\s*\+\s*['"]/.test(value);
+  const dynamic = /&\s*\(|['"][^'"]*['"]\s*\+\s*['"]/;
+  if (/\b(?:invoke-expression|iex|scriptblock)\b/i.test(value)) return true;
+  if (!dynamic.test(value)) return false;
+
+  // Recognize only a terminal output projection made of current-item property
+  // reads and literal space separators. Do not exempt arbitrary script blocks,
+  // concatenated command names, invocation operators or downstream pipelines.
+  // The destructive-command scan still examines the complete original command.
+  const projection = /\|\s*ForEach-Object\s*\{\s*\$_\.(?:[a-z][\w-]*|'[a-z][\w-]*')(?:\s*\+\s*' '\s*\+\s*\$_\.(?:[a-z][\w-]*|'[a-z][\w-]*'))+\s*\}\s*$/i;
+  const prefix = value.replace(projection, '');
+  if (prefix === value || dynamic.test(prefix)) return true;
+  // A narrow grammar for the observed XML inspection pipeline. Unknown
+  // prefixes keep the old conservative decision; a harmless output suffix
+  // must not accidentally clear an unrelated opaque command's risk.
+  const inspection = /^adb\s+-s\s+([a-z0-9._:-]+)\s+shell\s+uiautomator\s+dump\s+(\/sdcard\/[a-z0-9_-][a-z0-9_.-]*\.xml)\s*\|\s*Out-Null\s*;\s*\[xml\]\s*(\$[a-z]\w*)\s*=\s*adb\s+-s\s+\1\s+shell\s+cat\s+\2\s*;\s*\3\.SelectNodes\(\s*'\/\/node'\s*\)\s*\|\s*Where-Object\s*\{\s*\$_\.text\s+-eq\s+'[a-z0-9_. -]+'\s+-or\s+\(\s*\$_\.package\s+-eq\s+'[a-z0-9_. -]+'\s+-and\s+\$_\.'content-desc'\s*\)\s*\}\s*$/i;
+  return !inspection.test(prefix);
 }
 
 function riskyCommandText(value: string): boolean {

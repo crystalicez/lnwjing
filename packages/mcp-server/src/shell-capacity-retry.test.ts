@@ -37,7 +37,7 @@ describe('shell capacity retry backpressure', () => {
     const first = queue.retry(full, async () => success);
     const cancelled = queue.retry(full, run, abort.signal);
     abort.abort();
-    expect((await cancelled).structuredContent).toMatchObject({ error: { code: 'PROCESS_TIMEOUT' } });
+    expect((await cancelled).structuredContent).toMatchObject({ error: { code: 'REQUEST_CANCELLED', details: { dispatchState: 'not_dispatched', outcome: 'not_started' } } });
     expect(run).not.toHaveBeenCalled();
     expect(await first).toBe(success);
     expect(await queue.retry(full, run)).toBe(success);

@@ -48,7 +48,7 @@ export class ShellCapacityRetryQueue {
     parentSignal?: AbortSignal,
   ): Promise<McpToolResponse> {
     if (!isShellCapacityRejection(initial)) return initial;
-    const cancelled = (): McpToolResponse => mapError(appError('PROCESS_TIMEOUT', 'Shell request cancelled while waiting for capacity; no retry was dispatched', true));
+    const cancelled = (): McpToolResponse => mapError({ ...appError('REQUEST_CANCELLED', 'Shell request cancelled while waiting for capacity; no retry was dispatched', true), details: { dispatchState: 'not_dispatched', outcome: 'not_started', retry: 'inspect_before_retry' } });
     if (parentSignal?.aborted) return cancelled();
     if (this.pending >= this.maxPending) return initial;
     this.pending += 1;

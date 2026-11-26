@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   automationShellRequestDigest,
   appError,
@@ -34,6 +34,7 @@ interface ShellRequest {
   readonly activeWorkspaceRoot?: string;
   readonly execution: ShellExecution;
   readonly taskId?: string;
+  readonly requestId?: string;
   readonly timeoutSeconds: number;
   readonly maxOutputBytes: number;
   readonly tailLines?: number;
@@ -326,6 +327,9 @@ export class ShellCapabilityBackend implements CapabilityBackend {
     }
     if (signal?.aborted) return err(appError('PROCESS_TIMEOUT', 'Shell request was cancelled before launch', true));
 
+    if (request.requestId !== undefined && (this.durableStore === undefined || request.execution === 'foreground')) {
+      return err(appError('INVALID_INPUT', 'Shell request_id requires durable background execution'));
+    }
     if (request.automationDispatch !== undefined && this.durableStore === undefined) {
       return err(appError('INTERNAL_ERROR', 'Reserved automation shell dispatch requires the durable task store', true));
     }
@@ -531,7 +535,8 @@ export class ShellCapabilityBackend implements CapabilityBackend {
     invocation: { readonly executable: string; readonly args: readonly string[]; readonly windowsVerbatimArguments?: boolean },
   ): Promise<Result<unknown>> {
     if (this.durableStore === undefined) return err(appError('INTERNAL_ERROR', 'Durable task store is unavailable', true));
-    const taskId = request.automationDispatch?.taskId ?? randomUUID();
+    const taskId = request.automationDispatch?.taskId
+      ?? (request.requestId === undefined ? randomUUID() : shellRequestTaskId(request.owner, request.requestId));
     const durableRequest = {
       taskId,
       commandFingerprint: engineeringCommandFingerprint(formatEngineeringCommand(request.executable!, request.arguments)),
@@ -724,6 +729,8 @@ function parseShellRequest(value: unknown, defaultTimeoutSeconds: number, defaul
   if (cwd !== undefined && (typeof cwd !== 'string' || cwd.includes('\0'))) return err(appError('INVALID_INPUT', 'Working directory is invalid'));
   const taskId = value.task_id === undefined ? undefined : value.task_id;
   if (taskId !== undefined && (typeof taskId !== 'string' || taskId.trim().length === 0)) return err(appError('INVALID_INPUT', 'Task ID is invalid'));
+  const requestId = value.request_id;
+  if (requestId !== undefined && (typeof requestId !== 'string' || requestId.trim().length === 0 || requestId.trim().length > 128)) return err(appError('INVALID_INPUT', 'Request ID is invalid'));
   const hasAutomationDispatch = Object.prototype.hasOwnProperty.call(value, AUTOMATION_SHELL_DISPATCH_CONTEXT);
   const automationDispatch = readAutomationShellDispatchContext(value);
   if (hasAutomationDispatch && automationDispatch === undefined) return err(appError('INVALID_INPUT', 'Reserved automation shell context is invalid'));
@@ -746,9 +753,16 @@ function parseShellRequest(value: unknown, defaultTimeoutSeconds: number, defaul
   const dryRun = value.dry_run === undefined ? false : value.dry_run;
   const userConfirmed = value.userConfirmed === true;
   const owner = readCapabilityTaskOwner(value);
+  const lookupTaskId = taskId ?? (typeof requestId === 'string' && ['status', 'wait', 'logs', 'result'].includes(operation)
+    ? shellRequestTaskId(owner, requestId.trim()) : undefined);
   const activeWorkspaceRoot = readCapabilityActiveWorkspaceRoot(value);
   if (typeof includeStdout !== 'boolean' || typeof includeStderr !== 'boolean' || typeof dryRun !== 'boolean') return err(appError('INVALID_INPUT', 'Shell flags are invalid'));
-  return ok({ operation, ...(executable === undefined ? {} : { executable: executable.trim() }), arguments: rawArguments, privilege, ...(cwd === undefined ? {} : { cwd }), ...(activeWorkspaceRoot === undefined ? {} : { activeWorkspaceRoot }), execution, ...(taskId === undefined ? {} : { taskId }), timeoutSeconds, maxOutputBytes: requestedMaxBytes, ...(tailLines === undefined ? {} : { tailLines }), ...(limit === undefined ? {} : { limit }), ...(cursor === undefined ? {} : { cursor }), includeStdout, includeStderr, dryRun, userConfirmed, owner, ...(automationDispatch === undefined ? {} : { automationDispatch }) });
+  return ok({ operation, ...(executable === undefined ? {} : { executable: executable.trim() }), arguments: rawArguments, privilege, ...(cwd === undefined ? {} : { cwd }), ...(activeWorkspaceRoot === undefined ? {} : { activeWorkspaceRoot }), execution, ...(lookupTaskId === undefined ? {} : { taskId: lookupTaskId }), ...(typeof requestId === 'string' ? { requestId: requestId.trim() } : {}), timeoutSeconds, maxOutputBytes: requestedMaxBytes, ...(tailLines === undefined ? {} : { tailLines }), ...(limit === undefined ? {} : { limit }), ...(cursor === undefined ? {} : { cursor }), includeStdout, includeStderr, dryRun, userConfirmed, owner, ...(automationDispatch === undefined ? {} : { automationDispatch }) });
+}
+
+// Derive a separate namespace; a caller cannot choose an automation task ID.
+function shellRequestTaskId(owner: CapabilityTaskOwner, requestId: string): string {
+  return `request-${createHash('sha256').update(JSON.stringify([owner.clientId, owner.sessionId, owner.workspaceId ?? null, requestId])).digest('hex')}`;
 }
 
 function readAutomationShellDispatchContext(value: Record<string, unknown>): AutomationShellDispatchContext | undefined {

@@ -592,25 +592,48 @@ export async function startMcpHttp(options: McpHttpServerOptions): Promise<McpHt
   const allowedHostnames = [...new Set([...localhostAllowedHostnames(), ...(options.allowedHostnames ?? [])])];
   const listener: RequestListener = (request, response) => {
     const controller = new AbortController();
-    const onDisconnect = (): void => { if (!response.writableEnded) controller.abort(); };
-    request.once('aborted', onDisconnect);
-    response.once('close', onDisconnect);
+    const startedAt = performance.now();
+    let reported = false;
+    const reportInterruption = (reason: string): void => {
+      // GET/listener disconnects are expected; do not log their churn.
+      if (reported || request.method !== 'POST' || request.url?.split('?')[0] !== '/mcp') return;
+      reported = true;
+      const trace = request.headers.traceparent;
+      const traceParent = typeof trace === 'string' && /^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/i.test(trace) ? trace : 'unavailable';
+      const message = `reason=${reason} headersSent=${response.headersSent} elapsedMs=${Math.round(performance.now() - startedAt)} traceparent=${traceParent}`;
+      // No body, command, authentication headers or arbitrary exception text.
+      try {
+        if (options.diagnostic !== undefined) options.diagnostic({ name: 'McpTransportInterrupted', message });
+        else writeDiagnostic(new Error(`McpTransportInterrupted: ${message}`));
+      } catch { /* Diagnostics cannot alter request cancellation. */ }
+    };
+    const disconnect = (reason: string): void => {
+      if (response.writableEnded || controller.signal.aborted) return;
+      reportInterruption(reason);
+      controller.abort();
+    };
+    const onRequestAborted = (): void => disconnect('request_aborted');
+    const onResponseClose = (): void => disconnect('response_closed');
+    const onSocketClose = (): void => disconnect('socket_closed');
+    request.once('aborted', onRequestAborted);
+    response.once('close', onResponseClose);
     // A client may terminate the TCP connection before ServerResponse emits
     // close (notably with undici on Windows). Observe the owned socket too.
     const socket = response.socket;
-    socket?.once('close', onDisconnect);
+    socket?.once('close', onSocketClose);
     // Never reuse this signal across requests: a dropped SSE listener must not
     // cancel a later request from the same MCP session or a durable task.
     void handleRequest(request, response, handler, originPolicy, allowedHostnames, maxBodyBytes, controller.signal)
       .catch((error: unknown) => {
+        reportInterruption(response.headersSent ? 'response_stream_error' : 'handler_error');
         writeDiagnostic(error instanceof Error ? error : new Error('Unhandled MCP HTTP request error'));
         if (!response.headersSent) sendStatus(response, 500, 'Internal server error');
         else response.destroy();
       })
       .finally(() => {
-        request.off('aborted', onDisconnect);
-        response.off('close', onDisconnect);
-        socket?.off('close', onDisconnect);
+        request.off('aborted', onRequestAborted);
+        response.off('close', onResponseClose);
+        socket?.off('close', onSocketClose);
       });
   };
   const servers = await bindLoopbackServers(listener, options.port);

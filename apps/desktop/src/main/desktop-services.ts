@@ -916,6 +916,11 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       services: mcpServices,
       actor: mcpActor,
       activityTracker,
+      diagnostic: (event): void => {
+        if (event.name === 'McpTransportInterrupted') {
+          activityLogDiagnostic?.('mcp-transport:' + randomUUID(), '[MCP transport] ' + event.message);
+        }
+      },
       mutationAdmissionGuardProvider: () => checkMutationAdmissionWithRecovery(),
       profileProvider: activePermissionProfile,
       authorizationModeProvider: (): 'standard' | 'full_bypass' => desktopFullBypassEnabled() ? 'full_bypass' : 'standard',

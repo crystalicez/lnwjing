@@ -288,7 +288,7 @@ describe('DAP through registered tools', () => {
       const pending = registry.invoke('debug_step', { workspaceId, session_id: session, action: 'next', arguments: { threadId: 1 } }, undefined, controller.signal);
       await entered.promise;
       controller.abort();
-      expect(await pending).toMatchObject({ isError: true, structuredContent: { error: { code: 'PROCESS_TIMEOUT' } } });
+      expect(await pending).toMatchObject({ isError: true, structuredContent: { error: { code: 'REQUEST_CANCELLED', details: { dispatchState: 'dispatched', outcome: 'unknown', retry: 'inspect_before_retry' } } } });
       await vi.waitFor(() => expect(setup.sockets.size).toBe(1));
       expect((await registry.invoke('debug_step', { workspaceId, session_id: session, action: 'status' })).structuredContent).toMatchObject({ session: { state: 'disconnected', connectionGap: true, debuggeeState: 'unknown' } });
       expect((await other.invoke('debug_step', { workspaceId, session_id: otherSession, action: 'threads' })).isError).not.toBe(true);

@@ -54,6 +54,43 @@ describe('ShellCapabilityBackend', () => {
       .resolves.toMatchObject({ ok: true, value: { state: 'completed', command_fingerprint: expected } });
   }, 20_000);
 
+  it('recovers a lost shell receipt by request_id and never replays a retained or damaged receipt', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-shell-request-id-'));
+    temporaryRoots.push(root);
+    const taskStateDirectory = path.join(root, '.tasks');
+    const owner = { metadata: { [CAPABILITY_TASK_OWNER_METADATA_KEY]: { clientId: 'client-a', sessionId: 'session-a', workspaceId: 'workspace-a' } } };
+    const other = { metadata: { [CAPABILITY_TASK_OWNER_METADATA_KEY]: { clientId: 'client-a', sessionId: 'session-b', workspaceId: 'workspace-a' } } };
+    const script = path.join(root, 'fixture.cjs');
+    const counter = path.join(root, 'count.txt');
+    await writeFile(script, "require('node:fs').appendFileSync(process.argv[2], 'x');", 'utf8');
+    const backend = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory });
+    const reopened = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory });
+    const input = {
+      operation: 'run', request_id: 'logical-execution-a', executable: process.execPath,
+      arguments: [script, counter], cwd: root, execution: 'background', timeout_seconds: 30, ...owner,
+    };
+    const [first, overlapping] = await Promise.all([backend.execute(input), reopened.execute(input)]);
+    const launched = first.ok ? first : overlapping;
+    expect(launched).toMatchObject({ ok: true, value: { task_id: expect.stringMatching(/^request-/), durable: true } });
+    if (!launched.ok) throw new Error('Expected one admitted execution');
+    const taskId = String(launched.value.task_id);
+    if (first.ok && overlapping.ok) expect(first.value.task_id).toBe(overlapping.value.task_id);
+    await expect(reopened.execute({ operation: 'wait', request_id: input.request_id, timeout_seconds: 15, ...owner }))
+      .resolves.toMatchObject({ ok: true, value: { task_id: taskId, state: 'completed', exit_code: 0 } });
+    await expect(reopened.execute(input)).resolves.toMatchObject({ ok: true, value: { task_id: taskId, state: 'completed', started_at: launched.value.started_at } });
+    await expect(reopened.execute({ ...input, arguments: ['--version'] })).resolves.toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    await expect(reopened.execute({ operation: 'status', request_id: input.request_id, ...other }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'PROCESS_NOT_FOUND' } });
+    await expect(reopened.execute({ operation: 'status', task_id: taskId, ...other }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_DENIED' } });
+    expect(await readFile(counter, 'utf8')).toBe('x');
+    const receipt = path.join(taskStateDirectory, taskId, 'task.json');
+    await writeFile(receipt, 'invalid receipt', 'utf8');
+    await expect(reopened.execute(input)).resolves.toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect(await readFile(receipt, 'utf8')).toBe('invalid receipt');
+    expect(await readFile(counter, 'utf8')).toBe('x');
+  }, 30_000);
+
   it('rejects a public run request that tries to select a reserved task ID', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-shell-public-id-'));
     temporaryRoots.push(root);

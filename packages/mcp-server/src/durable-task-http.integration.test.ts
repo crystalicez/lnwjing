@@ -90,7 +90,7 @@ describe('durable task ownership over HTTP', () => {
 
       const launched = await client.callTool({ name: launchTool, arguments: {
         workspaceId: 'workspace-a', executable: process.execPath, arguments: [fixturePath, readyPath, releasePath], cwd: rootA,
-        timeout_seconds: 30, ...(launchTool === 'shell' ? { operation: 'run', execution: 'background' } : {}),
+        timeout_seconds: 30, ...(launchTool === 'shell' ? { operation: 'run', execution: 'background', request_id: 'http-recovery-key' } : {}),
       } });
       expect(launched.isError, JSON.stringify(launched)).not.toBe(true);
       taskId = z.string().min(1).parse(launched.structuredContent?.task_id);
@@ -111,6 +111,10 @@ describe('durable task ownership over HTTP', () => {
         expect(logs.structuredContent).toMatchObject({ state: 'running', stdout: '  ready ไทย 😀\n', stderr: 'warning ไทย\n' });
       }, { timeout: 5000 });
       backend = makeBackend();
+      if (launchTool === 'shell') {
+        const recovered = await client.callTool({ name: 'shell', arguments: { workspaceId: 'workspace-a', operation: 'status', request_id: 'http-recovery-key' } });
+        expect(recovered.structuredContent).toMatchObject({ task_id: taskId, state: 'running' });
+      }
       for (const operation of ['status', 'logs', 'result', 'wait']) {
         const observed = await client.callTool({ name: 'shell', arguments: { workspaceId: 'workspace-a', operation, task_id: taskId, timeout_seconds: 0.1 } });
         expect(observed.isError, JSON.stringify(observed)).not.toBe(true);

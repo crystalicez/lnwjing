@@ -233,9 +233,28 @@ export class DurableShellTaskStore {
       requestDigest,
       activeMarkerPath: reservation.value.markerPath,
     };
+    // Claim the task directory exclusively. A previous task may have finished
+    // and released its reservation between the first read and index admission.
+    // Never overwrite an existing (possibly damaged) execution receipt.
     try {
-      await mkdir(taskDirectory, { recursive: true });
-      await mkdir(this.rootDirectory, { recursive: true });
+      await mkdir(taskDirectory);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+        const concurrent = await this.readMetadata(request.taskId);
+        if (concurrent.ok && concurrent.value.request_digest === requestDigest) {
+          const reconciled = await this.reconcile(concurrent.value);
+          await this.releaseTerminalReservation(reconciled);
+          return ok(await this.snapshotFromMetadata(reconciled));
+        }
+        if (concurrent.ok && isTerminal(concurrent.value.state)) {
+          await this.activeIndex.release(request.taskId, requestDigest);
+        }
+        return err(appError('CONFLICT', 'Existing durable task receipt is unreadable or belongs to another request; do not replay the task', true));
+      }
+      await this.activeIndex.release(request.taskId, requestDigest);
+      return err(appError('INTERNAL_ERROR', 'Durable task directory could not be created', true));
+    }
+    try {
       const contained = this.platform === 'win32' ? await prepareWindowsContainedLaunch({
         directory: taskDirectory, executable: request.executable, args: request.arguments, cwd: request.cwd, timeoutMs: request.timeoutSeconds * 1000,
         windowsVerbatimArguments: request.windowsVerbatimArguments === true,
