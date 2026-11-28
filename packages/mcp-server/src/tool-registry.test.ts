@@ -1807,7 +1807,7 @@ describe('MCP tool registry', () => {
       goalLease: { goalId: 'terminal-goal', leaseToken: 'lease-token', leaseGeneration: 1 },
     });
 
-    expect(response).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT', recoverable: true } } });
+    expect(response, JSON.stringify(response)).toMatchObject({ isError: true, structuredContent: { error: { code: 'CONFLICT', recoverable: true } } });
     expect(capabilityCalls).toBe(0);
   });
 

@@ -352,6 +352,7 @@ const capabilityRequestSchema = {
 
 export const shellCapabilitySchema = z.object({
   workspaceId: optionalWorkspaceIdSchema,
+  recovery_token: z.string().regex(/^lnwrt_[a-f0-9]{64}$/).optional(),
   operation: z.enum(['run', 'list', 'status', 'wait', 'logs', 'result', 'cancel', 'resume', 'approve', 'deny']).default('run'),
   executable: z.string().trim().min(1).max(1024).optional(),
   arguments: z.array(z.string().max(32_768)).max(128).optional(),

@@ -18,7 +18,7 @@ import { engineeringCommandFingerprint, formatEngineeringCommand } from '@lnwjin
 import type { CapabilityBackend } from './local-capability-service.js';
 import { prohibitedAgentCommandReason, riskyAgentCommandReason } from './agent-command-policy.js';
 import { DurableShellTaskStore } from './durable-shell-task-store.js';
-import { capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, readCapabilityActiveWorkspaceRoot, readCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
+import { capabilityTaskGoalMatches, capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, readCapabilityActiveWorkspaceRoot, readCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
 
 type ShellOperation = 'run' | 'list' | 'status' | 'wait' | 'logs' | 'result' | 'cancel' | 'resume' | 'approve' | 'deny';
 type ShellExecution = 'foreground' | 'background' | 'auto';
@@ -196,10 +196,10 @@ export class ShellCapabilityBackend implements CapabilityBackend {
   }
 
   /** Trusted owner probe. Never equate workspace membership with actual task ownership. */
-  public async isOwnedGoalTask(ownerClientId: string, workspaceId: string, taskId: string): Promise<boolean> {
+  public async isOwnedGoalTask(ownerClientId: string, workspaceId: string, taskId: string, goalId?: string): Promise<boolean> {
     const record = this.tasks.get(taskId);
-    if (record) return record.owner.clientId === ownerClientId && record.owner.workspaceId === workspaceId;
-    return this.durableStore?.isOwnedGoalTask(ownerClientId, workspaceId, taskId) ?? false;
+    if (record) return capabilityTaskGoalMatches(record.owner, ownerClientId, workspaceId, goalId);
+    return this.durableStore?.isOwnedGoalTask(ownerClientId, workspaceId, taskId, goalId) ?? false;
   }
 
   /** Trusted read-only host probe scoped to the durable goal's workspace. */
@@ -252,10 +252,11 @@ export class ShellCapabilityBackend implements CapabilityBackend {
     ownerClientId: string,
     workspaceId: string,
     taskId: string,
+    goalId?: string,
   ): Promise<Result<GoalTaskCancellationObservation>> {
     const record = this.tasks.get(taskId);
     if (record !== undefined) {
-      if (record.owner.clientId !== ownerClientId || record.owner.workspaceId !== workspaceId) {
+      if (!capabilityTaskGoalMatches(record.owner, ownerClientId, workspaceId, goalId)) {
         return err(appError('PERMISSION_DENIED', 'Task belongs to another client or workspace'));
       }
       if (isVerifiedTerminal(record.state)) {
@@ -267,7 +268,7 @@ export class ShellCapabilityBackend implements CapabilityBackend {
       }
       return ok({ matched: true, state: 'termination_unverified', detail: record.state });
     }
-    if (this.durableStore !== undefined) return this.durableStore.cancelForGoal(taskId, ownerClientId, workspaceId);
+    if (this.durableStore !== undefined) return this.durableStore.cancelForGoal(taskId, ownerClientId, workspaceId, goalId);
     return ok({ matched: false, state: 'not_found' });
   }
 
@@ -588,7 +589,7 @@ export class ShellCapabilityBackend implements CapabilityBackend {
   private authorizeTaskOwner(stored: CapabilityTaskOwner, requester: CapabilityTaskOwner): Result<void> {
     return capabilityTaskOwnerMatches(stored, requester)
       ? ok(undefined)
-      : err(appError('PERMISSION_DENIED', 'Task is not owned by this client session and workspace'));
+      : err({ ...appError('PERMISSION_DENIED', 'Task access requires the original session or a verified recovery proof'), details: { reason: 'task_recovery_or_owner_mismatch' } });
   }
 
   private async resolveCwd(
@@ -762,7 +763,13 @@ function parseShellRequest(value: unknown, defaultTimeoutSeconds: number, defaul
 
 // Derive a separate namespace; a caller cannot choose an automation task ID.
 function shellRequestTaskId(owner: CapabilityTaskOwner, requestId: string): string {
-  return `request-${createHash('sha256').update(JSON.stringify([owner.clientId, owner.sessionId, owner.workspaceId ?? null, requestId])).digest('hex')}`;
+  // Preserve legacy IDs, but opt-in recovery scopes survive transport restart.
+  const identity = owner.workspaceId !== undefined && owner.recoveryHash !== undefined
+    ? ['recovery-v2', owner.clientId, owner.workspaceId, owner.recoveryHash, requestId]
+    : owner.workspaceId !== undefined && owner.goalId !== undefined
+      ? ['goal-v2', owner.clientId, owner.workspaceId, owner.goalId, requestId]
+      : [owner.clientId, owner.sessionId, owner.workspaceId ?? null, requestId];
+  return `request-${createHash('sha256').update(JSON.stringify(identity)).digest('hex')}`;
 }
 
 function readAutomationShellDispatchContext(value: Record<string, unknown>): AutomationShellDispatchContext | undefined {

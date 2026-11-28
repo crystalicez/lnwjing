@@ -114,7 +114,8 @@ function redactString(value: string): string {
     .replace(AUTHORIZATION_HEADER, '$1[REDACTED]')
     .replace(BEARER_VALUE, 'Bearer [REDACTED]')
     .replace(ENV_SECRET_ASSIGNMENT, '$1=[REDACTED]')
-    .replace(API_KEY_PREFIX, '[REDACTED]');
+    .replace(API_KEY_PREFIX, '[REDACTED]')
+    .replace(/\blnwrt_[a-f0-9]{64}\b/gi, '[REDACTED]');
 }
 
 function legacySummaryItems(summary: string | undefined): { readonly items: readonly string[]; readonly itemCount: number } {

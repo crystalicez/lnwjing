@@ -33,6 +33,22 @@ describe('MCP request scope', () => {
     });
   });
 
+  it('binds only the verified goal and strips raw recovery tokens', () => {
+    const actor = actorForRequestScope({ clientId: 'client-1', clientName: 'test' }, createStdioRequestScope('session-a'));
+    const token = 'lnwrt_' + 'a'.repeat(64);
+    const input = { workspaceId: 'ws-1', recovery_token: token,
+      metadata: { [CAPABILITY_TASK_OWNER_METADATA_KEY]: { goalId: 'forged', recoveryHash: 'b'.repeat(64) } } };
+    const scoped = withCapabilityOwnerMetadata(input, actor, { goal: { goalId: 'goal-1', workspaceId: 'ws-1' } });
+    expect(scoped).toMatchObject({ metadata: { [CAPABILITY_TASK_OWNER_METADATA_KEY]: {
+      clientId: 'client-1', sessionId: 'session-a', workspaceId: 'ws-1', goalId: 'goal-1', recoveryHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    } } });
+    expect(JSON.stringify(scoped)).not.toContain(token);
+    expect(JSON.stringify(scoped)).not.toContain('forged');
+    expect(JSON.stringify(scoped)).not.toContain('b'.repeat(64));
+    const mismatched = withCapabilityOwnerMetadata(input, actor, { goal: { goalId: 'goal-2', workspaceId: 'ws-2' } });
+    expect(JSON.stringify(mismatched)).not.toContain('goal-2');
+  });
+
   it('overwrites spoofed task ownership metadata with the trusted scoped actor', () => {
     const actor = actorForRequestScope({ clientId: 'client-1', clientName: 'test' }, createStdioRequestScope('session-a'));
     const input = withCapabilityOwnerMetadata({ workspaceId: 'ws-1', metadata: { [CAPABILITY_TASK_OWNER_METADATA_KEY]: { clientId: 'attacker', sessionId: 'spoofed' } } }, actor);

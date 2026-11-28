@@ -818,7 +818,8 @@ export class ToolRegistry {
         goalLease === undefined ? undefined : goalLease.goalId,
         callId,
         goalLease?.leaseGeneration,
-        { ...internal, checkedInvocation: {
+        { ...internal, verifiedTaskGoal: goalLease !== undefined && mutationFenceWorkspaceId !== undefined
+          ? { goalId: goalLease.goalId, workspaceId: mutationFenceWorkspaceId } : undefined, checkedInvocation: {
           ...(goalLease === undefined ? {} : { goalLease }),
           ...(engineeringTask === undefined ? {} : { engineeringTask }),
         } },
@@ -1101,7 +1102,7 @@ export class ToolRegistry {
     if (envelope === undefined || !isRecord(input)) return input;
     return {
       ...input,
-      ...(envelope.goalLease !== undefined && SCHEDULED_CONTINUATION_FENCED_TOOLS.has(name) ? { goalLease: envelope.goalLease } : {}),
+      ...(envelope.goalLease !== undefined && acceptsGoalLease(name) ? { goalLease: envelope.goalLease } : {}),
       ...(envelope.engineeringTask !== undefined && ENGINEERING_GUARDED_MUTATION_TOOLS.has(name) ? { engineeringTask: envelope.engineeringTask } : {}),
     };
   }
@@ -1509,9 +1510,13 @@ export const SCHEDULED_CONTINUATION_FENCED_TOOLS = new Set([
   'computer_use', 'dom_cdp', 'accessibility', 'input_event', 'ui_target_action', 'window',
   'clipboard', 'file_dialog', 'notification', 'web_fetch', 'scheduler',
   'office', 'audio', 'screen_record', 'docx_merge', 'office_ppt', ...OFFICE_SEMANTIC_TOOL_NAMES,
-  'task_create', 'benchmark_run', 'recipe_run', 'debug_attach', 'debug_step',
+  'task_create', 'task_cancel', 'benchmark_run', 'recipe_run', 'debug_attach', 'debug_step',
   ...AUTOMATION_TOOL_NAMES.filter((name) => AUTOMATION_MUTATION_TOOL_NAMES.has(name)),
 ]);
+const GOAL_TASK_RECOVERY_READ_TOOLS = new Set(['task_status', 'task_result', 'task_list']);
+function acceptsGoalLease(name: string): boolean {
+  return SCHEDULED_CONTINUATION_FENCED_TOOLS.has(name) || GOAL_TASK_RECOVERY_READ_TOOLS.has(name);
+}
 const WORKSPACE_WRITER_LEASE_CONTROL_TOOLS = new Set([
   'workspace_writer_lease_acquire', 'workspace_writer_lease_status',
   'workspace_writer_lease_renew', 'workspace_writer_lease_release',
@@ -1635,7 +1640,7 @@ function readWorkspaceWriterLeaseProof(input: unknown): WorkspaceWriterLeaseProo
 }
 
 function withGoalLeaseEnvelope(tool: McpToolDefinition): McpToolDefinition {
-  if (!SCHEDULED_CONTINUATION_FENCED_TOOLS.has(tool.name)) return tool;
+  if (!acceptsGoalLease(tool.name)) return tool;
   const extendObjectSchema = (schema: z.ZodObject): z.ZodObject =>
     schema.safeExtend({ goalLease: goalLeaseProofSchema.optional() });
   const inputSchema = tool.inputSchema instanceof z.ZodObject

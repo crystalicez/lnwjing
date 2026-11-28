@@ -2699,7 +2699,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
       if (fresh === null || fresh.workspaceId !== selected.id || !(fresh.trackedTasks ?? []).some(
         (row) => row.taskId === task.taskId && row.provider === task.provider && row.cancelWithGoal && row.role === 'blocking_job',
       )) throw new Error('Task ownership changed during confirmation');
-      const [outcome] = await taskCancellation.cancelForGoal(fresh.ownerClientId, selected.id, [task]);
+      const [outcome] = await taskCancellation.cancelForGoal(fresh.ownerClientId, selected.id, [task], fresh.id);
       if (!outcome) throw new Error('Task cancellation produced no provider observation');
       return {
         taskId: outcome.taskId, status: outcome.status,
@@ -2732,7 +2732,7 @@ export function createDesktopRuntime(dataPath: string, options: DesktopRuntimeOp
             ownerVerified = codexService.isOwnedGoalTask(client, workspaceId, taskId);
             status = codexService.statusForGoalLiveness(workspaceId, taskId);
           } else if (provider === 'shell') {
-            ownerVerified = await capabilityRuntime.shell.isOwnedGoalTask(client, workspaceId, taskId);
+            ownerVerified = await capabilityRuntime.shell.isOwnedGoalTask(client, workspaceId, taskId, goalId);
             status = await capabilityRuntime.shell.statusForGoalLiveness(workspaceId, taskId);
           } else return null;
           const detail = status.ok && status.value !== null && typeof status.value === 'object'

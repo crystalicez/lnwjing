@@ -189,6 +189,8 @@ export interface McpToolDefinition {
 
 export interface McpInternalInvocationContext {
   readonly automationDispatch?: AutomationDispatchContext;
+  /** Exact goal/workspace already checked by registry lease validation, not user input. */
+  readonly verifiedTaskGoal?: import('../request-scope.js').VerifiedTaskGoalScope | undefined;
   readonly checkedInvocation?: CheckedInvocationEnvelope;
   readonly recipeCancellation?: { register(snapshot: () => unknown): void };
 }

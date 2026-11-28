@@ -14,7 +14,7 @@ import {
   type ReservationDiagnosticRow,
 } from './durable-shell-task-index.js';
 import { DEFAULT_SHELL_MAX_CONCURRENT_TASKS, MAX_SHELL_CONCURRENT_TASKS } from '@lnwjing/shared';
-import { capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
+import { capabilityTaskGoalMatches, capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
 
 export type DurableShellTaskState = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled' | 'termination_unverified';
 
@@ -58,6 +58,8 @@ interface DurableTaskMetadata {
   readonly owner_client_id?: string;
   readonly owner_session_id?: string;
   readonly owner_workspace_id?: string;
+  readonly owner_goal_id?: string;
+  readonly owner_recovery_hash?: string;
 }
 
 interface DurableWorkerSpec {
@@ -146,16 +148,27 @@ export class DurableShellTaskStore {
     if (!/^[a-f0-9]{64}$/i.test(requestDigest)) {
       return Promise.resolve(err(appError('INVALID_INPUT', 'Reserved durable task digest is invalid')));
     }
-    return this.launchWithDigest(request, requestDigest.toLowerCase());
+    return this.launchWithDigest(request, requestDigest.toLowerCase(), true);
   }
 
   private async launchWithDigest(
     request: DurableShellLaunchRequest,
     requestDigest: string,
+    trustedReserved = false,
   ): Promise<Result<Record<string, unknown>>> {
+    const matchesOwner = (metadata: DurableTaskMetadata): boolean => {
+      const stored = metadataOwner(metadata);
+      // Only the trusted deterministic automation entry may resume a legacy
+      // unbound reservation, after matching its canonical dispatch digest.
+      return capabilityTaskOwnerMatches(stored, request.owner) || (trustedReserved
+        && stored.goalId === undefined && stored.recoveryHash === undefined
+        && request.owner.workspaceId !== undefined
+        && stored.clientId === request.owner.clientId && stored.workspaceId === request.owner.workspaceId);
+    };
     if (!isSafeTaskId(request.taskId)) return err(appError('INVALID_INPUT', 'Durable task ID is invalid'));
     const existing = await this.readMetadata(request.taskId, false, 1);
     if (existing.ok) {
+      if (!matchesOwner(existing.value)) return err(taskOwnerDenied());
       if (existing.value.request_digest !== requestDigest) {
         return err(appError('CONFLICT', 'Durable task ID is already used by another request', true));
       }
@@ -178,12 +191,14 @@ export class DurableShellTaskStore {
         ownerClientId: request.owner.clientId,
         ownerSessionId: request.owner.sessionId,
         ...(request.owner.workspaceId === undefined ? {} : { ownerWorkspaceId: request.owner.workspaceId }),
+        ...(request.owner.goalId === undefined ? {} : { ownerGoalId: request.owner.goalId }),
+        ...(request.owner.recoveryHash === undefined ? {} : { ownerRecoveryHash: request.owner.recoveryHash }),
       },
     });
     if (!reservation.ok) return reservation;
     if (!reservation.value.created) {
       const concurrent = await this.readMetadata(request.taskId);
-      if (concurrent.ok && concurrent.value.request_digest === requestDigest) {
+      if (concurrent.ok && concurrent.value.request_digest === requestDigest && matchesOwner(concurrent.value)) {
         const reconciled = await this.reconcile(concurrent.value);
         await this.releaseTerminalReservation(reconciled);
         return ok(await this.snapshotFromMetadata(reconciled));
@@ -213,6 +228,8 @@ export class DurableShellTaskStore {
       owner_client_id: request.owner.clientId,
       owner_session_id: request.owner.sessionId,
       ...(request.owner.workspaceId === undefined ? {} : { owner_workspace_id: request.owner.workspaceId }),
+      ...(request.owner.goalId === undefined ? {} : { owner_goal_id: request.owner.goalId }),
+      ...(request.owner.recoveryHash === undefined ? {} : { owner_recovery_hash: request.owner.recoveryHash }),
     };
     const spec: DurableWorkerSpec = {
       version: 1,
@@ -241,7 +258,7 @@ export class DurableShellTaskStore {
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
         const concurrent = await this.readMetadata(request.taskId);
-        if (concurrent.ok && concurrent.value.request_digest === requestDigest) {
+        if (concurrent.ok && concurrent.value.request_digest === requestDigest && matchesOwner(concurrent.value)) {
           const reconciled = await this.reconcile(concurrent.value);
           await this.releaseTerminalReservation(reconciled);
           return ok(await this.snapshotFromMetadata(reconciled));
@@ -381,7 +398,7 @@ export class DurableShellTaskStore {
     const metadata = await this.readMetadata(taskId);
     if (!metadata.ok) return metadata;
     if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(metadata.value), owner)) {
-      return err(appError('PERMISSION_DENIED', 'Task is not owned by this client session and workspace'));
+      return err(taskOwnerDenied());
     }
     const reconciled = await this.reconcile(metadata.value);
     await this.releaseTerminalReservation(reconciled);
@@ -389,11 +406,11 @@ export class DurableShellTaskStore {
   }
 
   /** Trusted read-only host probe scoped to the durable goal's workspace. */
-  public async isOwnedGoalTask(clientId: string, workspaceId: string, taskId: string): Promise<boolean> {
+  public async isOwnedGoalTask(clientId: string, workspaceId: string, taskId: string, goalId?: string): Promise<boolean> {
     const metadata = await this.readMetadata(taskId);
     if (!metadata.ok) return false;
     const owner = metadataOwner(metadata.value);
-    return owner.clientId === clientId && owner.workspaceId === workspaceId;
+    return capabilityTaskGoalMatches(owner, clientId, workspaceId, goalId);
   }
 
   public async snapshotForGoalLiveness(taskId: string, workspaceId: string): Promise<Result<Record<string, unknown>>> {
@@ -467,11 +484,12 @@ export class DurableShellTaskStore {
     taskId: string,
     ownerClientId: string,
     workspaceId: string,
+    goalId?: string,
   ): Promise<Result<GoalTaskCancellationObservation>> {
     const metadataResult = await this.readMetadata(taskId);
     if (!metadataResult.ok) return metadataResult;
     const storedOwner = metadataOwner(metadataResult.value);
-    if (storedOwner.clientId !== ownerClientId || storedOwner.workspaceId !== workspaceId) {
+    if (!capabilityTaskGoalMatches(storedOwner, ownerClientId, workspaceId, goalId)) {
       return err(appError('PERMISSION_DENIED', 'Task belongs to another client or workspace'));
     }
 
@@ -493,7 +511,7 @@ export class DurableShellTaskStore {
     const initial = await this.readMetadata(taskId);
     if (!initial.ok) return initial;
     if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(initial.value), owner)) {
-      return err(appError('PERMISSION_DENIED', 'Task is not owned by this client session and workspace'));
+      return err(taskOwnerDenied());
     }
     let current = await this.reconcile(initial.value);
     let nextProbeAt = Date.now() + 1_000;
@@ -505,7 +523,7 @@ export class DurableShellTaskStore {
       const latest = await this.readMetadata(taskId, probeDue);
       if (!latest.ok) return latest;
       if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(latest.value), owner)) {
-        return err(appError('PERMISSION_DENIED', 'Task is not owned by this client session and workspace'));
+        return err(taskOwnerDenied());
       }
       current = latest.value;
       if (!isTerminal(current.state) && (probeDue || current.state !== 'running')) {
@@ -529,7 +547,7 @@ export class DurableShellTaskStore {
     const metadataResult = await this.readMetadata(taskId);
     if (!metadataResult.ok) return metadataResult;
     if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(metadataResult.value), owner)) {
-      return err(appError('PERMISSION_DENIED', 'Task is not owned by this client session and workspace'));
+      return err(taskOwnerDenied());
     }
     let metadata = await this.reconcile(metadataResult.value);
     if (isTerminal(metadata.state)) {
@@ -644,6 +662,8 @@ export class DurableShellTaskStore {
       ownerClientId: owner.clientId,
       ownerSessionId: owner.sessionId,
       ...(owner.workspaceId === undefined ? {} : { ownerWorkspaceId: owner.workspaceId }),
+      ...(owner.goalId === undefined ? {} : { ownerGoalId: owner.goalId }),
+      ...(owner.recoveryHash === undefined ? {} : { ownerRecoveryHash: owner.recoveryHash }),
     };
   }
 
@@ -910,7 +930,9 @@ function isMetadata(value: unknown): value is DurableTaskMetadata {
     && typeof record.max_output_bytes === 'number'
     && typeof record.deadline_at === 'string'
     && (record.worker_started_at === undefined || typeof record.worker_started_at === 'string')
-    && (record.child_started_at === undefined || typeof record.child_started_at === 'string');
+    && (record.child_started_at === undefined || typeof record.child_started_at === 'string')
+    && (record.owner_goal_id === undefined || (typeof record.owner_goal_id === 'string' && record.owner_goal_id.length > 0 && record.owner_goal_id.length <= 256))
+    && (record.owner_recovery_hash === undefined || (typeof record.owner_recovery_hash === 'string' && /^[a-f0-9]{64}$/.test(record.owner_recovery_hash)));
 }
 
 async function readPublishedStartedAt(filename: string): Promise<string | undefined> {
@@ -923,12 +945,18 @@ async function readPublishedStartedAt(filename: string): Promise<string | undefi
   }
 }
 
+function taskOwnerDenied(): ReturnType<typeof appError> & { details: { reason: string } } {
+  return { ...appError('PERMISSION_DENIED', 'Task access requires the original session or a verified recovery proof'), details: { reason: 'task_recovery_or_owner_mismatch' } };
+}
+
 function metadataOwner(metadata: DurableTaskMetadata): CapabilityTaskOwner {
   if (metadata.owner_client_id === undefined || metadata.owner_session_id === undefined) return legacyCapabilityTaskOwner();
   return {
     clientId: metadata.owner_client_id,
     sessionId: metadata.owner_session_id,
     ...(metadata.owner_workspace_id === undefined ? {} : { workspaceId: metadata.owner_workspace_id }),
+    ...(typeof metadata.owner_goal_id !== 'string' ? {} : { goalId: metadata.owner_goal_id }),
+    ...(typeof metadata.owner_recovery_hash !== 'string' || !/^[a-f0-9]{64}$/.test(metadata.owner_recovery_hash) ? {} : { recoveryHash: metadata.owner_recovery_hash }),
   };
 }
 
@@ -937,6 +965,8 @@ function launchRecordOwner(record: DurableTaskLaunchRecord): CapabilityTaskOwner
     clientId: record.ownerClientId,
     sessionId: record.ownerSessionId,
     ...(record.ownerWorkspaceId === undefined ? {} : { workspaceId: record.ownerWorkspaceId }),
+    ...(record.ownerGoalId === undefined ? {} : { goalId: record.ownerGoalId }),
+    ...(record.ownerRecoveryHash === undefined ? {} : { recoveryHash: record.ownerRecoveryHash }),
   };
 }
 

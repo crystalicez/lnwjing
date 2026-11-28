@@ -840,7 +840,7 @@ export class GoalContinuationService {
       // stale worker cannot continue into a later native wake.
       const [requestCancellation, taskCancellations] = await Promise.all([
         this.cancelInFlightRequests(goalId, goal.leaseGeneration),
-        this.cancelTrackedTasks(ownerClientId, goal.workspaceId, trackedTasks),
+        this.cancelTrackedTasks(ownerClientId, goal.workspaceId, trackedTasks, goal.id),
       ]);
       return ok({
         ...toSnapshot(goal),
@@ -878,7 +878,7 @@ export class GoalContinuationService {
       });
       const [requestCancellation, taskCancellations] = await Promise.all([
         this.cancelInFlightRequests(goalId, cancelled.goal.leaseGeneration),
-        this.cancelTrackedTasks(ownerClientId, cancelled.goal.workspaceId, cancelled.trackedTasks ?? legacyTrackedTasks(cancelled.trackedTaskIds)),
+        this.cancelTrackedTasks(ownerClientId, cancelled.goal.workspaceId, cancelled.trackedTasks ?? legacyTrackedTasks(cancelled.trackedTaskIds), cancelled.goal.id),
       ]);
       let scheduledTaskCancellation: ScheduledTaskCancellationInstruction = {
         action: 'none',
@@ -1064,6 +1064,7 @@ export class GoalContinuationService {
     ownerClientId: string,
     workspaceId: string,
     trackedTasks: readonly GoalTrackedTask[],
+    goalId: string,
   ): Promise<readonly GoalTaskCancellationResult[]> {
     const cancellationTargets = trackedTasks.filter((task) => task.cancelWithGoal);
     const skippedTasks = trackedTasks.filter((task) => !task.cancelWithGoal);
@@ -1075,7 +1076,7 @@ export class GoalContinuationService {
     if (cancellationTargets.length === 0) return skippedTasks.map(skippedGoalTaskCancellation);
     try {
       const cancellationInputs = cancellationTargets.map((task) => task.provider === 'legacy_auto' ? task.taskId : task);
-      const results = await this.taskCancellation.cancelForGoal(ownerClientId, workspaceId, cancellationInputs);
+      const results = await this.taskCancellation.cancelForGoal(ownerClientId, workspaceId, cancellationInputs, goalId);
       const byTask = new Map(results.map((entry) => [`${entry.provider ?? 'legacy_auto'}\0${entry.taskId}`, entry]));
       return trackedTasks.map((task) => task.cancelWithGoal
         ? byTask.get(`${task.provider}\0${task.taskId}`)

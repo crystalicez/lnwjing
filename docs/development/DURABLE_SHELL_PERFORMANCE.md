@@ -171,3 +171,42 @@ Never claim history-size independence from a single cold bootstrap sample.
   `limit`/`cursor` contract and transition to in-memory tasks.
 - `scripts/benchmark-durable-shell-history.mjs` is the release performance gate
   for terminal-history growth.
+
+
+## Durable ownership across reconnects
+
+For new goal-bound shell tasks, supply the explicit workspaceId and the current
+verified goalLease on launch and on recovery calls. The server stores the
+original goal ID only after validating the lease, not from caller metadata.
+After reconnect, obtain the current lease for that same goal, then use
+status, wait, logs, result or list with that lease. Other goals cannot adopt
+the bound job by inserting its task ID into trackedTasks.
+
+For standalone jobs, an opt-in recovery_token is a client-generated
+cryptographically random secret: lnwrt_ followed by 64 lowercase hex digits
+(32 random bytes). Retain it privately before the first launch. Use the same
+explicit workspaceId, token, and unique request_id for that intended command;
+send the token again on every observation or cancellation, including from the
+original session. Only its SHA-256 hash is persisted. Do not put the token in
+command arguments, source files, or logs. Token-bound tasks require the token
+even when a stateless endpoint shares a transport session identity.
+
+The original session-only behavior remains for legacy jobs without a recovery
+binding. They cannot be automatically adopted by a new session merely because
+the client or workspace matches. Do not retry old launches using a new recovery
+scope: the deterministic request ID namespace differs. If the existing receipt
+is inaccessible or expired, inspect the actual external state before deciding
+whether to launch again.
+
+A request_id retry in the same recovery scope returns the retained original
+task; different arguments conflict. Cancellation still requires the ordinary
+permission checks. Goal recovery inherits the existing goal-lease acquisition
+policy, not a new conversation identity guarantee. Trusted automation retains
+its exact canonical dispatch digest recovery path.
+
+No new database, polling loop, or per-task recovery file is needed. Recovery
+adds optional fields to the existing task metadata and launch journal, and
+bounded history uses the same ownership checks before hydration. The modern
+and legacy HTTP integration tests exercise actual child processes across
+server endpoint and backend reconstruction, not a full desktop restart or
+live Secure Tunnel deployment.

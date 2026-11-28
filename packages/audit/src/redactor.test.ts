@@ -33,6 +33,13 @@ describe('Redactor', () => {
     expect(redacted).toMatchObject({ env: { NORMAL_VALUE: 'safe' } });
   });
 
+  it('redacts task recovery secrets in fields and free text', () => {
+    const token = 'lnwrt_' + 'a'.repeat(64);
+    const redactor = new Redactor();
+    expect(JSON.stringify(redactor.redact({ recovery_token: token, note: 'resume ' + token }))).not.toContain(token);
+    expect(redactor.redactText('resume ' + token)).toBe('resume [REDACTED]');
+  });
+
   it('removes terminal control sequences from audit text and expandable details', () => {
     const input = '\u001b[33mwarning\u001b[22m\u001b[39m \u001b]8;;https://example.test\u0007link\u001b]8;;\u0007';
 

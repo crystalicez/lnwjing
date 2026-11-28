@@ -61,21 +61,34 @@ export function actorForRequestScope(actor: FileActor, scope: McpRequestScope | 
 }
 
 
-export function withCapabilityOwnerMetadata(input: unknown, actor: FileActor): unknown {
+export interface VerifiedTaskGoalScope {
+  readonly goalId: string;
+  readonly workspaceId: string;
+}
+
+/** Only the checked registry may supply the verified goal scope. Never trust caller metadata. */
+export function withCapabilityOwnerMetadata(input: unknown, actor: FileActor, recovery?: { readonly goal?: VerifiedTaskGoalScope }): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return input;
   const request = input as Record<string, unknown>;
   const existingMetadata = typeof request.metadata === 'object' && request.metadata !== null && !Array.isArray(request.metadata)
     ? request.metadata as Record<string, unknown>
     : {};
   const workspaceId = typeof request.workspaceId === 'string' && request.workspaceId.trim().length > 0 ? request.workspaceId.trim() : undefined;
+  const goalId = workspaceId !== undefined && recovery?.goal?.workspaceId === workspaceId ? recovery.goal.goalId : undefined;
+  const token = recovery !== undefined && workspaceId !== undefined && typeof request.recovery_token === 'string'
+    && /^lnwrt_[a-f0-9]{64}$/.test(request.recovery_token) ? request.recovery_token : undefined;
+  const safeRequest = { ...request };
+  delete safeRequest.recovery_token;
   return {
-    ...request,
+    ...safeRequest,
     metadata: {
       ...existingMetadata,
       [CAPABILITY_TASK_OWNER_METADATA_KEY]: {
         clientId: actor.clientId,
         sessionId: actor.sessionId?.trim() || actor.clientId,
         ...(workspaceId === undefined ? {} : { workspaceId }),
+        ...(goalId === undefined ? {} : { goalId }),
+        ...(token === undefined ? {} : { recoveryHash: createHash('sha256').update(token).digest('hex') }),
       },
     },
   };

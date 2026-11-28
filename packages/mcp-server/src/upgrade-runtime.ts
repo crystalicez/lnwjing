@@ -516,7 +516,7 @@ export class UpgradeRuntimeService {
       case 'task_cancel':
       case 'task_result':
       case 'task_list':
-        return this.managedTask(name, input, signal, authorization);
+        return this.managedTask(name, input, signal, authorization, internal);
       case 'delegate':
       case 'delegate_status':
       case 'delegate_cancel':
@@ -1099,6 +1099,7 @@ export class UpgradeRuntimeService {
     input: Record<string, unknown>,
     signal?: AbortSignal,
     authorization?: InvocationAuthorization,
+    internal?: McpInternalInvocationContext,
   ): Promise<Result<unknown>> {
     if (name === 'task_create') {
       const goalId = readString(input, 'goalId')?.trim();
@@ -1125,6 +1126,11 @@ export class UpgradeRuntimeService {
     const capabilities = this.services.capabilities;
     if (capabilities === undefined) return ok(truthfulUnavailable(name, 'needs_setup', ['local shell task runtime']));
     const workspaceId = readString(input, 'workspaceId');
+    if (input.recovery_token !== undefined && (workspaceId === undefined || workspaceId.trim().length === 0)) {
+      return err(appError('INVALID_INPUT', 'Task recovery requires an explicit workspaceId'));
+    }
+    const recovery = internal?.verifiedTaskGoal === undefined ? {} : { goal: internal.verifiedTaskGoal };
+    const recoveryToken = input.recovery_token === undefined ? {} : { recovery_token: input.recovery_token };
     if (name === 'task_create') {
       const explicitExecutable = readString(input, 'executable');
       const commandAlias = readString(input, 'command');
@@ -1141,13 +1147,14 @@ export class UpgradeRuntimeService {
         executable,
         execution: 'background',
         ...(workspaceId === undefined ? {} : { workspaceId }),
-      }, this.actor), signal, authorization);
+      }, this.actor, recovery), signal, authorization);
     }
     if (name === 'task_list') {
       return capabilities.execute('shell', withCapabilityOwnerMetadata({
         operation: 'list',
+        ...recoveryToken,
         ...(workspaceId === undefined ? {} : { workspaceId }),
-      }, this.actor), signal, authorization);
+      }, this.actor, recovery), signal, authorization);
     }
     const taskId = readString(input, 'taskId') ?? readString(input, 'task_id');
     if (taskId === undefined) return err(appError('INVALID_INPUT', `${name} requires taskId`));
@@ -1155,12 +1162,13 @@ export class UpgradeRuntimeService {
     const taskResult = await capabilities.execute('shell', withCapabilityOwnerMetadata({
       operation,
       task_id: taskId,
+      ...recoveryToken,
       include_stdout: true,
       include_stderr: true,
       ...(name === 'task_status' ? { tail_lines: MANAGED_TASK_STATUS_TAIL_LINES } : {}),
       ...(workspaceId === undefined ? {} : { workspaceId }),
       ...(name === 'task_cancel' ? { userConfirmed: input.userConfirmed === true } : {}),
-    }, this.actor), signal, authorization);
+    }, this.actor, recovery), signal, authorization);
     if (name !== 'task_status' || !taskResult.ok || !isRecord(taskResult.value)) return taskResult;
     return ok(boundManagedTaskStatusOutput(taskResult.value));
   }

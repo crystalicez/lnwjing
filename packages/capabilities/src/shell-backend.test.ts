@@ -140,6 +140,11 @@ describe('ShellCapabilityBackend', () => {
     if (!first.ok) return;
     const repeated = await backend.execute(input);
     expect(repeated).toMatchObject({ ok: true, value: { task_id: taskId, started_at: first.value.started_at } });
+    const reconnectedMetadata = { [CAPABILITY_TASK_OWNER_METADATA_KEY]: { clientId: 'client-a', sessionId: 'session-b', workspaceId: 'workspace-a' } };
+    await expect(backend.execute({ operation: 'status', task_id: taskId, metadata: reconnectedMetadata }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_DENIED' } });
+    const recovered = withAutomationShellDispatchContext({ ...input, metadata: reconnectedMetadata }, context);
+    await expect(backend.execute(recovered)).resolves.toMatchObject({ ok: true, value: { task_id: taskId, started_at: first.value.started_at } });
     await expect(backend.statusForAutomation('client-a', 'workspace-a', taskId, requestDigest))
       .resolves.toMatchObject({ ok: true, value: { task_id: taskId } });
     await expect(backend.statusForAutomation('client-b', 'workspace-a', taskId, requestDigest))

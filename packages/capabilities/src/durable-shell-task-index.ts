@@ -35,6 +35,8 @@ export interface DurableTaskLaunchRecord {
   readonly ownerClientId: string;
   readonly ownerSessionId: string;
   readonly ownerWorkspaceId?: string;
+  readonly ownerGoalId?: string;
+  readonly ownerRecoveryHash?: string;
 }
 
 export interface ReservationDiagnosticRow {
@@ -705,7 +707,9 @@ function isLaunchRecord(value: unknown): value is DurableTaskLaunchRecord {
     && value.ownerClientId.length > 0
     && typeof value.ownerSessionId === 'string'
     && value.ownerSessionId.length > 0
-    && (value.ownerWorkspaceId === undefined || typeof value.ownerWorkspaceId === 'string');
+    && (value.ownerWorkspaceId === undefined || typeof value.ownerWorkspaceId === 'string')
+    && (value.ownerGoalId === undefined || (typeof value.ownerGoalId === 'string' && value.ownerGoalId.length > 0 && value.ownerGoalId.length <= 256))
+    && (value.ownerRecoveryHash === undefined || (typeof value.ownerRecoveryHash === 'string' && /^[a-f0-9]{64}$/.test(value.ownerRecoveryHash)));
 }
 
 function parseLaunchRecord(value: string): DurableTaskLaunchRecord | undefined {
@@ -719,6 +723,8 @@ function parseLaunchRecord(value: string): DurableTaskLaunchRecord | undefined {
       ownerClientId: parsed.ownerClientId,
       ownerSessionId: parsed.ownerSessionId,
       ...(parsed.ownerWorkspaceId === undefined ? {} : { ownerWorkspaceId: parsed.ownerWorkspaceId }),
+      ...(parsed.ownerGoalId === undefined ? {} : { ownerGoalId: parsed.ownerGoalId }),
+      ...(parsed.ownerRecoveryHash === undefined ? {} : { ownerRecoveryHash: parsed.ownerRecoveryHash }),
     };
   } catch {
     return undefined;
