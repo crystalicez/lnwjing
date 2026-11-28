@@ -612,26 +612,38 @@ export class SqliteAuditRepository implements AuditEventRepository {
     const needle = query.trim().toLocaleLowerCase();
     const matches = new Set<string>();
     if (!needle || needle.length > 512) return matches;
+    if (candidates.length === 0) return matches;
     const statement = this.database.connection.prepare(
-      `SELECT 1 FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation
-       WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?
-         AND json_extract(metadata_json, '$.phase') = ?
-         AND EXISTS (
-           SELECT 1 FROM json_each(metadata_json, '$.activityTargetDetail.items') AS item
-           WHERE typeof(item.value) = 'text' AND instr(lower(item.value), ?) > 0
-         ) LIMIT 1`,
+      `SELECT json_extract(candidate.value, '$[0]') AS candidate_id
+       FROM json_each(?) AS candidate
+       WHERE EXISTS (
+         SELECT 1 FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation
+         WHERE workspace_id IS json_extract(candidate.value, '$[1]')
+           AND json_extract(metadata_json, '$.callId') = json_extract(candidate.value, '$[2]')
+           AND json_extract(metadata_json, '$.phase') = json_extract(candidate.value, '$[3]')
+           AND EXISTS (
+             SELECT 1 FROM json_each(metadata_json, '$.activityTargetDetail.items') AS item
+             WHERE typeof(item.value) = 'text' AND instr(lower(item.value), ?) > 0
+           )
+       )`,
     );
-    for (let i = 0; i < candidates.length; i += 1) {
-      const candidate = candidates[i]!;
-      const suffix = ':completed';
-      const phase = candidate.detailRef.endsWith(suffix) ? 'completed' : 'started';
-      const callId = phase === 'completed'
-        ? candidate.detailRef.slice(0, -suffix.length) : candidate.detailRef;
-      if (callId && statement.get(candidate.workspaceId, callId, phase, needle) !== undefined) {
-        matches.add(candidate.id);
+    // Keep the existing bound on index seeks per event-loop turn, but cross
+    // the JS/SQLite boundary once per batch instead of once per candidate.
+    const batchSize = 32;
+    for (let offset = 0; offset < candidates.length; offset += batchSize) {
+      const batch = candidates.slice(offset, offset + batchSize).flatMap((candidate) => {
+        const suffix = ':completed';
+        const phase = candidate.detailRef.endsWith(suffix) ? 'completed' : 'started';
+        const callId = phase === 'completed'
+          ? candidate.detailRef.slice(0, -suffix.length) : candidate.detailRef;
+        return callId ? [[candidate.id, candidate.workspaceId, callId, phase]] : [];
+      });
+      if (batch.length > 0) {
+        for (const row of statement.all(JSON.stringify(batch), needle)) {
+          if (typeof row.candidate_id === 'string') matches.add(row.candidate_id);
+        }
       }
-      // Yield to the Electron event loop before another bounded index batch.
-      if ((i + 1) % 32 === 0 && i + 1 < candidates.length) {
+      if (offset + batchSize < candidates.length) {
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
     }

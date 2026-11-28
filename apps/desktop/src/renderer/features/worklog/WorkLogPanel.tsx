@@ -20,8 +20,8 @@ export interface LogScopeSelection {
 }
 
 type WorkLogRow =
-  | { readonly kind: 'inflight'; readonly timestamp: string; readonly id: string; readonly item: InFlightWorkItem }
-  | { readonly kind: 'entry'; readonly timestamp: string; readonly id: string; readonly item: WorkLogEntry };
+  | { readonly kind: 'inflight'; readonly timestamp: string; readonly timestampMs: number; readonly id: string; readonly item: InFlightWorkItem }
+  | { readonly kind: 'entry'; readonly timestamp: string; readonly timestampMs: number; readonly id: string; readonly item: WorkLogEntry };
 
 interface WorkLogPanelProps {
   readonly locale?: UiLocale;
@@ -302,15 +302,15 @@ export function newestFirstWorkLogRows(
   const scopedEntries = entries.filter((entry) => matchesScope(entry, scope, workspaces));
   const scopedInFlight = inFlight.filter((entry) => matchesScope(entry, scope, workspaces));
   const entryRows = (filter === 'all' ? scopedEntries : scopedEntries.filter((entry) => workLogLevel(entry) === filter))
-    .map((item): WorkLogRow => ({ kind: 'entry', timestamp: item.timestamp, id: item.id, item }));
+    .map((item): WorkLogRow => ({ kind: 'entry', timestamp: item.timestamp, timestampMs: Date.parse(item.timestamp), id: item.id, item }));
   const inFlightRows = filter === 'all'
-    ? scopedInFlight.map((item): WorkLogRow => ({ kind: 'inflight', timestamp: item.startedAt, id: scopedActivityId(item), item }))
+    ? scopedInFlight.map((item): WorkLogRow => ({ kind: 'inflight', timestamp: item.startedAt, timestampMs: Date.parse(item.startedAt), id: scopedActivityId(item), item }))
     : [];
   return [...entryRows, ...inFlightRows]
     .filter((row) => needle.length === 0 || workLogSearchText(row).includes(needle) || hiddenMatches.has(workLogRowIdentity(row)))
     .sort((left, right) => {
-      const leftTime = Date.parse(left.timestamp);
-      const rightTime = Date.parse(right.timestamp);
+      const leftTime = left.timestampMs;
+      const rightTime = right.timestampMs;
       if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return rightTime - leftTime;
       const timestampOrder = right.timestamp.localeCompare(left.timestamp);
       return timestampOrder !== 0 ? timestampOrder : right.id.localeCompare(left.id);

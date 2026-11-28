@@ -53,8 +53,8 @@ describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
     try {
       let scans = 0;
       const quota = new GlobalStorageQuotaReservations(root, {
-        availableVolumeBytes: () => BigInt(512 * MIB),
-        scanProfileInventory: async () => { scans++; return inspectProfileStorageOffMain(root); },
+        availableVolumeBytes: (): bigint => BigInt(512 * MIB),
+        scanProfileInventory: async (): ReturnType<typeof inspectProfileStorageOffMain> => { scans++; return inspectProfileStorageOffMain(root); },
       });
       quota.configure({ limitBytes: 64 * MIB, criticalReserveBytes: MIB });
       const releases = await Promise.all(Array.from({ length: 8 }, () => quota.reserveMcpActivityAudit(() => 1024)));
@@ -76,7 +76,7 @@ describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
   it('falls back to independent admission when the combined MCP request is too large', async () => {
     const { root, dispose } = await fixture();
     try {
-      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: () => BigInt(512 * MIB) });
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => BigInt(512 * MIB) });
       quota.configure({ limitBytes: 8 * MIB, criticalReserveBytes: MIB });
       const results = await Promise.allSettled([
         quota.reserveMcpActivityAudit(() => 6 * MIB),
@@ -94,7 +94,7 @@ describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
   it('does not re-run schema DDL or table introspection on each reservation and release', async () => {
     const { root, dispose } = await fixture();
     try {
-      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: () => BigInt(512 * MIB) });
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => BigInt(512 * MIB) });
       quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });
       const ledger = new DatabaseSync(path.join(root, 'global-quota-reservations-v2.sqlite'));
       try {
@@ -118,7 +118,7 @@ describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
     const { root, dispose } = await fixture();
     try {
       let probes = 0;
-      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: () => { probes++; return BigInt(512 * MIB); } });
+      const quota = new GlobalStorageQuotaReservations(root, { availableVolumeBytes: (): bigint => { probes++; return BigInt(512 * MIB); } });
       expect(quota.isConfigured()).toBe(false);
       expect(existsSync(path.join(root, 'global-quota-reservations-v2.sqlite'))).toBe(false);
       quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });
@@ -137,8 +137,8 @@ describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
     try {
       let scans = 0;
       const quota = new GlobalStorageQuotaReservations(root, {
-        availableVolumeBytes: () => BigInt(512 * MIB),
-        scanProfileInventory: async () => { scans++; return inspectProfileStorageOffMain(root); },
+        availableVolumeBytes: (): bigint => BigInt(512 * MIB),
+        scanProfileInventory: async (): ReturnType<typeof inspectProfileStorageOffMain> => { scans++; return inspectProfileStorageOffMain(root); },
       });
       quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });
       const [a, b] = await Promise.all([quota.inspect(), quota.inspect()]);
@@ -157,9 +157,9 @@ describe('opt-in cross-process Global Storage Quota V2 reservations', () => {
       let volumeChecks = 0;
       let estimates = 0;
       const quota = new GlobalStorageQuotaReservations(root, {
-        availableVolumeBytes: () => { volumeChecks++; return BigInt(512 * MIB); },
+        availableVolumeBytes: (): bigint => { volumeChecks++; return BigInt(512 * MIB); },
       });
-      const estimate = () => { estimates++; return 1024; };
+      const estimate = (): number => { estimates++; return 1024; };
       expect(await quota.reserveMcpActivityAudit(estimate)).toBeNull();
       expect([volumeChecks, estimates]).toEqual([0, 0]);
       quota.configure({ limitBytes: 32 * MIB, criticalReserveBytes: MIB });

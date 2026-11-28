@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuditEvent } from '@lnwjing/audit';
 import { SqliteAuditRepository, ROUTINE_READ_RECOVERY_PROBE_SQL, ROUTINE_READ_RECOVERY_DELETE_SQL } from './audit-repository.js';
 import { SqliteDatabase } from './database.js';
@@ -391,6 +391,57 @@ describe('SqliteAuditRepository', () => {
         "EXPLAIN QUERY PLAN SELECT 1 FROM audit_events INDEXED BY idx_audit_calls_workspace_correlation WHERE workspace_id IS ? AND json_extract(metadata_json, '$.callId') = ?",
       ).all('workspace-a', 'same-call') as { detail: string }[];
       expect(secondaryPlan.some((row) => row.detail.includes('idx_audit_calls_workspace_correlation'))).toBe(true);
+    } finally { database.close(); }
+  });
+
+  it('batches real scoped SQLite detail searches without mixing workspace or phase', async () => {
+    const database = new SqliteDatabase(':memory:');
+    try {
+      const repository = new SqliteAuditRepository(database);
+      const candidates: { id: string; detailRef: string; workspaceId: string | null }[] = [];
+      const expected = new Set<string>();
+      for (let i = 0; i < 65; i += 1) {
+        const callId = 'batch-' + i;
+        for (const workspaceId of ['workspace-a', 'workspace-b', null]) {
+          for (const phase of ['started', 'completed']) {
+            const id = [workspaceId, callId, phase].join(':');
+            const match = i % 3 === 0 && workspaceId !== 'workspace-b' && phase === 'completed';
+            await repository.insert({
+              id, timestamp: '2026-08-20T00:00:00.000Z',
+              actorId: 'test', actorName: 'test', ...(workspaceId === null ? {} : { workspaceId }),
+              action: 'mcp_tool:read_file', resultCode: 'SUCCESS', durationMs: 0,
+              metadata: { callId, phase, activityTargetDetail: { kind: 'files', items: [match ? 'Needle.ts' : 'other.ts'] } },
+            });
+            candidates.push({ id, workspaceId, detailRef: callId + (phase === 'completed' ? ':completed' : '') });
+            if (match) expected.add(id);
+          }
+        }
+      }
+      candidates.push({ id: 'missing', detailRef: 'missing', workspaceId: null },
+        { id: 'empty', detailRef: ':completed', workspaceId: null },
+        { id: 'duplicate-ref', detailRef: 'batch-0:completed', workspaceId: null });
+      expected.add('duplicate-ref');
+      const before = database.connection.prepare('SELECT total_changes() AS changes').get()?.changes;
+      const prototype = Object.getPrototypeOf(database.connection.prepare('SELECT 1'));
+      const get = vi.spyOn(prototype, 'get');
+      const all = vi.spyOn(prototype, 'all');
+      let sql = '';
+      let parameters: unknown[] = [];
+      try {
+        const actual = await repository.activityTargetScopedRefsMatching(candidates, ' NEEDLE ');
+        expect(actual).toEqual(expected);
+        // Count actual native SQLite executions; no mocked query results.
+        expect(get.mock.calls.length + all.mock.calls.length).toBeLessThanOrEqual(Math.ceil(candidates.length / 32));
+        sql = (all.mock.contexts[0] as { sourceSQL: string }).sourceSQL;
+        parameters = all.mock.calls[0] ?? [];
+      } finally {
+        get.mockRestore();
+        all.mockRestore();
+      }
+      const plan = database.connection.prepare('EXPLAIN QUERY PLAN ' + sql)
+        .all(...parameters as [string, string]).map((row) => String(row.detail)).join('\n');
+      expect(plan).toMatch(/SEARCH audit_events (?:EXISTS )?USING INDEX idx_audit_calls_workspace_correlation .*workspace_id=\?.*<expr>=\?/);
+      expect(database.connection.prepare('SELECT total_changes() AS changes').get()?.changes).toBe(before);
     } finally { database.close(); }
   });
 

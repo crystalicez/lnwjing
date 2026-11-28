@@ -756,7 +756,7 @@ describe('durable shell background tasks', () => {
     const lease = await admission.enter({ actorClientId: owner.clientId, workspaceId: owner.workspaceId, kind: 'synchronous_mutation' });
     expect(lease.ok).toBe(true);
     if (lease.ok) await lease.value.releaseAfterVerifiedTermination();
-    const reads = () => vi.mocked(readFile).mock.calls.filter(([filename]) => String(filename).endsWith(path.sep + 'task.json')).length;
+    const reads = (): number => vi.mocked(readFile).mock.calls.filter(([filename]) => String(filename).endsWith(path.sep + 'task.json')).length;
     expect(reads()).toBe(oldReady ? 0 : 12);
     vi.mocked(readFile).mockClear();
     const store = new DurableShellTaskStore(state);

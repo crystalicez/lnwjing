@@ -18,7 +18,7 @@ describe('shell capacity through the real registry and worker', () => {
     await writeFile(hold, 'setTimeout(() => {}, 30000);');
     await writeFile(quick, "process.stdout.write('queued-ok');");
     const backend = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory: state,
-      maxConcurrentTasksProvider: () => 1 });
+      maxConcurrentTasksProvider: (): number => 1 });
     let profile: PermissionProfile = permissionProfiles.full;
     let signalCapacity: (() => void) | undefined;
     const services = { capabilities: {
@@ -33,7 +33,7 @@ describe('shell capacity through the real registry and worker', () => {
     const workloadAdmission = new ToolWorkloadAdmission();
     const options = { profileProvider: (): PermissionProfile => profile,
       sessionId: owner.sessionId, workloadAdmission,
-      activeWorkspaceScopesProvider: async () => [{ workspaceId: owner.workspaceId, rootPath: root }] };
+      activeWorkspaceScopesProvider: async (): Promise<{ workspaceId: string; rootPath: string }[]> => [{ workspaceId: owner.workspaceId, rootPath: root }] };
     const registry = new ToolRegistry(services, { clientId: owner.clientId, clientName: 'owner' }, options);
     const foreign = new ToolRegistry(services, { clientId: 'foreign', clientName: 'foreign' }, { ...options, sessionId: 'other' });
     const run = (script: string): Promise<McpToolResponse> => registry.invoke('shell', {
