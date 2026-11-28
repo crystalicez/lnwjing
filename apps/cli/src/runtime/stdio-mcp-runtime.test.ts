@@ -1,8 +1,9 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SqliteDatabase, SqliteSettingsRepository, SqliteWorkspaceRepository } from '@lnwjing/storage';
 import { permissionProfiles } from '@lnwjing/permissions';
 import { CAPABILITY_TASK_OWNER_METADATA_KEY } from '@lnwjing/capabilities';
@@ -538,41 +539,68 @@ describe('stdio MCP runtime', { timeout: STDIO_RUNTIME_TEST_TIMEOUT_MS }, () => 
   it('keeps a shell background task alive across STDIO runtime replacement', async () => {
     const dataPath = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stdio-durable-'));
     temporaryRoots.push(dataPath);
+    const ready = path.join(dataPath, 'worker-ready');
+    const release = path.join(dataPath, 'worker-release');
+    const worker = path.join(dataPath, 'worker.cjs');
+    await writeFile(worker, [
+      "const fs = require('node:fs');",
+      "fs.writeFileSync(process.argv[2], 'ready');",
+      "const timer = setInterval(() => { if (fs.existsSync(process.argv[3])) { clearInterval(timer); process.stdout.write('stdio-durable'); } }, 100);",
+    ].join('\n'), 'utf8');
     const firstRuntime = createStdioMcpRuntime(dataPath, workspace, true);
-    const capabilities = firstRuntime.services.capabilities;
-    expect(capabilities).toBeDefined();
-    if (capabilities === undefined) return;
-
-    const started = await capabilities.execute('shell', {
-      operation: 'run',
-      executable: process.execPath,
-      arguments: ['-e', "setTimeout(() => process.stdout.write('stdio-durable'), 350)"],
-      cwd: dataPath,
-      execution: 'background',
-      timeout_seconds: 30,
-      userConfirmed: true,
-    });
-    expect(started).toMatchObject({ ok: true, value: { task_id: expect.any(String), durable: true } });
-    if (!started.ok) {
+    let replacementRuntime: ReturnType<typeof createStdioMcpRuntime> | undefined;
+    let firstClosed = false;
+    let taskId: string | undefined;
+    let terminal = false;
+    try {
+      // Synchronize with the real child rather than racing a short timer.
+      const started = await firstRuntime.services.capabilities!.execute('shell', {
+        operation: 'run',
+        executable: process.execPath,
+        arguments: [worker, ready, release],
+        cwd: dataPath,
+        execution: 'background',
+        timeout_seconds: 40,
+        userConfirmed: true,
+      });
+      if (started.ok) taskId = String((started.value as Record<string, unknown>).task_id);
+      expect(started, JSON.stringify(started)).toMatchObject({ ok: true, value: { task_id: expect.any(String), state: 'running', durable: true } });
+      await vi.waitFor(() => expect(existsSync(ready)).toBe(true), { timeout: 15_000, interval: 100 });
       await firstRuntime.close();
-      return;
-    }
-    const taskId = String((started.value as Record<string, unknown>).task_id);
-    await firstRuntime.close();
+      firstClosed = true;
 
-    const replacementRuntime = createStdioMcpRuntime(dataPath, workspace, true);
-    const replacementCapabilities = replacementRuntime.services.capabilities;
-    expect(replacementCapabilities).toBeDefined();
-    if (replacementCapabilities === undefined) {
-      await replacementRuntime.close();
-      return;
+      replacementRuntime = createStdioMcpRuntime(dataPath, workspace, true);
+      const capabilities = replacementRuntime.services.capabilities!;
+      const active = await capabilities.execute('shell', { operation: 'status', task_id: taskId! });
+      expect(active).toMatchObject({ ok: true, value: { task_id: taskId, state: 'running', durable: true } });
+      await writeFile(release, '', 'utf8');
+
+      // A bounded wait can return running; observe the exact task without relaunching it.
+      let finished = await capabilities.execute('shell', { operation: 'wait', task_id: taskId!, timeout_seconds: 5 });
+      for (let attempt = 0; attempt < 3 && finished.ok && (finished.value as Record<string, unknown>).state === 'running'; attempt += 1) {
+        finished = await capabilities.execute('shell', { operation: 'wait', task_id: taskId!, timeout_seconds: 5 });
+      }
+      terminal = finished.ok && ['completed', 'failed', 'cancelled', 'timed_out'].includes(String((finished.value as Record<string, unknown>).state));
+      expect(finished).toMatchObject({
+        ok: true,
+        value: { task_id: taskId, state: 'completed', exit_code: 0, stdout: 'stdio-durable', durable: true },
+      });
+    } finally {
+      try {
+        if (taskId !== undefined && !terminal) {
+          await writeFile(release, '', 'utf8');
+          const cleanup = replacementRuntime ?? (firstClosed ? createStdioMcpRuntime(dataPath, workspace, true) : firstRuntime);
+          try {
+            await cleanup.services.capabilities?.execute('shell', { operation: 'cancel', task_id: taskId, userConfirmed: true });
+          } finally {
+            if (cleanup !== firstRuntime && cleanup !== replacementRuntime) await cleanup.close();
+          }
+        }
+      } finally {
+        await replacementRuntime?.close();
+        if (!firstClosed) await firstRuntime.close();
+      }
     }
-    const finished = await replacementCapabilities.execute('shell', { operation: 'wait', task_id: taskId, timeout_seconds: 5 });
-    expect(finished).toMatchObject({
-      ok: true,
-      value: { task_id: taskId, state: 'completed', exit_code: 0, stdout: 'stdio-durable', durable: true },
-    });
-    await replacementRuntime.close();
   });
 
   it('reads durable shell task liveness after STDIO runtime replacement without treating another session as absence', async () => {
