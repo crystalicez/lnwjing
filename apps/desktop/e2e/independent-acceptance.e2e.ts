@@ -25,6 +25,7 @@ async function freePort(): Promise<number> {
 async function withRuntime(action: (context: {
   app: ElectronApplication; page: Page; client: Client; connect: () => Promise<Client>; root: string; first: string; second: string;
   good: (name: string, args?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  restartDesktop: () => Promise<{ page: Page; oldPid: number; newPid: number }>;
 }) => Promise<void>, prepare?: (first: string, second: string) => Promise<void>): Promise<void> {
   const base = path.join(repo, '.audit');
   await mkdir(base, { recursive: true });
@@ -43,7 +44,7 @@ async function withRuntime(action: (context: {
     delete env.LNWJING_UNRESTRICTED;
     delete env.LNWJING_E2E_NODE_PATH;
     const exe = process.env.LNWJING_PACKAGED_EXECUTABLE?.trim();
-    app = await _electron.launch({
+    const launch = async (): Promise<ElectronApplication> => _electron.launch({
       executablePath: exe || electronExecutablePath(desktop),
       args: ['--user-data-dir=' + profile, '--disable-background-networking', ...(exe ? [] : [path.join(desktop, 'dist', 'main', 'main.js')])],
       cwd: desktop,
@@ -51,14 +52,42 @@ async function withRuntime(action: (context: {
         LNWJING_MCP_PORT: String(await freePort()) },
       timeout: 45_000,
     });
-    const page = await app.firstWindow();
-    page.on('pageerror', error => errors.push(String(error)));
-    await settleFirstRunAndOpenHome(page);
-    const dashboard = await page.evaluate(() => window.lnwjing.getDashboard());
-    expect(dashboard.permissionProfile).toBe('balanced');
-    expect(dashboard.selectedWorkspace?.realRootPath.toLowerCase()).toBe(first.toLowerCase());
-    const endpoint = new URL(dashboard.mcp.url!);
-    expect(endpoint.hostname).toBe('127.0.0.1');
+    const open = async (instance: ElectronApplication): Promise<{ page: Page; endpoint: URL }> => {
+      const page = await instance.firstWindow();
+      page.on('pageerror', error => errors.push(String(error)));
+      await settleFirstRunAndOpenHome(page);
+      const dashboard = await page.evaluate(() => window.lnwjing.getDashboard());
+      expect(dashboard.permissionProfile).toBe('balanced');
+      expect(dashboard.selectedWorkspace?.realRootPath.toLowerCase()).toBe(first.toLowerCase());
+      const endpoint = new URL(dashboard.mcp.url!);
+      expect(endpoint.hostname).toBe('127.0.0.1');
+      return { page, endpoint };
+    };
+    app = await launch();
+    const initial = await open(app);
+    const page = initial.page;
+    let endpoint = initial.endpoint;
+    const restartDesktop = async (): Promise<{ page: Page; oldPid: number; newPid: number }> => {
+      if (app === undefined) throw new Error('No Desktop to restart');
+      const oldPid = app.process().pid!;
+      for (const peer of clients.splice(0)) await peer.close().catch(() => undefined);
+      const exiting = app.process();
+      const exit = new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Desktop did not exit gracefully within 20 seconds')), 20_000);
+        exiting.once('exit', () => { clearTimeout(timer); resolve(); });
+      });
+      // Request the normal application shutdown. Playwright close() may fall
+      // back to killing the entire Windows process tree, including durable jobs.
+      await app.evaluate(({ app: electronApp }) => { setTimeout(() => electronApp.quit(), 50); });
+      await exit;
+      app = undefined;
+      app = await launch();
+      const newPid = app.process().pid!;
+      expect(newPid).not.toBe(oldPid);
+      const next = await open(app);
+      endpoint = next.endpoint;
+      return { page: next.page, oldPid, newPid };
+    };
     const connect = async (): Promise<Client> => {
       const client = new Client({ name: 'independent-' + randomUUID(), version: '1.0.0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
       clients.push(client);
@@ -72,7 +101,7 @@ async function withRuntime(action: (context: {
       expect(result.structuredContent, name).toBeDefined();
       return result.structuredContent as Record<string, unknown>;
     };
-    await action({ app, page, client, connect, root, first, second, good });
+    await action({ app, page, client, connect, root, first, second, good, restartDesktop });
     expect(errors).toEqual([]);
   } finally {
     for (const client of clients) await client.close().catch(() => undefined);
@@ -299,6 +328,62 @@ test('real packaged MCP restart recovers an owned running shell without duplicat
           .not.toBe('running').catch(() => undefined);
         await peer.close().catch(() => undefined);
       }
+    }
+  });
+});
+
+test('real whole Desktop restart recovers one durable task across ten MCP clients', async () => {
+  test.setTimeout(150_000);
+  await withRuntime(async ({ page, first, good, restartDesktop, connect }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    const recoveryToken = 'lnwrt_' + randomBytes(32).toString('hex');
+    await writeFile(path.join(first, 'whole-restart.mjs'), [
+      "import { appendFileSync, existsSync } from 'node:fs';",
+      "appendFileSync('whole-launch-count', String(process.pid) + '\\n');",
+      "console.log('WHOLE_READY:' + process.pid);",
+      "const timer = setInterval(() => {",
+      " if (existsSync('release')) { clearInterval(timer); console.log('WHOLE_DONE:' + process.pid); }",
+      "}, 100);",
+    ].join('\n'));
+    const run = { workspaceId, executable: 'node', arguments: ['whole-restart.mjs'], timeout_seconds: 100,
+      request_id: 'whole-restart-' + randomUUID(), recovery_token: recoveryToken };
+    const receipt = await good('shell', run);
+    const taskId = String(receipt.task_id);
+    const observe = { workspaceId, operation: 'result', task_id: taskId, recovery_token: recoveryToken };
+    let owner: Client | undefined;
+    try {
+      const launchFile = path.join(first, 'whole-launch-count');
+      await expect.poll(async () => (await readFile(launchFile, 'utf8').catch(() => '')).trim(), { timeout: 15_000 }).toMatch(/^\d+$/);
+      const firstLaunch = await readFile(launchFile, 'utf8');
+      const originalPid = firstLaunch.trim();
+      const restarted = await restartDesktop();
+      expect((await restarted.page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace?.id).toBe(workspaceId);
+      const peers = await Promise.all(Array.from({ length: 10 }, () => connect()));
+      owner = peers[0]!;
+      const denied = await Promise.all(peers.slice(5).map(peer => peer.callTool({ name: 'shell', arguments: {
+        workspaceId, operation: 'result', task_id: taskId,
+      } })));
+      for (const result of denied) {
+        expect(result).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+        expect(JSON.stringify(result)).not.toContain('WHOLE_READY:');
+      }
+      const running = await owner.callTool({ name: 'shell', arguments: observe });
+      expect(running.structuredContent).toMatchObject({ task_id: taskId, state: 'running', stdout: expect.stringContaining('WHOLE_READY:' + originalPid) });
+      const replays = await Promise.all(peers.slice(0, 5).map(peer => peer.callTool({ name: 'shell', arguments: run })));
+      for (const replay of replays) expect(replay.structuredContent).toMatchObject({ task_id: taskId, started_at: receipt.started_at });
+      expect(await readFile(launchFile, 'utf8')).toBe(firstLaunch);
+      await writeFile(path.join(first, 'release'), 'go');
+      await expect.poll(async () => (await owner!.callTool({ name: 'shell', arguments: observe })).structuredContent, { timeout: 20_000 })
+        .toMatchObject({ task_id: taskId, state: 'completed', exit_code: 0, stdout: expect.stringContaining('WHOLE_DONE:' + originalPid) });
+      const terminal = await Promise.all(peers.slice(0, 5).map(peer => peer.callTool({ name: 'shell', arguments: observe })));
+      for (const result of terminal) expect(result.structuredContent).toMatchObject({ task_id: taskId, state: 'completed', exit_code: 0 });
+      expect(await readFile(launchFile, 'utf8')).toBe(firstLaunch);
+      console.info('WHOLE_DESKTOP_RECOVERY=' + JSON.stringify({ oldDesktopPid: restarted.oldPid, newDesktopPid: restarted.newPid,
+        originalChildPid: Number(originalPid), clients: peers.length, launches: 1 }));
+    } finally {
+      await writeFile(path.join(first, 'release'), 'go').catch(() => undefined);
+      if (owner !== undefined) await expect.poll(async () => (await owner!.callTool({ name: 'shell', arguments: observe })).structuredContent?.state, { timeout: 20_000 })
+        .not.toBe('running').catch(() => undefined);
     }
   });
 });
