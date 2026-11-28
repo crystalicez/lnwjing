@@ -1,10 +1,15 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { promisify } from 'node:util';
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const temporaryRoots: string[] = [];
+const execFileAsync = promisify(execFile);
+// Bound both real subprocess operations, with time left for verified cleanup.
+const POWERSHELL_DEADLINE_MS = 10_000;
+const STARTER_TEST_DEADLINE_MS = 25_000;
 const helperPath = path.resolve('scripts/lib/lnwjing-tunnel-lock.ps1');
 const starterPath = path.resolve('scripts/start-lnwjing-tunnel.ps1');
 
@@ -209,7 +214,7 @@ describe('production PowerShell tunnel starter integration', () => {
       await writeFile(releaseSignal, '', 'utf8');
       await waitForExit(holder.child);
     }
-  });
+  }, STARTER_TEST_DEADLINE_MS);
 
   it('does not erase the active owner stop marker when the starter loses the lock', async () => {
     const root = await temporaryDirectory();
@@ -223,13 +228,14 @@ describe('production PowerShell tunnel starter integration', () => {
     await writeFile(fakeClient, '@exit /b 99\r\n', 'utf8');
     const holder = await startHolder(profileDir, releaseSignal);
     try {
-      await runPowerShellFile(starterPath, ['-TunnelClientPath', fakeClient, '-NoViewer', '-Once'], { APPDATA: root, USERPROFILE: root, LOCALAPPDATA: root });
+      const result = await runPowerShellFile(starterPath, ['-TunnelClientPath', fakeClient, '-NoViewer', '-Once'], { APPDATA: root, USERPROFILE: root, LOCALAPPDATA: root });
+      expect(result.stdout).toContain(`already owned by PID ${holder.pid}`);
       expect(await readFile(marker, 'utf8')).toBe('active-owner-stop');
     } finally {
       await writeFile(releaseSignal, '', 'utf8');
       await waitForExit(holder.child);
     }
-  });
+  }, STARTER_TEST_DEADLINE_MS);
 });
 
 async function temporaryDirectory(): Promise<string> {
@@ -252,21 +258,11 @@ async function runPowerShellFile(file: string, args: readonly string[], env: Nod
 }
 
 async function runPowerShellProcess(args: readonly string[], env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('powershell.exe', args, { env: { ...process.env, ...env }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => { stdout += chunk; });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
-    child.once('error', reject);
-    child.once('exit', (code) => {
-      const result = { stdout: stdout.trim(), stderr: stderr.trim() };
-      if (code === 0) resolve(result);
-      else reject(new Error(`PowerShell exited ${code ?? 'unknown'}: ${result.stderr || result.stdout}`));
-    });
+  const result = await execFileAsync('powershell.exe', [...args], {
+    env: { ...process.env, ...env }, windowsHide: true, encoding: 'utf8',
+    timeout: POWERSHELL_DEADLINE_MS, maxBuffer: 1024 * 1024,
   });
+  return { stdout: result.stdout.trim(), stderr: result.stderr.trim() };
 }
 
 async function startHolder(profileDir: string, releaseSignal: string): Promise<{ child: ChildProcess; pid: number }> {
@@ -285,14 +281,18 @@ async function startHolder(profileDir: string, releaseSignal: string): Promise<{
   const pid = await new Promise<number>((resolve, reject) => {
     let output = '';
     let errors = '';
+    const deadline = setTimeout(() => {
+      child.kill();
+      reject(new Error(`Lock holder did not become ready: ${errors || output}`));
+    }, POWERSHELL_DEADLINE_MS);
     child.stdout?.on('data', (chunk: string) => {
       output += chunk;
       const match = /READY:(\d+)/.exec(output);
-      if (match?.[1] !== undefined) resolve(Number(match[1]));
+      if (match?.[1] !== undefined) { clearTimeout(deadline); resolve(Number(match[1])); }
     });
     child.stderr?.on('data', (chunk: string) => { errors += chunk; });
-    child.once('error', reject);
-    child.once('exit', (code) => reject(new Error(`Lock holder exited early (${code ?? 'unknown'}): ${errors}`)));
+    child.once('error', error => { clearTimeout(deadline); reject(error); });
+    child.once('exit', (code) => { clearTimeout(deadline); reject(new Error(`Lock holder exited early (${code ?? 'unknown'}): ${errors}`)); });
   });
   return { child, pid };
 }

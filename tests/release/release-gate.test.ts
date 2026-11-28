@@ -301,7 +301,12 @@ describe('MVP release verification gate', () => {
 
   it('pins the macOS signer binary detector to the protobuf-safe release', async () => {
     const workspace = await readFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8');
-    expect(workspace).toContain('"@electron/osx-sign>isbinaryfile": 5.0.7');
+    const lockfile = await readFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8');
+    // The YAML serializer may choose either quote style. Require the same
+    // exact pinned version in both the declared overrides and lockfile.
+    const pin = /^ {2}(['"])@electron\/osx-sign>isbinaryfile\1: 5\.0\.7\r?$/m;
+    expect(workspace).toMatch(pin);
+    expect(lockfile).toMatch(pin);
   });
 
   it('rejects release tags that do not match the packaged application version', async () => {
