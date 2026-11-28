@@ -601,11 +601,18 @@ export class DurableShellTaskStore {
   }
 
   private async inspectTaskForIndex(taskId: string): Promise<ActiveTaskInspection> {
-    return (await this.inspectForIndexBootstrap(taskId)).inspection;
+    return (await this.inspectIndexRecord(taskId, true)).inspection;
   }
 
-  /** One metadata read for legacy history bootstrap and writer safety. */
+  /** Bootstrap holds the shared index lock: classify only persisted metadata.
+   * Running or uncertain legacy tasks stay reserved until an out-of-lock
+   * admission probe or an explicit task observation verifies termination.
+   */
   public async inspectForIndexBootstrap(taskId: string): Promise<{ readonly inspection: ActiveTaskInspection; readonly record?: DurableTaskLaunchRecord }> {
+    return this.inspectIndexRecord(taskId, false);
+  }
+
+  private async inspectIndexRecord(taskId: string, reconcileRunning: boolean): Promise<{ readonly inspection: ActiveTaskInspection; readonly record?: DurableTaskLaunchRecord }> {
     const metadata = await this.readMetadata(taskId, false, 1);
     if (!metadata.ok) {
       try {
@@ -618,6 +625,7 @@ export class DurableShellTaskStore {
     }
     const record = this.launchRecord(metadata.value);
     if (isTerminal(metadata.value.state)) return { inspection: 'terminal', record };
+    if (!reconcileRunning) return { inspection: 'unknown', record };
     const reconciled = await this.reconcile(metadata.value);
     return { inspection: isTerminal(reconciled.state) ? 'terminal' : reconciled.state === 'running' ? 'active' : 'unknown', record };
   }

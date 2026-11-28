@@ -89,7 +89,7 @@ describe('DurableShellTaskIndex', () => {
     expect(await restarted.reserve(writer)).toMatchObject({ ok: true });
   });
 
-  it('bootstraps legacy terminal and active history once, then reinspects only active markers', async () => {
+  it('bootstraps legacy history once, then admits below capacity without process inspection', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-bootstrap-'));
     temporaryRoots.push(root);
     await mkdir(path.join(root, 'history-terminal'));
@@ -123,12 +123,94 @@ describe('DurableShellTaskIndex', () => {
     });
 
     expect(reserved).toMatchObject({ ok: true, value: { activeTasks: 3 } });
-    expect(warmInspector.mock.calls.map(([taskId]) => taskId).sort()).toEqual([
-      'history-running',
-      'history-unverified',
-    ]);
+    expect(warmInspector).not.toHaveBeenCalled();
     await replacement.release('new-task', 'a'.repeat(64));
   });
+
+  it('does not hold the shared lock across a blocked liveness probe', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-unrelated-admission-'));
+    temporaryRoots.push(root);
+    let enterProbe!: () => void;
+    let finishProbe!: () => void;
+    const entered = new Promise<void>(resolve => { enterProbe = resolve; });
+    const gate = new Promise<void>(resolve => { finishProbe = resolve; });
+    const first = new DurableShellTaskIndex(root, {
+      maxConcurrentTasks: 10,
+      inspectTask: async (): Promise<'active'> => { enterProbe(); await gate; return 'active'; },
+    });
+    const peerInspect = vi.fn(async (): Promise<'active'> => 'active');
+    const peer = new DurableShellTaskIndex(root, { maxConcurrentTasks: 10, inspectTask: peerInspect });
+    const a = { taskId: 'project-a', requestDigest: 'a'.repeat(64), ownerClientId: 'a', ownerWorkspaceId: 'a' };
+    const b = { taskId: 'project-b', requestDigest: 'b'.repeat(64), ownerClientId: 'b', ownerWorkspaceId: 'b' };
+    expect(await first.reserve(a)).toMatchObject({ ok: true });
+    const blocked = first.reserve({ ...a, taskId: 'lifecycle-a', mutationKind: 'workspace_lifecycle' });
+    let other: ReturnType<DurableShellTaskIndex['reserve']> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await entered;
+      other = peer.reserve(b);
+      const result = await Promise.race([other, new Promise<'blocked'>(resolve => { timer = setTimeout(() => resolve('blocked'), 2_000); })]);
+      expect(result).toMatchObject({ ok: true });
+      expect(peerInspect).not.toHaveBeenCalled();
+      // The global lock must also be available for terminal release and list.
+      await peer.release(b.taskId, b.requestDigest);
+      expect(await peer.listLaunches({ limit: 10 })).toMatchObject({ ok: true });
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      finishProbe();
+      await other;
+      await blocked;
+    }
+    expect(await blocked).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+  }, 15_000);
+
+  it('cannot remove a replacement reservation using stale terminal evidence', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-stale-probe-'));
+    temporaryRoots.push(root);
+    let enterProbe!: () => void;
+    let finishProbe!: () => void;
+    const entered = new Promise<void>(resolve => { enterProbe = resolve; });
+    const gate = new Promise<void>(resolve => { finishProbe = resolve; });
+    const first = new DurableShellTaskIndex(root, {
+      maxConcurrentTasks: 10,
+      inspectTask: async (): Promise<'terminal'> => { enterProbe(); await gate; return 'terminal'; },
+    });
+    const peer = new DurableShellTaskIndex(root, { maxConcurrentTasks: 10, inspectTask: async (): Promise<'active'> => 'active' });
+    const owner = { taskId: 'reused', requestDigest: 'a'.repeat(64), ownerClientId: 'a', ownerWorkspaceId: 'a' };
+    expect(await first.reserve(owner)).toMatchObject({ ok: true });
+    const pending = first.reserve({ ...owner, taskId: 'import', mutationKind: 'repository_import' });
+    try {
+      await entered;
+      await peer.release(owner.taskId, owner.requestDigest);
+      expect(await peer.reserve(owner)).toMatchObject({ ok: true, value: { created: true } });
+    } finally { finishProbe(); }
+    expect(await pending).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect(await peer.hasReservation(owner.taskId, owner.requestDigest)).toBe(true);
+  }, 15_000);
+
+  it('reports a live index lock timeout without admitting a reservation', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-live-index-lock-'));
+    temporaryRoots.push(root);
+    const inspector = vi.fn(async (): Promise<'active'> => 'active');
+    const index = new DurableShellTaskIndex(root, { maxConcurrentTasks: 10, inspectTask: inspector });
+    await index.initialize();
+    const lockPath = path.join(root, '.index', 'v1', 'index.lock');
+    const request = { taskId: 'busy-request', requestDigest: 'a'.repeat(64), ownerClientId: 'client', ownerWorkspaceId: 'workspace-b' };
+    await writeFile(lockPath, JSON.stringify({ version: 1, pid: process.pid, acquiredAt: new Date().toISOString() }), { flag: 'wx' });
+    try {
+      const [reservation, listing] = await Promise.all([index.reserve(request), index.listLaunches({ limit: 10 })]);
+      for (const result of [reservation, listing]) {
+        expect(result).toMatchObject({
+          ok: false, error: { code: 'CONFLICT', recoverable: true, message: expect.stringContaining('index is busy'), details: { reason: 'durable_task_index_busy' } },
+        });
+      }
+      expect(await index.hasReservation(request.taskId, request.requestDigest)).toBe(false);
+      expect(inspector).not.toHaveBeenCalled();
+    } finally {
+      await rm(lockPath);
+    }
+    expect(await index.reserve(request)).toMatchObject({ ok: true, value: { created: true } });
+  }, 20_000);
 
   it('retries transient lock-file deletion before another store instance acquires the index', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-index-lock-release-'));

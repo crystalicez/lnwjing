@@ -40,20 +40,29 @@ jobs:
 
 The marker filename is a SHA-256 digest of the task ID so untrusted IDs never
 become index paths. Its record binds the original task ID, owner, request
-digest, reservation time, and launcher identity.
+digest, reservation time, launcher identity, and (for new reservations) a unique
+reservation nonce.
 
 ## One-time bootstrap and warm behavior
 
 The first process that does not find a valid `.index/v1/ready.json` acquires
-`index.lock`, scans legacy task directories once, and inspects their state.
-Active or unknown legacy tasks receive a conservative marker with
+`index.lock`, scans legacy task directories once, and reads persisted metadata
+without process liveness reconciliation. Nonterminal or unknown legacy tasks
+receive a conservative marker with
 `requestDigest: null`; terminal tasks do not. The same pass rebuilds
 `launches.jsonl` from valid persisted launch metadata and then atomically writes
 `ready.json`.
 
 After readiness is established:
 
-- capacity reservation reads only active marker files;
+- below capacity and without an exclusive-operation conflict, reservation
+  counts active markers without probing any process liveness;
+- when capacity or a safety fence would reject a reservation, inspect only
+  relevant blockers outside the shared lock, then reacquire it, validate
+  reservation identity and recount the current markers before admitting work;
+- a slow liveness probe in one workspace cannot hold the shared reservation
+  lock and delay unrelated admissions; no per-workspace duplication of the
+  global capacity limit is introduced;
 - bounded listing reads the launch journal backwards in 64 KiB chunks;
 - at most 16 selected task records are hydrated concurrently;
 - new task reservation appends one journal record after its marker is durable;
@@ -67,9 +76,11 @@ recovery cost, not a warm-path optimization failure.
 
 Index uncertainty consumes capacity instead of freeing it:
 
-- a corrupt or unreadable active marker counts as active;
+- a corrupt or unreadable active marker fails admission closed;
 - `active` and `unknown` task inspection keep the marker;
-- a terminal task removes its marker;
+- a terminal task releases its marker normally; admission-time cleanup of
+  terminal markers is deferred until capacity or an exclusive fence requires it;
+  stale probe evidence cannot remove a replacement reservation;
 - a missing task removes a non-legacy reservation only after the 30-second
   grace period and only when the recorded launcher PID is proven gone;
 - legacy markers, missing launcher identity, and unknown liveness are never
@@ -84,6 +95,10 @@ exact task ID and request digest. Unknown observation remains
 
 `index.lock` is created exclusively. A contender may quarantine a lock only
 after it is older than 30 seconds and its recorded owner PID is proven gone.
+A lock-acquisition timeout returns a recoverable conflict, not a generic
+internal error. An exclusive repository import or writer-lease probe remains
+global because unsandboxed child processes may affect other workspace roots.
+A different workspace ID is not proof of filesystem isolation.
 
 ## Page through history
 

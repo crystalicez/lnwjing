@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -118,6 +118,25 @@ describe('multi-workspace concurrency acceptance', () => {
       });
       expect(ownProcess.isError).not.toBe(true);
       expect(['starting', 'running']).toContain(structuredRecord(ownProcess).state);
+
+      // Both real children remain blocked on their own release files.
+      // An unrelated project must still edit and inspect its own history
+      // rather than wait for the first project's process lifetime.
+      const [editA, editB, listB] = await Promise.all([
+        clientA.callTool({ name: 'edit_file', arguments: {
+          workspaceId: workspaceA.id, path: 'flow-a.txt', oldText: 'flow-a', newText: 'edited-a',
+        } }),
+        clientB.callTool({ name: 'edit_file', arguments: {
+          workspaceId: workspaceB.id, path: 'flow-b.txt', oldText: 'flow-b', newText: 'edited-b',
+        } }),
+        clientB.callTool({ name: 'shell', arguments: { workspaceId: workspaceB.id, operation: 'list', limit: 10 } }),
+      ]);
+      for (const result of [editA, editB, listB]) expect(result.isError, JSON.stringify(result)).not.toBe(true);
+      expect(await readFile(path.join(workspaceRootA, 'flow-a.txt'), 'utf8')).toBe('edited-a');
+      expect(await readFile(path.join(workspaceRootB, 'flow-b.txt'), 'utf8')).toBe('edited-b');
+      expect(['starting', 'running']).toContain(structuredRecord(await clientA.callTool({
+        name: 'process_status', arguments: { workspaceId: workspaceA.id, processId: processA },
+      })).state);
 
       await runtime.services.selectWorkspace({ workspaceId: workspaceB.id });
       expect((await runtime.services.startMcp({ workspaceId: workspaceB.id })).url).toBe(connection.url);

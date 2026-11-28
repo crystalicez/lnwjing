@@ -273,6 +273,37 @@ describe('durable shell background tasks', () => {
     });
   }, 15_000);
 
+  it('bootstraps unresolved task metadata without reconciling or writing it under the index lock', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-bootstrap-unresolved-'));
+    temporaryRoots.push(root);
+    const taskId = 'legacy-running';
+    const taskDirectory = path.join(root, taskId);
+    await mkdir(taskDirectory);
+    const filename = path.join(taskDirectory, 'task.json');
+    // No worker identity has been captured. Bootstrap cannot prove termination.
+    const original = JSON.stringify({
+      version: 1, task_id: taskId, state: 'running',
+      started_at: '2026-01-01T00:00:00.000Z',
+      deadline_at: '2026-01-01T00:01:00.000Z',
+      include_stdout: false, include_stderr: false, max_output_bytes: 1024,
+    });
+    await writeFile(filename, original, 'utf8');
+    const store = new DurableShellTaskStore(root);
+    expect(await store.inspectForIndexBootstrap(taskId)).toMatchObject({
+      inspection: 'unknown', record: { taskId },
+    });
+    expect(await readFile(filename, 'utf8')).toBe(original);
+    // Exercise the actual bootstrap through managed writer admission, not only
+    // the helper. The unrelated ordinary writer can start with the legacy
+    // reservation still conservatively counted.
+    const gate = new SharedManagedWriterAdmission(root);
+    const result = await gate.enter({ actorClientId: 'other-client', workspaceId: 'other-workspace', kind: 'synchronous_mutation' });
+    expect(result.ok).toBe(true);
+    if (result.ok) await result.value.releaseAfterVerifiedTermination();
+    expect(await readFile(filename, 'utf8')).toBe(original);
+    expect(await store.reservationDiagnostics()).toMatchObject({ total: 1 });
+  });
+
   it('does not overwrite terminal metadata when Windows-style PID reuse is observed during reconciliation', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'lnwjing-durable-pid-reuse-'));
     temporaryRoots.push(root);
