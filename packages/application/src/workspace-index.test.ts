@@ -1,4 +1,5 @@
 import { createReadStream, watch, type FSWatcher } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
@@ -120,17 +121,28 @@ describe('WorkspaceIndexService', () => {
       const source = path.join(root, 'source.ts');
       await writeFile(source, 'export const small = true;');
       expect((await service.indexWorkspace(workspace.id)).ok).toBe(true);
-      const mockedMetadata = await lstat(source);
-      mockedMetadata.size = 128 * 1024 * 1024 + 1;
-      vi.mocked(lstat).mockResolvedValueOnce(mockedMetadata);
+      // Real filesystem metadata; a one-shot lstat mock can be consumed by
+      // the scan lease or another metadata lookup instead of the source file.
+      // Mark sparse before extending on Windows to avoid writing 128 MiB.
+      if (process.platform === 'win32') execFileSync('fsutil.exe', ['sparse', 'setflag', source], { windowsHide: true, timeout: 5_000 });
+      const oversized = 128 * 1024 * 1024 + 1;
+      await truncate(source, oversized);
+      expect((await lstat(source)).size).toBe(oversized);
       vi.mocked(createReadStream).mockClear();
+      vi.mocked(readFile).mockClear();
       expect(await service.indexPath(workspace.id, 'source.ts', { deepLargeFile: true })).toMatchObject({
         ok: false, error: { code: 'FILE_TOO_LARGE' },
       });
       expect(vi.mocked(createReadStream)).not.toHaveBeenCalled();
-      expect((await service.indexPath(workspace.id, 'source.ts')).ok).toBe(true);
+      const ordinary = await service.indexPath(workspace.id, 'source.ts');
+      expect(ordinary.ok).toBe(true);
+      if (ordinary.ok) expect(ordinary.value.entries.find(entry => entry.relativePath === 'source.ts')).toMatchObject({ size: oversized, contentHash: null });
+      expect(vi.mocked(createReadStream)).not.toHaveBeenCalled();
+      expect(vi.mocked(readFile).mock.calls.some(([filename]) => filename === source)).toBe(false);
+      await writeFile(source, 'export const recovered = true;');
+      const recovered = await service.indexPath(workspace.id, 'source.ts', { deepLargeFile: true });
+      expect(recovered.ok && recovered.value.entries.find(entry => entry.relativePath === 'source.ts')?.symbols).toContain('recovered');
     } finally {
-      vi.mocked(lstat).mockClear();
       await service.close();
       await rm(root, { recursive: true, force: true });
     }

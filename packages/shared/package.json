@@ -34,7 +34,7 @@
     }
   },
   "scripts": {
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "node ../../scripts/clean-ts-output.mjs dist && tsc --outDir dist"
   },
