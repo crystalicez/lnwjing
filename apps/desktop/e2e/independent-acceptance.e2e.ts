@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -250,6 +250,55 @@ test('real concurrent background jobs stay scoped and Running Projects tracks in
       await Promise.all([first, second].map(dir => writeFile(path.join(dir, 'release'), 'go').catch(() => undefined)));
       for (const entry of ids) await expect.poll(async () => (await status(entry).catch(() => undefined))?.state,
         { timeout: 45_000 }).not.toBe('running').catch(() => undefined);
+    }
+  });
+});
+
+test('real packaged MCP restart recovers an owned running shell without duplicate execution', async () => {
+  test.setTimeout(120_000);
+  await withRuntime(async ({ page, client, first, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    const recoveryToken = 'lnwrt_' + randomBytes(32).toString('hex');
+    const fixture = [
+      "import { appendFileSync, existsSync } from 'node:fs';",
+      "appendFileSync('launch-count', 'launch\\n');",
+      "console.log('RECOVERY_READY');",
+      "const timer = setInterval(() => {",
+      " if (existsSync('release')) { clearInterval(timer); console.log('RECOVERY_DONE'); }",
+      "}, 100);",
+    ].join('\n');
+    await writeFile(path.join(first, 'recovery.mjs'), fixture);
+    const run = { workspaceId, executable: 'node', arguments: ['recovery.mjs'], timeout_seconds: 60,
+      request_id: 'restart-acceptance-' + randomUUID(), recovery_token: recoveryToken };
+    const receipt = await good('shell', run);
+    const taskId = String(receipt.task_id);
+    const observe = { workspaceId, operation: 'result', task_id: taskId, recovery_token: recoveryToken };
+    let peer: Client | undefined;
+    try {
+      await expect.poll(async () => readFile(path.join(first, 'launch-count'), 'utf8').catch(() => ''), { timeout: 15_000 }).toBe('launch\n');
+      await client.close();
+      const restarted = await page.evaluate(() => window.lnwjing.restartMcp());
+      expect(restarted.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
+      peer = new Client({ name: 'restart-recovery-' + randomUUID(), version: '1.0.0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
+      await peer.connect(new StreamableHTTPClientTransport(new URL(restarted.url!)));
+      const denied = await peer.callTool({ name: 'shell', arguments: { workspaceId, operation: 'result', task_id: taskId } });
+      expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+      const status = await peer.callTool({ name: 'shell', arguments: observe });
+      expect(status.structuredContent).toMatchObject({ task_id: taskId, state: 'running', stdout: expect.stringContaining('RECOVERY_READY') });
+      const replays = await Promise.all([peer.callTool({ name: 'shell', arguments: run }), peer.callTool({ name: 'shell', arguments: run })]);
+      for (const replay of replays) expect(replay.structuredContent).toMatchObject({ task_id: taskId, started_at: receipt.started_at });
+      expect(await readFile(path.join(first, 'launch-count'), 'utf8')).toBe('launch\n');
+      await writeFile(path.join(first, 'release'), 'go');
+      await expect.poll(async () => (await peer!.callTool({ name: 'shell', arguments: observe })).structuredContent, { timeout: 20_000 })
+        .toMatchObject({ task_id: taskId, state: 'completed', exit_code: 0, stdout: expect.stringContaining('RECOVERY_DONE') });
+      expect(await readFile(path.join(first, 'launch-count'), 'utf8')).toBe('launch\n');
+    } finally {
+      await writeFile(path.join(first, 'release'), 'go').catch(() => undefined);
+      if (peer !== undefined) {
+        await expect.poll(async () => (await peer!.callTool({ name: 'shell', arguments: observe })).structuredContent?.state, { timeout: 20_000 })
+          .not.toBe('running').catch(() => undefined);
+        await peer.close().catch(() => undefined);
+      }
     }
   });
 });
