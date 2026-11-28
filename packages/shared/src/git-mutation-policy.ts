@@ -21,6 +21,14 @@ export function isProvablyReadOnlyGitInvocation(args: readonly string[]): boolea
   const first = args[0]!.toLowerCase();
   if (first.startsWith('-')) return args.length === 1 && (first === '--help' || first === '--version');
   const rest = args.slice(1);
+  // ls-files only enumerates index/working-tree entries. Ordinary wildcard
+  // pathspecs do not make it a writer. Keep other broad pathspecs conservative.
+  // --debug/--format and future flags are not implicitly trusted here.
+  if (first === 'ls-files') return isReadOnlyLsFiles(rest);
+  // Diff-family commands can write a file via --output, and can invoke
+  // arbitrary configured external diff/textconv drivers. Never classify an
+  // explicit output or external-driver request as a harmless read.
+  if (hasGitOption(rest, ['--output', '--ext-diff', '--textconv'])) return false;
   if (containsBroadPathspecMagic(rest)) return false;
 
   if (ALWAYS_READ_ONLY_GIT_SUBCOMMANDS.has(first)) return true;
@@ -101,6 +109,25 @@ function hasGitOption(args: readonly string[], options: readonly string[]): bool
 function isDestructivePush(args: readonly string[]): boolean {
   if (hasGitOption(args, ['--force', '-f', '--force-with-lease', '--force-if-includes', '--delete', '--mirror', '--prune'])) return true;
   return args.some((arg) => arg.startsWith(':') || arg.startsWith('+'));
+}
+
+function isReadOnlyLsFiles(args: readonly string[]): boolean {
+  const flags = new Set(['-z', '-t', '-v', '-f', '-c', '--cached', '-d', '--deleted',
+    '-m', '--modified', '-o', '--others', '-i', '--ignored', '-s', '--stage',
+    '-u', '--unmerged', '-k', '--killed', '--directory', '--no-empty-directory',
+    '--full-name', '--error-unmatch', '--exclude-standard', '--deduplicate']);
+  let pathsOnly = false;
+  for (const arg of args) {
+    if (!pathsOnly && arg === '--') { pathsOnly = true; continue; }
+    if (!pathsOnly && arg.startsWith('-')) {
+      if (!flags.has(arg)) return false;
+      continue;
+    }
+    // Never infer magic pathspecs, absolute paths, or parent traversal.
+    if (arg.startsWith(':') || /^(?:[A-Za-z]:|[\\/])/.test(arg)
+      || arg.split(/[\\/]/).includes('..') || arg.includes('\0')) return false;
+  }
+  return true;
 }
 
 function containsBroadPathspecMagic(args: readonly string[]): boolean {

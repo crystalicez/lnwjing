@@ -52,6 +52,21 @@ describe('ShellCapabilityBackend', () => {
     const reopened = new ShellCapabilityBackend({ allowedRoots: [root], taskStateDirectory });
     await expect(reopened.statusForGoalLiveness('workspace-1', taskId))
       .resolves.toMatchObject({ ok: true, value: { state: 'completed', command_fingerprint: expected } });
+    const recovery = { operation: 'recover_legacy_result', task_id: taskId, userConfirmed: true, metadata: {
+      [CAPABILITY_TASK_OWNER_METADATA_KEY]: { clientId: 'client-1', sessionId: 'session-2', workspaceId: 'workspace-1' },
+    } };
+    const nativeApproval = { mode: 'standard' as const, applicationApproved: true, bypassApplicationAuthorization: false, source: 'host_approval' as const };
+    await expect(reopened.execute(recovery)).resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_REQUIRED' } });
+    await expect(reopened.execute(recovery, undefined, { mode: 'full_bypass', applicationApproved: true, bypassApplicationAuthorization: true, source: 'full_bypass' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_REQUIRED' } });
+    await expect(reopened.execute({ ...recovery, metadata: { [CAPABILITY_TASK_OWNER_METADATA_KEY]: {
+      clientId: 'foreign-client', sessionId: 'session-2', workspaceId: 'workspace-1',
+    } } }, undefined, nativeApproval)).resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_DENIED' } });
+    await expect(reopened.execute(recovery, undefined, nativeApproval)).resolves.toMatchObject({ ok: true, value: {
+      state: 'completed', task_id: taskId, recovery: 'one_shot_host_approved_legacy_result',
+    } });
+    await expect(reopened.execute({ ...recovery, operation: 'result' })).resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_DENIED' } });
+    await expect(reopened.execute({ ...recovery, operation: 'cancel' })).resolves.toMatchObject({ ok: false, error: { code: 'PERMISSION_DENIED' } });
   }, 20_000);
 
   it('recovers a lost shell receipt by request_id and never replays a retained or damaged receipt', async () => {

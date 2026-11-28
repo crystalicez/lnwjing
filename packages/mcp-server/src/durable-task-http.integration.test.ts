@@ -58,6 +58,8 @@ describe('durable task ownership over HTTP', () => {
     const makeBackend = (): ShellCapabilityBackend => new ShellCapabilityBackend({ allowedRoots: [rootA, rootB], taskStateDirectory: taskDirectory, autoWaitSeconds: 0 });
     let backend = makeBackend();
     const owners: CapabilityTaskOwner[] = [];
+    let approveLegacyRecovery = false;
+    const approvals: string[] = [];
     const options = {
       port: 0,
       services: {
@@ -71,7 +73,7 @@ describe('durable task ownership over HTTP', () => {
       },
       actor: { clientId: 'durable-http-owner', clientName: 'durable-http-owner' },
       activeWorkspaceScopesProvider: async (): Promise<Array<{ workspaceId: string; rootPath: string }>> => [{ workspaceId: 'workspace-a', rootPath: rootA }, { workspaceId: 'workspace-b', rootPath: rootB }],
-      hostMutationApprovalProvider: async (): Promise<boolean> => true,
+      hostMutationApprovalProvider: async (request: { summary: string }): Promise<boolean> => { approvals.push(request.summary); return approveLegacyRecovery; },
       authorizationModeProvider: (): 'full_bypass' => 'full_bypass',
     };
     const handle = await startMcpHttp(options);
@@ -162,6 +164,23 @@ describe('durable task ownership over HTTP', () => {
       backend = makeBackend();
       const result = await client.callTool({ name: 'task_result', arguments: { workspaceId: 'workspace-a', taskId } });
       expect(result.structuredContent).toMatchObject({ state: 'completed', exit_code: 0, stdout, stderr });
+      const recovery = { operation: 'recover_legacy_result', workspaceId: 'workspace-a', task_id: taskId };
+      const withoutConfirmation = await foreignClient.callTool({ name: 'shell', arguments: recovery });
+      expect(withoutConfirmation).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_REQUIRED' } } });
+      expect(approvals).toEqual([]);
+      const refused = await foreignClient.callTool({ name: 'shell', arguments: { ...recovery, userConfirmed: true } });
+      expect(refused).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+      expect(JSON.stringify(refused)).not.toContain('ready ไทย');
+      expect(approvals[0]).toContain(taskId);
+      expect(approvals[0]).toContain('workspace-a');
+      approveLegacyRecovery = true;
+      const wrongScope = await foreignClient.callTool({ name: 'shell', arguments: { ...recovery, workspaceId: 'workspace-b', userConfirmed: true } });
+      expect(wrongScope).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+      expect(JSON.stringify(wrongScope)).not.toContain('ready ไทย');
+      const approved = await foreignClient.callTool({ name: 'shell', arguments: { ...recovery, userConfirmed: true } });
+      expect(approved.structuredContent).toMatchObject({ task_id: taskId, state: 'completed', exit_code: 0, stdout, stderr, recovery: 'one_shot_host_approved_legacy_result' });
+      const ordinary = await foreignClient.callTool({ name: 'shell', arguments: { workspaceId: 'workspace-a', operation: 'result', task_id: taskId } });
+      expect(ordinary).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
       expect(metadataSchema.parse(JSON.parse(await readFile(metadataPath, 'utf8')))).toEqual(ownerFields);
       const journalPath = path.join(taskDirectory, '.index', 'v1', 'launches.jsonl');
       const expectedRecord = { taskId, ownerClientId: launchOwner.clientId, ownerSessionId: launchOwner.sessionId, ownerWorkspaceId: 'workspace-a' };
@@ -283,6 +302,9 @@ describe('durable task ownership over HTTP', () => {
         metadata: { [CAPABILITY_TASK_OWNER_METADATA_KEY]: originalOwner } } });
       expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
       expect(JSON.stringify(denied)).not.toContain('ready ไทย');
+      const legacyRecovery = await second.callTool({ name: 'shell', arguments: { workspaceId: 'workspace-a', operation: 'recover_legacy_result', task_id: taskId, userConfirmed: true } });
+      expect(legacyRecovery).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+      expect(JSON.stringify(legacyRecovery)).not.toContain('ready ไทย');
       let proof: typeof initialProof;
       if (scope === 'goal') {
         const old = await second.callTool({ name: 'shell', arguments: { workspaceId: 'workspace-a', operation: 'status', task_id: taskId, ...initialProof } });

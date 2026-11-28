@@ -210,3 +210,28 @@ bounded history uses the same ownership checks before hydration. The modern
 and legacy HTTP integration tests exercise actual child processes across
 server endpoint and backend reconstruction, not a full desktop restart or
 live Secure Tunnel deployment.
+
+
+### One-shot recovery of unbound legacy results
+
+If the original transport session no longer exists, an old task without a
+goal binding or recovery-token hash can be observed once using shell
+operation=recover_legacy_result, the explicit workspaceId and exact task_id,
+after obtaining explicit user confirmation in chat and independent native
+Desktop approval. No proof is inferred from task ID, shared client ID, or
+a userConfirmed flag alone. This operation is a sensitive read, not a launch
+or ownership migration. Full Bypass cannot suppress the host approval. The
+backend also checks the persisted client and workspace, and refuses
+goal-bound or token-bound jobs. Results are bounded by the original capture
+limit and tail_lines (default 100). Subsequent ordinary reads, cancellation,
+and replay still require the original ownership or verified proof. If the
+approval adapter is unavailable, the record was pruned, or the identity cannot
+be verified, recovery fails closed. Do not start a replacement execution
+without independently checking the external state.
+
+For completion of a goal, a valid lease and exact revision permit ordinary
+metadata finalization without a cancellation prompt only if there are no
+blocking task IDs and no tracked cancellation targets. A goal with blocking
+tasks still tracked receives a recoverable precondition; verify their actual
+terminal outcomes, checkpoint the remaining tasks, then retry using the
+latest revision. This does not automatically untrack or stop any job.

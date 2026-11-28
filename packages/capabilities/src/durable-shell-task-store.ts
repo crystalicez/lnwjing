@@ -14,7 +14,7 @@ import {
   type ReservationDiagnosticRow,
 } from './durable-shell-task-index.js';
 import { DEFAULT_SHELL_MAX_CONCURRENT_TASKS, MAX_SHELL_CONCURRENT_TASKS } from '@lnwjing/shared';
-import { capabilityTaskGoalMatches, capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
+import { capabilityLegacyRecoveryMatches, capabilityTaskGoalMatches, capabilityTaskOwnerDenied, capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
 
 export type DurableShellTaskState = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled' | 'termination_unverified';
 
@@ -168,7 +168,7 @@ export class DurableShellTaskStore {
     if (!isSafeTaskId(request.taskId)) return err(appError('INVALID_INPUT', 'Durable task ID is invalid'));
     const existing = await this.readMetadata(request.taskId, false, 1);
     if (existing.ok) {
-      if (!matchesOwner(existing.value)) return err(taskOwnerDenied());
+      if (!matchesOwner(existing.value)) return err(capabilityTaskOwnerDenied());
       if (existing.value.request_digest !== requestDigest) {
         return err(appError('CONFLICT', 'Durable task ID is already used by another request', true));
       }
@@ -398,11 +398,22 @@ export class DurableShellTaskStore {
     const metadata = await this.readMetadata(taskId);
     if (!metadata.ok) return metadata;
     if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(metadata.value), owner)) {
-      return err(taskOwnerDenied());
+      return err(capabilityTaskOwnerDenied());
     }
     const reconciled = await this.reconcile(metadata.value);
     await this.releaseTerminalReservation(reconciled);
     return ok(await this.snapshotFromMetadata(reconciled, tailLines));
+  }
+
+  /** One-shot read after exact native host approval. Does not update ownership,
+   * mint a credential, cancel a job, or enable later ordinary reads. */
+  public async snapshotForApprovedLegacyRecovery(taskId: string, owner: CapabilityTaskOwner, tailLines?: number): Promise<Result<Record<string, unknown>>> {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(taskId)) return err(appError('INVALID_INPUT', 'Exact legacy task ID is required'));
+    const metadata = await this.readMetadata(taskId);
+    if (!metadata.ok || !capabilityLegacyRecoveryMatches(metadataOwner(metadata.value), owner)) return err(capabilityTaskOwnerDenied());
+    const reconciled = await this.reconcile(metadata.value);
+    await this.releaseTerminalReservation(reconciled);
+    return ok({ ...await this.snapshotFromMetadata(reconciled, tailLines ?? 100), recovery: 'one_shot_host_approved_legacy_result' });
   }
 
   /** Trusted read-only host probe scoped to the durable goal's workspace. */
@@ -511,7 +522,7 @@ export class DurableShellTaskStore {
     const initial = await this.readMetadata(taskId);
     if (!initial.ok) return initial;
     if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(initial.value), owner)) {
-      return err(taskOwnerDenied());
+      return err(capabilityTaskOwnerDenied());
     }
     let current = await this.reconcile(initial.value);
     let nextProbeAt = Date.now() + 1_000;
@@ -523,7 +534,7 @@ export class DurableShellTaskStore {
       const latest = await this.readMetadata(taskId, probeDue);
       if (!latest.ok) return latest;
       if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(latest.value), owner)) {
-        return err(taskOwnerDenied());
+        return err(capabilityTaskOwnerDenied());
       }
       current = latest.value;
       if (!isTerminal(current.state) && (probeDue || current.state !== 'running')) {
@@ -547,7 +558,7 @@ export class DurableShellTaskStore {
     const metadataResult = await this.readMetadata(taskId);
     if (!metadataResult.ok) return metadataResult;
     if (owner !== undefined && !capabilityTaskOwnerMatches(metadataOwner(metadataResult.value), owner)) {
-      return err(taskOwnerDenied());
+      return err(capabilityTaskOwnerDenied());
     }
     let metadata = await this.reconcile(metadataResult.value);
     if (isTerminal(metadata.state)) {
@@ -943,10 +954,6 @@ async function readPublishedStartedAt(filename: string): Promise<string | undefi
   } catch {
     return undefined;
   }
-}
-
-function taskOwnerDenied(): ReturnType<typeof appError> & { details: { reason: string } } {
-  return { ...appError('PERMISSION_DENIED', 'Task access requires the original session or a verified recovery proof'), details: { reason: 'task_recovery_or_owner_mismatch' } };
 }
 
 function metadataOwner(metadata: DurableTaskMetadata): CapabilityTaskOwner {

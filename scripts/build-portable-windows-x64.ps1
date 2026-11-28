@@ -155,7 +155,10 @@ try {
         Write-Host "STAGED_PORTABLE_VERIFIED: $stagedArtifact" -ForegroundColor Green
         Write-Host "STAGED_MANIFEST: $stagedManifest"
         Write-Host "SHA256: $artifactSha256"
-        return
+        # The caller launches this as a dedicated -File PowerShell process.
+        # Return an explicit exit code rather than leaving host shutdown implicit;
+        # PowerShell still executes the environment restoration in finally.
+        exit 0
     }
 
     # Rename on the same volume instead of copying ~270 MiB. This output folder

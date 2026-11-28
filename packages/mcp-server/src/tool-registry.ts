@@ -1113,6 +1113,13 @@ export class ToolRegistry {
     profile: PermissionProfile,
     fullBypass: boolean,
   ): Promise<Result<InvocationPolicyAssessment>> {
+    const legacyRecovery = isLegacyTaskRecovery(tool.name, input);
+    if (legacyRecovery && isRecord(input) && (readExplicitWorkspaceId(input) === undefined
+      || typeof input.task_id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(input.task_id)
+      || input.request_id !== undefined || input.cwd !== undefined || input.executable !== undefined
+      || (Array.isArray(input.arguments) && input.arguments.length > 0) || input.recovery_token !== undefined || input.dry_run === true)) {
+      return err(appError('INVALID_INPUT', 'Legacy recovery requires exact workspaceId and task_id without execution arguments or recovery proof'));
+    }
     const activeRoutedInput = await this.routeInputToActiveWorkspace(input);
     const requestedWorkspaceId = readExplicitWorkspaceId(input);
     if (requestedWorkspaceId !== undefined
@@ -1132,16 +1139,26 @@ export class ToolRegistry {
       const lease = await this.services.goals.validateGoalLease(this.actor, {
         goalId: activeRoutedInput.goalId, leaseToken: activeRoutedInput.leaseToken,
       });
-      if (lease.ok && lease.value.revision === activeRoutedInput.expectedRevision
-        && lease.value.trackedTasks.length === 0 && lease.value.activeTaskIds.length === 0) {
-        mutationDecision = { kind: 'bounded_write', reason: 'Lease- and revision-bound goal completion without tracked tasks' };
+      if (lease.ok && lease.value.revision === activeRoutedInput.expectedRevision) {
+        // Completion with blocking tasks is rejected by the repository anyway.
+        // Return that precondition before asking the user to authorize a stop
+        // which cannot take place. Do not silently drop tracked work.
+        if (lease.value.activeTaskIds.length > 0) {
+          return err(appError('CONFLICT', 'Goal cannot be completed while blocking tasks remain tracked; verify each terminal outcome, then checkpoint with only the remaining tracked tasks and retry the latest revision', true));
+        }
+        if (lease.value.trackedTasks.every((task) => !task.cancelWithGoal)) {
+          mutationDecision = { kind: 'bounded_write', reason: 'Lease- and revision-bound goal completion without task cancellation targets' };
+        }
       }
     }
     const policy = this.destructivePolicyProvider();
     const mutationWorkspaceId = readInvocationWorkspaceId(tool.name, activeRoutedInput);
     const nativePathScopeRequired = requiresNativePathScope(tool.name, activeRoutedInput);
-    const activeWorkspaceScope = !this.enforceActiveWorkspaceScope || (mutationDecision.kind === 'read' && !nativePathScopeRequired)
+    const activeWorkspaceScope = !this.enforceActiveWorkspaceScope || (mutationDecision.kind === 'read' && !nativePathScopeRequired && !legacyRecovery)
       ? null : await this.resolveActiveWorkspaceScope(mutationWorkspaceId);
+    if (legacyRecovery && this.enforceActiveWorkspaceScope && (activeWorkspaceScope === null || activeWorkspaceScope.workspaceId !== mutationWorkspaceId)) {
+      return err(appError('PERMISSION_DENIED', 'Legacy result recovery requires the exact active workspace'));
+    }
     if (!fullBypass && mutationDecision.kind === 'execute' && commandExecutionLeavesActiveWorkspace(tool.name, activeRoutedInput, activeWorkspaceScope)) {
       mutationDecision = { kind: 'opaque_mutation', reason: 'Command execution explicitly targets a working directory outside the host Active Project' };
     }
@@ -1156,7 +1173,9 @@ export class ToolRegistry {
     }
     const policyAllowsScopedDestructive = !fullBypass && mutationWorkspaceId !== undefined
       && isScopedAutoApprovalAllowed(tool.name, activeRoutedInput, mutationDecision, policy, activeWorkspaceScope);
-    const hostApprovalRequired = !fullBypass && requiresProfileMutationConfirmation(tool.name, mutationDecision, profile);
+    // Unlike ordinary reads, a legacy result discloses another session's data.
+    // Full Bypass and destructive auto-approval cannot grant that ownership.
+    const hostApprovalRequired = legacyRecovery || (!fullBypass && requiresProfileMutationConfirmation(tool.name, mutationDecision, profile));
     const permissionDecision = fullBypass ? 'ALLOW' : this.permissionEngine.decide(profile, {
       action: 'mcp:' + tool.name,
       level: policyAllowsScopedDestructive ? 'WRITE' : permissionLevelForMutationDecision(mutationDecision),
@@ -1962,6 +1981,13 @@ function relativePathStaysWithin(pathApi: typeof path.win32, relative: string): 
 function summarizeMutationForApproval(toolName: string, input: unknown, activeWorkspaceScope: WorkspaceScope | null): string {
   if (!isRecord(input)) return `tool = ${toolName}`;
   const lines = [`tool = ${toolName}`];
+  if (isLegacyTaskRecovery(toolName, input)) {
+    lines.push('operation = recover_legacy_result');
+    lines.push(`workspaceId = ${JSON.stringify(input.workspaceId)}`);
+    lines.push(`task_id = ${JSON.stringify(input.task_id)}`);
+    lines.push('WARNING: share retained output from one old session with this requester, one time only. No ownership transfer or cancellation.');
+    return boundedApprovalSummary(lines);
+  }
   if (toolName === 'mcp_call') {
     appendApprovalValue(lines, 'server', readTrimmedString(input.server));
     appendApprovalValue(lines, 'childTool', readTrimmedString(input.tool));
@@ -2161,9 +2187,9 @@ function createInvocationAuthorization(input: {
   readonly explicitUserConfirmation: boolean;
 }): InvocationAuthorization {
   let source: InvocationAuthorizationSource = 'profile';
-  if (input.fullBypass) source = 'full_bypass';
+  if (input.hostApprovalRequired && !input.policyAllowsScopedDestructive) source = 'host_approval';
+  else if (input.fullBypass) source = 'full_bypass';
   else if (input.policyAllowsScopedDestructive) source = 'scoped_policy';
-  else if (input.hostApprovalRequired) source = 'host_approval';
   else if (input.explicitUserConfirmation) source = 'explicit_user';
   return {
     mode: input.fullBypass ? 'full_bypass' : 'standard',
@@ -2172,6 +2198,10 @@ function createInvocationAuthorization(input: {
     source,
   };
 }
+function isLegacyTaskRecovery(toolName: string, input: unknown): boolean {
+  return toolName === 'shell' && isRecord(input) && input.operation === 'recover_legacy_result';
+}
+
 function readExplicitWorkspaceId(input: unknown): string | undefined {
   if (typeof input !== 'object' || input === null || !('workspaceId' in input)) return undefined;
   const value = (input as { workspaceId?: unknown }).workspaceId;

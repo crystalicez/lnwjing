@@ -339,6 +339,7 @@ function inspectGit(value: Readonly<Record<string, unknown>>): MutationPolicyDec
 
 function inspectTaskExecution(value: Readonly<Record<string, unknown>>, toolName: string): MutationPolicyDecision {
   const operation = normalized(value.operation ?? 'run');
+  if (toolName === 'shell' && operation === 'recover_legacy_result') return read('Read one legacy result only after exact native user approval');
   if (READ_ONLY_TASK_OPERATIONS.has(operation)) return read(`${toolName} ${operation} only observes task state`);
   if (operation === 'run' && value.dry_run === true) return read(`${toolName} dry run does not start the command`);
   // Shell cancel targets only a durable handle whose client/session/workspace

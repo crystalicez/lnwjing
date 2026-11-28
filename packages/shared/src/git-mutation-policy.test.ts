@@ -62,6 +62,30 @@ describe('prohibitedAgentGitInvocationReason', () => {
     expect(prohibitedAgentGitInvocationReason(args)).toBeUndefined();
   });
 
+  it.each([
+    ['ls-files', '*LICENSE*', '*COPYING*'],
+    ['ls-files', '--', 'src/**/*.ts', '[ab]?.txt'],
+    ['ls-files', '-z', '--cached', '--', 'foo'],
+    ['ls-files', '--others', '--exclude-standard'],
+  ])('allows scoped read-only ls-files pathspecs %j', (...args) => {
+    expect(isProvablyReadOnlyGitInvocation(args)).toBe(true);
+  });
+
+  it.each([
+    ['ls-files', '--recurse-submodules'],
+    ['ls-files', '--with-tree=HEAD'],
+    ['ls-files', '--', ':/'],
+    ['ls-files', '--', '../outside'],
+    ['ls-files', '--', 'C:/outside'],
+    ['ls-files', '--future-flag'],
+    ['diff', '--output=outside.txt'],
+    ['show', '--output', 'outside.txt'],
+    ['diff', '--ext-diff'],
+    ['log', '--textconv'],
+  ])('does not downgrade potentially unsafe Git forms %j', (...args) => {
+    expect(isProvablyReadOnlyGitInvocation(args)).toBe(false);
+  });
+
   it('classifies demonstrably read-only forms separately from allowed writes', () => {
     expect(isProvablyReadOnlyGitInvocation(['status', '--short'])).toBe(true);
     expect(isProvablyReadOnlyGitInvocation(['version'])).toBe(true);

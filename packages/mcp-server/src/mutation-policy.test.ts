@@ -13,6 +13,8 @@ interface MutationCase {
 }
 
 const cases: readonly MutationCase[] = [
+  { label: 'git wildcard index listing', tool: 'git', input: { args: ['ls-files', '*LICENSE*', '*COPYING*'] }, permission: 'EXECUTE', kind: 'read' },
+  { label: 'git diff output file', tool: 'git', input: { args: ['diff', '--output=outside.txt'] }, permission: 'EXECUTE', kind: 'opaque_mutation' },
   { label: 'read-only git status', tool: 'git', input: { args: ['status', '--short'] }, permission: 'EXECUTE', kind: 'read' },
   { label: 'git index replacement', tool: 'git', input: { args: ['add', '--', 'src/a.ts'] }, permission: 'EXECUTE', kind: 'replace' },
   { label: 'git scope override before clean', tool: 'git', input: { args: ['-C', 'E:\\outside', 'clean', '-fd'] }, permission: 'EXECUTE', kind: 'opaque_mutation' },

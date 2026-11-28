@@ -18,9 +18,9 @@ import { engineeringCommandFingerprint, formatEngineeringCommand } from '@lnwjin
 import type { CapabilityBackend } from './local-capability-service.js';
 import { prohibitedAgentCommandReason, riskyAgentCommandReason } from './agent-command-policy.js';
 import { DurableShellTaskStore } from './durable-shell-task-store.js';
-import { capabilityTaskGoalMatches, capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, readCapabilityActiveWorkspaceRoot, readCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
+import { capabilityTaskGoalMatches, capabilityTaskOwnerDenied, capabilityTaskOwnerMatches, legacyCapabilityTaskOwner, readCapabilityActiveWorkspaceRoot, readCapabilityTaskOwner, type CapabilityTaskOwner } from './task-ownership.js';
 
-type ShellOperation = 'run' | 'list' | 'status' | 'wait' | 'logs' | 'result' | 'cancel' | 'resume' | 'approve' | 'deny';
+type ShellOperation = 'run' | 'list' | 'status' | 'wait' | 'logs' | 'result' | 'recover_legacy_result' | 'cancel' | 'resume' | 'approve' | 'deny';
 type ShellExecution = 'foreground' | 'background' | 'auto';
 type ShellPrivilege = 'user' | 'admin';
 type TaskState = 'running' | 'completed' | 'failed' | 'timed_out' | 'cancelled' | 'termination_unverified';
@@ -118,7 +118,7 @@ interface ShellTaskRecord {
   terminationAttempt?: Promise<boolean>;
 }
 
-const SHELL_OPERATIONS: readonly ShellOperation[] = ['run', 'list', 'status', 'wait', 'logs', 'result', 'cancel', 'resume', 'approve', 'deny'];
+const SHELL_OPERATIONS: readonly ShellOperation[] = ['run', 'list', 'status', 'wait', 'logs', 'result', 'recover_legacy_result', 'cancel', 'resume', 'approve', 'deny'];
 const DEFAULT_TIMEOUT_SECONDS = 3600;
 const DEFAULT_BACKGROUND_TIMEOUT_SECONDS = 86_400;
 const DEFAULT_AUTO_WAIT_SECONDS = 1;
@@ -173,6 +173,17 @@ export class ShellCapabilityBackend implements CapabilityBackend {
       case 'wait': return this.wait(parsed.value);
       case 'logs': return this.taskSnapshot(parsed.value.taskId, parsed.value.tailLines, parsed.value.owner);
       case 'result': return this.taskSnapshot(parsed.value.taskId, undefined, parsed.value.owner);
+      case 'recover_legacy_result':
+        if (authorization?.source !== 'host_approval' || authorization.applicationApproved !== true || !parsed.value.userConfirmed) {
+          return err(appError('PERMISSION_REQUIRED', 'Legacy result recovery requires exact native Desktop approval', true));
+        }
+        if (parsed.value.taskId === undefined || parsed.value.owner.workspaceId === undefined || parsed.value.requestId !== undefined
+          || parsed.value.cwd !== undefined || parsed.value.executable !== undefined || parsed.value.arguments.length !== 0
+          || parsed.value.owner.goalId !== undefined || parsed.value.owner.recoveryHash !== undefined || parsed.value.dryRun) {
+          return err(appError('INVALID_INPUT', 'Legacy recovery requires only the exact workspaceId and task_id, without execution arguments or recovery proof'));
+        }
+        return this.durableStore?.snapshotForApprovedLegacyRecovery(parsed.value.taskId, parsed.value.owner, parsed.value.tailLines)
+          ?? err(appError('PROCESS_NOT_FOUND', 'Durable task store is unavailable'));
       case 'cancel':
         if (!isApplicationAuthorized(authorization, parsed.value.userConfirmed)) return err(appError('PERMISSION_REQUIRED', 'Cancelling a task requires explicit user confirmation'));
         return this.cancel(parsed.value.taskId, false, parsed.value.owner);
@@ -589,7 +600,7 @@ export class ShellCapabilityBackend implements CapabilityBackend {
   private authorizeTaskOwner(stored: CapabilityTaskOwner, requester: CapabilityTaskOwner): Result<void> {
     return capabilityTaskOwnerMatches(stored, requester)
       ? ok(undefined)
-      : err({ ...appError('PERMISSION_DENIED', 'Task access requires the original session or a verified recovery proof'), details: { reason: 'task_recovery_or_owner_mismatch' } });
+      : err(capabilityTaskOwnerDenied());
   }
 
   private async resolveCwd(

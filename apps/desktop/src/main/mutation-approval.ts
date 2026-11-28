@@ -31,6 +31,8 @@ export function mutationApprovalDialogOptions(
   if (!trustedHostWindowAvailable) throw new Error('Trusted host window is unavailable for mutation approval');
 
   const thai = locale === 'th';
+  const legacyRecovery = request.toolName === 'shell' && request.mutationKind === 'read'
+    && request.summary.includes('operation = recover_legacy_result');
   const workspace = request.workspaceRoot ?? (thai ? 'ไม่มี Active Project' : 'No Active Project');
   const workspaceId = request.workspaceId ?? '-';
   const detail = thai
@@ -44,7 +46,7 @@ export function mutationApprovalDialogOptions(
         'คำสั่งหรือเป้าหมายที่จะใช้จริง:',
         request.summary,
         '',
-        'ตรวจสอบ path และ arguments ให้ครบก่อนอนุญาต การอนุญาตนี้ใช้ได้ครั้งเดียวเท่านั้น',
+        legacyRecovery ? 'ตรวจสอบรหัสโปรเจกต์และ Task ID ให้ตรงกัน ผลลัพธ์อาจมีข้อมูลสำคัญ อนุญาตให้เปิดเผยครั้งเดียวเท่านั้น ไม่โอนสิทธิ์หรือสั่งยกเลิกงาน' : 'ตรวจสอบ path และ arguments ให้ครบก่อนอนุญาต การอนุญาตนี้ใช้ได้ครั้งเดียวเท่านั้น',
       ].join('\n')
     : [
         `Project: ${workspace}`,
@@ -56,14 +58,15 @@ export function mutationApprovalDialogOptions(
         'Exact command or target:',
         request.summary,
         '',
-        'Verify every path and argument before approving. This approval is valid once only.',
+        legacyRecovery ? 'Verify the project and task ID. Retained output may contain sensitive data. Approval shares it once only, without transferring ownership or cancellation rights.' : 'Verify every path and argument before approving. This approval is valid once only.',
       ].join('\n');
   return {
     type: 'warning',
-    title: thai ? 'ยืนยันคำสั่งที่มีความเสี่ยง' : 'Confirm high-risk action',
-    message: thai
-      ? 'lnwjing กำลังจะรันคำสั่งที่อาจลบหรือแทนที่ข้อมูล'
-      : 'lnwjing is about to run an action that may delete or replace data',
+    title: legacyRecovery ? (thai ? 'ยืนยันการอ่านผล Task เก่า' : 'Confirm legacy task result recovery')
+      : (thai ? 'ยืนยันคำสั่งที่มีความเสี่ยง' : 'Confirm high-risk action'),
+    message: legacyRecovery
+      ? (thai ? 'lnwjing กำลังขอเปิดเผยผลจาก session เก่าให้ session ปัจจุบัน' : 'lnwjing is requesting to share retained output from an older session with the current session')
+      : (thai ? 'lnwjing กำลังจะรันคำสั่งที่อาจลบหรือแทนที่ข้อมูล' : 'lnwjing is about to run an action that may delete or replace data'),
     detail,
     buttons: thai ? ['ยกเลิก', 'อนุญาตครั้งนี้'] : ['Cancel', 'Approve once'],
     defaultId: 0,

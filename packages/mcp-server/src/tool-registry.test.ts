@@ -1834,6 +1834,32 @@ describe('MCP tool registry', () => {
     expect(finishGoal).not.toHaveBeenCalled();
   });
 
+  it('returns actionable completion preconditions without prompting to cancel tracked jobs', async () => {
+    const approval = vi.fn(async () => true);
+    const finishGoal = vi.fn(async () => ok({ status: 'completed' }));
+    const validateGoalLease = vi.fn(async () => ok({
+      revision: 4, workspaceId: 'workspace-1', leaseGeneration: 1,
+      activeTaskIds: ['blocking'], trackedTasks: [{ taskId: 'blocking', role: 'blocking_job', provider: 'shell', cancelWithGoal: true }],
+    }));
+    const registry = new ToolRegistry({ goals: { validateGoalLease, finishGoal } } as unknown as McpApplicationServices, actor, {
+      profileProvider: (): PermissionProfile => permissionProfiles.balanced,
+      hostMutationApprovalProvider: approval,
+    });
+    const input = { goalId: 'goal-1', leaseToken: 'token', expectedRevision: 4, status: 'completed', summary: 'Done', evidence: [] };
+    await expect(registry.invoke('finish_goal', input)).resolves.toMatchObject({ isError: true, structuredContent: { error: {
+      code: 'CONFLICT', recoverable: true, message: expect.stringContaining('checkpoint with only the remaining tracked tasks'),
+    } } });
+    expect(approval).not.toHaveBeenCalled();
+    expect(finishGoal).not.toHaveBeenCalled();
+    validateGoalLease.mockResolvedValueOnce(ok({
+      revision: 4, workspaceId: 'workspace-1', leaseGeneration: 1, activeTaskIds: [],
+      trackedTasks: [{ taskId: 'service', provider: 'shell', role: 'supporting_service', cancelWithGoal: false }],
+    }));
+    await expect(registry.invoke('finish_goal', input)).resolves.toMatchObject({ structuredContent: { status: 'completed' } });
+    expect(finishGoal).toHaveBeenCalledTimes(1);
+    expect(approval).not.toHaveBeenCalled();
+  });
+
   it('honors Custom ALLOW for ordinary replacement and opaque operations instead of silently converting it to ASK', async () => {
     const customAllow: PermissionProfile = {
       name: 'custom',

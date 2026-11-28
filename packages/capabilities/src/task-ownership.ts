@@ -1,4 +1,6 @@
-﻿export const CAPABILITY_TASK_OWNER_METADATA_KEY = 'lnwjing.taskOwner.v1';
+﻿import { appError } from '@lnwjing/domain';
+
+export const CAPABILITY_TASK_OWNER_METADATA_KEY = 'lnwjing.taskOwner.v1';
 
 export const CAPABILITY_ACTIVE_WORKSPACE_ROOT_METADATA_KEY = 'lnwjing.activeWorkspaceRoot.v1';
 
@@ -54,6 +56,22 @@ export function capabilityTaskOwnerMatches(stored: CapabilityTaskOwner, requeste
   // insufficient: several AI conversations may share one transport client.
   if (requester.workspaceId === undefined || stored.workspaceId !== requester.workspaceId) return false;
   return stored.goalId !== undefined && requester.goalId === stored.goalId;
+}
+
+/** Only an exact same-client, same-workspace, unbound legacy record is eligible
+ * for a one-shot host-approved observation. Never confer ownership. */
+export function capabilityLegacyRecoveryMatches(stored: CapabilityTaskOwner, requester: CapabilityTaskOwner): boolean {
+  return requester.workspaceId !== undefined && stored.workspaceId === requester.workspaceId
+    && stored.clientId === requester.clientId && stored.clientId !== 'legacy'
+    && stored.goalId === undefined && stored.recoveryHash === undefined;
+}
+
+export function capabilityTaskOwnerDenied(): ReturnType<typeof appError> & { details: { reason: string; recovery: string } } {
+  return {
+    ...appError('PERMISSION_DENIED', 'Task access requires the original session or a verified recovery proof'),
+    details: { reason: 'task_recovery_or_owner_mismatch',
+      recovery: 'Use the original goalLease or recovery_token if set at launch. For an unbound legacy task, ask the user before calling shell recover_legacy_result with exact workspaceId and task_id; Desktop approval is required. Do not relaunch an uncertain task.' },
+  };
 }
 
 /** A trackedTasks entry is not a grant to adopt another goal's bound job. */

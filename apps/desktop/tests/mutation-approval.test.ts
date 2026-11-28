@@ -36,6 +36,20 @@ describe('desktop exact-action mutation approval', () => {
     expect(isMutationApprovalResponse(2)).toBe(false);
   });
 
+  it('describes the confidentiality boundary of a one-shot legacy result recovery', () => {
+    const recovery = { ...request, mutationKind: 'read' as const, reason: 'Read one legacy result only after exact native user approval',
+      summary: 'tool = shell\noperation = recover_legacy_result\nworkspaceId = "workspace-a"\ntask_id = "old-task"' };
+    const en = mutationApprovalDialogOptions('en', recovery);
+    expect(en.title).toBe('Confirm legacy task result recovery');
+    expect(en.message).toContain('share retained output');
+    expect(en.detail).toContain('sensitive data');
+    expect(en.detail).toContain('old-task');
+    expect(en.detail).toContain('without transferring ownership');
+    expect(en.defaultId).toBe(0);
+    expect(mutationApprovalDialogOptions('th', recovery).message).toContain('เปิดเผยผลจาก session เก่า');
+    expect(() => mutationApprovalDialogOptions('en', recovery, false)).toThrow(/trusted host window/i);
+  });
+
   it('fails closed for empty or oversized exact-action summaries', () => {
     expect(isMutationApprovalRequestValid(request)).toBe(true);
     expect(isMutationApprovalRequestValid({ ...request, summary: '   ' })).toBe(false);

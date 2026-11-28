@@ -332,6 +332,51 @@ test('real packaged MCP restart recovers an owned running shell without duplicat
   });
 });
 
+test('real Desktop explicitly approves one legacy result without transferring task ownership', async () => {
+  test.setTimeout(90_000);
+  await withRuntime(async ({ app, page, client, first, good }) => {
+    const workspaceId = (await page.evaluate(() => window.lnwjing.getDashboard())).selectedWorkspace!.id;
+    await writeFile(path.join(first, 'legacy-result.mjs'), "console.log('LEGACY_RESULT_SENTINEL');\n");
+    const receipt = await good('shell', { workspaceId, executable: 'node', arguments: ['legacy-result.mjs'], timeout_seconds: 20 });
+    const taskId = String(receipt.task_id);
+    await expect.poll(async () => (await good('shell', { workspaceId, operation: 'result', task_id: taskId })).state, { timeout: 15_000 }).toBe('completed');
+    await client.close();
+    const restarted = await page.evaluate(() => window.lnwjing.restartMcp());
+    const peer = new Client({ name: 'legacy-recovery-' + randomUUID(), version: '1.0.0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
+    try {
+      await peer.connect(new StreamableHTTPClientTransport(new URL(restarted.url!)));
+      const recovery = { workspaceId, task_id: taskId, operation: 'recover_legacy_result' };
+      const ordinary = { workspaceId, task_id: taskId, operation: 'result' };
+      const denied = await peer.callTool({ name: 'shell', arguments: ordinary });
+      expect(denied).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+      const unconfirmed = await peer.callTool({ name: 'shell', arguments: recovery });
+      expect(unconfirmed).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_REQUIRED' } } });
+      for (const approve of [false, true]) {
+        const opened = app.waitForEvent('window');
+        const pending = peer.callTool({ name: 'shell', arguments: { ...recovery, userConfirmed: true } });
+        const prompt = await opened;
+        await expect(prompt.getByRole('alertdialog')).toContainText(taskId);
+        await expect(prompt.getByRole('alertdialog')).toContainText(workspaceId);
+        await expect(prompt.getByRole('alertdialog')).toContainText(/share retained output|เปิดเผยผลจาก session เก่า/);
+        const button = approve ? prompt.locator('.mutation-approval-confirm') : prompt.getByRole('button', { name: /^(Cancel|ยกเลิก)$/ });
+        await button.click().catch((error: unknown) => {
+          if (!prompt.isClosed() || !String(error).includes('Target page, context or browser has been closed')) throw error;
+        });
+        const response = await pending;
+        if (approve) expect(response.structuredContent).toMatchObject({ task_id: taskId, state: 'completed', exit_code: 0,
+          stdout: expect.stringContaining('LEGACY_RESULT_SENTINEL'), recovery: 'one_shot_host_approved_legacy_result' });
+        else {
+          expect(response).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+          expect(JSON.stringify(response)).not.toContain('LEGACY_RESULT_SENTINEL');
+        }
+      }
+      expect(await peer.callTool({ name: 'shell', arguments: ordinary })).toMatchObject({ isError: true, structuredContent: { error: { code: 'PERMISSION_DENIED' } } });
+    } finally {
+      await peer.close().catch(() => undefined);
+    }
+  });
+});
+
 test('real whole Desktop restart recovers one durable task across ten MCP clients', async () => {
   test.setTimeout(150_000);
   await withRuntime(async ({ page, first, good, restartDesktop, connect }) => {
