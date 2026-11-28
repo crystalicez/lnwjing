@@ -36,6 +36,8 @@ export const v580Copy = {
       unattributed:'ไม่ระบุ', dateLocale:'th-TH',
     },
     resources: {
+      reservationsTitle:'Shell reservations ทั้งโปรแกรม', managedWriters:'Managed writers', unclassifiedReservations:'ยังจำแนกไม่ได้ / อ่านไม่ได้', reservationsTotal:'รวมทั้งหมด', reservationsNote:'สถานะจาก reservation ที่บันทึกไว้ ไม่ใช่การยืนยันว่า process ยังทำงานอยู่ งานที่ไม่ทราบเจ้าของจะไม่ถูกยกเลิกอัตโนมัติ', recordedState:'สถานะที่บันทึก', reservationsTruncated:'แสดงเฉพาะ reservation ที่อ่านได้สูงสุด 128 รายการ',
+      shellLimit:'Shell / ขีดจำกัด', workspace:'โปรเจกต์',
       trackedTasks:'Task ที่ติดตาม', ownerVerified:'ยืนยันเจ้าของแล้ว', ownerShared:'งานใช้ร่วมกัน', ownerUnknown:'ยังยืนยันไม่ได้', cancelUnavailable:'ยกเลิกไม่ได้',
       copyAll:'คัดลอกทั้งหมด', copyDetails:'คัดลอกรายละเอียด', copied:'คัดลอกแล้ว', copyError:'ไม่สามารถคัดลอกได้', details:'รายละเอียด',
       intro:'แสดงค่า RAM ของโปรเซสที่ตรวจเจ้าของได้จริง และ CPU เฉลี่ยตั้งแต่เริ่มงาน ข้อมูลจะอัปเดตขณะเปิดหน้านี้ โดยไม่เดาค่าที่วัดไม่ได้',
@@ -130,6 +132,8 @@ export const v580Copy = {
       unattributed:'Not attributed', dateLocale:'en-US',
     },
     resources: {
+      reservationsTitle:'Host-wide shell reservations', managedWriters:'Managed writers', unclassifiedReservations:'Unclassified / unreadable', reservationsTotal:'Total', reservationsNote:'Recorded reservations, not verified live process counts. Unverified owners are never cancelled automatically.', recordedState:'Recorded state', reservationsTruncated:'Showing up to 128 readable reservations.',
+      shellLimit:'Shell / Limit', workspace:'Workspace',
       trackedTasks:'Tracked tasks', ownerVerified:'Owner verified', ownerShared:'Shared service', ownerUnknown:'Owner unknown', cancelUnavailable:'Not cancellable',
       copyAll:'Copy all details', copyDetails:'Copy details', copied:'Copied', copyError:'Unable to copy details', details:'Details',
       intro:'View verified task process memory and lifetime-average CPU. Measurements refresh while this tab is open; missing data is never guessed.',
